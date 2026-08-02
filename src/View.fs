@@ -69,7 +69,12 @@ let render model =
     section sb "WILDS" (byKind (function Wild -> true | _ -> false))
     section sb "SPECIAL (standing alone)" (byKind (function Special -> true | _ -> false))
     section sb "DEAD" (byKind (function Dead -> true | _ -> false))
-    section sb "PLAYERS" (model.Players |> List.map (playerLine model.Active))
+    let players = model.Players |> List.map (playerLine model.Active)
+
+    let run =
+        $"  negotiations in a row: {model.Negotiations} of {Model.playerCount model} - the game ends on the last"
+
+    section sb "PLAYERS" (players @ [ run ])
 
     let unruled predicate =
         Model.rulings model |> List.filter (snd >> predicate) |> List.length
@@ -115,6 +120,9 @@ let help =
           "                                         stones into a bordering region (alias: m)"
           "  negotiate                              draw a stone from the reserve (alias: n)"
           "    then: return <colour> | keep         hand a stone back, or keep the draw"
+          ""
+          "The game ends once every player has negotiated in a row. An empty-handed"
+          "player has their turn skipped, and that counts as a negotiation."
           ""
           "Other commands:"
           "  rule <region>             show the working behind who rules a region"

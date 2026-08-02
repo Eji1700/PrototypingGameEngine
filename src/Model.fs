@@ -24,6 +24,10 @@ type Model =
       Active: PlayerId
       /// Set while the active player still owes a decision mid-turn.
       Pending: Pending option
+      /// Turns spent negotiating, or skipped for want of stones, without a stone
+      /// being played in between. Once every player has done so in a row, the game
+      /// is over.
+      Negotiations: int
       Turn: int
       /// Newest entry first.
       Log: string list

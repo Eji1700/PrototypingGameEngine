@@ -69,39 +69,45 @@ let private takeStones colors regionName pile =
 // Turn order
 // ---------------------------------------------------------------------------
 
-/// Every action needs either a stone in the bag or a reserve to draw from.
-/// Negotiating can refill a bag, so an empty-handed player is only finished once
-/// the reserve is spent too.
-let private canAct playerId model =
-    match model.Players |> List.tryFind (fun player -> player.Id = playerId) with
-    | Some player -> not (Pile.isEmpty player.Bag) || not (Pile.isEmpty model.Reserve)
-    | None -> false
+/// The game ends once every player in turn has negotiated rather than played a
+/// stone, a skipped turn counting as a negotiation.
+let private overIfAllNegotiated model =
+    if model.Negotiations < Model.playerCount model then
+        model
+    else
+        let reason =
+            if model.Players |> List.forall (fun player -> Pile.isEmpty player.Bag) then
+                "every player has played out their bag"
+            else
+                "every player negotiated in turn"
 
-/// Hand over to the next player with something to play. There is no passing, so a
-/// player who can do nothing is stepped over; when that is everyone, the game is done.
-let private endTurn model =
+        { model with Status = Over reason } |> log $"The game is over: {reason}."
+
+/// Close the turn and hand on. `negotiated` says whether this turn was spent
+/// negotiating; playing a stone instead breaks the run and resets the count.
+/// A player holding nothing has their turn skipped, which counts as a negotiation.
+let rec private endTurn negotiated model =
     let model =
         { model with
             Pending = None
-            Turn = model.Turn + 1 }
+            Negotiations = if negotiated then model.Negotiations + 1 else 0 }
 
-    let rec nextAble remaining steppedOver current =
-        if canAct current model then Some(current, List.rev steppedOver)
-        elif remaining = 0 then None
-        else nextAble (remaining - 1) (current :: steppedOver) (Model.nextPlayer current model)
+    match overIfAllNegotiated model with
+    | { Status = Over _ } as over -> over
+    | model ->
+        let model =
+            { model with
+                Active = Model.nextPlayer model.Active model
+                Turn = model.Turn + 1 }
 
-    match nextAble (Model.playerCount model) [] (Model.nextPlayer model.Active model) with
-    | None ->
-        { model with Status = Over "nobody has a stone left to play" }
-        |> log "No one has anything left to play - the game is over."
-    | Some(next, steppedOver) ->
-        steppedOver
-        |> List.fold
-            (fun model playerId ->
-                match model.Players |> List.tryFind (fun player -> player.Id = playerId) with
-                | Some player -> log $"{Player.name player} has nothing to play and is stepped over." model
-                | None -> model)
-            { model with Active = next }
+        let player = Model.activePlayer model
+
+        if Pile.isEmpty player.Bag then
+            model
+            |> log $"{Player.name player} has no stones left, so the turn is skipped and counts as a negotiation."
+            |> endTurn true
+        else
+            model
 
 // ---------------------------------------------------------------------------
 // The four actions
@@ -117,7 +123,7 @@ let private recruit color into model =
         return
             model
             |> log $"{Player.name player} recruits a {StoneColor.name color} stone into {region.Name}."
-            |> endTurn
+            |> endTurn false
     }
 
 /// Place a stone in the Axe and name a region. For each stone there matching the
@@ -152,7 +158,7 @@ let private battle color target driven model =
             |> Model.withRegion { region with Stones = held }
             |> Model.returnToReserve spoils
             |> log telling
-            |> endTurn
+            |> endTurn false
     }
 
 /// Place a stone in the Flag and name a region. Stones there of the matching colour
@@ -183,7 +189,7 @@ let private march color from into count model =
             |> Model.withRegion { destination with Stones = Pile.add color count destination.Stones }
             |> log
                 $"{Player.name player} marches {count} {StoneColor.name color} stone(s) from {source.Name} into {destination.Name}."
-            |> endTurn
+            |> endTurn false
     }
 
 /// Draw a stone from the reserve at random. The player then owes a decision about
@@ -211,7 +217,7 @@ let private settle handBack model =
     let player = Model.activePlayer model
 
     match handBack with
-    | None -> Ok(model |> log $"{Player.name player} keeps the draw." |> endTurn)
+    | None -> Ok(model |> log $"{Player.name player} keeps the draw." |> endTurn true)
     | Some color ->
         match Pile.tryTake color 1 player.Bag with
         | None -> Error $"{Player.name player} has no {StoneColor.name color} stone to hand back."
@@ -221,7 +227,7 @@ let private settle handBack model =
                 |> Model.withPlayer { player with Bag = bag }
                 |> Model.returnToReserve (Pile.ofCounts [ color, 1 ])
                 |> log $"{Player.name player} hands a {StoneColor.name color} stone back to the reserve."
-                |> endTurn
+                |> endTurn true
             )
 
 // ---------------------------------------------------------------------------

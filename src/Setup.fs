@@ -84,6 +84,7 @@ let init playerCount (seed: uint64) : Model =
       Reserve = reserve
       Active = (List.head players).Id
       Pending = None
+      Negotiations = 0
       Turn = 1
       Log = [ $"A new game for {playerCount} players is dealt from seed {seed}." ]
       Status = InProgress }

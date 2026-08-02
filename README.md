@@ -33,11 +33,28 @@ console, so the view can be swapped for anything later.
 - 2 to 5 players. Each draws a bag of eight stones at random; a player commands no
   faction, so a bag holds stones of any colour. Undealt stones sit in the reserve
   (25 with two players, 1 with five).
-- On a turn a player takes one of the four actions below. There is no passing, so a
-  player holding nothing while the reserve is spent has no move at all and is
-  stepped over; when that is true of everyone, the game is over. Negotiating can
-  refill a bag, so an empty-handed player is not finished while the reserve holds
-  anything.
+- On a turn a player takes one of the four actions below. There is no passing.
+
+## Ending the game
+
+The game ends once every player, in a row, has taken a turn without playing a
+stone. `Model.Negotiations` counts that run: negotiating adds to it, recruiting,
+battling or marching resets it to zero, and the game is over the moment it reaches
+the number of players.
+
+A player whose bag is empty has their turn skipped, and the skip counts towards the
+run exactly as a negotiation does. So in a two-player game, one player being
+skipped and the other negotiating ends it. If every bag is empty, every turn is a
+skip and the run fills in one lap of the table — which is the "all players have
+played out their stones" ending, arrived at by the same counter rather than a
+separate check. The end is reported either way: *every player negotiated in turn*,
+or *every player has played out their bag*.
+
+One reading to confirm: an empty-handed player is **skipped rather than allowed to
+negotiate**, following "a player can play their last stone, but then their turn is
+skipped". That makes an empty bag final — a player cannot draw their way back into
+the game. Letting them negotiate instead would still count towards the run, but
+would let them refill from the reserve.
 
 ## The four actions
 
