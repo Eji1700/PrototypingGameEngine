@@ -197,6 +197,11 @@ let private march color from into count model =
 let private negotiate model =
     result {
         let player = Model.activePlayer model
+
+        do! require
+                (not (Pile.isEmpty player.Bag))
+                $"{Player.name player} holds nothing, and only a player with a stone in the bag may negotiate."
+
         let drawn, rng = Pile.drawOne model.Reserve model.Rng
 
         match drawn with

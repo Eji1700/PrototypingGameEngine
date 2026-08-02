@@ -12,7 +12,9 @@ console, so the view can be swapped for anything later.
 | [src/Prelude.fs](src/Prelude.fs) | The `result` computation expression used to chain an action's checks |
 | [src/Rng.fs](src/Rng.fs) | Immutable SplitMix64 generator and the `Rand<'T>` computation expression |
 | [src/Domain.fs](src/Domain.fs) | `StoneColor`, `Pile` (a stone multiset), `Region`, `Player` |
-| [src/Ruling.fs](src/Ruling.fs) | Who rules a region, and the tie-breaking cascade behind it |
+| [src/Cascade.fs](src/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning |
+| [src/Ruling.fs](src/Ruling.fs) | Who rules a region |
+| [src/Outcome.fs](src/Outcome.fs) | Which faction carries the board, and which player carries the faction |
 | [src/Board.fs](src/Board.fs) | The fixed map: the region table, the borders between them, and the checks that the map hangs together |
 | [src/Model.fs](src/Model.fs) | The `Model`, the `Msg` cases, and queries over the model |
 | [src/Setup.fs](src/Setup.fs) | Board table and the opening deal |
@@ -34,6 +36,47 @@ console, so the view can be swapped for anything later.
   faction, so a bag holds stones of any colour. Undealt stones sit in the reserve
   (25 with two players, 1 with five).
 - On a turn a player takes one of the four actions below. There is no passing.
+
+## Winning
+
+Two cascades run when the game ends, both shaped exactly like ruling a region — see
+`Cascade.run`, which all three share.
+
+**The faction that carries the board:**
+
+1. rules the most land;
+2. failing that, the most stones in the Axe;
+3. failing that, the most stones in the Flag;
+4. failing that, the game is a draw.
+
+The Flag and the Axe are ruled like anywhere else, but they are manoeuvres bought
+with stones rather than ground held, so they count for nothing in the first
+measure — only in the tie-breakers they *are*. That leaves twelve regions of land:
+three homes, eight wilds and the dead region, which nobody can ever hold.
+`Model.landRulings` draws that line.
+
+Every faction contends, including one ruling nothing. If no faction rules a single
+region they are level on nought and the Axe decides, rather than the game being
+drawn out of hand.
+
+**The player who carries that faction:**
+
+1. if every player has played out their bag, nobody wins and the game is a draw;
+2. otherwise, the most stones of the winning faction's colour still in the bag;
+3. failing that, the fewest stones of the losing factions;
+4. failing that, whoever would take the next turn.
+
+The last measure always separates them, since no two players sit the same distance
+from the next turn — so a game with a winning faction and any stones left always
+has exactly one winning player.
+
+Both cascades are printed with their working when the game ends, and
+`dotnet fsi tests/outcome.fsx` checks them, including the two examples above.
+
+One reading to confirm: when every bag is empty the whole game is a draw, following
+"no one wins, the entire game is a draw" — even though a faction did carry the
+board. The result names the faction anyway, so it reads *Black carried the board,
+but every player has played out their bag*.
 
 ## Ending the game
 
@@ -72,9 +115,9 @@ legal, since the rule says "may".
 colour then move into a single region bordering it, which must not be the dead
 region. Since the Flag and the Axe border nothing, they can never be marched into.
 
-**Negotiate** — draw a stone from the reserve at random into the bag. The player
-may then hand any one stone from the bag back to the reserve, including the stone
-just drawn.
+**Negotiate** — only open to a player holding at least one stone. Draw a stone from
+the reserve at random into the bag; the player may then hand any one stone from the
+bag back to the reserve, including the stone just drawn.
 
 Readings the rules left open, all easy to change:
 

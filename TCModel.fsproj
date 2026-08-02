@@ -9,11 +9,13 @@
 
   <ItemGroup>
     <Compile Include="src/Prelude.fs" />
+    <Compile Include="src/Cascade.fs" />
     <Compile Include="src/Rng.fs" />
     <Compile Include="src/Domain.fs" />
     <Compile Include="src/Ruling.fs" />
     <Compile Include="src/Board.fs" />
     <Compile Include="src/Model.fs" />
+    <Compile Include="src/Outcome.fs" />
     <Compile Include="src/Setup.fs" />
     <Compile Include="src/Update.fs" />
     <Compile Include="src/View.fs" />

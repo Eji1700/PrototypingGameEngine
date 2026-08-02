@@ -3,6 +3,7 @@
 //
 //   dotnet fsi tests/ruling.fsx
 
+#load "../src/Cascade.fs"
 #load "../src/Rng.fs"
 #load "../src/Domain.fs"
 #load "../src/Ruling.fs"

@@ -77,7 +77,7 @@ module Model =
     let regionsOfKind predicate model =
         regions model |> List.filter (fun region -> predicate region.Kind)
 
-    let private stonesIn regionId model =
+    let stonesIn regionId model =
         tryRegion regionId model
         |> Option.map (fun region -> region.Stones)
         |> Option.defaultValue Pile.empty
@@ -94,10 +94,16 @@ module Model =
     let rulings model =
         regions model |> List.map (fun region -> region, ruleOver region model)
 
-    /// How many regions each colour rules, in canonical colour order.
+    /// Ruling over ground only. The Flag and the Axe hold stones and can be ruled
+    /// like anywhere else, but they are manoeuvres rather than land, so they are no
+    /// part of how much of the map a faction holds.
+    let landRulings model =
+        rulings model |> List.filter (fun (region, _) -> not (Region.isIsolated region))
+
+    /// How much land each colour rules, in canonical colour order.
     let standings model =
         let ruled =
-            rulings model
+            landRulings model
             |> List.choose (fun (_, rule) ->
                 match rule with
                 | Ruling.RuledBy color -> Some color

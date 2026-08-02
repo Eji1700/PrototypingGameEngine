@@ -1,6 +1,6 @@
 /// Who rules a region. The colour holding the most stones there rules it; ties are
 /// broken first by the Axe and then by the Flag. Each measure only narrows the field
-/// left by the one before, so a colour knocked out early never returns.
+/// left by the one before, so a colour knocked out never comes back.
 module TCModel.Ruling
 
 type Rule =
@@ -11,41 +11,22 @@ type Rule =
     /// The region holds no stones at all.
     | Unclaimed
 
-/// Keep only the candidates that lead on this measure. A field of one is already
-/// settled and passes through untouched.
-let private narrowBy measure candidates =
-    match candidates with
-    | []
-    | [ _ ] -> candidates
-    | _ ->
-        let best = candidates |> List.map measure |> List.max
-        candidates |> List.filter (fun color -> measure color = best)
+let private measures axe flag stones =
+    let by label pile =
+        Cascade.measure label (fun color -> Pile.count color pile) (fun color ->
+            $"{StoneColor.name color} {Pile.count color pile}")
 
-/// Run the cascade, keeping a record of each measure that was actually needed.
-let private cascade axe flag stones =
-    let stages =
-        [ "stones in the region", (fun color -> Pile.count color stones)
-          "stones in the Axe", (fun color -> Pile.count color axe)
-          "stones in the Flag", (fun color -> Pile.count color flag) ]
+    [ by "stones in the region" stones
+      by "stones in the Axe" axe
+      by "stones in the Flag" flag ]
 
-    // Only colours actually present contend: an empty region is ruled by nobody,
-    // however the Axe and the Flag happen to stand.
-    let present =
-        StoneColor.all |> List.filter (fun color -> Pile.count color stones > 0)
-
-    stages
-    |> List.fold
-        (fun (candidates, trace) (label, measure) ->
-            if List.length candidates <= 1 then
-                candidates, trace
-            else
-                let narrowed = narrowBy measure candidates
-                let tallies = candidates |> List.map (fun color -> color, measure color)
-                narrowed, trace @ [ (label, tallies, narrowed) ])
-        (present, [])
+/// Only colours actually present contend: an empty region is ruled by nobody,
+/// however the Axe and the Flag happen to stand.
+let private contenders stones =
+    StoneColor.all |> List.filter (fun color -> Pile.count color stones > 0)
 
 let decide axe flag stones =
-    match cascade axe flag stones |> fst with
+    match Cascade.run (measures axe flag stones) (contenders stones) |> fst with
     | [] -> Unclaimed
     | [ color ] -> RuledBy color
     | tied -> Contested tied
@@ -55,17 +36,7 @@ let explain axe flag stones =
     let names colors =
         colors |> List.map StoneColor.name |> String.concat ", "
 
-    let counts pairs =
-        pairs |> List.map (fun (color, n) -> $"{StoneColor.name color} {n}") |> String.concat ", "
-
-    let candidates, trace = cascade axe flag stones
-
-    let steps =
-        trace
-        |> List.map (fun (label, tallies, narrowed) ->
-            match narrowed with
-            | [ color ] -> $"  {label}: {counts tallies} -> {StoneColor.name color} leads"
-            | _ -> $"  {label}: {counts tallies} -> {names narrowed} still level")
+    let candidates, trace = Cascade.run (measures axe flag stones) (contenders stones)
 
     let verdict =
         match candidates with
@@ -73,7 +44,7 @@ let explain axe flag stones =
         | [ color ] -> $"  {StoneColor.name color} rules the region."
         | tied -> $"  {names tied} are level after every tie-breaker, so the region is tied and has no ruler."
 
-    steps @ [ verdict ]
+    Cascade.workings StoneColor.name trace @ [ verdict ]
 
 let describe rule =
     match rule with

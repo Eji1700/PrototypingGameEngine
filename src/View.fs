@@ -76,25 +76,32 @@ let render model =
 
     section sb "PLAYERS" (players @ [ run ])
 
-    let unruled predicate =
-        Model.rulings model |> List.filter (snd >> predicate) |> List.length
+    let countLand predicate =
+        Model.landRulings model |> List.filter (snd >> predicate) |> List.length
 
     let ruled =
         Model.standings model
         |> List.map (fun (color, n) -> $"{StoneColor.name color} {n}")
         |> String.concat "   "
 
+    let tied = countLand (function Ruling.Contested _ -> true | _ -> false)
+    let unclaimed = countLand (function Ruling.Unclaimed -> true | _ -> false)
+
     section
         sb
-        "RULE"
-        [ $"  {ruled}   tied {unruled (function Ruling.Contested _ -> true | _ -> false)}   "
-          + $"unclaimed {unruled (function Ruling.Unclaimed -> true | _ -> false)}" ]
+        "LAND RULED"
+        [ $"  {ruled}   tied {tied}   unclaimed {unclaimed}"
+          "  (the Flag and the Axe are manoeuvres, not land, and do not count here)" ]
 
     section
         sb
         "SUPPLY"
         [ $"  on the board: {tally (Model.stonesOnBoard model)}"
           $"  in reserve:   {tally model.Reserve}" ]
+
+    match model.Status with
+    | InProgress -> ()
+    | Over _ -> section sb "RESULT" (Outcome.explain model)
 
     section sb "LOG" (model.Log |> List.rev |> List.map (fun entry -> $"  {entry}"))
 
