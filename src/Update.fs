@@ -69,19 +69,39 @@ let private takeStones colors regionName pile =
 // Turn order
 // ---------------------------------------------------------------------------
 
+/// Every action needs either a stone in the bag or a reserve to draw from.
+/// Negotiating can refill a bag, so an empty-handed player is only finished once
+/// the reserve is spent too.
+let private canAct playerId model =
+    match model.Players |> List.tryFind (fun player -> player.Id = playerId) with
+    | Some player -> not (Pile.isEmpty player.Bag) || not (Pile.isEmpty model.Reserve)
+    | None -> false
+
+/// Hand over to the next player with something to play. There is no passing, so a
+/// player who can do nothing is stepped over; when that is everyone, the game is done.
 let private endTurn model =
     let model =
         { model with
-            Active = Model.nextPlayer model.Active model
             Pending = None
             Turn = model.Turn + 1 }
 
-    // Negotiating can refill a bag, so the game only ends once the reserve is spent too.
-    if Model.allBagsEmpty model && Pile.isEmpty model.Reserve then
-        { model with Status = Over "every bag and the reserve are empty" }
-        |> log "Nothing is left to play - the game is over."
-    else
-        model
+    let rec nextAble remaining steppedOver current =
+        if canAct current model then Some(current, List.rev steppedOver)
+        elif remaining = 0 then None
+        else nextAble (remaining - 1) (current :: steppedOver) (Model.nextPlayer current model)
+
+    match nextAble (Model.playerCount model) [] (Model.nextPlayer model.Active model) with
+    | None ->
+        { model with Status = Over "nobody has a stone left to play" }
+        |> log "No one has anything left to play - the game is over."
+    | Some(next, steppedOver) ->
+        steppedOver
+        |> List.fold
+            (fun model playerId ->
+                match model.Players |> List.tryFind (fun player -> player.Id = playerId) with
+                | Some player -> log $"{Player.name player} has nothing to play and is stepped over." model
+                | None -> model)
+            { model with Active = next }
 
 // ---------------------------------------------------------------------------
 // The four actions
@@ -242,6 +262,3 @@ let update msg model =
     | InProgress, None, March(color, from, into, count) -> model |> attempt (march color from into count model)
     | InProgress, None, Negotiate -> model |> attempt (negotiate model)
     | InProgress, None, Settle _ -> model |> log "There is no negotiation to settle."
-    | InProgress, None, Pass ->
-        let player = Model.activePlayer model
-        model |> log $"{Player.name player} passes." |> endTurn

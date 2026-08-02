@@ -118,7 +118,6 @@ let help =
           ""
           "Other commands:"
           "  rule <region>             show the working behind who rules a region"
-          "  pass                      end your turn without acting"
           "  restart [seed]            deal a fresh game to the same players"
           $"  players <n> [seed]        deal a fresh game to n players ({Setup.MinPlayers}-{Setup.MaxPlayers})"
           "  help                      show this list"

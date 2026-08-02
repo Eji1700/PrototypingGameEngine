@@ -45,8 +45,6 @@ type Msg =
     | Negotiate
     /// Finish a negotiation: hand a stone back to the reserve, or keep the draw.
     | Settle of handBack: StoneColor option
-    /// Give up the turn without acting.
-    | Pass
     /// Abandon this game and deal a fresh one. Anything left unspecified is carried
     /// over from the game in progress.
     | Restart of players: int option * seed: uint64 option
@@ -126,6 +124,3 @@ module Model =
         order[(index + 1) % order.Length]
 
     let playerCount model = List.length model.Players
-
-    let allBagsEmpty model =
-        model.Players |> List.forall (fun player -> Pile.isEmpty player.Bag)

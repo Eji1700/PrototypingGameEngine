@@ -86,7 +86,6 @@ let parse (line: string) : Result<Command, string> =
     | [] -> Ok Nothing
     | [ "help" ] | [ "?" ] -> Ok Help
     | [ "quit" ] | [ "exit" ] | [ "q" ] -> Ok(Game Quit)
-    | [ "pass" ] -> Ok(Game Pass)
     | [ "restart" ] -> Ok(Game(Restart(None, None)))
     | [ "restart"; seed ] -> parseSeed seed |> Result.map (fun seed -> Game(Restart(None, seed)))
     | [ "players"; count ] -> parsePlayerCount count |> Result.map (fun count -> Game(Restart(count, None)))

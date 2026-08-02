@@ -33,9 +33,11 @@ console, so the view can be swapped for anything later.
 - 2 to 5 players. Each draws a bag of eight stones at random; a player commands no
   faction, so a bag holds stones of any colour. Undealt stones sit in the reserve
   (25 with two players, 1 with five).
-- On a turn a player takes one of the four actions below, or passes. The game ends
-  when every bag *and* the reserve are empty — negotiating can refill a bag, so an
-  empty-handed player is not necessarily finished.
+- On a turn a player takes one of the four actions below. There is no passing, so a
+  player holding nothing while the reserve is spent has no move at all and is
+  stepped over; when that is true of everyone, the game is over. Negotiating can
+  refill a bag, so an empty-handed player is not finished while the reserve holds
+  anything.
 
 ## The four actions
 
@@ -163,7 +165,7 @@ dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 | `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
 | `negotiate` (`n`), then `return <colour>` or `keep` | Negotiate |
 | `rule <region>` | not an action; shows who rules a region and why |
-| `pass`, `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
+| `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 
 Colours are `r`/`red`, `b`/`blue`, `k`/`black`; regions are numbered as shown on
 the board. So `battle black 6 blue` places a black stone in the Axe and drives one
