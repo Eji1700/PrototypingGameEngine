@@ -11,37 +11,200 @@ let private log message model =
 /// Record a message that came from outside the game proper, such as unparseable input.
 let note message model = log message model
 
+let private number (RegionId n) = n
+
+// ---------------------------------------------------------------------------
+// Vetting the pieces an action needs
+// ---------------------------------------------------------------------------
+
+let private findRegion regionId model =
+    match Model.tryRegion regionId model with
+    | Some region -> Ok region
+    | None -> Error $"There is no region {number regionId}."
+
+/// A region a stone may enter: anything but the dead one.
+let private openRegion regionId model =
+    result {
+        let! region = findRegion regionId model
+        do! require (Region.isOpen region) $"{region.Name} is dead ground - no stone may enter."
+        return region
+    }
+
+/// A region an action may be aimed at: not dead, and not one of the two that stand alone.
+let private contestedRegion regionId model =
+    result {
+        let! region = openRegion regionId model
+
+        do! require
+                (not (Region.isIsolated region))
+                $"{region.Name} stands apart from the map and cannot be chosen."
+
+        return region
+    }
+
+let private takeFromBag color model =
+    let player = Model.activePlayer model
+
+    match Pile.tryTake color 1 player.Bag with
+    | None -> Error $"{Player.name player} has no {StoneColor.name color} stone in the bag."
+    | Some bag -> Ok(Model.withPlayer { player with Bag = bag } model)
+
+/// Move a stone out of the bag and into a region that has already been vetted.
+let private placeFromBag color region model =
+    takeFromBag color model |> Result.map (Model.withRegion (Region.addStone color region))
+
+/// Lift the named stones out of a pile, objecting if any of them is not there.
+let private takeStones colors regionName pile =
+    colors
+    |> List.fold
+        (fun outcome color ->
+            outcome
+            |> Result.bind (fun pile ->
+                match Pile.tryTake color 1 pile with
+                | Some pile -> Ok pile
+                | None -> Error $"{regionName} has no {StoneColor.name color} stone to drive out."))
+        (Ok pile)
+
+// ---------------------------------------------------------------------------
+// Turn order
+// ---------------------------------------------------------------------------
+
 let private endTurn model =
     let model =
         { model with
             Active = Model.nextPlayer model.Active model
+            Pending = None
             Turn = model.Turn + 1 }
 
-    if Model.allBagsEmpty model then
-        { model with Status = Over "every bag is empty" } |> log "Every bag is empty - the game is over."
+    // Negotiating can refill a bag, so the game only ends once the reserve is spent too.
+    if Model.allBagsEmpty model && Pile.isEmpty model.Reserve then
+        { model with Status = Over "every bag and the reserve are empty" }
+        |> log "Nothing is left to play - the game is over."
     else
         model
 
-let private place color regionId model =
+// ---------------------------------------------------------------------------
+// The four actions
+// ---------------------------------------------------------------------------
+
+/// Place any stone from the bag on the map, anywhere but the dead region.
+let private recruit color into model =
+    result {
+        let player = Model.activePlayer model
+        let! region = openRegion into model
+        let! model = placeFromBag color region model
+
+        return
+            model
+            |> log $"{Player.name player} recruits a {StoneColor.name color} stone into {region.Name}."
+            |> endTurn
+    }
+
+/// Place a stone in the Axe and name a region. For each stone there matching the
+/// placed colour, one stone of another colour may be driven back to the reserve.
+let private battle color target driven model =
+    result {
+        let player = Model.activePlayer model
+        let! region = contestedRegion target model
+        let! axe = findRegion Board.axe model
+        let matching = Pile.count color region.Stones
+
+        do! require
+                (driven |> List.forall (fun other -> other <> color))
+                $"The Axe drives out stones of other colours, not {StoneColor.name color} ones."
+
+        do! require
+                (List.length driven <= matching)
+                $"{region.Name} holds {matching} {StoneColor.name color} stone(s), so no more than that many may be driven out."
+
+        let! held = takeStones driven region.Name region.Stones
+        let! model = placeFromBag color axe model
+        let spoils = Pile.ofColors driven
+
+        let telling =
+            match driven with
+            | [] -> $"{Player.name player} battles {region.Name} with a {StoneColor.name color} stone, but drives nothing out."
+            | _ ->
+                $"{Player.name player} battles {region.Name} with a {StoneColor.name color} stone, driving {Pile.describe spoils} back to the reserve."
+
+        return
+            model
+            |> Model.withRegion { region with Stones = held }
+            |> Model.returnToReserve spoils
+            |> log telling
+            |> endTurn
+    }
+
+/// Place a stone in the Flag and name a region. Stones there of the matching colour
+/// may then march into a region bordering it.
+let private march color from into count model =
+    result {
+        let player = Model.activePlayer model
+        let! source = contestedRegion from model
+        let! destination = openRegion into model
+        let! flag = findRegion Board.flag model
+        do! require (count >= 1) "A march moves at least one stone."
+
+        let available = Pile.count color source.Stones
+
+        do! require
+                (available >= count)
+                $"{source.Name} holds {available} {StoneColor.name color} stone(s), which is not enough to march {count}."
+
+        do! require
+                (Model.areAdjacent source.Id destination.Id model)
+                $"{source.Name} does not border {destination.Name}."
+
+        let! model = placeFromBag color flag model
+
+        return
+            model
+            |> Model.withRegion { source with Stones = Pile.remove color count source.Stones }
+            |> Model.withRegion { destination with Stones = Pile.add color count destination.Stones }
+            |> log
+                $"{Player.name player} marches {count} {StoneColor.name color} stone(s) from {source.Name} into {destination.Name}."
+            |> endTurn
+    }
+
+/// Draw a stone from the reserve at random. The player then owes a decision about
+/// which stone, if any, to hand back, so the turn stays open.
+let private negotiate model =
+    result {
+        let player = Model.activePlayer model
+        let drawn, rng = Pile.drawOne model.Reserve model.Rng
+
+        match drawn with
+        | None -> return! Error "The reserve is empty - there is nothing to negotiate for."
+        | Some(color, reserve) ->
+            return
+                { model with
+                    Rng = rng
+                    Reserve = reserve
+                    Pending = Some(AwaitingReturn color) }
+                |> Model.withPlayer { player with Bag = Pile.add color 1 player.Bag }
+                |> log
+                    $"{Player.name player} draws a {StoneColor.name color} stone from the reserve, and may hand one back."
+    }
+
+/// Finish a negotiation by handing a stone back, or by keeping the draw.
+let private settle handBack model =
     let player = Model.activePlayer model
 
-    match Model.tryRegion regionId model with
-    | None ->
-        let (RegionId n) = regionId
-        log $"There is no region {n}." model
-    | Some region when not (Region.isOpen region) -> log $"{region.Name} is dead ground - no stone may enter." model
-    | Some region ->
+    match handBack with
+    | None -> Ok(model |> log $"{Player.name player} keeps the draw." |> endTurn)
+    | Some color ->
         match Pile.tryTake color 1 player.Bag with
-        | None -> log $"{Player.name player} has no {StoneColor.name color} stone left in the bag." model
+        | None -> Error $"{Player.name player} has no {StoneColor.name color} stone to hand back."
         | Some bag ->
-            let player = { player with Bag = bag }
-            let region = Region.addStone color region
+            Ok(
+                model
+                |> Model.withPlayer { player with Bag = bag }
+                |> Model.returnToReserve (Pile.ofCounts [ color, 1 ])
+                |> log $"{Player.name player} hands a {StoneColor.name color} stone back to the reserve."
+                |> endTurn
+            )
 
-            { model with
-                Players = model.Players |> List.map (fun p -> if p.Id = player.Id then player else p)
-                Regions = model.Regions |> Map.add region.Id region }
-            |> log $"{Player.name player} places a {StoneColor.name color} stone in {region.Name}."
-            |> endTurn
+// ---------------------------------------------------------------------------
 
 /// Deal a fresh game, falling back to the current table size and drawing an unnamed
 /// seed from the generator in play so that even a restart stays reproducible.
@@ -55,12 +218,30 @@ let private restart players seed model =
 
     Setup.init players seed
 
+/// An action that fails leaves the game untouched and says why.
+let private attempt outcome model =
+    match outcome with
+    | Ok model -> model
+    | Error objection -> log objection model
+
 let update msg model =
-    match model.Status, msg with
-    | _, Restart(players, seed) -> restart players seed model
-    | Over _, _ -> model
-    | InProgress, Place(color, regionId) -> place color regionId model
-    | InProgress, Pass ->
+    match model.Status, model.Pending, msg with
+    | _, _, Restart(players, seed) -> restart players seed model
+    | Over _, _, _ -> model
+    | InProgress, _, Quit -> { model with Status = Over "the players walked away" }
+
+    // A draw from the reserve must be settled before the turn can move on.
+    | InProgress, Some _, Settle handBack -> model |> attempt (settle handBack model)
+    | InProgress, Some(AwaitingReturn drawn), _ ->
+        model
+        |> log
+            $"Settle the negotiation first: hand a stone back, or keep the {StoneColor.name drawn} stone just drawn."
+
+    | InProgress, None, Recruit(color, into) -> model |> attempt (recruit color into model)
+    | InProgress, None, Battle(color, target, driven) -> model |> attempt (battle color target driven model)
+    | InProgress, None, March(color, from, into, count) -> model |> attempt (march color from into count model)
+    | InProgress, None, Negotiate -> model |> attempt (negotiate model)
+    | InProgress, None, Settle _ -> model |> log "There is no negotiation to settle."
+    | InProgress, None, Pass ->
         let player = Model.activePlayer model
         model |> log $"{Player.name player} passes." |> endTurn
-    | InProgress, Quit -> { model with Status = Over "the players walked away" }

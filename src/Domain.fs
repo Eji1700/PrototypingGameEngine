@@ -68,6 +68,10 @@ module Pile =
     let ofColors colors =
         colors |> Seq.fold (fun pile color -> add color 1 pile) empty
 
+    /// Everything in both piles.
+    let merge (Pile counts) pile =
+        counts |> Map.fold (fun pile color n -> add color n pile) pile
+
     /// Counts in canonical colour order, omitting colours that are absent.
     let toCounts pile =
         StoneColor.all
@@ -79,6 +83,15 @@ module Pile =
     /// The individual stones, in canonical colour order.
     let toColors pile =
         toCounts pile |> List.collect (fun (color, n) -> List.replicate n color)
+
+    /// Reads as "2 Red and 1 Black"; empty piles read as "nothing".
+    let describe pile =
+        match toCounts pile with
+        | [] -> "nothing"
+        | counts ->
+            counts
+            |> List.map (fun (color, n) -> $"{n} {StoneColor.name color}")
+            |> String.concat " and "
 
     /// The colour of the stone sitting at `index` when the pile is laid out in
     /// canonical order. Used to turn a uniform integer into a uniform stone.

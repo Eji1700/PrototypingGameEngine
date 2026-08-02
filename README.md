@@ -9,8 +9,10 @@ console, so the view can be swapped for anything later.
 
 | File | Role |
 | --- | --- |
+| [src/Prelude.fs](src/Prelude.fs) | The `result` computation expression used to chain an action's checks |
 | [src/Rng.fs](src/Rng.fs) | Immutable SplitMix64 generator and the `Rand<'T>` computation expression |
 | [src/Domain.fs](src/Domain.fs) | `StoneColor`, `Pile` (a stone multiset), `Region`, `Player` |
+| [src/Ruling.fs](src/Ruling.fs) | Who rules a region, and the tie-breaking cascade behind it |
 | [src/Board.fs](src/Board.fs) | The fixed map: the region table, the borders between them, and the checks that the map hangs together |
 | [src/Model.fs](src/Model.fs) | The `Model`, the `Msg` cases, and queries over the model |
 | [src/Setup.fs](src/Setup.fs) | Board table and the opening deal |
@@ -31,8 +33,42 @@ console, so the view can be swapped for anything later.
 - 2 to 5 players. Each draws a bag of eight stones at random; a player commands no
   faction, so a bag holds stones of any colour. Undealt stones sit in the reserve
   (25 with two players, 1 with five).
-- On a turn a player places one stone from their bag into any open region, or
-  passes. The game ends when every bag is empty.
+- On a turn a player takes one of the four actions below, or passes. The game ends
+  when every bag *and* the reserve are empty — negotiating can refill a bag, so an
+  empty-handed player is not necessarily finished.
+
+## The four actions
+
+**Recruit** — place any stone from the bag into any region but the dead one. The
+Flag and the Axe are legal targets, since the rule excludes only the dead region.
+
+**Battle** — place any stone from the bag into the Axe and name another region
+(not dead, not the Flag or the Axe). Count the stones there matching the colour
+just placed; up to that many stones *of other colours* may be driven out of that
+region and back to the reserve. The player chooses which. Driving out none is
+legal, since the rule says "may".
+
+**March** — place any stone from the bag into the Flag and name another region
+(not dead, not the Flag or the Axe). One or more stones there of the matching
+colour then move into a single region bordering it, which must not be the dead
+region. Since the Flag and the Axe border nothing, they can never be marched into.
+
+**Negotiate** — draw a stone from the reserve at random into the bag. The player
+may then hand any one stone from the bag back to the reserve, including the stone
+just drawn.
+
+Readings the rules left open, all easy to change:
+
+- **"the main bag"** in Battle is taken to be the reserve, the same pool Negotiate
+  draws from.
+- **Battle counts matching stones in the named region**, not in the Axe. The stone
+  placed in the Axe stays there and does not count towards the total.
+- **A march moves its whole group into one destination**, rather than splitting it
+  across several neighbours.
+- **Negotiate is two steps.** The draw is random, so the player cannot sensibly
+  choose what to hand back before seeing it. `Negotiate` draws and leaves the turn
+  open with `Model.Pending` set to `AwaitingReturn`; `Settle` then ends the turn.
+  No other action is accepted in between.
 
 Points the rules did not settle, decided here and easy to change:
 
@@ -42,6 +78,43 @@ Points the rules did not settle, decided here and easy to change:
 - **Region count** — the Flag and the Axe are additions to the original twelve, so
   the board holds fourteen regions: 3 home + 8 wild + 1 dead makes the twelve, plus
   the two specials (`Setup.board`).
+
+## Ruling
+
+A region is ruled by the colour holding the most stones in it. Ties cascade through
+two further measures, and each one only narrows the field left by the one before —
+a colour knocked out never comes back:
+
+1. most stones in the region;
+2. failing that, most stones in the Axe;
+3. failing that, most stones in the Flag;
+4. failing that, the region is tied and has no ruler.
+
+So a colour trailing on stones cannot win a region on the strength of the Axe, even
+if it holds the Axe outright. `Ruling.decide` returns `RuledBy`, `Contested` (level
+after every measure) or `Unclaimed`.
+
+An empty region is `Unclaimed`: only colours actually present contend, so a loaded
+Axe does not hand out the regions nobody has entered. That is a reading, not a
+stated rule — counting absent colours as tied on zero would instead give every
+empty region to whoever leads the Axe.
+
+Ruling is computed on demand from the position, never stored, so it cannot fall out
+of step with the board. It carries no consequence yet. The Flag and the Axe are
+ruled like any other region, which makes the Axe's own tie-breaker self-referential
+but well defined.
+
+`rule <region>` shows the working:
+
+```
+> rule 6
+Saltmarsh holds 1 Blue and 1 Black.
+  stones in the region: Blue 1, Black 1 -> Blue, Black still level
+  stones in the Axe: Blue 0, Black 1 -> Black leads
+  Black rules the region.
+```
+
+`dotnet fsi tests/ruling.fsx` checks the cascade, including the elimination rule.
 
 ## The map
 
@@ -83,9 +156,19 @@ dotnet run -- 3           # 3 players, random seed
 dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 ```
 
-Commands: `place <colour> <region>` (alias `p`), `pass`, `restart [seed]`,
-`players <n> [seed]`, `help`, `quit`. Colours are `r`/`red`, `b`/`blue`,
-`k`/`black`; regions are numbered as shown on the board.
+| command | action |
+| --- | --- |
+| `recruit <colour> <region>` (`r`) | Recruit |
+| `battle <colour> <region> [colours...]` (`b`) | Battle; the trailing colours are the stones driven out |
+| `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
+| `negotiate` (`n`), then `return <colour>` or `keep` | Negotiate |
+| `rule <region>` | not an action; shows who rules a region and why |
+| `pass`, `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
+
+Colours are `r`/`red`, `b`/`blue`, `k`/`black`; regions are numbered as shown on
+the board. So `battle black 6 blue` places a black stone in the Axe and drives one
+blue stone out of Saltmarsh, and `march blue 4 1 2` places a blue stone in the Flag
+and moves two blue stones from the Crossroads into Emberfall.
 
 Every random decision comes from the seed, so a seed plus a list of messages
 reproduces a game exactly.

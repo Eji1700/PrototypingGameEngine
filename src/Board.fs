@@ -21,6 +21,18 @@ let regions =
 
 let count = List.length regions
 
+let private idNamed name =
+    regions
+    |> List.tryFindIndex (fun (regionName, _) -> regionName = name)
+    |> Option.map (fun index -> RegionId(index + 1))
+    |> Option.defaultValue (RegionId 0)
+
+/// The region a march is declared through.
+let flag = idNamed "The Flag"
+
+/// The region a battle is declared through.
+let axe = idNamed "The Axe"
+
 /// Region numbers paired with the regions they border. Every border here is named
 /// from both ends, and `adjacency` symmetrises anyway, so a border added later only
 /// has to be named once.
@@ -96,6 +108,13 @@ let problems =
           | true, false -> yield $"{name} is meant to stand alone but borders other regions."
           | false, true -> yield $"{name} borders nothing, so no stone can ever reach it."
           | _ -> ()
+
+      for label, regionId in [ "The Flag", flag; "The Axe", axe ] do
+          match named |> List.tryFind (fun (id, _, _) -> id = regionId) with
+          | None -> yield $"{label} is missing from the board, but actions are declared through it."
+          | Some(_, _, kind) ->
+              if not (RegionKind.isIsolated kind) then
+                  yield $"{label} must be a region that stands alone."
 
       match mainland with
       | [] -> ()

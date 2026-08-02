@@ -28,11 +28,12 @@ let private regionLine model (region: Region) =
     let (RegionId n) = region.Id
 
     sprintf
-        "  [%2d] %-18s %-11s %-15s %s"
+        "  [%2d] %-18s %-11s %-15s %-8s %s"
         n
         region.Name
         (Region.describeKind region)
         (borders model region)
+        (Model.ruleOver region model |> Ruling.describe)
         (stones region.Stones)
 
 let private playerLine active (player: Player) =
@@ -50,13 +51,15 @@ let render model =
     let active = Model.activePlayer model
 
     let heading =
-        match model.Status with
-        | InProgress -> $"Turn {model.Turn} - {Player.name active} to play"
-        | Over reason -> $"Game over after {model.Turn} turns - {reason}"
+        match model.Status, model.Pending with
+        | Over reason, _ -> $"Game over after {model.Turn} turns - {reason}"
+        | InProgress, Some(AwaitingReturn drawn) ->
+            $"Turn {model.Turn} - {Player.name active} drew a {StoneColor.name drawn} stone and may hand one back"
+        | InProgress, None -> $"Turn {model.Turn} - {Player.name active} to play"
 
     sb.AppendLine().AppendLine($"=== {heading} ===").AppendLine() |> ignore
 
-    sb.AppendLine(sprintf "  %-4s %-18s %-11s %-15s %s" "id" "region" "kind" "borders" "stones")
+    sb.AppendLine(sprintf "  %-4s %-18s %-11s %-15s %-8s %s" "id" "region" "kind" "borders" "ruler" "stones")
     |> ignore
 
     let byKind predicate =
@@ -68,6 +71,20 @@ let render model =
     section sb "DEAD" (byKind (function Dead -> true | _ -> false))
     section sb "PLAYERS" (model.Players |> List.map (playerLine model.Active))
 
+    let unruled predicate =
+        Model.rulings model |> List.filter (snd >> predicate) |> List.length
+
+    let ruled =
+        Model.standings model
+        |> List.map (fun (color, n) -> $"{StoneColor.name color} {n}")
+        |> String.concat "   "
+
+    section
+        sb
+        "RULE"
+        [ $"  {ruled}   tied {unruled (function Ruling.Contested _ -> true | _ -> false)}   "
+          + $"unclaimed {unruled (function Ruling.Unclaimed -> true | _ -> false)}" ]
+
     section
         sb
         "SUPPLY"
@@ -78,15 +95,34 @@ let render model =
 
     sb.ToString()
 
+/// Show the working behind who rules a region.
+let explainRule regionId model =
+    match Model.tryRegion regionId model with
+    | None ->
+        let (RegionId n) = regionId
+        $"There is no region {n}."
+    | Some region ->
+        String.concat Environment.NewLine ($"{region.Name} holds {Pile.describe region.Stones}." :: Model.explainRule region model)
+
 let help =
     String.concat
         Environment.NewLine
-        [ "Commands:"
-          "  place <colour> <region>   put a stone from your bag into a region (alias: p)"
-          "  pass                      end your turn without placing"
+        [ "Each turn, take one of the four actions:"
+          "  recruit <colour> <region>              place a stone from your bag on the map (alias: r)"
+          "  battle <colour> <region> [colours...]  place a stone in the Axe, then drive that many"
+          "                                         stones of other colours out of the region (alias: b)"
+          "  march <colour> <from> <to> [count]     place a stone in the Flag, then move matching"
+          "                                         stones into a bordering region (alias: m)"
+          "  negotiate                              draw a stone from the reserve (alias: n)"
+          "    then: return <colour> | keep         hand a stone back, or keep the draw"
+          ""
+          "Other commands:"
+          "  rule <region>             show the working behind who rules a region"
+          "  pass                      end your turn without acting"
           "  restart [seed]            deal a fresh game to the same players"
           $"  players <n> [seed]        deal a fresh game to n players ({Setup.MinPlayers}-{Setup.MaxPlayers})"
           "  help                      show this list"
           "  quit                      leave the game"
           ""
-          "Colours: r/red, b/blue, k/black. Regions are numbered by the board above." ]
+          "Colours: r/red, b/blue, k/black. Regions are numbered by the board above."
+          "Battle and march cannot target the dead region, the Flag or the Axe." ]

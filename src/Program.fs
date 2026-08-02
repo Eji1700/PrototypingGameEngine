@@ -45,6 +45,9 @@ let rec private loop model =
             | Ok Input.Help ->
                 printfn "%s" View.help
                 loop model
+            | Ok(Input.Explain regionId) ->
+                printfn "%s" (View.explainRule regionId model)
+                loop model
             | Ok(Input.Game msg) -> loop (Update.update msg model)
             | Error problem -> loop (Update.note problem model)
 
