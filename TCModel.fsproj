@@ -4,23 +4,38 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Compile Include="src/Prelude.fs" />
-    <Compile Include="src/Cascade.fs" />
-    <Compile Include="src/Rng.fs" />
-    <Compile Include="src/Domain.fs" />
-    <Compile Include="src/Ruling.fs" />
-    <Compile Include="src/Board.fs" />
-    <Compile Include="src/Model.fs" />
-    <Compile Include="src/Outcome.fs" />
-    <Compile Include="src/Setup.fs" />
-    <Compile Include="src/Update.fs" />
-    <Compile Include="src/View.fs" />
-    <Compile Include="src/Input.fs" />
-    <Compile Include="src/Program.fs" />
+  <ItemGroup Label="Common - generic, knows nothing of the game">
+    <Compile Include="src/Common/Result.fs" />
+    <Compile Include="src/Common/Cascade.fs" />
+    <Compile Include="src/Common/Random.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Domain - the language and rules of the game">
+    <Compile Include="src/Domain/Stones.fs" />
+    <Compile Include="src/Domain/Board.fs" />
+    <Compile Include="src/Domain/Players.fs" />
+    <Compile Include="src/Domain/Position.fs" />
+    <Compile Include="src/Domain/Ruling.fs" />
+    <Compile Include="src/Domain/Game.fs" />
+    <Compile Include="src/Domain/Events.fs" />
+    <Compile Include="src/Domain/Actions.fs" />
+    <Compile Include="src/Domain/Outcome.fs" />
+    <Compile Include="src/Domain/Setup.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="App - the MVU loop">
+    <Compile Include="src/App/Model.fs" />
+    <Compile Include="src/App/Messages.fs" />
+    <Compile Include="src/App/Update.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Console - the only part that talks to a person">
+    <Compile Include="src/Console/Words.fs" />
+    <Compile Include="src/Console/Render.fs" />
+    <Compile Include="src/Console/Parse.fs" />
+    <Compile Include="src/Console/Program.fs" />
   </ItemGroup>
 
 </Project>

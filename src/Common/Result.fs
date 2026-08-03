@@ -1,4 +1,4 @@
-namespace TCModel
+namespace TCModel.Common
 
 /// Sequences validation steps, short-circuiting on the first objection.
 type ResultBuilder() =
