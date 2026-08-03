@@ -25,9 +25,12 @@
     <Compile Include="src/Domain/Setup.fs" />
   </ItemGroup>
 
-  <ItemGroup Label="App - the MVU loop">
-    <Compile Include="src/App/Model.fs" />
+  <ItemGroup Label="App - the MVU loop, and the game's memory of itself">
     <Compile Include="src/App/Messages.fs" />
+    <Compile Include="src/App/Session.fs" />
+    <Compile Include="src/App/Timeline.fs" />
+    <Compile Include="src/App/Journal.fs" />
+    <Compile Include="src/App/Model.fs" />
     <Compile Include="src/App/Update.fs" />
   </ItemGroup>
 
@@ -35,6 +38,7 @@
     <Compile Include="src/Console/Words.fs" />
     <Compile Include="src/Console/Render.fs" />
     <Compile Include="src/Console/Parse.fs" />
+    <Compile Include="src/Console/Transcript.fs" />
     <Compile Include="src/Console/Program.fs" />
   </ItemGroup>
 

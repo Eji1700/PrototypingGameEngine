@@ -4,25 +4,25 @@ open TCModel.Common
 open TCModel.Domain
 
 /// The U of MVU: a pure transition from a message and a model to the next model.
-/// The domain owns the rules of each action; what lives here is the flow of a turn -
-/// whose it is, when it ends, and when the game does.
+/// The domain owns the rules of each move; what lives here is the flow of a turn -
+/// whose it is, when it ends, when the game does - and the game's memory of itself.
 module Update =
 
     /// Deal a fresh game. The player count is the only thing that can be wrong, and
     /// the table reports it, so a dealt game always has a legal number of players.
     let private deal players seed =
-        match Setup.deal players seed with
-        | Ok game ->
-            Ok
-                { Seed = seed
-                  Session =
-                    InPlay
-                        { Game = game
-                          Phase = AwaitingAction
-                          Negotiations = 0
-                          Turn = 1 }
-                  Log = [] }
-        | Error problem -> Error problem
+        Setup.deal players seed
+        |> Result.map (fun game ->
+            let dealt =
+                InPlay
+                    { Game = game
+                      Phase = AwaitingAction
+                      Negotiations = 0
+                      Turn = 1 }
+
+            { Timeline = Timeline.ofDeal dealt
+              Journal = Journal.ofDeal players seed
+              Log = [] })
 
     let private finish ending (play: Play) =
         Finished
@@ -59,15 +59,15 @@ module Update =
                 Negotiations = if negotiated then play.Negotiations + 1 else 0 }
             []
 
-    /// What an action did, followed by the turn changing hands.
+    /// What a move did, followed by the turn changing hands.
     let private thenEndTurn negotiated (play: Play) (game, event) =
         let session, events = endTurn negotiated { play with Game = game }
         session, event :: events
 
-    /// Carry out an action, then close the turn. Negotiating is the exception: it
-    /// leaves the turn open until a stone goes back.
-    let private act action (play: Play) =
-        match action with
+    /// Carry out a move, then close the turn. Negotiating is the exception: it leaves
+    /// the turn open until a stone goes back.
+    let private carry move (play: Play) =
+        match move with
         | Recruit(color, into) -> Actions.recruit color into play.Game |> Result.map (thenEndTurn false play)
         | Battle(color, target, driven) -> Actions.battle color target driven play.Game |> Result.map (thenEndTurn false play)
         | March(color, from, into, count) ->
@@ -76,50 +76,70 @@ module Update =
             Actions.negotiate play.Game
             |> Result.map (fun (game, drawn, event) ->
                 InPlay { play with Game = game; Phase = AwaitingReturn drawn }, [ event ])
+        | Settle color -> Actions.settle color play.Game |> Result.map (thenEndTurn true play)
+        | Resign -> Ok(finish Abandoned play, [ GameEnded Abandoned ])
 
-    let private settle color (play: Play) =
-        Actions.settle color play.Game |> Result.map (thenEndTurn true play)
+    /// Whether the move may be asked for at all just now, before the rules of the move
+    /// itself have their say. A draw from the reserve must be settled before anything
+    /// else can happen; walking away is allowed at any point.
+    let private attempt move (play: Play) =
+        match move, play.Phase with
+        | Resign, _ -> carry move play
+        | Settle _, AwaitingReturn _ -> carry move play
+        | Settle _, AwaitingAction -> Error NothingToSettle
+        | _, AwaitingReturn drawn -> Error(MustSettleFirst drawn)
+        | _, AwaitingAction -> carry move play
 
-    /// Apply an outcome: on success the session moves on and the events are recorded,
-    /// on refusal the game is untouched and the objection is noted.
-    let private apply outcome model =
-        match outcome with
-        | Ok(session, events) ->
-            { model with Session = session }
-            |> Model.recordAll (events |> List.map Happened)
-        | Error rejection -> model |> Model.record (Refused rejection)
+    /// Ask for a move. Whatever comes of it, the record gains a line: a refusal leaves
+    /// the position exactly where it was, but it was still asked for.
+    let private make move model =
+        let asked = Make move
 
-    /// Record something the shell could not make sense of.
-    let note text model = model |> Model.record (Misunderstood text)
+        match Model.session model with
+        | Finished _ -> model |> Model.happen asked [ GameIsOver ] model.Timeline
+        | InPlay play ->
+            match attempt move play with
+            | Ok(session, events) ->
+                let timeline = Timeline.advance asked session model.Timeline
+                model |> Model.happen asked (events |> List.map Happened) timeline
+            | Error rejection -> model |> Model.happen asked [ Refused rejection ] model.Timeline
+
+    /// Step the finger back or forward along the timeline. Either way the move is
+    /// written into the record, so the record shows the game as it was really played.
+    let private walk asked step nothingThere told model =
+        match step model.Timeline with
+        | Some(timeline, move) -> model |> Model.happen asked [ told move ] timeline
+        | None -> model |> Model.happen asked [ nothingThere ] model.Timeline
+
+    /// Abandon this game and deal another. The old record is left behind whole - it is
+    /// the shell's business to have saved it - and the new game starts its own.
+    let private restart players seed model =
+        let game = Model.game model
+        let players = players |> Option.defaultValue (Game.playerCount game)
+        let seed = seed |> Option.defaultValue (Rng.next game.Rng |> fst)
+
+        match deal players seed with
+        | Ok dealt -> dealt
+        | Error(TooFewPlayers n) -> model |> Model.record (Misunderstood $"{n} is too few players.")
+        | Error(TooManyPlayers n) -> model |> Model.record (Misunderstood $"{n} is too many players.")
 
     let update msg model =
-        match msg, model.Session with
-        | Restart(players, seed), session ->
-            let game = Session.game session
-            let players = players |> Option.defaultValue (Game.playerCount game)
+        match msg with
+        | Make move -> make move model
+        | Undo -> walk Undo Timeline.undo NothingToTakeBack TookBack model
+        | Redo -> walk Redo Timeline.redo NothingToMakeAgain MadeAgain model
+        | Restart(players, seed) -> restart players seed model
 
-            let seed =
-                match seed with
-                | Some seed -> seed
-                | None -> Rng.next game.Rng |> fst
-
-            match deal players seed with
-            | Ok dealt -> dealt
-            | Error(TooFewPlayers n) -> model |> note $"{n} is too few players."
-            | Error(TooManyPlayers n) -> model |> note $"{n} is too many players."
-
-        | _, Finished _ -> model
-
-        | Quit, InPlay play ->
-            { model with Session = finish Abandoned play }
-            |> Model.record (Happened(GameEnded Abandoned))
-
-        // A draw from the reserve must be settled before the turn can move on.
-        | Settle color, InPlay({ Phase = AwaitingReturn _ } as play) -> model |> apply (settle color play)
-        | _, InPlay { Phase = AwaitingReturn drawn } -> model |> Model.record (Refused(MustSettleFirst drawn))
-
-        | Act action, InPlay({ Phase = AwaitingAction } as play) -> model |> apply (act action play)
-        | Settle _, InPlay { Phase = AwaitingAction } -> model |> Model.record (Refused NothingToSettle)
+    /// Record something the shell could not make sense of. It never became a move, so
+    /// it stays out of the record and merely goes up on screen.
+    let note text model = model |> Model.record (Misunderstood text)
 
     /// Deal the first game of a session.
     let start players seed = deal players seed
+
+    /// Play a whole game again from its deal. Because `update` is pure and the
+    /// generator travels inside the game, folding the recorded moves over a fresh deal
+    /// arrives at exactly the state they were recorded from - undone moves and all.
+    let replay players seed moves =
+        deal players seed
+        |> Result.map (fun model -> moves |> List.fold (fun model msg -> update msg model) model)

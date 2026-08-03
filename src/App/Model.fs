@@ -2,73 +2,49 @@ namespace TCModel.App
 
 open TCModel.Domain
 
-/// What the active player owes before their turn can end. A turn is either open to
-/// any action, or waiting on a stone to go back to the reserve - never both.
-type Phase =
-    | AwaitingAction
-    | AwaitingReturn of drawn: StoneColor
-
-/// A game still being played.
-type Play =
-    { Game: Game
-      Phase: Phase
-      /// Turns spent negotiating, or skipped for want of stones, without a stone
-      /// being played in between. The game ends when every player has done so in a row.
-      Negotiations: int
-      Turn: int }
-
-/// A game that has finished. There is no phase and no turn to take.
-type Over =
-    { Game: Game
-      Ending: Ending
-      Turn: int }
-
-/// A game is either in play or over, and the two offer different things to do,
-/// so no code has to ask whether the game it holds is still running.
-type Session =
-    | InPlay of Play
-    | Finished of Over
-
-/// A line in the record of what has happened.
-type Notice =
-    | Happened of Event
-    | Refused of Rejection
-    | Misunderstood of string
-
-/// The whole of what the game keeps: the session, and the story so far.
+/// The whole of what the game keeps.
+///
+/// The present position is not held here: it is whatever the timeline's finger is on,
+/// so there is one place a state can come from and no way for a stored "current game"
+/// to drift from the history behind it.
 type Model =
-    { Seed: uint64
-      Session: Session
-      /// Newest first.
+    { Timeline: Timeline
+      /// The durable record of play, saved when the game is done.
+      Journal: Journal
+      /// Newest first: the last few lines of chatter for the screen. This is not the
+      /// record - it also carries input the shell could not make sense of, which never
+      /// became a move at all.
       Log: Notice list }
-
-module Session =
-
-    let game session =
-        match session with
-        | InPlay play -> play.Game
-        | Finished over -> over.Game
-
-    let turn session =
-        match session with
-        | InPlay play -> play.Turn
-        | Finished over -> over.Turn
 
 module Model =
 
-    /// Longest run of notices kept.
+    /// Longest run of notices kept on screen. The journal keeps the rest.
     [<Literal>]
     let LogDepth = 12
 
+    let session model = Timeline.present model.Timeline
+
+    let game model = Session.game (session model)
+
+    let isOver model = Session.isOver (session model)
+
+    let seed model = Journal.seed model.Journal
+
+    let players model = Journal.players model.Journal
+
     let record notice model =
-        { model with Log = notice :: model.Log |> List.truncate LogDepth }
+        { model with
+            Log = notice :: model.Log |> List.truncate LogDepth }
 
-    let recordAll notices model =
-        notices |> List.fold (fun model notice -> record notice model) model
+    /// Write down that something was asked for and what came of it, and move the game
+    /// to where the new timeline points.
+    ///
+    /// Everything that happens goes through this one door, so nothing can reach the
+    /// record without reaching the screen, or the screen without the record.
+    let happen asked told timeline model =
+        let asking = session model
 
-    let game model = Session.game model.Session
-
-    let isOver model =
-        match model.Session with
-        | Finished _ -> true
-        | InPlay _ -> false
+        { model with
+            Timeline = timeline
+            Journal = Journal.write (Session.turn asking) (Game.active (Session.game asking)).Id asked told model.Journal
+            Log = (List.rev told) @ model.Log |> List.truncate LogDepth }

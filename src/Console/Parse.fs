@@ -14,6 +14,12 @@ module Parse =
         | Send of Msg
         | Help
         | Explain of RegionId
+        /// Show the record of the game so far.
+        | Recount
+        /// Write the record out now.
+        | Keep
+        /// Put the game down and go.
+        | Leave
         | Nothing
 
     let private tryInt (text: string) =
@@ -57,7 +63,7 @@ module Parse =
         result {
             let! c = color c
             let! r = region r
-            return Send(Act(Recruit(c, r)))
+            return Send(Make(Recruit(c, r)))
         }
 
     let private battle c target driven =
@@ -67,12 +73,14 @@ module Parse =
 
             let! driven =
                 match driven with
-                // Unsaid means drive out everything the rule allows.
+                // Unsaid means drive out everything the rule allows. Naming none is a
+                // legal thing to ask for and an illegal thing to do, and the rules say
+                // so themselves - the shell does not need its own copy of that.
                 | [] -> Ok AsManyAsAllowed
-                | [ "none" ] -> Error "A battle must drive out at least one stone."
+                | [ "none" ] -> Ok(These [])
                 | named -> colors named |> Result.map These
 
-            return Send(Act(Battle(c, target, driven)))
+            return Send(Make(Battle(c, target, driven)))
         }
 
     let private march c from into count =
@@ -86,17 +94,25 @@ module Parse =
                 | Some n when n >= 1 -> Ok n
                 | _ -> Error $"'{count}' is not a number of stones to march."
 
-            return Send(Act(March(c, from, into, count)))
+            return Send(Make(March(c, from, into, count)))
         }
 
     let line (text: string) : Result<Command, string> =
+        // A byte order mark can lead a line that was piped in or saved by an editor.
+        // It is not part of what anyone typed, so it is thrown away with the spaces.
         let words =
-            text.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofArray
+            text.Split([| ' '; '\t'; '\uFEFF' |], StringSplitOptions.RemoveEmptyEntries)
+            |> List.ofArray
 
         match words |> List.map (fun word -> word.ToLowerInvariant()) with
         | [] -> Ok Nothing
         | [ "help" ] | [ "?" ] -> Ok Help
-        | [ "quit" ] | [ "exit" ] | [ "q" ] -> Ok(Send Quit)
+        | [ "quit" ] | [ "exit" ] | [ "q" ] -> Ok Leave
+        | [ "history" ] | [ "log" ] -> Ok Recount
+        | [ "save" ] -> Ok Keep
+        | [ "undo" ] | [ "u" ] -> Ok(Send Undo)
+        | [ "redo" ] -> Ok(Send Redo)
+        | [ "resign" ] -> Ok(Send(Make Resign))
         | [ "rule"; r ] -> region r |> Result.map Explain
         | [ "restart" ] -> Ok(Send(Restart(None, None)))
         | [ "restart"; s ] -> seed s |> Result.map (fun s -> Send(Restart(None, s)))
@@ -111,6 +127,6 @@ module Parse =
         | ("battle" | "b") :: c :: target :: driven -> battle c target driven
         | [ ("march" | "m"); c; from; into ] -> march c from into "1"
         | [ ("march" | "m"); c; from; into; count ] -> march c from into count
-        | [ "negotiate" ] | [ "n" ] -> Ok(Send(Act Negotiate))
-        | [ "return"; c ] -> color c |> Result.map (Settle >> Send)
+        | [ "negotiate" ] | [ "n" ] -> Ok(Send(Make Negotiate))
+        | [ "return"; c ] -> color c |> Result.map (Settle >> Make >> Send)
         | word :: _ -> Error $"I don't know how to '{word}'. Type help."

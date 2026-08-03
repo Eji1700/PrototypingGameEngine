@@ -106,10 +106,39 @@ module Words =
             $"Settle the negotiation first: a stone must go back to the reserve, and the {color drawn} stone just drawn may be it."
         | NothingToSettle -> "There is no negotiation to settle."
 
+    /// A message written the way a player types it. The record is kept in the same
+    /// words the prompt takes, so a game can be read back and played again without a
+    /// second language standing between the two.
+    let command msg =
+        let short color = (glyph color |> string).ToLowerInvariant()
+
+        match msg with
+        | Make(Recruit(c, into)) -> $"recruit {short c} {number into}"
+        | Make(Battle(c, target, AsManyAsAllowed)) -> $"battle {short c} {number target}"
+        | Make(Battle(c, target, These [])) -> $"battle {short c} {number target} none"
+        | Make(Battle(c, target, These driven)) ->
+            let driven = driven |> List.map short |> String.concat " "
+            $"battle {short c} {number target} {driven}"
+        | Make(March(c, from, into, count)) -> $"march {short c} {number from} {number into} {count}"
+        | Make Negotiate -> "negotiate"
+        | Make(Settle c) -> $"return {short c}"
+        | Make Resign -> "resign"
+        | Undo -> "undo"
+        | Redo -> "redo"
+        | Restart(None, None) -> "restart"
+        | Restart(None, Some seed) -> $"restart {seed}"
+        | Restart(Some players, None) -> $"players {players}"
+        | Restart(Some players, Some seed) -> $"players {players} {seed}"
+
     let notice =
         function
         | Happened e -> event e
         | Refused r -> rejection r
+        | TookBack msg -> $"Taken back: {command msg}."
+        | MadeAgain msg -> $"Made again: {command msg}."
+        | NothingToTakeBack -> "There is nothing left to take back - this is the deal itself."
+        | NothingToMakeAgain -> "There is nothing to make again."
+        | GameIsOver -> "The game is over. Take a move back to see it again, or restart."
         | Misunderstood text -> text
 
     let rulingMeasure =

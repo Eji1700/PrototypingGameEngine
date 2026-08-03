@@ -32,12 +32,16 @@ Four layers, each depending only on the ones above it.
 | [Outcome.fs](src/Domain/Outcome.fs) | Which faction carries the board, and which player carries the faction |
 | [Setup.fs](src/Domain/Setup.fs) | Dealing a fresh game |
 
-**`src/App`** — the MVU loop: whose turn it is, when it ends, and when the game does.
+**`src/App`** — the MVU loop and the game's memory of itself: whose turn
+it is, when it ends, when the game does, and everything that has happened so far.
 
 | File | Role |
 | --- | --- |
-| [Model.fs](src/App/Model.fs) | `Session`, `Play`, `Over`, and the log |
-| [Messages.fs](src/App/Messages.fs) | `Action` and `Msg` |
+| [Messages.fs](src/App/Messages.fs) | `Move` and `Msg` |
+| [Session.fs](src/App/Session.fs) | `Session`, `Play`, `Over`, and `Notice` |
+| [Timeline.fs](src/App/Timeline.fs) | Every state the game has stood in, with a finger on the present |
+| [Journal.fs](src/App/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
+| [Model.fs](src/App/Model.fs) | The timeline, the journal, and the last few lines on screen |
 | [Update.fs](src/App/Update.fs) | `Msg -> Model -> Model` |
 
 **`src/Console`** — the only part that talks to a person.
@@ -47,6 +51,7 @@ Four layers, each depending only on the ones above it.
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
 | [Render.fs](src/Console/Render.fs) | `Model -> string` |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
+| [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 | [Program.fs](src/Console/Program.fs) | The read/update/render loop |
 
 ## Keeping invalid states out
@@ -72,6 +77,14 @@ down in the first place.
 - **Events and rejections are data**, not sentences. The domain says
   `NothingToDriveOut(region, colour)` and [Words.fs](src/Console/Words.fs) decides
   how that reads, so wording can change without touching a rule.
+- **`Msg` separates a `Move` from walking the history.** Only a move can be
+  attempted against a position, so `attempt` never has to answer what `Undo` does
+  to a phase, and undo never has to answer what it does to a bag.
+- **The model holds no current game.** The present position is whatever the
+  timeline's finger is on, so a stored "current game" cannot drift out of step with
+  the history behind it.
+- **`Timeline` has a private constructor**, so its two lists can only be moved
+  between in step: a state can be walked away from and back to, never dropped.
 
 What is not enforced by types: that the 63 stones are conserved. Actions only ever
 move stones between piles, and `tests/actions.fsx` checks the total after each one.
@@ -226,6 +239,73 @@ or *every player has played out their bag*.
 Since a negotiation never grows a bag and only a stone in hand allows one, every
 bag shrinks monotonically, so a game always winds down.
 
+## Taking it back, and writing it down
+
+Two things remember the game, and they are deliberately different.
+
+**The timeline** ([Timeline.fs](src/App/Timeline.fs)) is a zipper: the deal, the
+moves made since, and the moves taken back. The present is wherever the finger
+points. `undo` and `redo` only move the finger, so no state is ever rebuilt and
+none is ever lost.
+
+Because a session is a value and the generator travels inside it, undoing carries
+the generator back too. A negotiation taken back and made again **draws the same
+stone**. Undo is going back in time, not rolling again, and there is no way to
+fish for a better draw.
+
+**The journal** ([Journal.fs](src/App/Journal.fs)) is append-only and never
+rewound. Undoing a move adds a line saying so rather than erasing the one before
+it, so the record is the game as it was really played, second thoughts and all.
+It keeps refused moves too: asking is part of what happened, and a refusal can
+tell the table something — that the reserve is empty, or that a region holds no
+black stone.
+
+Every entry names the turn and the player who asked. That is the hook a later
+account of who-knows-what hangs on: the record already says who was in a position
+to learn each thing.
+
+Both live in the model, and everything passes through `Model.happen`, so nothing
+can reach the record without reaching the screen or the screen without the record.
+Only input the shell could not parse stays out — it never became a move.
+
+### The record as a file
+
+A game writes itself to `logs/` when it ends, on `restart`, on the way out, and
+whenever you type `save`. The name is fixed when the game is dealt, so saving the
+same game again writes over the same file.
+
+There is no second format. Every move is written exactly as it is typed at the
+prompt, one to a line, and everything else is a comment — so reading a record back
+is the same job as reading a player's input, done by the same parser.
+
+```
+deal 2 42
+
+#   1  turn 1, Player 1
+recruit r 5
+#      Player 1 recruits a Red stone into Greymarket.
+
+#   2  turn 2, Player 2
+undo
+#      Taken back: recruit r 5.
+```
+
+```powershell
+dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
+```
+
+Replaying folds the recorded moves over a fresh deal. Since `update` is pure and
+the generator is part of the game, this lands on exactly the state the record was
+saved from — and, because undo and redo are recorded moves like any other, it
+passes through every state the original game did on the way, in the same order.
+A replayed game writes a byte-identical record; [history.fsx](tests/history.fsx)
+checks that, state for state.
+
+Replay stops where the game left off, which is also where `undo` starts. So the
+same two commands that take a move back during play are what walk a finished game
+backwards and forwards for review, and a game that ends stays open at the prompt
+rather than closing the window on itself.
+
 ## The map
 
 Borders are declared once in `Board.declaredBorders` and symmetrised, so a border
@@ -264,6 +344,8 @@ ready for the dead region to obstruct movement).
 dotnet run                # 2 players, random seed from the clock
 dotnet run -- 3           # 3 players, random seed
 dotnet run -- 3 42        # 3 players, reproducible game from seed 42
+
+dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log   # play a saved record again
 ```
 
 | command | action |
@@ -272,6 +354,9 @@ dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 | `battle <colour> <region> [colours...]` (`b`) | Battle; name no colours to drive out all you may |
 | `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
 | `negotiate` (`n`), then `return <colour>` | Negotiate |
+| `undo` (`u`), `redo` | walk the game back and forward a move at a time |
+| `history` (`log`) | the whole record so far, as it will be saved |
+| `save` | write the record out now |
 | `rule <region>` | not an action; shows who rules a region and why |
 | `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 
@@ -292,7 +377,10 @@ advanced by mutation would make `update` impure and stop the model being a value
 dotnet fsi tests/ruling.fsx     # the ruling cascade, including elimination
 dotnet fsi tests/outcome.fsx    # both winning cascades
 dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone conservation
+dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 ```
 
-Each script exits non-zero on failure. They load the domain directly, so they run
-without building the console app.
+Each script exits non-zero on failure. They load the source directly, so they run
+without building the console app. `history.fsx` reaches up through the App layer to
+the transcript reader and writer, which is what lets it check a whole game out to
+text and back again.

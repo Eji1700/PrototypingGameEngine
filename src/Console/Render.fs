@@ -97,6 +97,30 @@ module Render =
         @ factionVerdict
         @ players
 
+    /// The record of the game so far, as it stands and as it will be saved.
+    let history model =
+        let entry (entry: Entry) =
+            let asked =
+                sprintf "  %3d  turn %-4d %-9s %s" entry.Ordinal entry.Turn (Words.player entry.Actor) (Words.command entry.Asked)
+
+            let told =
+                entry.Told |> List.map (fun notice -> String.replicate 26 " " + Words.notice notice)
+
+            asked :: told
+
+        let standing =
+            let made = Timeline.movesMade model.Timeline
+            let back = Timeline.movesTakenBack model.Timeline
+
+            match back with
+            | 0 -> $"{made} move(s) stand between the deal and here."
+            | _ -> $"{made} move(s) stand between the deal and here, with {back} taken back and waiting to be made again."
+
+        match Journal.entries model.Journal with
+        | [] -> "Nothing has happened yet."
+        | entries ->
+            String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + standing ])
+
     /// Render the whole game as a block of text.
     let model model =
         let sb = StringBuilder()
@@ -104,7 +128,7 @@ module Render =
         let active = Game.active game
 
         let heading =
-            match model.Session with
+            match Model.session model with
             | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
             | InPlay { Phase = AwaitingReturn drawn; Turn = turn } ->
                 $"Turn {turn} - {Words.player active.Id} drew a {Words.color drawn} stone and must hand one back"
@@ -124,7 +148,7 @@ module Render =
         section sb "DEAD" (byKind (function Dead -> true | _ -> false))
 
         let run =
-            match model.Session with
+            match Model.session model with
             | InPlay play ->
                 [ $"  negotiations in a row: {play.Negotiations} of {Game.playerCount game} - the game ends on the last" ]
             | Finished _ -> []
@@ -153,7 +177,7 @@ module Render =
             [ $"  on the board: {Words.tally (Position.total game.Position)}"
               $"  in reserve:   {Words.tally game.Reserve}" ]
 
-        match model.Session with
+        match Model.session model with
         | InPlay _ -> ()
         | Finished _ -> section sb "RESULT" (result game)
 
@@ -180,12 +204,22 @@ module Render =
               "The game ends once every player has negotiated in a row. An empty-handed player"
               "has their turn skipped, and that counts as a negotiation."
               ""
+              "Walking the game:"
+              "  undo                      take the last move back, whoever made it"
+              "  redo                      make again the move last taken back"
+              "  history                   the whole record of the game so far"
+              "  save                      write the record out now, without waiting"
+              ""
+              "Undo goes back in time rather than rolling again: a negotiation taken back"
+              "and made again draws the same stone. Both are written into the record, so a"
+              "saved game replays exactly as it was played, doubling back and all."
+              ""
               "Other commands:"
               "  rule <region>             show the working behind who rules a region"
               "  restart [seed]            deal a fresh game to the same players"
               $"  players <n> [seed]        deal a fresh game to n players ({Table.MinPlayers}-{Table.MaxPlayers})"
               "  help                      show this list"
-              "  quit                      leave the game"
+              "  quit                      leave, saving the record on the way out"
               ""
               "Colours: r/red, b/blue, k/black. Regions are numbered by the board above."
               "Battle and march cannot target the dead region, the Flag or the Axe." ]
