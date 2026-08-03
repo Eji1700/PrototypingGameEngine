@@ -126,6 +126,26 @@ let private recruit color into model =
             |> endTurn false
     }
 
+/// The stones in a region that a battle of this colour could drive out.
+let private losingStones color (region: Region) =
+    Pile.toCounts region.Stones |> List.filter (fun (other, _) -> other <> color)
+
+/// Work out what an unnamed battle drives out. Taking everything on offer is only
+/// assumed where it is the one thing the attacker could have meant; a real choice
+/// between colours has to be made by the player. Both counts are known to be at
+/// least one by the time this runs, so it never comes back empty.
+let private resolveCasualties color region allowed =
+    let losing = losingStones color region
+    let available = losing |> List.sumBy snd
+
+    match losing with
+    | _ when available <= allowed -> Ok(losing |> List.collect (fun (other, n) -> List.replicate n other))
+    | [ (only, _) ] -> Ok(List.replicate allowed only)
+    | _ ->
+        let holding = losing |> List.map (fun (other, n) -> $"{n} {StoneColor.name other}") |> String.concat " and "
+
+        Error $"{region.Name} holds {holding}, and {allowed} of them may be driven out - name which."
+
 /// Place a stone in the Axe and name a region. For each stone there matching the
 /// placed colour, one stone of another colour may be driven back to the reserve.
 let private battle color target driven model =
@@ -134,6 +154,24 @@ let private battle color target driven model =
         let! region = contestedRegion target model
         let! axe = findRegion Board.axe model
         let matching = Pile.count color region.Stones
+        let available = losingStones color region |> List.sumBy snd
+
+        // A battle has to be a real fight: something of yours to fight with, and
+        // something of theirs to drive out.
+        do! require
+                (matching >= 1)
+                $"{region.Name} holds no {StoneColor.name color} stone, so there is nothing there to battle with."
+
+        do! require
+                (available >= 1)
+                $"{region.Name} holds nothing but {StoneColor.name color} stones, so there is nothing to drive out."
+
+        let! driven =
+            match driven with
+            | These named -> Ok named
+            | AsManyAsAllowed -> resolveCasualties color region matching
+
+        do! require (not (List.isEmpty driven)) "A battle must drive out at least one stone."
 
         do! require
                 (driven |> List.forall (fun other -> other <> color))
@@ -148,10 +186,7 @@ let private battle color target driven model =
         let spoils = Pile.ofColors driven
 
         let telling =
-            match driven with
-            | [] -> $"{Player.name player} battles {region.Name} with a {StoneColor.name color} stone, but drives nothing out."
-            | _ ->
-                $"{Player.name player} battles {region.Name} with a {StoneColor.name color} stone, driving {Pile.describe spoils} back to the reserve."
+            $"{Player.name player} battles {region.Name} with a {StoneColor.name color} stone, driving {Pile.describe spoils} back to the reserve."
 
         return
             model
@@ -172,6 +207,10 @@ let private march color from into count model =
         do! require (count >= 1) "A march moves at least one stone."
 
         let available = Pile.count color source.Stones
+
+        do! require
+                (available >= 1)
+                $"{source.Name} holds no {StoneColor.name color} stone, so there is nothing there to march."
 
         do! require
                 (available >= count)

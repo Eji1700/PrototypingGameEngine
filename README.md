@@ -106,14 +106,21 @@ Flag and the Axe are legal targets, since the rule excludes only the dead region
 
 **Battle** — place any stone from the bag into the Axe and name another region
 (not dead, not the Flag or the Axe). Count the stones there matching the colour
-just placed; up to that many stones *of other colours* may be driven out of that
-region and back to the reserve. The player chooses which. Driving out none is
-legal, since the rule says "may".
+just placed; up to that many stones *of other colours* are driven out of that
+region and back to the reserve.
+
+A battle must be a real fight, so the target must hold at least one stone of the
+attacking colour and at least one stone of another colour, and at least one stone
+must be driven out. Naming no colours drives out everything the rule allows. Where
+that would take a genuine choice — more stones on offer than removals, spread
+across more than one colour — the game asks which instead of guessing.
 
 **March** — place any stone from the bag into the Flag and name another region
 (not dead, not the Flag or the Axe). One or more stones there of the matching
 colour then move into a single region bordering it, which must not be the dead
-region. Since the Flag and the Axe border nothing, they can never be marched into.
+region. The source must hold at least one stone of that colour and at least one
+must move. Since the Flag and the Axe border nothing, they can never be marched
+into.
 
 **Negotiate** — only open to a player holding at least one stone. Draw a stone from
 the reserve at random into the bag; the player may then hand any one stone from the
@@ -221,7 +228,7 @@ dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 | command | action |
 | --- | --- |
 | `recruit <colour> <region>` (`r`) | Recruit |
-| `battle <colour> <region> [colours...]` (`b`) | Battle; the trailing colours are the stones driven out |
+| `battle <colour> <region> [colours...]` (`b`) | Battle; name no colours to drive out all you may |
 | `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
 | `negotiate` (`n`), then `return <colour>` or `keep` | Negotiate |
 | `rule <region>` | not an action; shows who rules a region and why |

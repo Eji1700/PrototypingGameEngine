@@ -61,7 +61,14 @@ let private parseBattle color target driven =
     result {
         let! color = parseColor color
         let! target = parseRegion target
-        let! driven = parseColors driven
+
+        let! driven =
+            match driven with
+            // Unsaid means drive out everything the rule allows.
+            | [] -> Ok AsManyAsAllowed
+            | [ "none" ] -> Error "A battle must drive out at least one stone."
+            | named -> parseColors named |> Result.map These
+
         return Game(Battle(color, target, driven))
     }
 

@@ -33,6 +33,15 @@ type Model =
       Log: string list
       Status: GameStatus }
 
+/// Which stones a battle drives out of the region it targets.
+type Casualties =
+    /// As many as the rule allows. Only stated when there is no choice to be made;
+    /// where the attacker could pick between colours they must say which.
+    | AsManyAsAllowed
+    /// Exactly these. A battle must drive out at least one stone, so an empty list
+    /// is rejected rather than treated as declining the fight.
+    | These of StoneColor list
+
 /// Everything the game can be asked to do. The first four are the actions a player
 /// may take on their turn.
 type Msg =
@@ -40,7 +49,7 @@ type Msg =
     | Recruit of color: StoneColor * into: RegionId
     /// Place a stone in the Axe, then drive stones of other colours out of a region
     /// and back to the reserve, one for each stone there matching the placed colour.
-    | Battle of color: StoneColor * target: RegionId * driven: StoneColor list
+    | Battle of color: StoneColor * target: RegionId * driven: Casualties
     /// Place a stone in the Flag, then move matching stones from one region into a
     /// region bordering it.
     | March of color: StoneColor * from: RegionId * into: RegionId * count: int
