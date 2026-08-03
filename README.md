@@ -123,8 +123,9 @@ must move. Since the Flag and the Axe border nothing, they can never be marched
 into.
 
 **Negotiate** — only open to a player holding at least one stone. Draw a stone from
-the reserve at random into the bag; the player may then hand any one stone from the
-bag back to the reserve, including the stone just drawn.
+the reserve at random into the bag, then hand any one stone from the bag back to
+the reserve, which may be the stone just drawn. A stone always goes back, so a
+negotiation trades one stone for another and never changes the size of a bag.
 
 Readings the rules left open, all easy to change:
 
@@ -137,7 +138,8 @@ Readings the rules left open, all easy to change:
 - **Negotiate is two steps.** The draw is random, so the player cannot sensibly
   choose what to hand back before seeing it. `Negotiate` draws and leaves the turn
   open with `Model.Pending` set to `AwaitingReturn`; `Settle` then ends the turn.
-  No other action is accepted in between.
+  No other action is accepted in between, and the turn cannot end without a stone
+  going back.
 
 Points the rules did not settle, decided here and easy to change:
 
@@ -230,7 +232,7 @@ dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 | `recruit <colour> <region>` (`r`) | Recruit |
 | `battle <colour> <region> [colours...]` (`b`) | Battle; name no colours to drive out all you may |
 | `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
-| `negotiate` (`n`), then `return <colour>` or `keep` | Negotiate |
+| `negotiate` (`n`), then `return <colour>` | Negotiate |
 | `rule <region>` | not an action; shows who rules a region and why |
 | `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 

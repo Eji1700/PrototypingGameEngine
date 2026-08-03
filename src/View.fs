@@ -54,7 +54,7 @@ let render model =
         match model.Status, model.Pending with
         | Over reason, _ -> $"Game over after {model.Turn} turns - {reason}"
         | InProgress, Some(AwaitingReturn drawn) ->
-            $"Turn {model.Turn} - {Player.name active} drew a {StoneColor.name drawn} stone and may hand one back"
+            $"Turn {model.Turn} - {Player.name active} drew a {StoneColor.name drawn} stone and must hand one back"
         | InProgress, None -> $"Turn {model.Turn} - {Player.name active} to play"
 
     sb.AppendLine().AppendLine($"=== {heading} ===").AppendLine() |> ignore
@@ -130,7 +130,8 @@ let help =
           "A battle needs a stone of its colour in the region and something else to drive"
           "out, and must drive out at least one. A march needs stones of its colour to move."
           "  negotiate                              draw a stone from the reserve (alias: n)"
-          "    then: return <colour> | keep         hand a stone back, or keep the draw"
+          "    then: return <colour>                hand a stone back - one always must go back,"
+          "                                         and it may be the one just drawn"
           ""
           "The game ends once every player has negotiated in a row. An empty-handed"
           "player has their turn skipped, and that counts as a negotiation."

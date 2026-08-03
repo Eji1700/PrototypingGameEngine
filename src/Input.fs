@@ -105,6 +105,5 @@ let parse (line: string) : Result<Command, string> =
     | [ ("march" | "m"); color; from; into; count ] -> parseMarch color from into count
     | [ "rule"; region ] -> parseRegion region |> Result.map Explain
     | [ "negotiate" ] | [ "n" ] -> Ok(Game Negotiate)
-    | [ "keep" ] -> Ok(Game(Settle None))
-    | [ "return"; color ] -> parseColor color |> Result.map (Some >> Settle >> Game)
+    | [ "return"; color ] -> parseColor color |> Result.map (Settle >> Game)
     | word :: _ -> Error $"I don't know how to '{word}'. Type help."

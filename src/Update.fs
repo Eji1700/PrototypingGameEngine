@@ -253,26 +253,24 @@ let private negotiate model =
                     Pending = Some(AwaitingReturn color) }
                 |> Model.withPlayer { player with Bag = Pile.add color 1 player.Bag }
                 |> log
-                    $"{Player.name player} draws a {StoneColor.name color} stone from the reserve, and may hand one back."
+                    $"{Player.name player} draws a {StoneColor.name color} stone from the reserve, and must now hand one back."
     }
 
-/// Finish a negotiation by handing a stone back, or by keeping the draw.
-let private settle handBack model =
+/// Finish a negotiation by handing a stone back. A stone always goes back, so the
+/// bag ends the turn the size it began it.
+let private settle color model =
     let player = Model.activePlayer model
 
-    match handBack with
-    | None -> Ok(model |> log $"{Player.name player} keeps the draw." |> endTurn true)
-    | Some color ->
-        match Pile.tryTake color 1 player.Bag with
-        | None -> Error $"{Player.name player} has no {StoneColor.name color} stone to hand back."
-        | Some bag ->
-            Ok(
-                model
-                |> Model.withPlayer { player with Bag = bag }
-                |> Model.returnToReserve (Pile.ofCounts [ color, 1 ])
-                |> log $"{Player.name player} hands a {StoneColor.name color} stone back to the reserve."
-                |> endTurn true
-            )
+    match Pile.tryTake color 1 player.Bag with
+    | None -> Error $"{Player.name player} has no {StoneColor.name color} stone to hand back."
+    | Some bag ->
+        Ok(
+            model
+            |> Model.withPlayer { player with Bag = bag }
+            |> Model.returnToReserve (Pile.ofCounts [ color, 1 ])
+            |> log $"{Player.name player} hands a {StoneColor.name color} stone back to the reserve."
+            |> endTurn true
+        )
 
 // ---------------------------------------------------------------------------
 
@@ -305,7 +303,7 @@ let update msg model =
     | InProgress, Some(AwaitingReturn drawn), _ ->
         model
         |> log
-            $"Settle the negotiation first: hand a stone back, or keep the {StoneColor.name drawn} stone just drawn."
+            $"Settle the negotiation first: a stone must go back to the reserve, and the {StoneColor.name drawn} stone just drawn may be it."
 
     | InProgress, None, Recruit(color, into) -> model |> attempt (recruit color into model)
     | InProgress, None, Battle(color, target, driven) -> model |> attempt (battle color target driven model)

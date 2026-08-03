@@ -56,8 +56,9 @@ type Msg =
     /// Draw a stone from the reserve at random. The turn is not over until the draw
     /// is settled with `Settle`.
     | Negotiate
-    /// Finish a negotiation: hand a stone back to the reserve, or keep the draw.
-    | Settle of handBack: StoneColor option
+    /// Finish a negotiation by handing a stone back to the reserve. One must always
+    /// go back, so a negotiation leaves the bag the size it started.
+    | Settle of handBack: StoneColor
     /// Abandon this game and deal a fresh one. Anything left unspecified is carried
     /// over from the game in progress.
     | Restart of players: int option * seed: uint64 option
