@@ -151,6 +151,55 @@ module Board =
 
     let areAdjacent one other = neighbours one |> Set.contains other
 
+    /// Where the regions lie, so the map can be drawn as a map. The mainland is a
+    /// patch of a triangular lattice: rows run north to south, each row starting at
+    /// the half-column given in front of it and its regions standing two half-columns
+    /// apart, so that one row is offset half a step from the next.
+    ///
+    /// Two regions border each other exactly when they stand two half-columns apart in
+    /// the same row, or one half-column apart in rows that touch. So every border can
+    /// be drawn as a line and no line has to be drawn that is not a border - which is
+    /// what `problems` checks the tables against each other for. The Flag and the Axe
+    /// lie nowhere, being no part of the map.
+    let private places =
+        [ 2, [ 2; 1 ]
+          1, [ 3; 4 ]
+          0, [ 5; 6; 7 ]
+          1, [ 8; 9; 10 ]
+          2, [ 11; 12 ] ]
+
+    let private placed =
+        places
+        |> List.map (fun (offset, row) -> row |> List.mapi (fun step n -> n, offset + 2 * step))
+
+    /// The regions row by row, each with the half-column it stands in.
+    let layout =
+        placed
+        |> List.map (List.choose (fun (n, at) -> tryId n |> Option.map (fun regionId -> regionId, at)))
+
+    let private asPair one other = min one other, max one other
+
+    /// The borders the layout puts side by side, which should be all of them.
+    let private drawnBorders =
+        Set.ofList
+            [ for row in placed do
+                  for one, here in row do
+                      for other, there in row do
+                          if one <> other && abs (here - there) = 2 then
+                              yield asPair one other
+
+              for above, below in List.pairwise placed do
+                  for one, here in above do
+                      for other, there in below do
+                          if abs (here - there) = 1 then
+                              yield asPair one other ]
+
+    let private namedBorders =
+        Set.ofList
+            [ for from, borders in declaredBorders do
+                  for other in borders do
+                      yield asPair from other ]
+
     /// Every region reachable from the start by crossing borders, optionally
     /// treating some regions as impassable.
     let reachableFrom (blocked: Set<RegionId>) start =
@@ -185,6 +234,27 @@ module Board =
               | true, false -> yield $"{region.Name} is meant to stand alone but borders other regions."
               | false, true -> yield $"{region.Name} borders nothing, so no stone can ever reach it."
               | _ -> ()
+
+          // The map as drawn has to be the map as declared, or the picture lies.
+          for n, _ in List.concat placed do
+              if Option.isNone (tryId n) then
+                  yield $"The map lays out region {n}, which is not on the board."
+
+          for region in regions do
+              let times = List.concat placed |> List.filter (fst >> (=) (RegionId.value region.Id)) |> List.length
+
+              match RegionKind.isIsolated region.Kind, times with
+              | true, 0
+              | false, 1 -> ()
+              | true, _ -> yield $"{region.Name} stands apart from the map, but the map lays it out."
+              | false, 0 -> yield $"{region.Name} is nowhere on the map."
+              | false, n -> yield $"{region.Name} is laid out on the map {n} times."
+
+          for one, other in Set.difference namedBorders drawnBorders do
+              yield $"Regions {one} and {other} border each other, but the map does not lay them side by side."
+
+          for one, other in Set.difference drawnBorders namedBorders do
+              yield $"The map lays regions {one} and {other} side by side, but they share no border."
 
           for label, regionId in [ "The Flag", flag; "The Axe", axe ] do
               match regions |> List.tryFind (fun region -> region.Id = regionId) with

@@ -16,6 +16,10 @@ let flag = Board.flag
 let axe = Board.axe
 let waste = at 6 // dead
 
+// Nothing else here means much if the board itself does not hang together, and the
+// map is only drawn as it is because the layout and the borders agree.
+report "the map hangs together" [] Board.problems
+
 /// A two-player game: region 8 holds what is asked, Player 1 holds one of each.
 let private game stocked =
     gameOf [ 8, stocked ] [ [ Red, 1; Blue, 1; Black, 1 ]; [ (Red, 1) ] ]

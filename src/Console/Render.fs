@@ -9,20 +9,136 @@ open TCModel.App
 /// The V of MVU: a pure projection from the model to console text.
 module Render =
 
-    let private borders regionId =
-        match Board.neighbours regionId |> Set.toList with
-        | [] -> "-"
-        | ids -> ids |> List.map (Words.number >> string) |> String.concat ","
+    // --- the map ----------------------------------------------------------------
+    //
+    // `Board.layout` lies on a triangular lattice, which is drawn here as brickwork:
+    // every region is two half-columns wide and each row is laid half a region across
+    // from the one above, so a region touches the two either side of it and the two
+    // above and below. Those six are exactly its neighbours - a wall shared between
+    // two regions is a border, and regions meeting at a corner only are not. So no
+    // border has to be drawn as a line, and none can be drawn wrong: `Board.problems`
+    // checks the layout against the borders before a game is ever dealt.
 
-    let private regionLine game (region: Region) =
-        sprintf
-            "  [%2d] %-18s %-11s %-15s %-8s %s"
-            (Words.number region.Id)
-            region.Name
-            (Words.kind region.Kind)
-            (borders region.Id)
-            (Game.ruleOver region.Id game |> Words.rule)
-            (Game.stones region.Id game |> Words.stones)
+    /// Characters to a half-column, so a region is two of them wide, wall to wall.
+    let private step = 11
+
+    /// The room between a region's walls, and the room its writing takes inside that,
+    /// which is the same less a margin either side.
+    let private cell = 2 * step - 1
+    let private written = cell - 2
+
+    let private column halfColumn = halfColumn * step
+
+    /// Where a row's walls stand: one at each region's left, and one closing the row.
+    let private walls row =
+        match row with
+        | [] -> []
+        | _ -> (row |> List.map (snd >> column)) @ [ column (List.last row |> snd) + 2 * step ]
+
+    let private mapWidth =
+        (Board.layout |> List.collect walls |> List.max) + 1
+
+    /// A region as it is titled on the map: its number and name, and for a home the
+    /// colour that holds it. A name with no room to spare gives up its "The".
+    let private mapTitle (region: Region) =
+        let titled name =
+            match region.Kind with
+            | Home color -> sprintf "[%2d] %s (%c)" (Words.number region.Id) name (Words.glyph color)
+            | Wild
+            | Special
+            | Dead -> sprintf "[%2d] %s" (Words.number region.Id) name
+
+        let full = titled region.Name
+
+        if String.length full <= written || not (region.Name.StartsWith "The ") then
+            full
+        else
+            titled (region.Name.Substring 4)
+
+    /// What stands in a region, with who rules it held against the right-hand edge.
+    /// A full region falls back to the tally rather than run into its neighbour.
+    let private mapStanding game (region: Region) =
+        let ruler =
+            match Game.ruleOver region.Id game with
+            | RuledBy color -> $">{Words.glyph color}"
+            | Contested tied -> "=" + (tied |> List.map (Words.glyph >> string) |> String.concat "")
+            | Unclaimed -> ""
+
+        // A space between the stones and the ruler keeps the two apart when a region
+        // fills up.
+        let room = written - String.length ruler - 1
+        let pile = Game.stones region.Id game
+
+        let standing =
+            match region.Kind with
+            | Dead -> "dead"
+            | Home _
+            | Wild
+            | Special ->
+                let laid = Words.stones pile
+                if String.length laid <= room then laid else Words.counted pile
+
+        let standing =
+            if String.length standing > room then standing.Substring(0, room) else standing
+
+        standing.PadRight(written - String.length ruler) + ruler
+
+    /// The map is laid out by column rather than written left to right, so its lines
+    /// are painted onto a blank one.
+    let private paint (line: char array) at (text: string) =
+        text |> String.iteri (fun i c -> if at + i < line.Length then line[at + i] <- c)
+
+    /// A row of regions: what each one is, and what stands in it, walled off from its
+    /// neighbours either side.
+    let private mapRow game row =
+        let line () =
+            let blank = Array.create mapWidth ' '
+            walls row |> List.iter (fun at -> blank[at] <- '|')
+            blank
+
+        let titles, standing = line (), line ()
+
+        for regionId, at in row do
+            let region = Board.region regionId
+            paint titles (column at + 2) (mapTitle region)
+            paint standing (column at + 2) (mapStanding game region)
+
+        [ String(titles).TrimEnd(); String(standing).TrimEnd() ]
+
+    /// The ground between two rows, which is where their shared borders run. Each row's
+    /// walls come down to meet it, half a region apart, and the wall a region shares
+    /// with the row above is the stretch between them.
+    let private mapBetween above below =
+        let line = Array.create mapWidth ' '
+        let corners = walls above @ walls below
+
+        for at in List.min corners .. List.max corners do
+            line[at] <- '-'
+
+        corners |> List.iter (fun at -> line[at] <- '+')
+
+        String(line).TrimEnd()
+
+    let private mapLines game =
+        let rec draw above rows =
+            match rows with
+            | [] -> [ mapBetween above [] ]
+            | row :: rest -> mapBetween above row :: mapRow game row @ draw row rest
+
+        draw [] Board.layout
+
+    /// The Flag and the Axe, drawn in the same hand as the map but standing clear of it
+    /// and of each other: sharing no wall with anything, they border nothing.
+    let private apartLines game regions =
+        let across piece =
+            regions |> List.map piece |> String.concat "   "
+
+        let inside (text: string) = "| " + text.PadRight written + " |"
+
+        [ across (fun _ -> "+" + String.replicate cell "-" + "+")
+          across (mapTitle >> inside)
+          across (fun region -> inside (mapStanding game region))
+          across (fun _ -> "+" + String.replicate cell "-" + "+") ]
 
     let private playerLine active (player: Player) =
         let marker = if player.Id = active then "->" else "  "
@@ -136,16 +252,20 @@ module Render =
 
         sb.AppendLine().AppendLine($"=== {heading} ===").AppendLine() |> ignore
 
-        sb.AppendLine(sprintf "  %-4s %-18s %-11s %-15s %-8s %s" "id" "region" "kind" "borders" "ruler" "stones")
-        |> ignore
+        section
+            sb
+            "THE MAP"
+            (mapLines game
+             @ [ ""
+                 "  Two regions border each other where they share a wall, and nowhere else -"
+                 "  regions that only meet at a corner do not. A home carries its colour, '>'"
+                 "  marks who rules a region and '=' who is level in it, and the rest are wild." ])
 
-        let byKind predicate =
-            Board.regions |> List.filter (fun region -> predicate region.Kind) |> List.map (regionLine game)
-
-        section sb "HOMELANDS" (byKind (function Home _ -> true | _ -> false))
-        section sb "WILDS" (byKind (function Wild -> true | _ -> false))
-        section sb "SPECIAL (standing alone)" (byKind (function Special -> true | _ -> false))
-        section sb "DEAD" (byKind (function Dead -> true | _ -> false))
+        section
+            sb
+            "STANDING APART"
+            (apartLines game (Board.regions |> List.filter (fun region -> RegionKind.isIsolated region.Kind))
+             @ [ ""; "  Bought with stones, but no part of the map and no part of the land." ])
 
         let run =
             match Model.session model with

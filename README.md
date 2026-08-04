@@ -334,10 +334,48 @@ neighbours: no border joins regions more than three apart, and all but three of 
 numbers border the one after them. The mainland takes 1 to 12, with the dead region
 at its centre; the Flag and the Axe, which are no part of the map, come last.
 
+### Drawn as a map
+
+That border graph is a patch of a triangular lattice, so it can be drawn as the map
+it is rather than listed. `Board.layout` says where each region lies — rows north to
+south, each row half a region across from the one above — and the board is drawn as
+brickwork:
+
+```
+                      +---------------------+---------------------+
+                      | [ 2] Saltmarsh      | [ 1] Nightfen (K)   |
+                      | B B              >B | K K              >K |
+           +----------+----------+----------+----------+----------+
+           | [ 3] Greymarket     | [ 4] Thornwood      |
+           | R R              >R | B K             =BK |
++----------+----------+----------+----------+----------+----------+
+| [ 5] Emberfall (R)  | [ 6] Hollow Waste   | [ 7] Stonecradle    |
+| R R              >R | dead                | R B             =RB |
++----------+----------+----------+----------+----------+----------+----------+
+           | [ 8] The Crossroads | [ 9] Windgap        | [10] Tidewatch (B)  |
+           | R K             =RK | B K             =BK | B B              >B |
+           +----------+----------+----------+----------+----------+----------+
+                      | [11] Ironford       | [12] Dunmoor        |
+                      | B B              >B | B K             =BK |
+                      +---------------------+---------------------+
+```
+
+Every region is two half-columns wide and each row is offset by one, so a region
+touches two either side and two above and below — six, which is exactly the most
+neighbours any region has. **A shared wall is a border, and regions meeting only at a
+corner share none.** So no border is drawn as a line into empty space, and none can
+be drawn wrong: the picture is the border table, laid out.
+
+`Board.problems` checks that it is, before a game is ever dealt. Alongside the
+older checks — ids on the board, no self-borders, isolated regions bordering
+nothing, every other region reachable — it now walks the layout and the borders
+against each other: every mainland region laid out exactly once, the Flag and the
+Axe laid out nowhere, no border without a shared wall, and no shared wall without a
+border. A layout that drifts from the table stops the game rather than drawing a
+map that lies. [actions.fsx](tests/actions.fsx) checks the same list is empty.
+
 No two homes border each other, and every home is three steps from every other,
-whether or not the dead region is passable. `Board.problems` checks the table at
-startup — ids on the board, no self-borders, isolated regions bordering nothing,
-every other region reachable — and the game refuses to start if any check fails.
+whether or not the dead region is passable.
 
 Rules that use adjacency can be written against `Board.areAdjacent`,
 `Board.neighbours` and `Board.reachableFrom` (which takes a set of blocked regions,

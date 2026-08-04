@@ -28,13 +28,6 @@ module Words =
 
     let player playerId = $"Player {PlayerId.value playerId}"
 
-    let kind =
-        function
-        | Home c -> $"{color c} home"
-        | Wild -> "wild"
-        | Special -> "special"
-        | Dead -> "dead"
-
     /// Reads as "2 Red and 1 Black"; empty piles read as "nothing".
     let pile stones =
         match Pile.toCounts stones with
@@ -48,13 +41,15 @@ module Words =
         else
             pile |> Pile.toColors |> List.map (glyph >> string) |> String.concat " "
 
-    /// A compact tally, as "Rx4 Bx2 (6)".
-    let tally pile =
-        let counts =
-            Pile.toCounts pile |> List.map (fun (c, n) -> $"{glyph c}x{n}") |> String.concat " "
+    /// Stones counted rather than laid out, as "Rx4 Bx2", for where there are too many
+    /// to draw one by one.
+    let counted pile =
+        match Pile.toCounts pile with
+        | [] -> "empty"
+        | counts -> counts |> List.map (fun (c, n) -> $"{glyph c}x{n}") |> String.concat " "
 
-        let counts = if counts = "" then "empty" else counts
-        $"{counts} ({Pile.total pile})"
+    /// A compact tally, as "Rx4 Bx2 (6)".
+    let tally pile = $"{counted pile} ({Pile.total pile})"
 
     let rule =
         function
