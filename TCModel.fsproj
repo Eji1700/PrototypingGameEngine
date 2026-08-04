@@ -19,6 +19,7 @@
     <Compile Include="src/Domain/Position.fs" />
     <Compile Include="src/Domain/Ruling.fs" />
     <Compile Include="src/Domain/Game.fs" />
+    <Compile Include="src/Domain/Knowledge.fs" />
     <Compile Include="src/Domain/Events.fs" />
     <Compile Include="src/Domain/Actions.fs" />
     <Compile Include="src/Domain/Outcome.fs" />

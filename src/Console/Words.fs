@@ -51,6 +51,13 @@ module Words =
     /// A compact tally, as "Rx4 Bx2 (6)".
     let tally pile = $"{counted pile} ({Pile.total pile})"
 
+    /// Stones that may be out of sight: an open pile is tallied as usual, a closed one
+    /// gives up nothing but how many it holds.
+    let sight =
+        function
+        | Open pile -> tally pile
+        | Closed n -> $"closed ({n})"
+
     let rule =
         function
         | RuledBy c -> color c
@@ -135,6 +142,35 @@ module Words =
         | NothingToMakeAgain -> "There is nothing to make again."
         | GameIsOver -> "The game is over. Take a move back to see it again, or restart."
         | Misunderstood text -> text
+
+    // --- what a notice says to the player reading it ------------------------------
+    //
+    // The record above keeps the whole truth of what happened, because it is the record.
+    // What follows is that same truth as it reaches one player at the table, which is
+    // less: a stone drawn from the reserve goes straight into a closed bag, so only the
+    // player who drew it ever sees its colour.
+
+    let eventSeenBy beholder happening =
+        match happening with
+        | Drew(player', _) when player' <> beholder ->
+            $"{player player'} draws a stone from the reserve, and must now hand one back."
+        | _ -> event happening
+
+    /// A refusal is public - asking is part of what happened at the table - but this one
+    /// names the stone just drawn, and it stays on screen after the turn has moved on.
+    /// Only the player who drew can be told it, and the heading gives them the colour
+    /// anyway, so nothing is lost by leaving it out here.
+    let private rejectionSeenBy refusal =
+        match refusal with
+        | MustSettleFirst _ ->
+            "Settle the negotiation first: a stone must go back to the reserve, and the one just drawn may be it."
+        | _ -> rejection refusal
+
+    let noticeSeenBy beholder told =
+        match told with
+        | Happened happening -> eventSeenBy beholder happening
+        | Refused refusal -> rejectionSeenBy refusal
+        | _ -> notice told
 
     let rulingMeasure =
         function

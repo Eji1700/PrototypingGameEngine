@@ -27,6 +27,7 @@ Four layers, each depending only on the ones above it.
 | [Position.fs](src/Domain/Position.fs) | Which stones stand where |
 | [Ruling.fs](src/Domain/Ruling.fs) | Who rules a region |
 | [Game.fs](src/Domain/Game.fs) | The game in progress, and what can be asked of it |
+| [Knowledge.fs](src/Domain/Knowledge.fs) | What one player can see of a game, and what they cannot |
 | [Events.fs](src/Domain/Events.fs) | What happened, and why an action was refused |
 | [Actions.fs](src/Domain/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
 | [Outcome.fs](src/Domain/Outcome.fs) | Which faction carries the board, and which player carries the faction |
@@ -85,6 +86,9 @@ down in the first place.
   the history behind it.
 - **`Timeline` has a private constructor**, so its two lists can only be moved
   between in step: a state can be walked away from and back to, never dropped.
+- **A `Sight` is `Open` of a pile or `Closed` of a count**, so a bag someone
+  cannot see into carries no colours to leak by accident. What a player is shown
+  is built by `Knowledge`, not filtered out of a `Game` at the point of writing.
 
 What is not enforced by types: that the 63 stones are conserved. Actions only ever
 move stones between piles, and `tests/actions.fsx` checks the total after each one.
@@ -260,9 +264,9 @@ It keeps refused moves too: asking is part of what happened, and a refusal can
 tell the table something — that the reserve is empty, or that a region holds no
 black stone.
 
-Every entry names the turn and the player who asked. That is the hook a later
-account of who-knows-what hangs on: the record already says who was in a position
-to learn each thing.
+Every entry names the turn and the player who asked. That is the hook the account
+of who-knows-what below hangs on: the record already says who was in a position to
+learn each thing.
 
 Both live in the model, and everything passes through `Model.happen`, so nothing
 can reach the record without reaching the screen or the screen without the record.
@@ -305,6 +309,54 @@ Replay stops where the game left off, which is also where `undo` starts. So the
 same two commands that take a move back during play are what walk a finished game
 backwards and forwards for review, and a game that ends stays open at the prompt
 rather than closing the window on itself.
+
+## Who knows what
+
+A bag is held closed and so is the reserve, so nobody sees the whole game. The
+screen belongs to whoever is to play, and `Knowledge.seenBy`
+([Knowledge.fs](src/Domain/Knowledge.fs)) is what they are shown:
+
+| | what they see |
+| --- | --- |
+| their own bag | every stone, colour by colour |
+| the map | every stone, colour by colour — it is open to everyone |
+| every other bag | how many stones, never which |
+| the reserve | how many stones, never which |
+| out of sight | which colours are out there, never where |
+
+That last line is the one worth having. Every stone is somewhere, so whatever is
+neither on the map nor in the beholder's own bag must be in the reserve or in
+somebody's bag, and its colours follow exactly: `Unseen` is the whole game less
+the map less what the beholder holds. A player can count what is still to come
+without being told where any of it is.
+
+A `Sight` is either `Open` of a pile or `Closed` of a count, so a closed bag has
+no colours to leak by accident — there is nothing in the value to read. Once the
+game is over `Knowledge.laidBare` opens everything, because there is no longer
+anything to hold back.
+
+Two things a player is told would otherwise give a closed bag away, and both are
+worded around in [Words.fs](src/Console/Words.fs):
+
+- **A stone drawn from the reserve** goes straight into a closed bag. The player
+  who drew it is told its colour; everyone else is told only that a stone was
+  drawn. Handing one back *is* public — the stone lands in the reserve in front
+  of everybody — so between the two, the table learns what left a bag and never
+  what entered it.
+- **"Settle the negotiation first"** names the stone just drawn, and it stays on
+  screen after the turn has moved on, so the colour is left out of it. Only the
+  player who drew can be refused this way, and the heading tells them the colour
+  regardless.
+
+Every other refusal stays public and unabridged. Asking is part of what happened
+at the table: if a player calls for a red stone and cannot produce one, the table
+saw that, and the record says so.
+
+The journal keeps the whole truth, and so does the saved record — masking is a
+property of the view, not of what is stored. `Render` reads the journal through
+`Words.noticeSeenBy`; `Transcript` writes it through `Words.notice`. So typing
+`save` mid-game does put a full account on disk, where the file is out of the
+game's hands anyway.
 
 ## The map
 
@@ -427,6 +479,7 @@ dotnet fsi tests/ruling.fsx     # the ruling cascade, including elimination
 dotnet fsi tests/outcome.fsx    # both winning cascades
 dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone conservation
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
+dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
 ```
 
 Each script exits non-zero on failure. They load the source directly, so they run

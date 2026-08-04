@@ -190,9 +190,11 @@ module Render =
         |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) ->
             sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
 
-    let private playerLine active (player: Player) =
-        let marker = if player.Id = active then "->" else "  "
-        sprintf "  %s %-9s bag: %s" marker (Words.player player.Id) (Words.tally player.Bag)
+    /// A player and their bag as the reader sees it - their own laid out, everyone
+    /// else's closed. The reader is whoever is to play, so the same arrow marks both.
+    let private playerLine active (playerId, bag) =
+        let marker = if playerId = active then "->" else "  "
+        sprintf "  %s %-9s bag: %s" marker (Words.player playerId) (Words.sight bag)
 
     let private section (sb: StringBuilder) (title: string) lines =
         sb.AppendLine(title) |> ignore
@@ -263,16 +265,25 @@ module Render =
         @ factionVerdict
         @ players
 
-    /// The record of the game so far, as it stands and as it will be saved.
+    /// How a notice reads to whoever is at the screen. That is the player to act, and
+    /// while the game runs they are told only what they could know. Once it is over
+    /// there is nothing left to hold back.
+    let private wording model =
+        if Model.isOver model then
+            Words.notice
+        else
+            Words.noticeSeenBy (Game.active (Model.game model)).Id
+
+    /// The record of the game so far, as the player reading it may know it. The journal
+    /// itself keeps the whole of what happened, and `Transcript.write` saves it that way.
     let history model =
+        let told = wording model
+
         let entry (entry: Entry) =
             let asked =
                 sprintf "  %3d  turn %-4d %-9s %s" entry.Ordinal entry.Turn (Words.player entry.Actor) (Words.command entry.Asked)
 
-            let told =
-                entry.Told |> List.map (fun notice -> String.replicate 26 " " + Words.notice notice)
-
-            asked :: told
+            asked :: (entry.Told |> List.map (fun notice -> String.replicate 26 " " + told notice))
 
         let standing =
             let made = Timeline.movesMade model.Timeline
@@ -295,8 +306,23 @@ module Render =
         let game = Model.game model
         let active = Game.active game
 
+        // The screen belongs to whoever is sitting at it, and that is whoever is to
+        // play. Everything below is drawn from what they can see rather than from the
+        // game itself - until the game is over, when the table is turned face up.
+        let seen =
+            if Model.isOver model then
+                Knowledge.laidBare game
+            else
+                Knowledge.seenBy active game
+
+        let told = wording model
+
         /// Lines that are there to be read once, and only while they are still wanted.
         let noted lines = if notes then lines else []
+
+        /// Notes about what is being held back, which are only true while it still is.
+        let notedWhileHidden lines =
+            if Model.isOver model then [] else noted lines
 
         let heading =
             match Model.session model with
@@ -329,7 +355,7 @@ module Render =
                 [ $"  negotiations in a row: {play.Negotiations} of {Game.playerCount game} - the game ends on the last" ]
             | Finished _ -> []
 
-        section sb "PLAYERS" ((Game.players game |> List.map (playerLine active.Id)) @ run)
+        section sb "PLAYERS" ((seen.Bags |> List.map (playerLine seen.Beholder)) @ run)
 
         let ruled =
             Game.standings game
@@ -357,8 +383,13 @@ module Render =
         section
             sb
             "SUPPLY"
-            [ $"  on the board: {Words.tally (Position.total game.Position)}"
-              $"  in reserve:   {Words.tally game.Reserve}" ]
+            ([ $"  on the board: {Words.tally (Position.total seen.Position)}"
+               $"  in reserve:   {Words.sight seen.Reserve}"
+               $"  out of sight: {Words.tally seen.Unseen}" ]
+             @ notedWhileHidden
+                 [ "  (every bag but your own is closed, and so is the reserve, so those are"
+                   "  counted rather than read. But every stone is somewhere: what is neither"
+                   "  on the map nor in your bag must be out of sight, and that much is exact)" ])
 
         match Model.session model with
         | InPlay _ -> ()
@@ -369,7 +400,7 @@ module Render =
         if notes then
             section sb "COMMANDS" (commands @ [ ""; "  Colours are r, b and k; regions are numbered on the map above." ])
 
-        section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {Words.notice notice}"))
+        section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 
         sb.ToString()
 

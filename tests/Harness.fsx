@@ -9,6 +9,7 @@
 #load "../src/Domain/Position.fs"
 #load "../src/Domain/Ruling.fs"
 #load "../src/Domain/Game.fs"
+#load "../src/Domain/Knowledge.fs"
 #load "../src/Domain/Events.fs"
 #load "../src/Domain/Actions.fs"
 #load "../src/Domain/Outcome.fs"

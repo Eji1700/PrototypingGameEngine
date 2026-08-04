@@ -51,6 +51,10 @@ module Pile =
     let merge (Pile counts) pile =
         counts |> Map.fold (fun pile color n -> add color n pile) pile
 
+    /// What is left of a pile once everything in the first is taken out of it.
+    let without (Pile counts) pile =
+        counts |> Map.fold (fun pile color n -> remove color n pile) pile
+
     /// Counts in canonical colour order, omitting colours that are absent.
     let toCounts pile =
         StoneColor.all
