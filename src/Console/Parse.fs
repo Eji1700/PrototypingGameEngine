@@ -13,6 +13,9 @@ module Parse =
     type Command =
         | Send of Msg
         | Help
+        /// Show or hide the notes that explain the board. Saying neither turns them
+        /// whichever way they are not.
+        | Notes of showing: bool option
         | Explain of RegionId
         /// Show the record of the game so far.
         | Recount
@@ -110,6 +113,10 @@ module Parse =
         | [ "quit" ] | [ "exit" ] | [ "q" ] -> Ok Leave
         | [ "history" ] | [ "log" ] -> Ok Recount
         | [ "save" ] -> Ok Keep
+        | [ "notes" ] -> Ok(Notes None)
+        | [ "notes"; "on" ] -> Ok(Notes(Some true))
+        | [ "notes"; "off" ] -> Ok(Notes(Some false))
+        | "notes" :: _ -> Error "Say 'notes' to turn them the other way, or 'notes on' or 'notes off'."
         | [ "undo" ] | [ "u" ] -> Ok(Send Undo)
         | [ "redo" ] -> Ok(Send Redo)
         | [ "resign" ] -> Ok(Send(Make Resign))

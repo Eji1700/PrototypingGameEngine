@@ -185,6 +185,7 @@ module Render =
           ("b r 8", "battle in 8 with a Red one"), ("return k", "hand a Black one back")
           ("m k 8 5 2", "march 2 Black from 8 into 5"), ("undo, redo", "walk the game back")
           ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
+          ("notes", "hide this and every note"), ("save", "write the record now")
           ("help", "every command, at length"), ("quit", "leave, saving first") ]
         |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) ->
             sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
@@ -286,11 +287,16 @@ module Render =
         | entries ->
             String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + standing ])
 
-    /// Render the whole game as a block of text.
-    let model model =
+    /// Render the whole game as a block of text. `notes` says whether the writing that
+    /// explains the board comes with it: turned off, what is left is the position and
+    /// nothing else, for a player who already knows how to read it.
+    let model notes model =
         let sb = StringBuilder()
         let game = Model.game model
         let active = Game.active game
+
+        /// Lines that are there to be read once, and only while they are still wanted.
+        let noted lines = if notes then lines else []
 
         let heading =
             match Model.session model with
@@ -305,16 +311,17 @@ module Render =
             sb
             "THE MAP"
             (mapLines game
-             @ [ ""
-                 "  Two regions border each other where they share a side, and nowhere else -"
-                 "  regions that meet only at a point do not. A home carries its colour, '>'"
-                 "  marks who rules a region and '=' who is level in it, and the rest are wild." ])
+             @ noted
+                 [ ""
+                   "  Two regions border each other where they share a side, and nowhere else -"
+                   "  regions that meet only at a point do not. A home carries its colour, '>'"
+                   "  marks who rules a region and '=' who is level in it, and the rest are wild." ])
 
         section
             sb
             "STANDING APART"
             (apartLines game (Board.regions |> List.filter (fun region -> RegionKind.isIsolated region.Kind))
-             @ [ ""; "  Bought with stones, but no part of the map and no part of the land." ])
+             @ noted [ ""; "  Bought with stones, but no part of the map and no part of the land." ])
 
         let run =
             match Model.session model with
@@ -342,9 +349,10 @@ module Render =
         section
             sb
             "LAND RULED"
-            [ $"  {ruled}   tied {counted (function Contested _ -> true | _ -> false)}   unclaimed {counted (function Unclaimed -> true | _ -> false)}"
-              "  (the Flag and the Axe are manoeuvres rather than land, and the dead region"
-              "  is nobody's to take, so none of the three are counted here)" ]
+            ([ $"  {ruled}   tied {counted (function Contested _ -> true | _ -> false)}   unclaimed {counted (function Unclaimed -> true | _ -> false)}" ]
+             @ noted
+                 [ "  (the Flag and the Axe are manoeuvres rather than land, and the dead region"
+                   "  is nobody's to take, so none of the three are counted here)" ])
 
         section
             sb
@@ -356,11 +364,10 @@ module Render =
         | InPlay _ -> ()
         | Finished _ -> section sb "RESULT" (result game)
 
-        section
-            sb
-            "COMMANDS"
-            (commands
-             @ [ ""; "  Colours are r, b and k; regions are numbered on the map above." ])
+        // The commands go with the notes: a player who has turned them off has turned
+        // this off too, and `help` still says all of it.
+        if notes then
+            section sb "COMMANDS" (commands @ [ ""; "  Colours are r, b and k; regions are numbered on the map above." ])
 
         section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {Words.notice notice}"))
 
@@ -397,6 +404,8 @@ module Render =
               ""
               "Other commands:"
               "  rule <region>             show the working behind who rules a region"
+              "  notes [on|off]            show or hide the writing that explains the board,"
+              "                            and the list of commands that goes with it"
               "  restart [seed]            deal a fresh game to the same players"
               $"  players <n> [seed]        deal a fresh game to n players ({Table.MinPlayers}-{Table.MaxPlayers})"
               "  help                      show this list"

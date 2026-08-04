@@ -23,40 +23,46 @@ let private keepQuietly stamp model =
 
 /// Fold console input into the model. Once the game is over the loop stays open, so the
 /// record can be read and walked back through before the table is cleared.
-let rec private loop stamp model =
-    printf "%s" (Render.model model)
+///
+/// `notes` is the one thing the shell remembers for itself: whether the board comes with
+/// the writing that explains it. It is how the game is being read rather than how it is
+/// being played, so it stays out of the model and out of the record, and a fresh deal is
+/// still read the way the player was reading the last one.
+let rec private loop stamp notes model =
+    printf "%s" (Render.model notes model)
     printf "%s" (if Model.isOver model then "(over) > " else "> ")
 
     match Console.ReadLine() with
     | null -> leave stamp model
     | line ->
         match Parse.line line with
-        | Ok Parse.Nothing -> loop stamp model
+        | Ok Parse.Nothing -> loop stamp notes model
         | Ok Parse.Leave -> leave stamp model
         | Ok Parse.Help ->
             printfn "%s" Render.help
-            loop stamp model
+            loop stamp notes model
+        | Ok(Parse.Notes wanted) -> loop stamp (wanted |> Option.defaultValue (not notes)) model
         | Ok Parse.Recount ->
             printfn "%s" (Render.history model)
-            loop stamp model
+            loop stamp notes model
         | Ok Parse.Keep ->
             keep stamp model
-            loop stamp model
+            loop stamp notes model
         | Ok(Parse.Explain regionId) ->
             printfn "%s" (Render.explainRule regionId model)
-            loop stamp model
+            loop stamp notes model
         | Ok(Parse.Send(Restart _ as msg)) ->
             // The old game's record is closed and kept before the table is cleared.
             keepQuietly stamp model
-            loop (stampNow ()) (Update.update msg model)
+            loop (stampNow ()) notes (Update.update msg model)
         | Ok(Parse.Send msg) ->
             let next = Update.update msg model
             // A game that has just ended writes itself down without being asked.
             if Model.isOver next && not (Model.isOver model) then
                 keepQuietly stamp next
 
-            loop stamp next
-        | Error problem -> loop stamp (Update.note problem model)
+            loop stamp notes next
+        | Error problem -> loop stamp notes (Update.note problem model)
 
 /// Put the game down. One still in play is resigned first, so the record says how it
 /// ended rather than simply stopping.
@@ -135,5 +141,5 @@ let main argv =
         1
     | Ok model ->
         printfn "%s" Render.help
-        loop (stampNow ()) model |> ignore
+        loop (stampNow ()) true model |> ignore
         0

@@ -49,7 +49,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | File | Role |
 | --- | --- |
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
-| [Render.fs](src/Console/Render.fs) | `Model -> string` |
+| [Render.fs](src/Console/Render.fs) | `bool -> Model -> string`: the board, with or without the notes that explain it |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 | [Program.fs](src/Console/Program.fs) | The read/update/render loop |
@@ -406,6 +406,7 @@ dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log   # play a saved recor
 | `history` (`log`) | the whole record so far, as it will be saved |
 | `save` | write the record out now |
 | `rule <region>` | not an action; shows who rules a region and why |
+| `notes [on\|off]` | show or hide the writing that explains the board, and the short list of commands that sits above the log |
 | `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 
 Colours are `r`/`red`, `b`/`blue`, `k`/`black`; regions are numbered as shown on
