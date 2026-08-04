@@ -78,6 +78,14 @@ and private leave stamp model =
 
     model
 
+/// Deal a game. The table is the only thing that can refuse, and it says why, so a
+/// count that came from a person is answered in their words rather than swallowed.
+let private dealt players seed =
+    match Update.start players seed with
+    | Ok model -> Ok model
+    | Error(TooFewPlayers n) -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
+    | Error(TooManyPlayers n) -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
+
 /// Command line: [players] [seed], either of which may be left off.
 let private dealFrom (argv: string array) =
     let usage = $"Usage: dotnet run -- [players {Table.MinPlayers}-{Table.MaxPlayers}] [seed]"
@@ -85,24 +93,15 @@ let private dealFrom (argv: string array) =
     let players =
         match argv with
         | [||] -> Ok Table.MinPlayers
-        | _ ->
-            match Int32.TryParse argv[0] with
-            | true, n when n >= Table.MinPlayers && n <= Table.MaxPlayers -> Ok n
-            | _ -> Error usage
+        | _ -> Parse.tryPlayerCount argv[0] |> Result.mapError (fun _ -> usage)
 
     let seed =
         match argv with
-        | [| _; given |] ->
-            match UInt64.TryParse given with
-            | true, value -> Ok value
-            | _ -> Error "Usage: the seed must be a whole number."
+        | [| _; given |] -> Parse.trySeed given |> Result.mapError (fun _ -> "Usage: the seed must be a whole number.")
         | _ -> Ok(clockSeed ())
 
     match players, seed with
-    | Ok players, Ok seed ->
-        match Update.start players seed with
-        | Ok model -> Ok model
-        | Error _ -> Error usage
+    | Ok players, Ok seed -> dealt players seed |> Result.mapError (fun _ -> usage)
     | Error problem, _
     | _, Error problem -> Error problem
 
@@ -121,6 +120,42 @@ let private replayFrom path =
                 printfn "Take them back with 'undo', or read them with 'history'."
                 model))
 
+/// The start menu, which runs until there is a game to play or nobody left to play it.
+/// Everything it offers either deals a game or comes back round to here, so what it
+/// hands on is a game or nothing at all.
+let rec private welcome () =
+    printf "%s" Menu.screen
+    printf "> "
+
+    /// Say what went wrong and ask again. The menu is the only place to be when there
+    /// is no game yet, so nothing here can leave except by being asked to.
+    let retry problem =
+        printfn "%s" problem
+        welcome ()
+
+    match Console.ReadLine() with
+    | null -> None
+    | line ->
+        match Menu.choose line with
+        | Ok Menu.Waiting -> welcome ()
+        | Ok Menu.Leave -> None
+        | Ok Menu.Rules ->
+            printfn "%s" Render.help
+            welcome ()
+        | Ok(Menu.Deal(players, seed)) ->
+            match dealt players (seed |> Option.defaultValue (clockSeed ())) with
+            | Ok model -> Some model
+            | Error problem -> retry problem
+        | Ok(Menu.Replay path) ->
+            match replayFrom path with
+            | Ok model -> Some model
+            | Error problem -> retry problem
+        | Error problem -> retry problem
+
+let private play model =
+    loop (stampNow ()) true model |> ignore
+    0
+
 [<EntryPoint>]
 let main argv =
     match Board.problems with
@@ -130,16 +165,23 @@ let main argv =
         1
     | [] ->
 
-    let dealt =
-        match argv with
-        | [| "replay"; path |] -> replayFrom path
-        | _ -> dealFrom argv
+    // Arguments say what to deal and go straight to the board, so a game can still be
+    // started from a script or a shortcut exactly as before. With none, the menu asks.
+    match argv with
+    | [||] ->
+        match welcome () with
+        | Some model -> play model
+        | None -> 0
+    | _ ->
+        let opening =
+            match argv with
+            | [| "replay"; path |] -> replayFrom path
+            | _ -> dealFrom argv
 
-    match dealt with
-    | Error problem ->
-        eprintfn "%s" problem
-        1
-    | Ok model ->
-        printfn "%s" Render.help
-        loop (stampNow ()) true model |> ignore
-        0
+        match opening with
+        | Error problem ->
+            eprintfn "%s" problem
+            1
+        | Ok model ->
+            printfn "%s" Render.help
+            play model

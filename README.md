@@ -52,6 +52,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
 | [Render.fs](src/Console/Render.fs) | `bool -> Model -> string`: the board, with or without the notes that explain it |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
+| [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 | [Program.fs](src/Console/Program.fs) | The read/update/render loop |
 
@@ -441,12 +442,39 @@ ready for the dead region to obstruct movement).
 ## Running
 
 ```powershell
-dotnet run                # 2 players, random seed from the clock
-dotnet run -- 3           # 3 players, random seed
+dotnet run                # the start menu, which asks how many are playing
+dotnet run -- 3           # 3 players, random seed - straight to the board
 dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 
 dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log   # play a saved record again
 ```
+
+Arguments say what to deal and go straight to the board, so a game can still be
+started from a script or a shortcut. With none, the menu
+([Menu.fs](src/Console/Menu.fs)) asks:
+
+```
+=== TCModel ===
+
+  Stones on a map, and a seat each. How many are playing?
+
+    2  3  4  5             deal a game for that many
+
+  Or:
+
+    <players> <seed>       the same game again, from a seed
+    replay <file>          play a saved record again
+    rules                  the rules and the commands, at length
+    quit                   leave
+```
+
+A bare number is the answer to the question the menu asks, so it needs no command
+word in front of it. The seatings on offer are read off `Table.MinPlayers` and
+`Table.MaxPlayers` rather than written out, so the menu cannot come to offer a
+number the table would refuse. Like the rest of the console layer `Menu` is pure -
+it says what the menu reads like and what a typed line means, and `Program` does
+the reading and the writing. Once a game is dealt, `players <n>` and `restart` do
+the same job from the prompt.
 
 | command | action |
 | --- | --- |

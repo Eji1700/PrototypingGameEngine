@@ -25,6 +25,15 @@ module Parse =
         | Leave
         | Nothing
 
+    /// A typed line as the words in it, in the case they were typed.
+    ///
+    /// A byte order mark can lead a line that was piped in or saved by an editor. It is
+    /// not part of what anyone typed, so it is thrown away with the spaces. The start
+    /// menu reads lines from the same keyboard, so it splits them the same way.
+    let words (text: string) =
+        text.Split([| ' '; '\t'; '\uFEFF' |], StringSplitOptions.RemoveEmptyEntries)
+        |> List.ofArray
+
     let private tryInt (text: string) =
         match Int32.TryParse text with
         | true, value -> Some value
@@ -45,16 +54,23 @@ module Parse =
         | Some regionId -> Ok regionId
         | None -> Error $"'{text}' is not a region on the board. They run 1 to {Board.count}."
 
-    let private seed (text: string) =
+    /// How many are playing, and what to deal from. The start menu asks for the same
+    /// two before there is a game to play, so both are read here and read once.
+    let trySeed (text: string) =
         match UInt64.TryParse text with
-        | true, value -> Ok(Some value)
+        | true, value -> Ok value
         | _ -> Error $"'{text}' is not a seed."
 
-    let private playerCount text =
+    let tryPlayerCount text =
         match tryInt text with
-        | Some n when n >= Table.MinPlayers && n <= Table.MaxPlayers -> Ok(Some n)
+        | Some n when n >= Table.MinPlayers && n <= Table.MaxPlayers -> Ok n
         | Some n -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
         | None -> Error $"'{text}' is not a number of players."
+
+    // `Restart` carries both as options, saying "leave it as it is" by leaving it out.
+    let private seed text = trySeed text |> Result.map Some
+
+    let private playerCount text = tryPlayerCount text |> Result.map Some
 
     let private colors words =
         words
@@ -101,13 +117,7 @@ module Parse =
         }
 
     let line (text: string) : Result<Command, string> =
-        // A byte order mark can lead a line that was piped in or saved by an editor.
-        // It is not part of what anyone typed, so it is thrown away with the spaces.
-        let words =
-            text.Split([| ' '; '\t'; '\uFEFF' |], StringSplitOptions.RemoveEmptyEntries)
-            |> List.ofArray
-
-        match words |> List.map (fun word -> word.ToLowerInvariant()) with
+        match words text |> List.map (fun word -> word.ToLowerInvariant()) with
         | [] -> Ok Nothing
         | [ "help" ] | [ "?" ] -> Ok Help
         | [ "quit" ] | [ "exit" ] | [ "q" ] -> Ok Leave
