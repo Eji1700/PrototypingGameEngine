@@ -11,12 +11,13 @@ module Render =
 
     // --- the map ----------------------------------------------------------------
     //
-    // `Board.layout` lies on a triangular lattice, which is drawn here as brickwork:
-    // every region is two half-columns wide and each row is laid half a region across
-    // from the one above, so a region touches the two either side of it and the two
-    // above and below. Those six are exactly its neighbours - a wall shared between
-    // two regions is a border, and regions meeting at a corner only are not. So no
-    // border has to be drawn as a line, and none can be drawn wrong: `Board.problems`
+    // `Board.layout` lies on a triangular lattice, which is drawn here as a honeycomb:
+    // every region is a hex two half-columns wide, and each row is laid half a region
+    // across from the one above, so a region has an upright side to its left and right
+    // and a cut corner running to the two regions above and the two below. Those six
+    // are exactly its neighbours - a side shared between two regions is a border, and
+    // regions that meet only at a point are not neighbours. So no border has to be
+    // drawn as a line into open ground, and none can be drawn wrong: `Board.problems`
     // checks the layout against the borders before a game is ever dealt.
 
     /// Characters to a half-column, so a region is two of them wide, wall to wall.
@@ -29,14 +30,19 @@ module Render =
 
     let private column halfColumn = halfColumn * step
 
-    /// Where a row's walls stand: one at each region's left, and one closing the row.
-    let private walls row =
+    /// Where a row's upright sides stand: one at each region's left, and one closing
+    /// the row.
+    let private sides row =
         match row with
         | [] -> []
         | _ -> (row |> List.map (snd >> column)) @ [ column (List.last row |> snd) + 2 * step ]
 
+    /// Each region in a row as the two columns it stands between.
+    let private spans row =
+        row |> List.map (fun (_, at) -> column at, column at + 2 * step)
+
     let private mapWidth =
-        (Board.layout |> List.collect walls |> List.max) + 1
+        (Board.layout |> List.collect sides |> List.max) + 1
 
     /// A region as it is titled on the map: its number and name, and for a home the
     /// colour that holds it. A name with no room to spare gives up its "The".
@@ -88,12 +94,12 @@ module Render =
     let private paint (line: char array) at (text: string) =
         text |> String.iteri (fun i c -> if at + i < line.Length then line[at + i] <- c)
 
-    /// A row of regions: what each one is, and what stands in it, walled off from its
-    /// neighbours either side.
+    /// A row of regions: what each one is, and what stands in it, between the upright
+    /// sides it shares with its neighbours either side.
     let private mapRow game row =
         let line () =
             let blank = Array.create mapWidth ' '
-            walls row |> List.iter (fun at -> blank[at] <- '|')
+            sides row |> List.iter (fun at -> blank[at] <- '|')
             blank
 
         let titles, standing = line (), line ()
@@ -105,17 +111,48 @@ module Render =
 
         [ String(titles).TrimEnd(); String(standing).TrimEnd() ]
 
-    /// The ground between two rows, which is where their shared borders run. Each row's
-    /// walls come down to meet it, half a region apart, and the wall a region shares
-    /// with the row above is the stretch between them.
+    /// The line where one row meets the next, and so where the borders between them
+    /// run. Each region's flat side comes down to it, and the corners cut from either
+    /// end fall into the point of the region below and rise to the point of the one
+    /// above - a run of valleys and peaks, half a region apart.
     let private mapBetween above below =
+        let ground = spans above @ spans below
         let line = Array.create mapWidth ' '
-        let corners = walls above @ walls below
+        let middle (left, right) = (left + right) / 2
+        let covered at = ground |> List.exists (fun (left, right) -> left <= at && at <= right)
 
-        for at in List.min corners .. List.max corners do
-            line[at] <- '-'
+        // Each sloping side runs from a region's upright side to the point of the region
+        // beyond it, which is the ground between the two.
+        for left, right in ground do
+            for at in left .. right do
+                line[at] <- '_'
 
-        corners |> List.iter (fun at -> line[at] <- '+')
+        // Cut the ground away either side of a point, leaving the point itself and any
+        // ground the map does not reach.
+        let point at (before, after) =
+            if covered (at - 1) then line[at - 1] <- before
+            if covered (at + 1) then line[at + 1] <- after
+
+        let dip = '\\', '/'
+        let peak = '/', '\\'
+
+        // A region above comes to a point below its middle, and a region below rises to
+        // one above its own, so the line dips and peaks by turns half a region apart.
+        // Where a row runs out, the row beyond it does the same about its upright sides,
+        // which is what closes the honeycomb along the edges of the map.
+        for span in spans above do
+            point (middle span) dip
+
+        for at in sides below do
+            point at dip
+
+        for span in spans below do
+            line[middle span] <- ' '
+            point (middle span) peak
+
+        for at in sides above do
+            line[at] <- ' '
+            point at peak
 
         String(line).TrimEnd()
 
@@ -134,11 +171,12 @@ module Render =
             regions |> List.map piece |> String.concat "   "
 
         let inside (text: string) = "| " + text.PadRight written + " |"
+        let half = String.replicate (step - 1) "_"
 
-        [ across (fun _ -> "+" + String.replicate cell "-" + "+")
+        [ across (fun _ -> half + "/ \\" + half)
           across (mapTitle >> inside)
           across (fun region -> inside (mapStanding game region))
-          across (fun _ -> "+" + String.replicate cell "-" + "+") ]
+          across (fun _ -> half + "\\_/" + half) ]
 
     let private playerLine active (player: Player) =
         let marker = if player.Id = active then "->" else "  "
@@ -257,8 +295,8 @@ module Render =
             "THE MAP"
             (mapLines game
              @ [ ""
-                 "  Two regions border each other where they share a wall, and nowhere else -"
-                 "  regions that only meet at a corner do not. A home carries its colour, '>'"
+                 "  Two regions border each other where they share a side, and nowhere else -"
+                 "  regions that meet only at a point do not. A home carries its colour, '>'"
                  "  marks who rules a region and '=' who is level in it, and the rest are wild." ])
 
         section
