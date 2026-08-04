@@ -178,6 +178,17 @@ module Render =
           across (fun region -> inside (mapStanding game region))
           across (fun _ -> half + "\\_/" + half) ]
 
+    /// The commands in brief, each shown as it would be typed. This sits with the board
+    /// because that is where a player is looking; `Render.help` says all of it at length.
+    let private commands =
+        [ ("r b 5", "recruit a Blue stone into 5"), ("n", "negotiate for a stone")
+          ("b r 8", "battle in 8 with a Red one"), ("return k", "hand a Black one back")
+          ("m k 8 5 2", "march 2 Black from 8 into 5"), ("undo, redo", "walk the game back")
+          ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
+          ("help", "every command, at length"), ("quit", "leave, saving first") ]
+        |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) ->
+            sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
+
     let private playerLine active (player: Player) =
         let marker = if player.Id = active then "->" else "  "
         sprintf "  %s %-9s bag: %s" marker (Words.player player.Id) (Words.tally player.Bag)
@@ -320,14 +331,20 @@ module Render =
             |> List.map (fun (color, n) -> $"{Words.color color} {n}")
             |> String.concat "   "
 
+        // Dead ground is unclaimed and always will be, so counting it says nothing
+        // about how much of the map is still going spare.
+        let contested =
+            Game.landRulings game |> List.filter (fun (region, _) -> RegionKind.isOpen region.Kind)
+
         let counted predicate =
-            Game.landRulings game |> List.filter (snd >> predicate) |> List.length
+            contested |> List.filter (snd >> predicate) |> List.length
 
         section
             sb
             "LAND RULED"
             [ $"  {ruled}   tied {counted (function Contested _ -> true | _ -> false)}   unclaimed {counted (function Unclaimed -> true | _ -> false)}"
-              "  (the Flag and the Axe are manoeuvres, not land, and do not count here)" ]
+              "  (the Flag and the Axe are manoeuvres rather than land, and the dead region"
+              "  is nobody's to take, so none of the three are counted here)" ]
 
         section
             sb
@@ -338,6 +355,12 @@ module Render =
         match Model.session model with
         | InPlay _ -> ()
         | Finished _ -> section sb "RESULT" (result game)
+
+        section
+            sb
+            "COMMANDS"
+            (commands
+             @ [ ""; "  Colours are r, b and k; regions are numbered on the map above." ])
 
         section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {Words.notice notice}"))
 
