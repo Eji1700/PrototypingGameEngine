@@ -94,9 +94,9 @@ report "taking a move back is itself written down" 8 (recorded (Update.update Un
 report
     "a refused move is written down too"
     9
-    (recorded (Update.update (Make(March(Red, at 12, at 13, 1))) (Update.update Undo (playOn 7 (start ())))))
+    (recorded (Update.update (Make(March(Red, at 13, at 14, 1))) (Update.update Undo (playOn 7 (start ())))))
 
-report "a refusal leaves the position alone" (Model.session after) (Model.session (Update.update (Make(March(Red, at 12, at 13, 1))) after))
+report "a refusal leaves the position alone" (Model.session after) (Model.session (Update.update (Make(March(Red, at 13, at 14, 1))) after))
 
 // A move made after taking one back closes off the road not taken.
 let branched = send [ Undo; Undo; nextMove (send [ Undo; Undo ] after) ] after

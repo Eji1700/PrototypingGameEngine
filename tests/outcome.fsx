@@ -16,14 +16,14 @@ let faction name expected stocked =
 // Regions 1 and 2 go to Black, region 4 to Red.
 faction "most land ruled" [ Black ] [ 1, [ (Black, 2) ]; 2, [ (Black, 2) ]; 4, [ (Red, 2) ] ]
 
-// One region each, so the Axe (13) settles it.
-faction "level on land, the Axe settles it" [ Blue ] [ 1, [ (Red, 2) ]; 2, [ (Blue, 2) ]; 13, [ (Blue, 3) ] ]
+// One region each, so the Axe (14) settles it.
+faction "level on land, the Axe settles it" [ Blue ] [ 1, [ (Red, 2) ]; 2, [ (Blue, 2) ]; 14, [ (Blue, 3) ] ]
 
-// One region each and a level Axe, so the Flag (12) settles it.
+// One region each and a level Axe, so the Flag (13) settles it.
 faction
     "level on land and the Axe, the Flag settles it"
     [ Red ]
-    [ 1, [ (Red, 2) ]; 2, [ (Blue, 2) ]; 13, [ Red, 1; Blue, 1 ]; 12, [ (Red, 4) ] ]
+    [ 1, [ (Red, 2) ]; 2, [ (Blue, 2) ]; 14, [ Red, 1; Blue, 1 ]; 13, [ (Red, 4) ] ]
 
 faction "level throughout is a draw" [ Red; Blue ] [ 1, [ (Red, 2) ]; 2, [ (Blue, 2) ] ]
 
@@ -31,14 +31,14 @@ faction "level throughout is a draw" [ Red; Blue ] [ 1, [ (Red, 2) ]; 2, [ (Blue
 faction
     "faction out on land cannot win the Axe"
     [ Black ]
-    [ 1, [ (Black, 2) ]; 2, [ (Black, 2) ]; 4, [ (Red, 2) ]; 13, [ (Red, 9) ] ]
+    [ 1, [ (Black, 2) ]; 2, [ (Black, 2) ]; 4, [ (Red, 2) ]; 14, [ (Red, 9) ] ]
 
 // The Flag and the Axe are manoeuvres, not ground: holding both wins no land at all,
 // so a single region of real ground beats them.
-faction "the Flag and the Axe are not land" [ Black ] [ 1, [ (Black, 2) ]; 13, [ (Red, 4) ]; 12, [ (Red, 4) ] ]
+faction "the Flag and the Axe are not land" [ Black ] [ 1, [ (Black, 2) ]; 14, [ (Red, 4) ]; 13, [ (Red, 4) ] ]
 
 // Nobody rules any land, so every faction is level on nought and the Axe decides.
-faction "no land ruled at all, the Axe decides" [ Blue ] [ 13, [ (Blue, 1) ] ]
+faction "no land ruled at all, the Axe decides" [ Blue ] [ 14, [ (Blue, 1) ] ]
 
 // --- the winning player -----------------------------------------------------
 

@@ -9,16 +9,16 @@ open Harness
 
 let private at n = Board.tryId n |> Option.get
 
-let emberfall = at 1 // Red home, borders 4, 5 and 14
-let crossroads = at 4 // wild, borders 1, 8, 9 and 14
-let nightfen = at 3 // Black home, borders 6 and 7
+let emberfall = at 5 // Red home, borders 3, 6 and 8
+let crossroads = at 8 // wild, borders 5, 6, 9 and 11
+let nightfen = at 1 // Black home, borders 2 and 4
 let flag = Board.flag
 let axe = Board.axe
-let waste = at 14 // dead
+let waste = at 6 // dead
 
-/// A two-player game: region 4 holds what is asked, Player 1 holds one of each.
+/// A two-player game: region 8 holds what is asked, Player 1 holds one of each.
 let private game stocked =
-    gameOf [ 4, stocked ] [ [ Red, 1; Blue, 1; Black, 1 ]; [ (Red, 1) ] ]
+    gameOf [ 8, stocked ] [ [ Red, 1; Blue, 1; Black, 1 ]; [ (Red, 1) ] ]
 
 let private refuses name expected outcome =
     report name (Error expected) (outcome |> Result.mapError id |> Result.map (fun _ -> ()))
@@ -45,7 +45,7 @@ report
 
 // --- battle -----------------------------------------------------------------
 
-// Region 4 holds one blue and one black; a blue battle drives the black out.
+// Region 8 holds one blue and one black; a blue battle drives the black out.
 let blueVsBlack = game [ Blue, 1; Black, 1 ]
 
 report
@@ -113,7 +113,7 @@ report
 report
     "marching fills the destination"
     (Ok [ Red, 2; Blue, 2 ])
-    (Actions.march Blue crossroads emberfall 2 (gameOf [ 4, [ Blue, 2 ]; 1, [ Red, 2 ] ] [ [ (Blue, 1) ]; [ (Red, 1) ] ])
+    (Actions.march Blue crossroads emberfall 2 (gameOf [ 8, [ Blue, 2 ]; 5, [ Red, 2 ] ] [ [ (Blue, 1) ]; [ (Red, 1) ] ])
      |> stonesIn emberfall)
 
 report

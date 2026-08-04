@@ -177,7 +177,7 @@ Ruling is computed on demand from the position, never stored, so it cannot fall 
 of step with the board. `rule <region>` shows the working:
 
 ```
-> rule 6
+> rule 2
 Saltmarsh holds 1 Blue and 1 Black.
   stones in the region: Blue 1, Black 1 -> Blue, Black still level
   stones in the Axe: Blue 0, Black 1 -> Black leads
@@ -282,12 +282,12 @@ is the same job as reading a player's input, done by the same parser.
 deal 2 42
 
 #   1  turn 1, Player 1
-recruit r 5
+recruit r 3
 #      Player 1 recruits a Red stone into Greymarket.
 
 #   2  turn 2, Player 2
 undo
-#      Taken back: recruit r 5.
+#      Taken back: recruit r 3.
 ```
 
 ```powershell
@@ -315,19 +315,24 @@ nothing.
 
 | region | borders |
 | --- | --- |
-| 1 Emberfall (Red home) | 4, 5, 14 |
-| 2 Tidewatch (Blue home) | 9, 10, 11 |
-| 3 Nightfen (Black home) | 6, 7 |
-| 4 The Crossroads | 1, 8, 9, 14 |
-| 5 Greymarket | 1, 6, 7, 14 |
-| 6 Saltmarsh | 3, 5, 7 |
-| 7 Thornwood | 3, 5, 6, 10, 14 |
-| 8 Ironford | 4, 9, 11 |
-| 9 Windgap | 2, 4, 8, 10, 11, 14 |
-| 10 Stonecradle | 2, 7, 9, 14 |
-| 11 Dunmoor | 2, 8, 9 |
-| 12 The Flag, 13 The Axe | none |
-| 14 The Hollow Waste (dead) | 1, 4, 5, 7, 9, 10 |
+| 1 Nightfen (Black home) | 2, 4 |
+| 2 Saltmarsh | 1, 3, 4 |
+| 3 Greymarket | 2, 4, 5, 6 |
+| 4 Thornwood | 1, 2, 3, 6, 7 |
+| 5 Emberfall (Red home) | 3, 6, 8 |
+| 6 The Hollow Waste (dead) | 3, 4, 5, 7, 8, 9 |
+| 7 Stonecradle | 4, 6, 9, 10 |
+| 8 The Crossroads | 5, 6, 9, 11 |
+| 9 Windgap | 6, 7, 8, 10, 11, 12 |
+| 10 Tidewatch (Blue home) | 7, 9, 12 |
+| 11 Ironford | 8, 9, 12 |
+| 12 Dunmoor | 9, 10, 11 |
+| 13 The Flag, 14 The Axe | none |
+
+Regions are numbered across the map rather than by kind, so that neighbours read as
+neighbours: no border joins regions more than three apart, and all but three of the
+numbers border the one after them. The mainland takes 1 to 12, with the dead region
+at its centre; the Flag and the Axe, which are no part of the map, come last.
 
 No two homes border each other, and every home is three steps from every other,
 whether or not the dead region is passable. `Board.problems` checks the table at
@@ -361,8 +366,8 @@ dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log   # play a saved recor
 | `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 
 Colours are `r`/`red`, `b`/`blue`, `k`/`black`; regions are numbered as shown on
-the board. So `battle black 6 blue` places a black stone in the Axe and drives one
-blue stone out of Saltmarsh, and `march blue 4 1 2` places a blue stone in the Flag
+the board. So `battle black 2 blue` places a black stone in the Axe and drives one
+blue stone out of Saltmarsh, and `march blue 8 5 2` places a blue stone in the Flag
 and moves two blue stones from the Crossroads into Emberfall.
 
 Every random decision comes from the seed, so a seed plus a list of messages

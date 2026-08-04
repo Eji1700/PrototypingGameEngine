@@ -52,21 +52,27 @@ type Region =
 module Board =
 
     /// The regions in board order. A region's position in this list is its number.
+    ///
+    /// The order runs across the map rather than by kind, so that neighbours carry
+    /// nearby numbers: no border joins regions more than three apart, and most
+    /// regions border the one numbered either side of them. The mainland - homes,
+    /// wilds and the dead region - takes 1 to 12; the Flag and the Axe, which are no
+    /// part of the map, come last.
     let private table =
-        [ "Emberfall", Home Red
-          "Tidewatch", Home Blue
-          "Nightfen", Home Black
-          "The Crossroads", Wild
-          "Greymarket", Wild
+        [ "Nightfen", Home Black
           "Saltmarsh", Wild
+          "Greymarket", Wild
           "Thornwood", Wild
-          "Ironford", Wild
-          "Windgap", Wild
+          "Emberfall", Home Red
+          "The Hollow Waste", Dead
           "Stonecradle", Wild
+          "The Crossroads", Wild
+          "Windgap", Wild
+          "Tidewatch", Home Blue
+          "Ironford", Wild
           "Dunmoor", Wild
           "The Flag", Special
-          "The Axe", Special
-          "The Hollow Waste", Dead ]
+          "The Axe", Special ]
 
     let regions =
         table
@@ -107,20 +113,21 @@ module Board =
         regions |> List.filter (fun region -> RegionKind.isLand region.Kind)
 
     /// Region numbers paired with the regions they border. Borders are symmetrised
-    /// below, so a border only has to be named from one end.
+    /// below, so a border only has to be named from one end: each region names only
+    /// the neighbours numbered above it, which - given the numbering above - are
+    /// never more than three away.
     let private declaredBorders =
-        [ 1, [ 4; 5; 14 ]
-          5, [ 1; 14; 7; 6 ]
-          6, [ 3; 7; 5 ]
-          4, [ 1; 14; 9; 8 ]
-          14, [ 4; 1; 5; 7; 10; 9 ]
-          7, [ 14; 5; 6; 3; 10 ]
-          3, [ 6; 7 ]
-          8, [ 4; 9; 11 ]
-          9, [ 8; 4; 14; 10; 2; 11 ]
-          10, [ 9; 14; 7; 2 ]
-          11, [ 8; 9; 2 ]
-          2, [ 11; 9; 10 ] ]
+        [ 1, [ 2; 4 ]
+          2, [ 3; 4 ]
+          3, [ 4; 5; 6 ]
+          4, [ 6; 7 ]
+          5, [ 6; 8 ]
+          6, [ 7; 8; 9 ]
+          7, [ 9; 10 ]
+          8, [ 9; 11 ]
+          9, [ 10; 11; 12 ]
+          10, [ 12 ]
+          11, [ 12 ] ]
 
     /// Every declared border taken both ways round. Regions that border nothing
     /// still appear, mapped to the empty set.
