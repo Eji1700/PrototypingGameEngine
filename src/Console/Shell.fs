@@ -133,7 +133,8 @@ module Shell =
                             | _ -> Error $"'{given}' is not a colour for something. Say it as 'blue=teal'."))
                     (Ok Palette.standard)
 
-            painted |> Result.bind (fun palette -> View.byName palette this.View)
+            painted
+            |> Result.bind (fun palette -> View.byName AtATerminal palette this.View)
 
         override this.Validate() =
             match this.Reading() with

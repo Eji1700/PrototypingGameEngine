@@ -236,7 +236,9 @@ module Lobby =
         | Ok(Parse.Looking name) ->
             // In whatever colours this seat is already reading in: a player who set them
             // before sitting down does not lose them by changing how the board is laid out.
-            match View.byName seat.View.Palette name with
+            // And only among the views this seat could read - a browser asking for `rich`
+            // would be sent escape codes, and a console asking for `html` angle brackets.
+            match View.byName seat.View.Shown seat.View.Palette name with
             | Ok view -> mine { seat with View = view }
             | Error problem -> told problem
         | Ok(Parse.Explain regionId) -> lobby, just console (Told(seat.View.Ruling regionId lobby.Model))

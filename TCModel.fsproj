@@ -43,6 +43,7 @@
     <Compile Include="src/Console/Palette.fs" />
     <Compile Include="src/Console/Tint.fs" />
     <Compile Include="src/Console/Rich.fs" />
+    <Compile Include="src/Console/Html.fs" />
     <Compile Include="src/Console/View.fs" />
     <Compile Include="src/Console/Options.fs" />
     <Compile Include="src/Console/Launch.fs" />
@@ -54,6 +55,7 @@
   <ItemGroup Label="Net - the same game, with the players at different keyboards">
     <Compile Include="src/Net/Protocol.fs" />
     <Compile Include="src/Net/Lobby.fs" />
+    <Compile Include="src/Net/Browser.fs" />
     <Compile Include="src/Net/Server.fs" />
     <Compile Include="src/Net/Client.fs" />
   </ItemGroup>
@@ -62,9 +64,17 @@
     <Compile Include="src/Console/Program.fs" />
   </ItemGroup>
 
+  <ItemGroup Label="The browser's own client, carried rather than fetched">
+    <!-- Datastar's client, committed as it was published. A table opened on a machine with
+         no way out to the internet is exactly the table this game is for, so the browser
+         is handed the script by the same process that is hosting the game. -->
+    <EmbeddedResource Include="assets/datastar.js" LogicalName="datastar.js" />
+  </ItemGroup>
+
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Argu" Version="6.2.5" />
+    <PackageReference Include="Falco.Markup" Version="1.4.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
     <PackageReference Include="Spectre.Console" Version="0.51.1" />
     <PackageReference Include="Spectre.Console.Cli" Version="0.51.1" />

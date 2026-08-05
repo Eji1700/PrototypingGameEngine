@@ -47,6 +47,7 @@ jobs:
         run: |
           dotnet fsi tests/lobby.fsx
           dotnet fsi tests/view.fsx
+          dotnet fsi tests/html.fsx
           dotnet fsi tests/cli.fsx
 
       # Slower than the rest, and the only ones that generate their own games, so they

@@ -58,6 +58,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
 | [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
+| [Html.fs](src/Console/Html.fs) | The `html` view: every screen as a fragment of a page, and the page they land in |
 | [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
 | [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
 | [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
@@ -66,13 +67,14 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
 **`src/Net`** — the same game with the players at different keyboards. Only the
-last two files here touch a socket.
+last three files here touch a socket.
 
 | File | Role |
 | --- | --- |
 | [Protocol.fs](src/Net/Protocol.fs) | What crosses the wire, and what each end calls the other |
 | [Lobby.fs](src/Net/Lobby.fs) | Seats, tokens, and the three rules a table adds to the game |
-| [Server.fs](src/Net/Server.fs) | The host: one lobby behind a lock, and a SignalR hub over it |
+| [Browser.fs](src/Net/Browser.fs) | A page as a console: the streams held open to them, and what is served |
+| [Server.fs](src/Net/Server.fs) | The host: one lobby behind a lock, a SignalR hub and a handful of pages over it |
 | [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
 
 And [Program.fs](src/Console/Program.fs), compiled last, is the way in: the start
@@ -393,6 +395,7 @@ keyboard or five over a network.
 type View =
     { Name: string
       Describe: string
+      Shown:   Shown                               // what has to be reading it
       Palette: Palette                             // the colours it was built with
       Board:   bool -> Player -> Model -> string   // the whole board, for one player
       History: Player -> Model -> string           // the record of play so far
@@ -402,10 +405,11 @@ type View =
       Waiting: Waiting list -> string }            // a table still filling up
 ```
 
-| view | |
-| --- | --- |
-| `plain` | blocks of text, and nothing this terminal has to understand |
-| `rich` | panels, tables and charts in colour, via [Spectre.Console](https://spectreconsole.net) |
+| view | shown | |
+| --- | --- | --- |
+| `plain` | at a terminal | blocks of text, and nothing this terminal has to understand |
+| `rich` | at a terminal | panels, tables and charts in colour, via [Spectre.Console](https://spectreconsole.net) |
+| `html` | in a browser | a page, updated in place - see [In a browser](#in-a-browser) |
 
 ```powershell
 dotnet run -- play 3 --seed 42 --view rich
@@ -418,13 +422,19 @@ an option rather than an argument and can sit anywhere. From the menu, `view ric
 from the prompt mid-game, the same. A new view is added to `View.all` and nowhere
 else - the menu, the command line and the prompt all read that one list.
 
+`Shown` is not a preference. A terminal handed a page reads angle brackets and a
+browser handed the rich board reads escape codes, so **nothing is ever offered to a
+reader that could not show it**: `View.byName` takes the reader as part of the
+question, and `view html` at a terminal is answered with the two views a terminal has.
+
 **The endpoints take the model, not somebody else's finished text**, so a view is
 free to lay a screen out however it likes rather than only colouring what it is
-handed. That is the whole difference between the two: `plain` writes the board as
-one block of text, and `rich` ([Rich.fs](src/Console/Rich.fs)) builds it out of
-Spectre's panels, tables and charts - every region a panel bordered in the colour of
-whoever rules it, bags drawn stone by stone, a closed bag drawn as the row of stones
-nobody can name, land ruled as a bar chart, what is out of sight as a breakdown.
+handed. That is the whole difference between the three: `plain` writes the board as
+one block of text, `rich` ([Rich.fs](src/Console/Rich.fs)) builds it out of Spectre's
+panels, tables and charts - every region a panel bordered in the colour of whoever
+rules it, bags drawn stone by stone, a closed bag drawn as the row of stones nobody
+can name, land ruled as a bar chart, what is out of sight as a breakdown - and `html`
+([Html.fs](src/Console/Html.fs)) builds the same things out of elements.
 
 **The three factions are Red, Blue and Green**, written `R`, `B` and `G`. Each is
 drawn a good deal brighter than the flat version of its own colour, because a stone
@@ -492,17 +502,19 @@ compiler saying so.
   works out for itself, because a second view counting it again could count it
   differently.
 
-**The map is drawn twice, and both drawings say the same thing.** `plain` draws the
-honeycomb by counting characters into columns; `rich` gives every region a panel of
-its own, bordered in the colour of whoever rules it.
+**The map is drawn three times, and all three say the same thing.** `plain` draws
+the honeycomb by counting characters into columns; `rich` gives every region a panel
+of its own, bordered in the colour of whoever rules it; `html` gives it a box, bordered
+the same way.
 
-What matters is that neither loses adjacency. `Board.layout` lies on a triangular
+What matters is that none of them loses adjacency. `Board.layout` lies on a triangular
 lattice - a region is two half-columns wide and each row stands half a region across
 from the one above - so a region touches exactly six others: the two beside it and
 two on each of the rows above and below. Those six are its borders, and the map is
 the only part of the screen that says where a player may march. A honeycomb shows it
 with cut corners; brickwork shows it with the half-region offset. Either is faithful.
-A tidy grid with the offset dropped would not be, which is why `rich` keeps it.
+A tidy grid with the offset dropped would not be, which is why `rich` and `html` both
+keep it - in `html` it is a `margin-left` of so many half-regions and nothing else.
 
 ```
                           ╭─ [ 2] Saltmarsh ───────╮╭─ [ 1] Nightfen (G) ────╮
@@ -600,6 +612,64 @@ The table writes its record after every move rather than at the end, because a
 game with people at it can lose its host without warning. The file is the same
 replayable transcript a local game writes.
 
+### In a browser
+
+The same `host` also serves a page. Open the address it prints instead of running
+`join`, and you sit down at that same table:
+
+```powershell
+dotnet run -- host 3          # opens a table for three, for terminals and browsers alike
+```
+
+**A browser and a terminal can sit at one table**, take turns in order, and each be
+drawn a board of their own. `Lobby` never learns there are two kinds of console: it
+addresses a `Post` to a console id, and which sort that is, is written into the id
+([Browser.fs](src/Net/Browser.fs)).
+
+| | terminal | browser |
+| --- | --- | --- |
+| the socket | SignalR | server-sent events, held open by the page |
+| what goes across | the line typed, and the screen back | the same |
+| who you are | a token you are shown and can retype | a cookie, kept for you |
+| what draws the board | the table, per seat | the table, per seat |
+
+**Essentially no JavaScript, and none of it written here.**
+[Datastar](https://data-star.dev) is one 34 KB file, committed under `assets/` and
+embedded in the binary rather than fetched - a table opened on a machine with no way
+out to the internet is exactly the table this game is for. There is no `package.json`,
+no `node_modules`, and nothing to run before `dotnet run`. The markup is built with
+[Falco.Markup](https://github.com/FalcoFramework/Falco.Markup), which is F#, not a
+template language.
+
+**Every control types a line.** A button is `@post('/say?line=recruit%20r%205')`, and
+the server hands `recruit r 5` to the same `Parse.line` a prompt would. So the page
+cannot offer a move the game would not take - there is nothing else for a button to
+send - and the record stays one language all the way out to the browser.
+[html.fsx](tests/html.fsx) pins that down: it pulls every line out of every screen this
+view draws and puts each one through `Parse.line`.
+
+Moves needing more than a colour and a region - a battle, a march - are typed into the
+box at the bottom, which is the prompt by another name.
+
+**A screen is a fragment, not a page.** Every screen `Html` draws is one element with
+an id on it, so the same text serves both for building the page the first time and for
+patching it on the fiftieth move. The client puts an element where the element of that
+id already is, which means nothing on the server has to work out what changed - and
+`Lobby` was already redrawing whole boards per console, so there was nothing to work
+out. Two ids, two places anything lands: the board, and whatever the game last said
+without a board to go with it.
+
+**The colours are the page's.** `Palette` becomes five CSS custom properties in the
+document's own head, and every fragment draws in those rather than in colours of its
+own - so one board is built however many people are reading it, in however many
+palettes. The `colours` control at the top right is a plain `<form method="get">`,
+which needs no client at all; each choice is written as the words a console would type
+(`red=teal`) and read back by the same `Palette.read` that reads them off the wire.
+
+For terminals, `Palette.ink` gives Spectre's name for a colour rather than a hex triple,
+because sixteen of a terminal's colours belong to whoever owns the terminal and may have
+been re-themed. A browser has no such sixteen, so `Palette.paint` gives the triple, exact.
+
 ## The map
 
 Borders are declared once in `Board.declaredBorders` and symmetrised, so a border
@@ -693,6 +763,7 @@ dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
 dotnet run -- host 3                        # open a table at their own machines
 dotnet run -- join greg-pc                  # sit down at one someone else opened
 dotnet run -- join greg-pc --token <token>  # come back to the seat you were in
+                                            # or open greg-pc:5000 in a browser
 
 dotnet run -- --help           # every command; --help works on each of them too
 ```
@@ -795,6 +866,8 @@ dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot 
 dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
 dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
                                 #   and that changing the colours changes nothing else
+dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
+                                #   and has no control on it the game would not take
 dotnet fsi tests/cli.fsx        # the command surface, and that both halves of it agree
 dotnet fsi tests/properties.fsx # the invariants, over games the machine thinks up itself
 ```
@@ -806,7 +879,7 @@ text and back again.
 
 ### Examples, and invariants
 
-The first seven scripts play games somebody thought of.
+The first eight scripts play games somebody thought of.
 [properties.fsx](tests/properties.fsx) is the other kind: it uses
 [FsCheck](https://fscheck.github.io/FsCheck/) to deal from an arbitrary seed and throw
 an arbitrary string of moves at the rules - legal, illegal, out of turn, mid-negotiation,
@@ -857,3 +930,21 @@ are not defaults and are worth knowing about:
 `-warnaserror`, the format check, every test script, and one more thing: it replays the
 oldest committed record. That file is the oldest thing in the repository that still has
 to work, so the build says so out loud.
+
+### What it depends on
+
+| | |
+| --- | --- |
+| [Spectre.Console](https://spectreconsole.net) | the `rich` view's panels, tables and charts |
+| [Spectre.Console.Cli](https://spectreconsole.net/cli/) | the command surface: `play`, `host`, `join`, `replay` |
+| [Argu](https://fsprojects.github.io/Argu/) | a command line as a value, so the program can write one |
+| [Falco.Markup](https://github.com/FalcoFramework/Falco.Markup) | the `html` view's elements |
+| [FsCheck](https://fscheck.github.io/FsCheck/) | the generated games in `properties.fsx` (a test-time reference) |
+| ASP.NET Core + SignalR | the host, its hub, and the streams held open to browsers |
+| `assets/datastar.js` | [Datastar](https://data-star.dev) 1.0.2, committed and embedded rather than fetched |
+
+`Spectre.Console.Cli` is pinned to `0.51.1` to match `Spectre.Console`; taking its
+newest would quietly bring a newer rendering library along with it, under `Rich`.
+
+Nothing here needs npm, node, or a build step. The one piece of client-side anything is
+that committed `.js`, and it is served by the same process that hosts the game.

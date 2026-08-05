@@ -63,7 +63,7 @@ let rec private loop stamp (reading: Reading) model =
                     Notes = wanted |> Option.defaultValue (not reading.Notes) }
                 model
         | Ok(Parse.Looking name) ->
-            match View.byName reading.View.Palette name with
+            match View.byName reading.View.Shown reading.View.Palette name with
             | Ok view -> loop stamp { reading with View = view } model
             | Error problem -> loop stamp reading (Update.note problem model)
         | Ok Parse.Recount ->

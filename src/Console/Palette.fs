@@ -107,6 +107,15 @@ module Palette =
     /// and a red the reader has quietly turned brown is not the red that was chosen here.
     let ink (shade: Shade) = shade.Color.ToMarkup()
 
+    /// The same shade as a browser says it, which is the hex triple after all.
+    ///
+    /// The reason `ink` above gives for avoiding hex is a reason about terminals: sixteen
+    /// of their colours belong to whoever owns the terminal and may have been re-themed.
+    /// A browser has no such sixteen, so there is nothing to defer to and the triple is
+    /// exact - which is the whole of why this is a second function rather than the first
+    /// one used twice.
+    let paint (shade: Shade) = "#" + shade.Color.ToHex()
+
     let forColor color palette =
         match color with
         | Red -> palette.Red

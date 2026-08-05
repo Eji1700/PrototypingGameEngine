@@ -1,13 +1,14 @@
 // The ways of showing the game, and the colours they are shown in.
 //
-// A view may lay the board out however it likes - `plain` writes one block of text and
-// `rich` builds panels, tables and charts - but no view may show a player anything the
-// game means them not to see. A second renderer is a second chance to leak, so every view
-// there is gets held to that here, whether or not anybody remembered to come back and add
-// it to this file.
+// A view may lay the board out however it likes - `plain` writes one block of text, `rich`
+// builds panels, tables and charts, and `html` builds a page - but no view may show a
+// player anything the game means them not to see. A third renderer is a third chance to
+// leak, so every view there is gets held to that here, whether or not anybody remembered to
+// come back and add it to this file.
 //
 //   dotnet fsi tests/view.fsx
 
+#r "nuget: Falco.Markup, 1.4.0"
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
@@ -24,6 +25,7 @@
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
+#load "../src/Console/Html.fs"
 #load "../src/Console/View.fs"
 #load "../src/Console/Options.fs"
 
@@ -37,24 +39,35 @@ let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
 
 let private seats = Game.players (Model.game dealt)
 
-/// Colour taken back off, leaving what a person would actually see. The escape itself
-/// has to go with the codes; stripping only the codes leaves it sitting between the
-/// letters, and a check for "R R R" would then never find one.
-let private seen text =
+/// What a person would actually see, whatever the view wrote it in: colour taken back off,
+/// and markup with it. The escape itself has to go with the codes; stripping only the codes
+/// leaves it sitting between the letters, and a check for "R R R" would then never find one.
+let private uncoloured text =
     Regex.Replace(text, "\u001b\\[[0-9;]*m", "")
 
-/// A bag stone by stone, which is how `rich` draws one that is open.
-let private laidOut (player: Player) =
-    player.Bag
-    |> Pile.toColors
-    |> List.map (Words.glyph >> string)
-    |> String.concat " "
+/// Markup taken off too, so that what is left of a page is what somebody reading one would
+/// have in front of them.
+///
+/// Only for boards. The game's own prose says things like `recruit <colour> <region>`, and
+/// to a rule this blunt an angle bracket is an angle bracket - so anything checking what
+/// the game *says* uses `uncoloured` above and stops there.
+let private seen text =
+    Regex.Replace(uncoloured text, "<[^>]*>", "")
 
-/// The same bag counted, which is how `plain` draws it. Between them these are every way
-/// a bag is written anywhere in the program, and so every shape a leak could take.
-let private tallied (player: Player) = Words.counted player.Bag
+/// Every way a bag is written anywhere in the program, and so every shape a leak could
+/// take: laid out stone by stone, which is how `rich` draws one that is open; counted,
+/// which is how `plain` draws it; and laid out with nothing at all between the stones,
+/// which is what `html` comes to once its tags are off, each stone being an element of
+/// its own.
+let private spellings (player: Player) =
+    let stones = player.Bag |> Pile.toColors |> List.map (Words.glyph >> string)
+
+    [ String.concat " " stones; String.concat "" stones; Words.counted player.Bag ]
 
 let private mentions (needle: string) (text: string) = text.Contains needle
+
+let private spells (player: Player) (board: string) =
+    spellings player |> List.exists (fun spelling -> board |> mentions spelling)
 
 /// Every view, in the colours the game is drawn in unless somebody says otherwise. What a
 /// player may see does not depend on what colour it is drawn in, and the checks below say
@@ -68,16 +81,13 @@ for view in views do
     for beholder in seats do
         let board = seen (view.Board true beholder dealt)
 
-        report
-            $"the {view.Name} view shows {Words.player beholder.Id} their own bag"
-            true
-            (board |> mentions (laidOut beholder) || board |> mentions (tallied beholder))
+        report $"the {view.Name} view shows {Words.player beholder.Id} their own bag" true (board |> spells beholder)
 
         for other in seats |> List.filter (fun p -> p.Id <> beholder.Id) do
             report
                 $"the {view.Name} view keeps {Words.player other.Id}'s bag from {Words.player beholder.Id}"
                 false
-                (board |> mentions (laidOut other) || board |> mentions (tallied other))
+                (board |> spells other)
 
 // --- a stone drawn stays with the player who drew it ---------------------------------------
 
@@ -109,22 +119,48 @@ let private rich = View.rich Palette.standard
 
 report "the plain view leaves what the game says exactly as it said it" Render.help (plain.Says Render.help)
 
-report "the rich view colours prose without moving a character of it" Render.help (seen (rich.Says Render.help))
+report "the rich view colours prose without moving a character of it" Render.help (uncoloured (rich.Says Render.help))
 
 report "and does colour it" true (rich.Says Render.help |> mentions "[")
 
 // --- choosing one -----------------------------------------------------------------------------
 
-report "every view answers to its own name" [ "plain"; "rich" ] (views |> List.map (fun view -> view.Name))
+report "every view answers to its own name" [ "plain"; "rich"; "html" ] (views |> List.map (fun view -> view.Name))
 
-report "a view can be asked for by name" (Ok "rich") (View.byName Palette.standard "rich" |> Result.map (fun view -> view.Name))
+report
+    "a view can be asked for by name"
+    (Ok "rich")
+    (View.byName AtATerminal Palette.standard "rich"
+     |> Result.map (fun view -> view.Name))
 
-report "and is not case-fussy about it" (Ok "plain") (View.byName Palette.standard "PLAIN" |> Result.map (fun view -> view.Name))
+report
+    "and is not case-fussy about it"
+    (Ok "plain")
+    (View.byName AtATerminal Palette.standard "PLAIN"
+     |> Result.map (fun view -> view.Name))
 
 report
     "a name nobody answers to is refused, and says what there is"
-    (Error "'fancy' is not a way of showing the game. There is plain, rich.")
-    (View.byName Palette.standard "fancy" |> Result.map (fun view -> view.Name))
+    (Error "'fancy' is not a way of showing the game here. There is plain, rich.")
+    (View.byName AtATerminal Palette.standard "fancy"
+     |> Result.map (fun view -> view.Name))
+
+// Which views there are is one question and which of them a reader could show is another.
+// A terminal handed a page reads angle brackets and a browser handed the rich board reads
+// escape codes, so neither is offered the other's - and the refusal says what there is
+// rather than that the name is unknown, because the name is not the problem.
+
+report
+    "a terminal is not offered the page"
+    (Error "'html' is not a way of showing the game here. There is plain, rich.")
+    (View.byName AtATerminal Palette.standard "html"
+     |> Result.map (fun view -> view.Name))
+
+report
+    "and a browser is not offered the terminal's boards"
+    (Error "'rich' is not a way of showing the game here. There is html.")
+    (View.byName InABrowser Palette.standard "rich"
+     |> Result.map (fun view -> view.Name))
 
 // --- the colours it is drawn in -----------------------------------------------------------------
 //
@@ -181,8 +217,8 @@ report "and not in the one it was not" false ((View.rich redIsTeal).Board true b
 
 report
     "colouring moves not one character of the board"
-    (seen (rich.Board true beholder dealt))
-    (seen ((View.rich redIsTeal).Board true beholder dealt))
+    (uncoloured (rich.Board true beholder dealt))
+    (uncoloured ((View.rich redIsTeal).Board true beholder dealt))
 
 report
     "the plain view is left plain by any of it"

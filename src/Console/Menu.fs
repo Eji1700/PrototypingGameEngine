@@ -62,7 +62,7 @@ module Menu =
               ""
               choice "<players> <seed>" "the same game again, from a seed"
               choice "replay <file>" "play a saved record again"
-              choice $"view <{View.names}>" $"how the board is drawn - now {showing.Name}, {showing.Describe}"
+              choice $"view <{View.namesFor AtATerminal}>" $"how the board is drawn - now {showing.Name}, {showing.Describe}"
               choice "colours" "which colour is drawn for what"
               choice "rules" "the rules and the commands, at length"
               choice "quit" "leave"
@@ -101,8 +101,8 @@ module Menu =
                     return Host(players, Some seed)
                 }
             | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
-            | "view", [ name ] -> View.byName palette name |> Result.map Looking
-            | "view", _ -> Error $"Say 'view <name>', for one of {View.names}."
+            | "view", [ name ] -> View.byName AtATerminal palette name |> Result.map Looking
+            | "view", _ -> Error $"Say 'view <name>', for one of {View.namesFor AtATerminal}."
             | ("colours" | "colors" | "options"), [] -> Ok Options
             | ("colours" | "colors" | "options"), _ -> Error "Say 'colours' on its own; the screen it opens says the rest."
             | "join", [ address ] -> Ok(Join(address, None))

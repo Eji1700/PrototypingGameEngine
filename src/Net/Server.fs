@@ -6,6 +6,7 @@ open System.Net.Sockets
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
+open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
@@ -32,14 +33,26 @@ type Held(opening: Lobby, keep: Model -> unit) =
             keep (Lobby.model next)
             posts)
 
-/// The wire itself: it turns a call into a change and a change back into calls, and
-/// knows nothing else about the game.
-type TableHub(held: Held) =
-    inherit Hub()
+/// Everything the table says, said.
+///
+/// A console at a terminal has a socket SignalR is holding open; a console in a browser has
+/// a stream holding itself open. Which of the two any console is, is written into its id
+/// and nowhere else - the lobby that addressed the post has no idea there are two kinds,
+/// and does not need one.
+module Wire =
 
-    let deliver (clients: IHubCallerClients) posts =
+    // The clients are said as the generic interface rather than as `IHubClients`, because
+    // that is the one thing both ends of this have in common: a hub answering a call holds
+    // `IHubCallerClients`, and a page's request holds the hub's own `IHubClients`, and
+    // neither of those is the other.
+    let deliver (clients: IHubClients<IClientProxy>) (pages: Browser.Pages) posts =
         posts
         |> List.map (fun post ->
+            if Browser.isPage post.To then
+                Browser.send pages post
+                Task.CompletedTask
+            else
+
             let console = clients.Client post.To
 
             match post.Say with
@@ -49,6 +62,13 @@ type TableHub(held: Held) =
             | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why))
         |> Task.WhenAll
 
+/// The wire itself: it turns a call into a change and a change back into calls, and
+/// knows nothing else about the game.
+type TableHub(held: Held, pages: Browser.Pages) =
+    inherit Hub()
+
+    let deliver (clients: IHubCallerClients) posts = Wire.deliver clients pages posts
+
     member this.Join(token: string, view: string, palette: string) =
         let resuming = if String.IsNullOrWhiteSpace token then None else Some token
 
@@ -56,7 +76,9 @@ type TableHub(held: Held) =
         // ask for another once they are sitting down. Colours the table does not know are
         // passed over the same way, one at a time, by `Palette.read`.
         let palette = Palette.read palette
-        let view = View.byName palette view |> Result.defaultValue (View.plain palette)
+
+        let view =
+            View.byName AtATerminal palette view |> Result.defaultValue (View.plain palette)
 
         // A fresh token is minted out here and handed in, so the lobby stays a value:
         // a table that invented its own tokens could not be folded twice to the same
@@ -89,24 +111,51 @@ module Server =
     let host port model keep =
         let builder = WebApplication.CreateBuilder()
 
+        let held = Held(Lobby.opened model, keep)
+        let pages = Browser.Pages()
+
         // The console is a board, not a log. Anything the framework wants to say would
         // land in the middle of it.
         builder.Logging.ClearProviders() |> ignore
         builder.Services.AddSignalR() |> ignore
-        builder.Services.AddSingleton<Held>(Held(Lobby.opened model, keep)) |> ignore
+        builder.Services.AddSingleton<Held> held |> ignore
+        builder.Services.AddSingleton<Browser.Pages> pages |> ignore
         builder.WebHost.UseUrls($"http://0.0.0.0:{port}") |> ignore
 
         let app = builder.Build()
         app.MapHub<TableHub>(Protocol.Path) |> ignore
+
+        // What a page needs of the table, which is what a console needs of it: a way to
+        // change it, and a way for everybody to hear what came of that. The hub's own
+        // clients rather than a caller's, because a move made in a browser has to reach
+        // the terminals, and there is no call in progress to borrow them from.
+        let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
+
+        let sitting: Browser.Sitting =
+            { Change = held.Change
+              Deliver = fun posts -> Wire.deliver hub.Clients pages posts |> ignore }
+
+        app.MapGet(Html.Client, RequestDelegate(fun ctx -> Browser.script ctx))
+        |> ignore
+
+        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page ctx)) |> ignore
+
+        app.MapGet(Html.Stream, RequestDelegate(fun ctx -> Browser.stream sitting pages ctx :> Task))
+        |> ignore
+
+        app.MapPost(Html.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
+        |> ignore
 
         let seats = Game.playerCount (Model.game model)
 
         printfn ""
         printfn "=== A table for %d, waiting to be joined ===" seats
         printfn ""
-        printfn "  Each player runs:"
+        printfn "  Each player either runs:"
         printfn ""
         printfn "    dotnet run -- join <address>"
+        printfn ""
+        printfn "  or opens <address> in a browser. Both sit down at this one table."
         printfn ""
         printfn "  This table is at:"
         printfn ""

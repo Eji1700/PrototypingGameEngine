@@ -4,6 +4,7 @@
 //
 //   dotnet fsi tests/lobby.fsx
 
+#r "nuget: Falco.Markup, 1.4.0"
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
@@ -20,6 +21,7 @@
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
+#load "../src/Console/Html.fs"
 #load "../src/Console/View.fs"
 #load "../src/Net/Protocol.fs"
 #load "../src/Net/Lobby.fs"

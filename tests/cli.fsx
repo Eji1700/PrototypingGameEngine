@@ -14,6 +14,7 @@
 
 #r "nuget: FsCheck, 3.3.3"
 #r "nuget: Argu, 6.2.5"
+#r "nuget: Falco.Markup, 1.4.0"
 #r "nuget: Spectre.Console, 0.51.1"
 #r "nuget: Spectre.Console.Cli, 0.51.1"
 
@@ -31,6 +32,7 @@
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
+#load "../src/Console/Html.fs"
 #load "../src/Console/View.fs"
 #load "../src/Console/Launch.fs"
 #load "../src/Console/Shell.fs"
