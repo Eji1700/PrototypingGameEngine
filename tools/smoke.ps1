@@ -17,7 +17,11 @@
 param(
     [int]$Port = 5000,
     [int]$DebugPort = 9222,
-    [string]$Browser = ""
+    [string]$Browser = "",
+    # Serve the game with the machine in the second seat, and check the two things about
+    # that which only a browser can show: that the page is told whose seat it is, and that
+    # the machine's answer arrives down the stream without the page asking for it.
+    [string]$Rival = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -118,6 +122,11 @@ $script = @'
   for (let i = 0; i < 100 && !heading().startsWith('Turn'); i++) await wait(100);
 
   const out = { drew: heading(), regions: document.querySelectorAll('.region').length };
+
+  // Whatever landed beside the board on the way in, before anything has been clicked. At a
+  // table with a machine at it, this is the table saying which seat that is.
+  out.onArrival = (document.querySelector('#told') || {}).textContent || '';
+
   if (!box()) return JSON.stringify(out);
 
   // Typed into the box, sent with the button. The line goes as a signal, so this is the
@@ -145,7 +154,12 @@ $script = @'
   region.click();
   await wait(1500);
   out.afterRegion = heading();
-  out.said = document.querySelectorAll('#screen .said').length;
+  const said = [...document.querySelectorAll('#screen .said')].map(line => line.textContent);
+  out.said = said.length;
+  // Recruiting ends a turn, so at a table with a machine at it the seat after this one has
+  // answered by now - and its answer is in the log, having arrived on its own down the same
+  // stream rather than because the page went and asked.
+  out.answered = said.some(line => line.indexOf('Player 2') === 0);
 
   // A screen that lands beside the board rather than on it, and the only one made of
   // written lines rather than elements. Worth its own press: a newline is what separates
@@ -183,8 +197,10 @@ try {
 
     Start-Sleep -Milliseconds 500
 
-    $game = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" `
-        -ArgumentList @("run", "--project", $root, "--", "serve", "2", "--seed", "42")
+    $served = @("run", "--project", $root, "--", "serve", "2", "--seed", "42")
+    if ($Rival) { $served += @("--rival", $Rival) }
+
+    $game = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
 
     # Wait for the table rather than guess how long it takes to open. Driving a browser at a
     # server that is not up yet fails in ways that look like the page's fault - which is
@@ -230,6 +246,11 @@ try {
     Report "and the table hears it" ($r.said -gt 0) "$($r.said) line(s) in the log"
     Report "asking why a region is ruled as it is lands beside the board" ($r.working -match 'holds') $r.working
     Report "and arrives with its lines still separate" ($r.working -match "`n") "no newline survived"
+
+    if ($Rival) {
+        Report "the page is told which seat the machine is playing" ($r.onArrival -match "machine: Player 2 \($Rival\)") $r.onArrival
+        Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was Player 2's"
+    }
 
     ""
     if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }

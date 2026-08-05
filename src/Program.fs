@@ -38,6 +38,17 @@ let private errand doing =
     | Keeping(model, stamp, announce) -> write model stamp announce
     | Leaving(model, stamp) -> if not (Journal.isEmpty model.Journal) then write model stamp true
 
+/// Say the parts of what the table said that a terminal has to print for itself. A screen is
+/// not one of them: the loop below draws the board afresh each turn, because a terminal
+/// cannot patch one in place the way a page can.
+let private tell posts =
+    for post in posts do
+        match post.Say with
+        | Told text
+        | TurnedAway text -> printf "%s" (text + Environment.NewLine)
+        | Screen _
+        | Seated _ -> ()
+
 /// Fold what is typed here into the game. Once it is over the loop stays open, so the
 /// record can be read and walked back through before the table is cleared.
 ///
@@ -45,21 +56,13 @@ let private errand doing =
 /// a screen and a file - which is why the local game can be checked without any of the
 /// three, the same way the networked one can.
 let rec private loop solo =
-    // A terminal cannot patch a screen in place, so the board is drawn afresh each turn -
-    // and the `Screen` posts below are dropped, because this is them.
     Solo.board Keyboard solo |> Option.iter (printf "%s")
     printf "%s" (if Model.isOver (Solo.model solo) then "(over) > " else "> ")
 
     let heard line =
         let next, posts, doing = Solo.said (stampNow ()) Keyboard line solo
 
-        for post in posts do
-            match post.Say with
-            | Told text
-            | TurnedAway text -> printf "%s" (text + Environment.NewLine)
-            | Screen _
-            | Seated _ -> ()
-
+        tell posts
         errand doing
 
         match doing with
@@ -99,7 +102,7 @@ let private replayFrom path =
 /// Deal a game and serve it to a browser on this machine. Nothing comes back: like a
 /// hosted table it runs until the process is stopped, because a page has no way of saying
 /// the game is over and done with.
-let private serveFor palette players seed =
+let private serveFor palette skills players seed =
     match dealt players seed with
     | Error problem ->
         eprintfn "%s" problem
@@ -113,8 +116,14 @@ let private serveFor palette players seed =
                 Some(Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
 
         // Nobody is watching yet. A browser adds itself when it opens its stream, which is
-        // the only moment anybody is really there.
-        Server.serve Protocol.DefaultPort palette (Solo.opened (stampNow ()) model) stampNow keep
+        // the only moment anybody is really there - and the machines have already played up
+        // to the first seat a person has to fill by the time it does.
+        let solo, doing =
+            Solo.opened (stampNow ()) model
+            |> Solo.against (Rival.seating (Model.seed model) skills (Model.game model))
+
+        errand doing
+        Server.serve Protocol.DefaultPort palette solo stampNow keep
 
 /// Open a table for players at their own machines. Nothing comes back: the table waits
 /// until whoever opened it stops the process, because no one player may close it on all
@@ -135,7 +144,7 @@ let private hostFor players seed =
 /// runs to its own end and only has an exit code to give back.
 [<NoComparison; NoEquality>]
 type private Opening =
-    | Play of Model * View
+    | Play of Model * View * Skill list
     | Done of code: int
 
 /// The colour screen, which runs until the player is done with it and gives back the view
@@ -184,30 +193,37 @@ let rec private welcome (view: View) =
             welcome view
         | Ok(Menu.Looking chosen) -> welcome chosen
         | Ok Menu.Options -> welcome (colouring view)
-        | Ok(Menu.Deal(players, seed)) ->
+        | Ok(Menu.Deal(players, seed, rivals)) ->
             match dealt players (seed |> Option.defaultValue (clockSeed ())) with
-            | Ok model -> Play(model, view)
+            | Ok model -> Play(model, view, rivals)
             | Error problem -> retry problem
-        | Ok(Menu.Serve(players, seed)) ->
+        | Ok(Menu.Serve(players, seed, rivals)) ->
             // In whatever colours the player settled on here, which is the same promise
             // the command line's --colour keeps.
-            Done(serveFor view.Palette players (seed |> Option.defaultValue (clockSeed ())))
+            Done(serveFor view.Palette rivals players (seed |> Option.defaultValue (clockSeed ())))
         | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
         | Ok(Menu.Join(address, token)) -> Done(Client.join address token view)
         | Ok(Menu.Replay path) ->
             match replayFrom path with
-            | Ok model -> Play(model, view)
+            | Ok model -> Play(model, view, [])
             | Error problem -> retry problem
         | Error problem -> retry problem
 
 /// Sit down at a game and play it here. The board the player is looking at when they
 /// arrive is drawn by the same code that draws every one after it, because sitting down is
 /// simply the first thing that happens at the table.
-let private play view model =
-    let solo, _ =
+let private play view skills model =
+    // The machines take their seats before anybody sits down to watch, so that a table where
+    // the first move is theirs has already had it made by the time the first board is drawn.
+    let seated, doing =
         Solo.opened (stampNow ()) model
-        |> Solo.watching Keyboard { Notes = true; View = view }
+        |> Solo.against (Rival.seating (Model.seed model) skills (Model.game model))
 
+    errand doing
+
+    let solo, posts = seated |> Solo.watching Keyboard { Notes = true; View = view }
+
+    tell posts
     loop solo |> ignore
     0
 
@@ -218,21 +234,21 @@ let private play view model =
 /// that knows what opening a game actually involves, and adding a way in means adding a
 /// case rather than another road through `main`.
 let private opening (view: View) launch =
-    let orElse outcome =
+    let orElse skills outcome =
         match outcome with
         | Ok model ->
             printfn "%s" view.Rules
-            play view model
+            play view skills model
         | Error problem ->
             eprintfn "%s" problem
             1
 
     match launch with
-    | Launch.Deal(players, seed) -> orElse (dealt players (seed |> Option.defaultValue (clockSeed ())))
-    | Launch.Serve(players, seed) -> serveFor view.Palette players (seed |> Option.defaultValue (clockSeed ()))
+    | Launch.Deal(players, seed, rivals) -> orElse rivals (dealt players (seed |> Option.defaultValue (clockSeed ())))
+    | Launch.Serve(players, seed, rivals) -> serveFor view.Palette rivals players (seed |> Option.defaultValue (clockSeed ()))
     | Launch.Host(players, seed) -> hostFor players (seed |> Option.defaultValue (clockSeed ()))
     | Launch.Join(address, token) -> Client.join address token view
-    | Launch.Replay path -> orElse (replayFrom path)
+    | Launch.Replay path -> orElse [] (replayFrom path)
 
 [<EntryPoint>]
 let main argv =
@@ -250,6 +266,6 @@ let main argv =
     match argv with
     | [||] ->
         match welcome (View.plain Palette.standard) with
-        | Play(model, view) -> play view model
+        | Play(model, view, rivals) -> play view rivals model
         | Done code -> code
     | _ -> Shell.run opening argv

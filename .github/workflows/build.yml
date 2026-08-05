@@ -51,10 +51,13 @@ jobs:
           dotnet fsi tests/html.fsx
           dotnet fsi tests/cli.fsx
 
-      # Slower than the rest, and the only ones that generate their own games, so they
-      # run last and on their own.
+      # Slower than the rest, and the only ones that play or generate whole games of
+      # their own, so they run last and on their own.
       - name: Properties
         run: dotnet fsi tests/properties.fsx
+
+      - name: The machine at a seat
+        run: dotnet fsi tests/rival.fsx
 
       # A record is meant to replay for good. The committed one is the oldest thing in
       # the repository that still has to work, so the build says so out loud.

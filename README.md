@@ -7,6 +7,11 @@ screen a player reads goes through a `View` - so how the game looks is swappable
 and it is: `plain` writes blocks of text, `rich` builds panels and charts, and two
 players at one networked table can each pick their own.
 
+Seats can be played by the program rather than by somebody in the room. A machine
+at a seat is held to what a player is held to: it asks the rules what they will
+take rather than keeping its own opinion, it reads the map and its own bag and
+nothing else, and it picks a `Move` - the very thing a typed line turns into.
+
 ## Layout
 
 Five layers, each depending only on the ones above it.
@@ -27,7 +32,7 @@ Five layers, each depending only on the ones above it.
 | [Board.fs](src/Domain/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
 | [Players.fs](src/Domain/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
 | [Position.fs](src/Domain/Position.fs) | Which stones stand where |
-| [Ruling.fs](src/Domain/Ruling.fs) | Who rules a region |
+| [Ruling.fs](src/Domain/Ruling.fs) | Who rules a region, and how the land stands - both read off a position alone |
 | [Game.fs](src/Domain/Game.fs) | The game in progress, and what can be asked of it |
 | [Knowledge.fs](src/Domain/Knowledge.fs) | What one player can see of a game, and what they cannot |
 | [Events.fs](src/Domain/Events.fs) | What happened, and why an action was refused |
@@ -42,6 +47,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | --- | --- |
 | [Messages.fs](src/App/Messages.fs) | `Move` and `Msg` |
 | [Session.fs](src/App/Session.fs) | `Session`, `Play`, `Over`, and `Notice` |
+| [Rival.fs](src/App/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
 | [Timeline.fs](src/App/Timeline.fs) | Every state the game has stood in, with a finger on the present |
 | [Journal.fs](src/App/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
 | [Model.fs](src/App/Model.fs) | The timeline, the journal, and the last few lines on screen |
@@ -61,7 +67,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
 | [Html.fs](src/Console/Html.fs) | The `html` view: every screen as a fragment of a page, and the page they land in |
 | [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
-| [Solo.fs](src/Console/Solo.fs) | The game at one keyboard, as a value: what a typed line does, and what it asks written down |
+| [Solo.fs](src/Console/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
 | [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
 | [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
 | [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
@@ -386,6 +392,150 @@ property of the view, not of what is stored. `Render` reads the journal through
 `Words.noticeSeenBy`; `Transcript` writes it through `Words.notice`. So typing
 `save` mid-game does put a full account on disk, where the file is out of the
 game's hands anyway.
+
+## Playing against the program
+
+A seat can be played by the program. `--rival <skill>` gives away the seat after
+yours, once per seat, and the first seat is always yours:
+
+```powershell
+dotnet run -- play 2 --rival medium
+dotnet run -- play 4 --rival easy --rival hard --rival hard
+dotnet run -- serve 2 --rival hard      # the same, in a browser
+```
+
+There are three: `easy`, `medium` and `hard`. Nothing on the board says which seats
+are the machine's - its stones look like anybody's, and they are - so the table says
+so once, to whoever sits down to watch, in the words their own view speaks.
+
+### It plays no better than it is allowed to
+
+A machine at a table is the one thing here that can be wrong quietly. Every other
+part of the program either draws something a person looks at or refuses something a
+person typed; a machine that has picked a move nobody would has picked a legal move,
+drawn a perfectly good board, and said nothing at all. So it is fenced in three ways,
+and each of them is a thing the compiler or a check can hold it to.
+
+**It keeps no second copy of the rules.** To find out whether a move is allowed, it
+asks [Actions.fs](src/Domain/Actions.fs) - the same functions `Update` asks - and
+takes the answer. A machine that worked legality out for itself would be a second
+opinion about the rules, free to drift from the ones being played, and the way that
+shows up at a table is a machine asking for something, being told no, and asking
+again with the turn never passing. Over two whole machine-played games,
+[rival.fsx](tests/rival.fsx) insists not one thing it asked for was refused.
+
+**It reads the map and one bag.** The function that weighs a position takes a
+`Position` and a `Pile`, which is the whole of what somebody at that seat can see.
+There is nothing in the arguments to cheat with. Working out how the land stands from
+a position alone is what [Ruling.fs](src/Domain/Ruling.fs) does, so this is the game's
+own reckoning rather than a copy of it. And the same thing is said again from outside:
+the stones in the bags it cannot see are poured together and dealt back out between
+those players, and it has to pick the same move it picked before. Between them, not
+into them - what it is entitled to work out, that every stone is *somewhere*, is
+untouched, and the only thing that changed is the one thing it was never shown.
+
+**It can only make moves a person could type.** It picks a `Move`, which is what
+`Parse.line` produces from a typed line, so its moves land in the record in the same
+words yours do and a game against a machine replays like any other. Every move made
+over two whole games is written out with `Words.command`, fed back to `Parse.line`,
+and has to come back the same move.
+
+Its generator travels with it the way the game's own travels inside the game, so the
+same deal against the same machines plays the same game twice.
+
+### Three sets of numbers, not three machines
+
+There is one machine. What `easy`, `medium` and `hard` name is a set of weights and
+two knobs, all at the foot of [Rival.fs](src/App/Rival.fs):
+
+| | `easy` | `medium` | `hard` |
+| --- | --- | --- | --- |
+| land ruled by the faction it is backing | 10 | 10 | 10 |
+| standing inside a region, short of ruling it | 1 | 1 | 1 |
+| the Axe, and the Flag | — | — | 4, 3 |
+| its own faction's stones still in the bag | 12 | 12 | 12 |
+| the other two's, which count against it | −1 | −1 | −1 |
+| how often it plays anything legal instead | always | 15% | never |
+| how many of its own moves it checks a reply to | — | — | 5 |
+
+`easy` throws its judgement away every turn, so its column is there for the shape of the
+thing rather than because it is ever read.
+
+The last line is the only one that involves looking past its own turn, and it runs into the
+same wall as everything else: it cannot see the next player's bag, so it does not guess at
+one. It assumes the worst instead - that the seat about to act holds every stone that is
+neither on the map nor in its own bag, which is exactly what `Knowledge.Unseen` says is out
+there somewhere. Pessimistic, and honest. It never plays better for knowing something it was
+not told, only more carefully.
+
+The weights are the game's own winning conditions with a number against each, so
+there is no strategy written down anywhere: there is a statement of what winning is,
+which the rules already say, and how much a machine cares about each part of it.
+Adding a fourth way of playing is a fourth entry in the list; changing how `hard`
+plays is changing a number. Nothing else in the program knows what any of these
+words mean.
+
+Two of those lines are worth explaining, because they are what the numbers had to be
+tuned to get right.
+
+**Standing inside a region** is the slope up to the step. Ruling a region is a step,
+and most moves do not take one - so weighed on land alone nearly every move is worth
+exactly what every other one is, and the machine picks between them by drawing lots.
+Tuned without it, `hard` beat `easy` about as often as a coin would.
+
+**Its own stones still in the bag**, set high against land, is what stops it emptying
+its bag onto the map. This game is settled in two cascades: which faction carried the
+board, and then which *player* carried the faction - and that second one is decided by
+who is left holding most of the winning colour. A bag played out to nothing wins
+nothing, and a game where every bag is empty is drawn outright. Weighted low, two
+machines play every stone they have and draw every time.
+
+That has a corollary that the checks had to be taught: **a machine that never plays a
+stone at all beats a random one handsomely**, because the rules reward being left
+holding things. It also makes a dreadful opponent. So `hard` is held to beating that
+as well, and not by imitating it - [rival.fsx](tests/rival.fsx) plays it against a
+weights-set built to sit still, and separately insists that a machine facing somebody
+who plays plays back rather than negotiating the game away.
+
+The ordering the checks hold, over twelve deals played twice each with the seats
+swapped so that going first is not what is being measured:
+
+```
+hard vs easy     net +10   won 16  lost  6  drawn  2
+medium vs easy   net  +3   won 11  lost  8  drawn  5
+hard vs medium   net  +7   won 13  lost  6  drawn  5
+hard vs hoarder  net +10   won 16  lost  6  drawn  2
+```
+
+Fixed seeds, so there is nothing flaky in that: a run that came out differently would
+mean the machine had changed and not the dice.
+
+What it does not do is model the clock. The game ends when everybody negotiates in a
+row, and knowing whether you want that to happen yet is a real part of playing well
+that none of these three understand. Two machines of the same skill will often close a
+game out at once for that reason; against somebody playing stones, they play back.
+
+### At the table
+
+`Solo` gains one rule and one only: after a person has spoken, the machines answer for
+as long as the seat to act is one of theirs. What stops them is a move that left the
+game exactly as it found it - nothing they pick should ever be refused, but a machine
+that had somehow found one the rules would not take would otherwise be asked for it
+again, and again.
+
+The same rule read backwards is what `undo` does. Taking a move back takes the
+machine's answer back with it, and stops where a person has to decide something;
+anything else and one `undo` would hand the turn straight back and nothing would ever
+be undone.
+
+Everything else follows from a machine's move being an ordinary move. It goes through
+`Update.update`, lands in the record against its own seat, is drawn to everybody
+watching, and reaches a browser down the same stream a person's does. There is no
+second table and no second protocol.
+
+Hosted tables ([Lobby.fs](src/Net/Lobby.fs)) have no machines at them. That is a
+different table with seats, tokens and people at their own keyboards, and filling one
+of those seats with a machine is a separate piece of work rather than the same one.
 
 ## How the board is shown
 
@@ -842,7 +992,11 @@ dotnet run -- play 3           # 3 players, random seed - straight to the board
 dotnet run -- play 3 --seed 42 # the same game again, from a seed
 dotnet run -- play 2 --view rich --colour blue=teal
 
+dotnet run -- play 2 --rival medium              # the seat after yours, played by the program
+dotnet run -- play 4 --rival easy --rival hard   # once per seat you are giving away
+
 dotnet run -- serve 3          # the same game, played in a browser on this machine
+dotnet run -- serve 2 --rival hard
 
 dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
 
@@ -857,7 +1011,7 @@ dotnet run -- --help           # every command; --help works on each of them too
 ### Two halves of a command line
 
 The arguments go through [Spectre.Console.Cli](https://spectreconsole.net/cli/), which
-owns the command surface: the four commands, the options that go with each, `--help`,
+owns the command surface: the five commands, the options that go with each, `--help`,
 and the checking. A count the table would refuse, a view nobody has, a colour nobody
 has - each is answered at the door, in the same words the game would have used, before
 anything is dealt:
@@ -893,6 +1047,11 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Console/Menu.fs))
   Stones on a map, and a seat each. How many are playing?
 
     2  3  4  5             deal a game for that many, round this keyboard
+    serve <players>        the same, but played in a browser on this machine
+
+  Or, against the program:
+
+    vs <skill>...          one seat each - the machine plays easy, medium, hard
 
   Or, to play from separate machines:
 
@@ -912,7 +1071,9 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Console/Menu.fs))
 A bare number is the answer to the question the menu asks, so it needs no command
 word in front of it. The seatings on offer are read off `Table.MinPlayers` and
 `Table.MaxPlayers` rather than written out, so the menu cannot come to offer a
-number the table would refuse. Like the rest of the console layer `Menu` is pure -
+number the table would refuse. `vs` does not ask how many are playing, because
+saying who you are playing has already said it: one seat for you and one for each
+machine named, so `vs easy hard` is a table of three. Like the rest of the console layer `Menu` is pure -
 it says what the menu reads like and what a typed line means, and `Program` does
 the reading and the writing. Once a game is dealt, `players <n>` and `restart` do
 the same job from the prompt.
@@ -957,13 +1118,16 @@ dotnet fsi tests/view.fsx       # that no view shows a player anything they shou
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
                                 #   and has no control on it the game would not take
 dotnet fsi tests/cli.fsx        # the command surface, and that both halves of it agree
-dotnet fsi tests/properties.fsx # the invariants, over games the machine thinks up itself
+dotnet fsi tests/properties.fsx # the invariants, over games FsCheck thinks up itself
+dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays legally, that it
+                                #   plays fairly, and that the skills mean something
 ```
 
 And one that is not a script, because it needs a browser:
 
 ```powershell
-pwsh tools/smoke.ps1            # play the game in a real browser, and say whether it worked
+pwsh tools/smoke.ps1                  # play the game in a real browser, and say whether it worked
+pwsh tools/smoke.ps1 -Rival medium    # the same, with the machine in the second seat
 ```
 
 Everything in `tests/` checks what the program **writes**. [smoke.ps1](tools/smoke.ps1)
@@ -977,6 +1141,10 @@ its place: the working behind a ruling is written text rather than elements, and
 is what separates one instruction from the next on the way to the browser, so it is the
 screen that would arrive in pieces if the stream's framing were wrong.
 
+`-Rival` serves the same game with the program in the second seat, and checks the two things
+about that which only a browser can show: that the page is told whose seat it is, and that
+the machine's own move arrives down the stream without the page going and asking for it.
+
 It wants Edge or Chrome on the machine, which is why it is not in CI. Run it after touching
 anything the browser reads.
 
@@ -987,7 +1155,7 @@ text and back again.
 
 ### Examples, and invariants
 
-The first nine scripts play games somebody thought of.
+All but the last two play games somebody thought of.
 [properties.fsx](tests/properties.fsx) is the other kind: it uses
 [FsCheck](https://fscheck.github.io/FsCheck/) to deal from an arbitrary seed and throw
 an arbitrary string of moves at the rules - legal, illegal, out of turn, mid-negotiation,
@@ -1006,6 +1174,14 @@ cuts moves out until it has the shortest game that still fails.
 
 That last property is the one to keep. It is the promise the whole design rests on, and
 before this it was checked on one nine-move game.
+
+[rival.fsx](tests/rival.fsx) is the third kind. It generates nothing and poses almost
+nothing: it sits machines down opposite each other and plays whole games out, because the
+things worth knowing about a machine at a seat - that it never asks for a move the rules
+refuse, that its turn always passes, that it plays a game rather than negotiating one away,
+and that `hard` really does beat `easy` - are things that only a game from deal to verdict
+can answer. That a table of machines finishes at all is checked by the script reaching its
+next line: a turn that never passed would hang rather than fail.
 
 The suite earned its keep on the first run. It shrank a failure to two moves - `recruit`,
 `undo` - and the finding was that the check itself was wrong, not the game: when `undo`
@@ -1044,7 +1220,7 @@ to work, so the build says so out loud.
 | | |
 | --- | --- |
 | [Spectre.Console](https://spectreconsole.net) | the `rich` view's panels, tables and charts |
-| [Spectre.Console.Cli](https://spectreconsole.net/cli/) | the command surface: `play`, `host`, `join`, `replay` |
+| [Spectre.Console.Cli](https://spectreconsole.net/cli/) | the command surface: `play`, `serve`, `host`, `join`, `replay` |
 | [Argu](https://fsprojects.github.io/Argu/) | a command line as a value, so the program can write one |
 | [Falco.Markup](https://github.com/FalcoFramework/Falco.Markup) | the `html` view's elements |
 | [Falco.Datastar](https://github.com/FalcoFramework/Falco.Datastar) | the client's attributes, its stream frames and its signals, so none of those spellings are this repo's to remember |

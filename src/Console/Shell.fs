@@ -6,6 +6,7 @@ open System.ComponentModel
 open Spectre.Console
 open Spectre.Console.Cli
 open TCModel.Domain
+open TCModel.App
 
 /// The command line: what can be asked for at the shell prompt, and what each one means.
 ///
@@ -119,6 +120,16 @@ module Shell =
                     | _ -> Error $"'{given}' is not a colour for something. Say it as 'blue=teal'."))
             (Ok Palette.standard)
 
+    /// The seats the machine was told to play, folded up one at a time and in the order they
+    /// were named - the first being the seat after yours.
+    let private facing (given: string array) =
+        given
+        |> Array.fold
+            (fun rivals name ->
+                rivals
+                |> Result.bind (fun rivals -> Rival.byName name |> Result.map (fun skill -> rivals @ [ skill ])))
+            (Ok [])
+
     /// The colours, as every command that draws anywhere takes them.
     [<AbstractClass>]
     type ColourSettings() =
@@ -176,15 +187,48 @@ module Shell =
                 | Ok _ -> ValidationResult.Success()
                 | Error problem -> ValidationResult.Error problem
 
+    /// The machines a table was told to seat, checked against the seats there are for them.
+    /// The first is yours - that is what playing at this keyboard means - so a game for two
+    /// has one seat to give away, and asking for more of them is asking for a bigger table.
+    let private seating players given =
+        facing given
+        |> Result.bind (fun rivals ->
+            if List.length rivals > players - 1 then
+                Error
+                    $"A game for {players} leaves {players - 1} seat(s) for the machine, and it was given {List.length rivals}. Deal for more, or ask for fewer."
+            else
+                Ok rivals)
+
+    /// A game to play at this keyboard, which is the only kind of table a machine can be
+    /// asked to sit at: `host` deals seats to people at their own machines, and there is
+    /// nobody for a seat played here to be at the far end of.
+    type PlaySettings() =
+        inherit DealSettings()
+
+        [<CommandOption("-r|--rival <SKILL>")>]
+        [<Description("let the machine play the next seat: easy, medium or hard; may be given more than once")>]
+        member val Rivals: string array = [||] with get, set
+
+        member this.Facing() = seating this.Players this.Rivals
+
+        override this.Validate() =
+            match base.Validate() with
+            | ok when not ok.Successful -> ok
+            | _ ->
+                match this.Facing() with
+                | Ok _ -> ValidationResult.Success()
+                | Error problem -> ValidationResult.Error problem
+
     type PlayCommand(opening: Opening) =
-        inherit Command<DealSettings>()
+        inherit Command<PlaySettings>()
 
         override _.Execute(_, settings) =
-            match settings.Reading() with
-            | Error problem ->
+            match settings.Reading(), settings.Facing() with
+            | Error problem, _
+            | _, Error problem ->
                 eprintfn "%s" problem
                 1
-            | Ok view -> opening.Act view (Launch.Deal(settings.Players, Option.ofNullable settings.Seed))
+            | Ok view, Ok rivals -> opening.Act view (Launch.Deal(settings.Players, Option.ofNullable settings.Seed, rivals))
 
     /// A game to play in a browser. The same two things `play` is dealt from, and no
     /// `--view`: there is one way of drawing a board a browser can read, and it is not a
@@ -200,23 +244,34 @@ module Shell =
         [<Description("deal from this seed rather than from the clock, for the same game again")>]
         member val Seed = Nullable<uint64>() with get, set
 
+        [<CommandOption("-r|--rival <SKILL>")>]
+        [<Description("let the machine play the next seat: easy, medium or hard; may be given more than once")>]
+        member val Rivals: string array = [||] with get, set
+
+        member this.Facing() = seating this.Players this.Rivals
+
         override this.Validate() =
             match this.Palette() with
             | Error problem -> ValidationResult.Error problem
             | Ok _ ->
                 match Parse.tryPlayerCount (string this.Players) with
-                | Ok _ -> ValidationResult.Success()
                 | Error problem -> ValidationResult.Error problem
+                | Ok _ ->
+                    match this.Facing() with
+                    | Ok _ -> ValidationResult.Success()
+                    | Error problem -> ValidationResult.Error problem
 
     type ServeCommand(opening: Opening) =
         inherit Command<ServeSettings>()
 
         override _.Execute(_, settings) =
-            match settings.Palette() with
-            | Error problem ->
+            match settings.Palette(), settings.Facing() with
+            | Error problem, _
+            | _, Error problem ->
                 eprintfn "%s" problem
                 1
-            | Ok palette -> opening.Act (View.html palette) (Launch.Serve(settings.Players, Option.ofNullable settings.Seed))
+            | Ok palette, Ok rivals ->
+                opening.Act (View.html palette) (Launch.Serve(settings.Players, Option.ofNullable settings.Seed, rivals))
 
     type HostCommand(opening: Opening) =
         inherit Command<DealSettings>()
@@ -278,6 +333,7 @@ module Shell =
             .AddCommand<PlayCommand>("play")
             .WithDescription("Deal a game and play it at this keyboard.")
             .WithExample("play", "3")
+            .WithExample("play", "2", "--rival", "medium")
             .WithExample("play", "2", "--seed", "42", "--view", "rich")
         |> ignore
 
@@ -285,6 +341,7 @@ module Shell =
             .AddCommand<ServeCommand>("serve")
             .WithDescription("Deal a game and play it in a browser on this machine.")
             .WithExample("serve", "3")
+            .WithExample("serve", "2", "--rival", "hard")
             .WithExample("serve", "2", "--seed", "42", "--colour", "blue=teal")
         |> ignore
 

@@ -22,6 +22,7 @@
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
 #load "../src/App/Session.fs"
+#load "../src/App/Rival.fs"
 #load "../src/App/Timeline.fs"
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
@@ -37,11 +38,13 @@
 #load "../src/Console/View.fs"
 #load "../src/Console/Launch.fs"
 #load "../src/Console/Shell.fs"
+#load "../src/Console/Menu.fs"
 
 open System
 open FsCheck
 open FsCheck.FSharp
 open TCModel.Domain
+open TCModel.App
 open TCModel.Console
 open Harness
 
@@ -81,8 +84,25 @@ let private launches =
 
     let path = Gen.elements [ "logs/one.log"; "C:/Games/My Records/last night.log" ]
 
+    // A table with the machine at some of it. Never at more seats than there are after the
+    // first: the first is yours, and a line the program could not have written is not a line
+    // worth asking whether it reads back.
+    let dealing =
+        players
+        |> Gen.bind (fun players ->
+            let seatings =
+                [ []
+                  [ Rival.easy ]
+                  [ Rival.medium; Rival.hard ]
+                  [ Rival.hard; Rival.easy; Rival.medium ] ]
+                |> List.filter (fun rivals -> List.length rivals <= players - 1)
+
+            Gen.zip seed (Gen.elements seatings)
+            |> Gen.map (fun (seed, rivals) -> players, seed, rivals))
+
     Gen.oneof
-        [ Gen.zip players seed |> Gen.map Launch.Deal
+        [ dealing |> Gen.map Launch.Deal
+          dealing |> Gen.map Launch.Serve
           Gen.zip players seed |> Gen.map Launch.Host
           Gen.zip address token |> Gen.map Launch.Join
           path |> Gen.map Launch.Replay ]
@@ -163,20 +183,101 @@ report "so is a colour said the wrong way round" true (turnedAway [ "play"; "2";
 
 report "and a command nobody has" true (turnedAway [ "frobnicate" ])
 
+// The machine is asked for by name, and only for seats that exist. The first is yours, so a
+// game for two has one to give away and a second one asked for is somebody meaning
+// something else - which is worth saying at the door rather than at the table.
+
+report "a way of playing nobody has is turned away" true (turnedAway [ "play"; "2"; "--rival"; "cunning" ])
+
+report
+    "and so are more machines than there are seats for them"
+    true
+    (turnedAway [ "play"; "2"; "--rival"; "easy"; "--rival"; "hard" ])
+
+report "which `serve` says too, dealing the same table" true (turnedAway [ "serve"; "2"; "--rival"; "easy"; "--rival"; "hard" ])
+
 // --- the defaults --------------------------------------------------------------------------------
 
 report
     "a game asked for with no number is dealt for the fewest that can play"
-    (0, Some(Launch.Deal(Table.MinPlayers, None)))
+    (0, Some(Launch.Deal(Table.MinPlayers, None, [])))
     (through [ "play" ])
 
-report "a seed left unsaid is left unsaid, for the clock to answer" (0, Some(Launch.Deal(3, None))) (through [ "play"; "3" ])
+report "a seed left unsaid is left unsaid, for the clock to answer" (0, Some(Launch.Deal(3, None, []))) (through [ "play"; "3" ])
 
-report "and a seed given is carried through" (0, Some(Launch.Deal(3, Some 42UL))) (through [ "play"; "3"; "--seed"; "42" ])
+report "and a seed given is carried through" (0, Some(Launch.Deal(3, Some 42UL, []))) (through [ "play"; "3"; "--seed"; "42" ])
 
 report
     "how the board is drawn can be said in either spelling"
-    (0, Some(Launch.Deal(2, None)))
+    (0, Some(Launch.Deal(2, None, [])))
     (through [ "play"; "2"; "--color"; "blue=teal" ])
+
+report "a game with nobody said to play it is a game between people" (0, Some(Launch.Deal(3, None, []))) (through [ "play"; "3" ])
+
+report
+    "and the machines are taken in the order they were named"
+    (0, Some(Launch.Deal(3, None, [ Rival.hard; Rival.easy ])))
+    (through [ "play"; "3"; "--rival"; "hard"; "--rival"; "easy" ])
+
+report
+    "a browser's table takes them the same way"
+    (0, Some(Launch.Serve(2, Some 42UL, [ Rival.medium ])))
+    (through [ "serve"; "2"; "--seed"; "42"; "-r"; "medium" ])
+
+// --- the other door ---------------------------------------------------------------------------
+//
+// Running the program with no arguments at all opens the menu instead, which asks the same
+// questions in a different grammar. Only the newest part of it is held to anything here: how
+// many are playing is not asked for after `vs`, because saying who you are playing has
+// already said it - one seat for you and one for each machine named - and a menu that got
+// that sum wrong would deal a table with an empty chair at it.
+
+let private chosen line = Menu.choose Palette.standard line
+
+/// A choice as something that can be compared. `Menu.Choice` carries a view, and a view is
+/// a bundle of functions, so the choices cannot be held up against each other whole.
+let private dealing choice =
+    match choice with
+    | Ok(Menu.Deal(players, seed, rivals)) -> Ok("deal", players, seed, rivals |> List.map (fun skill -> skill.Name))
+    | Ok(Menu.Serve(players, seed, rivals)) -> Ok("serve", players, seed, rivals |> List.map (fun skill -> skill.Name))
+    | Ok _ -> Error "that is not a game to deal"
+    | Error problem -> Error problem
+
+report
+    "'vs' deals a seat for you and one for each machine named"
+    (Ok("deal", 3, None, [ "easy"; "hard" ]))
+    (dealing (chosen "vs easy hard"))
+
+report
+    "and the browser's table is asked for the same way"
+    (Ok("serve", 2, None, [ "medium" ]))
+    (dealing (chosen "serve vs medium"))
+
+report
+    "'vs' with nobody named says what to name"
+    true
+    (match chosen "vs" with
+     | Error problem -> problem.Contains "easy, medium, hard"
+     | Ok _ -> false)
+
+report
+    "and a table it would deal too big is refused, rather than dealt"
+    true
+    (match chosen "vs easy easy hard hard medium" with
+     | Error problem -> problem.Contains $"table of 6"
+     | Ok _ -> false)
+
+report
+    "a way of playing nobody has is refused here too"
+    true
+    (match chosen "vs cunning" with
+     | Error problem -> problem.Contains "not a way for the machine to play"
+     | Ok _ -> false)
+
+// And the seatings the menu offers on its own line still mean what they meant.
+
+report "a bare number is still a table of people" (Ok("deal", 4, None, [])) (dealing (chosen "4"))
+
+report "and the menu says the machine is on offer" true ((Menu.screen (View.plain Palette.standard)).Contains "vs <skill>...")
 
 finish ()

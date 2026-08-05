@@ -29,6 +29,9 @@
   <ItemGroup Label="App - the MVU loop, and the game's memory of itself">
     <Compile Include="src/App/Messages.fs" />
     <Compile Include="src/App/Session.fs" />
+    <!-- A seat played by the program. It needs a game and the moves there are, and nothing
+         of records or of walking one back, so it is compiled before either exists. -->
+    <Compile Include="src/App/Rival.fs" />
     <Compile Include="src/App/Timeline.fs" />
     <Compile Include="src/App/Journal.fs" />
     <Compile Include="src/App/Model.fs" />

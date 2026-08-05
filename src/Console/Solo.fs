@@ -48,27 +48,114 @@ type Errand =
 /// Watchers, plural, and the reading is per watcher. One is the usual case - a person at a
 /// keyboard - but a game served to a browser can have the same hot seat open in two places
 /// at once, and they are entitled to read it differently.
+///
+/// Some of the seats may be played by the program rather than by anybody in the room. That
+/// changes nothing about the game and nothing about the screen: a machine's move goes
+/// through `Update.update` like everybody else's, lands in the record like everybody else's,
+/// and is drawn to everybody watching like everybody else's. All this table adds is that
+/// after a person has spoken, the machines answer before the prompt comes back.
 [<NoComparison; NoEquality>]
 type Solo =
     private
         { Model: Model
           Stamp: string
+          Rivals: (PlayerId * Rival) list
           Watchers: (string * Reading) list }
 
 module Solo =
 
-    /// A game with nobody looking at it yet. The stamp names the file this game's record
-    /// will be kept in; it is taken outside and handed in, because it comes from the clock
-    /// and a table that read the clock for itself could not be folded twice to the same
-    /// answer.
+    /// A game with nobody looking at it yet and nobody but people at it. The stamp names
+    /// the file this game's record will be kept in; it is taken outside and handed in,
+    /// because it comes from the clock and a table that read the clock for itself could not
+    /// be folded twice to the same answer.
     let opened stamp model =
         { Model = model
           Stamp = stamp
+          Rivals = []
           Watchers = [] }
 
     let model solo = solo.Model
 
     let stamp solo = solo.Stamp
+
+    // --- the seats nobody is sitting in ------------------------------------------------
+
+    /// The machine at the seat to act, if that seat is one of theirs and there is still a
+    /// game to play.
+    let private toAct solo =
+        match Model.session solo.Model with
+        | Finished _ -> None
+        | InPlay play ->
+            solo.Rivals
+            |> List.tryFind (fst >> (=) (Game.active play.Game).Id)
+            |> Option.map (fun (_, rival) -> play, rival)
+
+    let private withRival playerId rival solo =
+        { solo with
+            Rivals =
+                solo.Rivals
+                |> List.map (fun (other, was) -> if other = playerId then other, rival else other, was) }
+
+    /// Let the machines take their turns.
+    ///
+    /// They play one after another for as long as the seat to act is one of theirs, so a
+    /// line typed by a person is answered by everybody between them and their next turn -
+    /// which is what sitting down opposite a machine looks like.
+    ///
+    /// A move that left the game exactly as it found it stops them, and that is the whole of
+    /// what stops them. Nothing a machine picks should be refused - it asks the rules what
+    /// they will take before it chooses - but a machine that had somehow found a move the
+    /// rules would not have would otherwise be asked for it again, and again, with the turn
+    /// never passing and nothing on the screen to say why.
+    let rec private answering solo =
+        match toAct solo with
+        | None -> solo
+        | Some(play, rival) ->
+            let seat = (Game.active play.Game).Id
+
+            match Rival.plays play rival with
+            | None -> solo
+            | Some(move, rival) ->
+                let next =
+                    { solo with
+                        Model = Update.update (Make move) solo.Model }
+                    |> withRival seat rival
+
+                if Model.session next.Model = Model.session solo.Model then next else answering next
+
+    /// The same rule read backwards, for walking the game about.
+    ///
+    /// A move taken back takes the machines' answers to it back with it, and a move made
+    /// again brings them along again. Anything else would be no way of taking a move back at
+    /// all: one `undo` and the machine would simply play it for you again before you had
+    /// looked at the board.
+    let rec private walking msg solo =
+        match toAct solo with
+        | None -> solo
+        | Some _ ->
+            let next =
+                { solo with
+                    Model = Update.update msg solo.Model }
+
+            if Model.session next.Model = Model.session solo.Model then next else walking msg next
+
+    /// Seat the machines, and let them play up to the first seat a person has to fill.
+    ///
+    /// Handed in already seated rather than named here, because which player a machine plays
+    /// and what its generator started from are facts about the game that was dealt, and this
+    /// table is only where they sit.
+    ///
+    /// Nobody is watching yet, so there is nothing to draw and nothing comes back but the
+    /// record - which is only ever asked for by a table where every seat is a machine's,
+    /// there being no seat for the opening to stop at, so it plays the whole game here.
+    let against rivals solo =
+        let played = answering { solo with Rivals = rivals }
+
+        played,
+        (if Model.isOver played.Model && not (Model.isOver solo.Model) then
+             Keeping(played.Model, played.Stamp, false)
+         else
+             Carrying)
 
     let private readingAt console solo =
         solo.Watchers |> List.tryFind (fst >> (=) console) |> Option.map snd
@@ -125,6 +212,25 @@ module Solo =
 
     // --- coming and going ---------------------------------------------------------------
 
+    /// Who at this table is the machine, said to somebody as they sit down to watch.
+    ///
+    /// Nothing on the board says so and nothing should: a machine's stones look like
+    /// anybody's, and they are. But a game where you cannot tell who you are playing has a
+    /// secret in it that is no part of the game, so it is said once, plainly, to whoever
+    /// arrives - in the words their own view speaks, like everything else said after the
+    /// fact.
+    let private roster (reading: Reading) solo =
+        match solo.Rivals with
+        | [] -> []
+        | rivals ->
+            rivals
+            |> List.map (fun (playerId, rival) -> $"{Words.player playerId} ({rival.Skill.Name})")
+            |> String.concat ", "
+            |> sprintf "Played by the machine: %s."
+            |> reading.View.Says
+            |> Told
+            |> List.singleton
+
     /// Somebody starts watching, reading it the way they say. A console already watching is
     /// not seated again; it simply says how it would rather read, which is what a browser
     /// reloading its page amounts to.
@@ -136,7 +242,9 @@ module Solo =
                 { solo with
                     Watchers = solo.Watchers @ [ (console, reading) ] }
 
-        solo, [ screenFor solo (console, reading) ]
+        solo,
+        [ screenFor solo (console, reading) ]
+        @ (roster reading solo |> List.map (fun said -> { To = console; Say = said }))
 
     /// Somebody stops. Nothing about the game changes - there are no seats to keep warm
     /// here, and the person who was playing every side has simply put it down.
@@ -197,22 +305,36 @@ module Solo =
             solo, drawAll solo, Leaving(ended, solo.Stamp)
         | Ok(Parse.Send(Restart _ as msg)) ->
             // The old game's record is closed and kept before the table is cleared, which
-            // is why the errand carries that game rather than this one.
+            // is why the errand carries that game rather than this one. The machines stay
+            // where they were sitting - they are at the table, not in the game - and answer
+            // the fresh deal the same way they would answer anything else.
             let closing = solo.Model
 
             moved
-                { solo with
-                    Model = Update.update msg solo.Model
-                    Stamp = fresh }
+                (answering
+                    { solo with
+                        Model = Update.update msg solo.Model
+                        Stamp = fresh })
                 (Keeping(closing, solo.Stamp, false))
+        | Ok(Parse.Send((Undo | Redo) as msg)) ->
+            moved
+                (walking
+                    msg
+                    { solo with
+                        Model = Update.update msg solo.Model })
+                Carrying
         | Ok(Parse.Send msg) ->
-            let next = Update.update msg solo.Model
+            let next =
+                answering
+                    { solo with
+                        Model = Update.update msg solo.Model }
 
-            // A game that has just ended writes itself down without being asked.
+            // A game that has just ended writes itself down without being asked - whoever
+            // ended it, which by now may well have been the machine.
             let errand =
-                if Model.isOver next && not (Model.isOver solo.Model) then
-                    Keeping(next, solo.Stamp, false)
+                if Model.isOver next.Model && not (Model.isOver solo.Model) then
+                    Keeping(next.Model, solo.Stamp, false)
                 else
                     Carrying
 
-            moved { solo with Model = next } errand
+            moved next errand

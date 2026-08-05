@@ -1,6 +1,7 @@
 namespace TCModel.Console
 
 open Argu
+open TCModel.App
 
 /// What a command line asks the program to open, as a value.
 ///
@@ -10,10 +11,11 @@ open Argu
 /// the compiler makes everybody answer.
 [<RequireQualifiedAccess>]
 type Launch =
-    /// Deal and play at this keyboard. A seed left unsaid is taken from the clock.
-    | Deal of players: int * seed: uint64 option
+    /// Deal and play at this keyboard. A seed left unsaid is taken from the clock, and the
+    /// skills are the seats after the first, in order, that the machine is to play.
+    | Deal of players: int * seed: uint64 option * rivals: Skill list
     /// The same game, played in a browser on this machine rather than at this keyboard.
-    | Serve of players: int * seed: uint64 option
+    | Serve of players: int * seed: uint64 option * rivals: Skill list
     /// Deal and wait for the other players to arrive from their own machines.
     | Host of players: int * seed: uint64 option
     /// Sit down at somebody else's table, resuming a seat if a token says which.
@@ -39,6 +41,7 @@ type Argument =
     | [<CliPrefix(CliPrefix.None); First>] Replay of path: string
     | [<AltCommandLine("-s")>] Seed of seed: uint64
     | [<AltCommandLine("-t")>] Token of token: string
+    | [<AltCommandLine("-r")>] Rival of skill: string
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -50,16 +53,21 @@ type Argument =
             | Replay _ -> "play a saved record again"
             | Seed _ -> "deal from this seed rather than from the clock"
             | Token _ -> "come back to the seat this token claimed"
+            | Rival _ -> $"let the machine play the next seat, at {Rival.names}"
 
 module Launch =
 
     let private parser =
         ArgumentParser.Create<Argument>(programName = "tcmodel", errorHandler = ProcessExiter())
 
+    let private said seed (rivals: Skill list) =
+        (seed |> Option.toList |> List.map Seed)
+        @ (rivals |> List.map (fun skill -> Rival skill.Name))
+
     let private arguments launch =
         match launch with
-        | Launch.Deal(players, seed) -> [ Play players ] @ (seed |> Option.toList |> List.map Seed)
-        | Launch.Serve(players, seed) -> [ Argument.Serve players ] @ (seed |> Option.toList |> List.map Seed)
+        | Launch.Deal(players, seed, rivals) -> [ Play players ] @ said seed rivals
+        | Launch.Serve(players, seed, rivals) -> [ Argument.Serve players ] @ said seed rivals
         | Launch.Host(players, seed) -> [ Argument.Host players ] @ (seed |> Option.toList |> List.map Seed)
         | Launch.Join(address, token) -> [ Argument.Join address ] @ (token |> Option.toList |> List.map Token)
         | Launch.Replay path -> [ Argument.Replay path ]
@@ -100,14 +108,29 @@ module Launch =
             let seed = taken.TryGetResult Seed
             let token = taken.TryGetResult Token
 
+            // Read back as skills rather than as the words they were written in, so a line
+            // naming a way of playing that does not exist stops here rather than at a seat.
+            let rivals =
+                taken.GetResults Rival
+                |> List.fold
+                    (fun found name ->
+                        found
+                        |> Result.bind (fun found -> Rival.byName name |> Result.map (fun skill -> found @ [ skill ])))
+                    (Ok [])
+
+            match rivals with
+            | Error problem -> Error problem
+            | Ok rivals ->
+
             match taken.GetAllResults() |> List.tryHead with
-            | Some(Play players) -> Ok(Launch.Deal(players, seed))
-            | Some(Serve players) -> Ok(Launch.Serve(players, seed))
+            | Some(Play players) -> Ok(Launch.Deal(players, seed, rivals))
+            | Some(Serve players) -> Ok(Launch.Serve(players, seed, rivals))
             | Some(Host players) -> Ok(Launch.Host(players, seed))
             | Some(Join address) -> Ok(Launch.Join(address, token))
             | Some(Replay path) -> Ok(Launch.Replay path)
             | Some(Seed _)
             | Some(Token _)
+            | Some(Rival _)
             | None ->
                 let line = String.concat " " words
                 Error $"'{line}' does not say what to open."

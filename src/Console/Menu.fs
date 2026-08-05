@@ -3,6 +3,7 @@ namespace TCModel.Console
 open System
 open TCModel.Common
 open TCModel.Domain
+open TCModel.App
 
 /// The front door: what a person can ask for before there is a game to play.
 ///
@@ -15,10 +16,11 @@ module Menu =
     [<NoComparison; NoEquality>]
     type Choice =
         /// Deal a fresh game. A seed left unsaid is taken from the clock, so the game
-        /// is a new one every time.
-        | Deal of players: int * seed: uint64 option
+        /// is a new one every time; the skills are the seats after the first that the
+        /// machine is to play.
+        | Deal of players: int * seed: uint64 option * rivals: Skill list
         /// Deal one and play it in a browser on this machine instead of at this keyboard.
-        | Serve of players: int * seed: uint64 option
+        | Serve of players: int * seed: uint64 option * rivals: Skill list
         /// Deal one and wait for the other players to arrive from their own machines.
         | Host of players: int * seed: uint64 option
         /// Sit down at somebody else's table.
@@ -56,6 +58,10 @@ module Menu =
               choice seatings "deal a game for that many, round this keyboard"
               choice "serve <players>" "the same, but played in a browser on this machine"
               ""
+              "  Or, against the program:"
+              ""
+              choice "vs <skill>..." $"one seat each - the machine plays {Rival.names}"
+              ""
               "  Or, to play from separate machines:"
               ""
               choice "host <players>" "open a table and wait for them to arrive"
@@ -82,8 +88,25 @@ module Menu =
             result {
                 let! players = Parse.tryPlayerCount players
                 let! seed = Parse.trySeed seed
-                return Deal(players, Some seed)
+                return Deal(players, Some seed, [])
             }
+
+        /// The machines named after `vs`. How many are playing is not asked for and is not
+        /// something to get wrong: it is one seat for whoever is reading this and one for
+        /// each machine named, which is what somebody saying 'vs medium' means.
+        let facing names =
+            names
+            |> List.fold
+                (fun found name ->
+                    found
+                    |> Result.bind (fun found -> Rival.byName name |> Result.map (fun skill -> found @ [ skill ])))
+                (Ok [])
+            |> Result.bind (fun skills ->
+                match List.length skills with
+                | 0 -> Error $"Say 'vs <skill>', for one or more of {Rival.names}."
+                | many when many + 1 > Table.MaxPlayers ->
+                    Error $"That is a table of {many + 1}. The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
+                | many -> Ok(many + 1, skills))
 
         match Parse.words text with
         | [] -> Ok Waiting
@@ -104,12 +127,20 @@ module Menu =
                     return Host(players, Some seed)
                 }
             | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
-            | "serve", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Serve(n, None))
+            // Before the seatings below, which would read 'vs' as a number of players and
+            // say so rather than saying what is actually wrong.
+            | "vs", names ->
+                facing names
+                |> Result.map (fun (players, skills) -> Deal(players, None, skills))
+            | "serve", "vs" :: names ->
+                facing names
+                |> Result.map (fun (players, skills) -> Serve(players, None, skills))
+            | "serve", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Serve(n, None, []))
             | "serve", [ players; seed ] ->
                 result {
                     let! players = Parse.tryPlayerCount players
                     let! seed = Parse.trySeed seed
-                    return Serve(players, Some seed)
+                    return Serve(players, Some seed, [])
                 }
             | "serve", _ -> Error $"Say 'serve <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
             | "view", [ name ] -> View.byName AtATerminal palette name |> Result.map Looking
@@ -119,8 +150,8 @@ module Menu =
             | "join", [ address ] -> Ok(Join(address, None))
             | "join", [ address; token ] -> Ok(Join(address, Some token))
             | "join", _ -> Error "Say 'join <address>', naming the machine that is hosting."
-            | "players", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(n, None))
+            | "players", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(n, None, []))
             | "players", [ players; seed ] -> dealing players seed
-            | players, [] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(n, None))
+            | players, [] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(n, None, []))
             | players, [ seed ] -> dealing players seed
             | word, _ -> Error $"I don't know how to '{word}'. Say how many are playing, or quit."

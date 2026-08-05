@@ -10,14 +10,6 @@ type Game =
       Reserve: Pile
       Rng: Rng }
 
-/// How the land stands: how much of it each colour rules, and how much is still going
-/// spare. Dead ground is left out of the last two - it is unclaimed and always will be,
-/// so counting it says nothing about how much is still to play for.
-type LandStanding =
-    { Ruled: Map<StoneColor, int>
-      Tied: int
-      Unclaimed: int }
-
 module Game =
 
     let active game = Table.active game.Table
@@ -38,54 +30,24 @@ module Game =
         { game with
             Table = Table.withActive player game.Table }
 
+    // Who rules what is settled by `Ruling`, off the position alone. These are here
+    // because a game is what most of the program is holding when it wants to ask.
+
     /// Who rules a region, with the Axe and the Flag standing by to break ties.
-    let ruleOver regionId game =
-        Ruling.decide (axeStones game) (flagStones game) (stones regionId game)
+    let ruleOver regionId game = Ruling.over regionId game.Position
 
     /// The cascade behind that verdict.
-    let weighRule regionId game =
-        Ruling.weigh (axeStones game) (flagStones game) (stones regionId game)
+    let weighRule regionId game = Ruling.weighing regionId game.Position
 
     /// Ruling over ground only. The Flag and the Axe hold stones and can be ruled
     /// like anywhere else, but they are manoeuvres rather than land.
-    let landRulings game =
-        Board.landRegions |> List.map (fun region -> region, ruleOver region.Id game)
+    let landRulings game = Ruling.landRulings game.Position
 
     /// How much land each colour rules, in canonical colour order.
-    let standings game =
-        let ruled =
-            landRulings game
-            |> List.choose (fun (_, rule) ->
-                match rule with
-                | RuledBy color -> Some color
-                | Contested _
-                | Unclaimed -> None)
+    let standings game = Ruling.standings game.Position
 
-        StoneColor.all
-        |> List.map (fun color -> color, ruled |> List.filter ((=) color) |> List.length)
-        |> Map.ofList
-
-    /// The whole standing of the land at once. Worked out here rather than wherever it
-    /// happens to be shown, because it is a fact about the position and not about the
-    /// drawing of it - and a second view counting it again for itself could count it
-    /// differently.
-    let landStanding game =
-        let open' =
-            landRulings game
-            |> List.filter (fun (region, _) -> RegionKind.isOpen region.Kind)
-
-        let counting predicate =
-            open' |> List.filter (snd >> predicate) |> List.length
-
-        { Ruled = standings game
-          Tied =
-            counting (function
-                | Contested _ -> true
-                | _ -> false)
-          Unclaimed =
-            counting (function
-                | Unclaimed -> true
-                | _ -> false) }
+    /// The whole standing of the land at once.
+    let landStanding game = Ruling.landStanding game.Position
 
     let allBagsEmpty game = Table.allEmptyHanded game.Table
 

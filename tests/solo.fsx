@@ -23,6 +23,7 @@
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
 #load "../src/App/Session.fs"
+#load "../src/App/Rival.fs"
 #load "../src/App/Timeline.fs"
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
@@ -39,6 +40,7 @@
 #load "../src/Console/View.fs"
 #load "../src/Console/Solo.fs"
 
+open TCModel.Common
 open TCModel.Domain
 open TCModel.App
 open TCModel.Console
@@ -271,5 +273,119 @@ report
      |> fst
      |> say "recruit r 1"
      |> fun (_, posts, _) -> posts |> List.filter (fun post -> post.To = "other") |> List.length)
+
+// --- the seats nobody is sitting in --------------------------------------------------------
+//
+// A machine at a seat is not a second kind of table. It moves through `Update.update` like
+// anybody else and lands in the record like anybody else; the only thing this table adds is
+// that after a person has spoken, the machines answer before the prompt comes back. What is
+// worth holding it to is the two places that has an edge: what happens when nobody at the
+// table is a person, and what `undo` means when half the moves were not yours.
+
+let private facing skills solo =
+    Solo.against (Rival.seating 42UL skills (Model.game (Solo.model solo))) solo
+
+let private opposed =
+    Solo.opened "first" dealt
+    |> facing [ Rival.medium ]
+    |> fst
+    |> Solo.watching "keyboard" reading
+    |> fst
+
+report
+    "the machine answers a move without being asked to, before the prompt comes back"
+    2
+    (let solo = next "recruit r 1" opposed
+     Journal.length (Solo.model solo).Journal)
+
+report
+    "and it is Player 1's turn again when it does"
+    1
+    (let solo = next "recruit r 1" opposed
+     PlayerId.value (Game.active (Model.game (Solo.model solo))).Id)
+
+// The record is the record. A machine's move is written into it in the same words a person's
+// would be, so a game played against one replays like any other.
+
+// Which move it picked is `Rival`'s business and [rival.fsx](rival.fsx)'s to check. What
+// matters here is that it went into the record against the seat that made it, in the same
+// words a person's would have - so a game played against a machine is a record like any
+// other, and replays like one.
+
+report
+    "a machine's move goes into the record against its own seat, in the words a person types"
+    [ 1, "recruit r 1"; 2, "battle r 1" ]
+    (next "recruit r 1" opposed
+     |> Solo.model
+     |> fun model ->
+         Journal.entries model.Journal
+         |> List.map (fun entry -> PlayerId.value entry.Actor, Words.command entry.Asked))
+
+// The one with an edge on it. Taking a move back has to take the machine's answer back with
+// it, or `undo` would hand the turn straight back to the machine and nothing would ever be
+// undone.
+
+report
+    "undo takes the machine's answer back with it, and stops where a person has to decide"
+    (Model.session dealt)
+    (opposed |> next "recruit r 1" |> next "undo" |> Solo.model |> Model.session)
+
+report
+    "and redo brings both of them along again"
+    (Model.session (Solo.model (next "recruit r 1" opposed)))
+    (opposed
+     |> next "recruit r 1"
+     |> next "undo"
+     |> next "redo"
+     |> Solo.model
+     |> Model.session)
+
+// A table where every seat is the machine's has no seat to stop at, so it plays itself out
+// the moment the machines sit down - and asks for the record, there being no later moment to
+// ask at. `Rival.seating` will not build one of these, on purpose; this one is built by hand.
+
+let private noPeople =
+    Solo.opened "first" dealt
+    |> Solo.against (
+        Game.players (Model.game dealt)
+        |> List.mapi (fun seat player ->
+            player.Id,
+            { Skill = Rival.easy
+              Rng = Rng.ofSeed (uint64 seat) })
+    )
+
+report "a table of nothing but machines plays itself out as it sits down" true (Model.isOver (Solo.model (fst noPeople)))
+
+report
+    "and asks for the record on the way, there being no later moment to ask at"
+    true
+    (match snd noPeople with
+     | Keeping(model, "first", false) -> Model.isOver model
+     | _ -> false)
+
+report
+    "while a table of people asks for nothing when it opens"
+    true
+    (match snd (facing [] (Solo.opened "first" dealt)) with
+     | Carrying -> true
+     | _ -> false)
+
+// Who you are playing is not on the board - a machine's stones look like anybody's - so the
+// table says it once, to whoever sits down, in the words their own view speaks.
+
+report
+    "sitting down at a table with a machine at it says which seat that is"
+    [ "Played by the machine: Player 2 (medium)." ]
+    (Solo.opened "first" dealt
+     |> facing [ Rival.medium ]
+     |> fst
+     |> Solo.watching "keyboard" reading
+     |> snd
+     |> saidTo)
+
+report
+    "and a table of people says nothing at all"
+    []
+    (Solo.watching "keyboard" reading (Solo.opened "first" dealt) |> snd |> saidTo)
 
 finish ()
