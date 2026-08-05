@@ -77,9 +77,10 @@ last three files here touch a socket.
 | [Server.fs](src/Net/Server.fs) | The host: one lobby behind a lock, a SignalR hub and a handful of pages over it |
 | [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
 
-And [Program.fs](src/Console/Program.fs), compiled last, is the way in: the start
-menu, the read/update/render loop, and the choice between playing here and playing
-over a wire.
+And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
+read/update/render loop, and the choice between playing here and playing over a wire.
+It sits outside all five because it needs all five - F# compiles in order and a file
+sees only what came before it, so the door has to be the last thing built.
 
 ## Keeping invalid states out
 

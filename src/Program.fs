@@ -1,9 +1,10 @@
-module TCModel.Console.Program
+module TCModel.Program
 
 open System
 open System.IO
 open TCModel.Domain
 open TCModel.App
+open TCModel.Console
 open TCModel.Net
 
 let private clockSeed () = uint64 DateTime.UtcNow.Ticks
