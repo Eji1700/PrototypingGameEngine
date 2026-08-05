@@ -10,6 +10,14 @@ type Game =
       Reserve: Pile
       Rng: Rng }
 
+/// How the land stands: how much of it each colour rules, and how much is still going
+/// spare. Dead ground is left out of the last two - it is unclaimed and always will be,
+/// so counting it says nothing about how much is still to play for.
+type LandStanding =
+    { Ruled: Map<StoneColor, int>
+      Tied: int
+      Unclaimed: int }
+
 module Game =
 
     let active game = Table.active game.Table
@@ -55,6 +63,27 @@ module Game =
         StoneColor.all
         |> List.map (fun color -> color, ruled |> List.filter ((=) color) |> List.length)
         |> Map.ofList
+
+    /// The whole standing of the land at once. Worked out here rather than wherever it
+    /// happens to be shown, because it is a fact about the position and not about the
+    /// drawing of it - and a second view counting it again for itself could count it
+    /// differently.
+    let landStanding game =
+        let open' =
+            landRulings game |> List.filter (fun (region, _) -> RegionKind.isOpen region.Kind)
+
+        let counting predicate =
+            open' |> List.filter (snd >> predicate) |> List.length
+
+        { Ruled = standings game
+          Tied =
+            counting (function
+                | Contested _ -> true
+                | _ -> false)
+          Unclaimed =
+            counting (function
+                | Unclaimed -> true
+                | _ -> false) }
 
     let allBagsEmpty game = Table.allEmptyHanded game.Table
 

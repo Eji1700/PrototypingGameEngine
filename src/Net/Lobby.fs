@@ -1,6 +1,6 @@
 namespace TCModel.Net
 
-open System
+
 open TCModel.Domain
 open TCModel.App
 open TCModel.Console
@@ -14,20 +14,27 @@ type Occupant =
     | Empty
     | Taken of token: string * console: string option
 
-/// One place at a networked table: the player it plays, who is in it, and how that
-/// person is reading the board. The notes belong to the seat rather than the game,
-/// because they are how one player reads and not how the game is played.
+/// One place at a networked table: the player it plays, who is in it, and how that person
+/// is reading the board.
+///
+/// The notes and the view belong to the seat rather than to the game, because they are how
+/// one player reads and not how the game is played. The board is drawn here at the table -
+/// a view lays the whole screen out and so needs the game to do it - which means two people
+/// at the same table can be sent two boards that look nothing alike, from one position.
+[<NoComparison; NoEquality>]
 type Seat =
     { Player: PlayerId
       Occupant: Occupant
-      Notes: bool }
+      Notes: bool
+      View: View }
 
 /// A dealt game with consoles at it.
 ///
-/// This is where the difference between one keyboard and several is settled, and it is
-/// only ever three things: who may act, who may see, and what a player may ask for. The
-/// rules of the game itself are untouched - `Update.update` decides a move here exactly
-/// as it does at a kitchen table.
+/// This is where the difference between one keyboard and several is settled, and it is only
+/// ever three things: who may act, who may see, and what a player may ask for. The rules of
+/// the game itself are untouched - `Update.update` decides a move here exactly as it does
+/// at a kitchen table.
+[<NoComparison; NoEquality>]
 type Lobby =
     private
         { Model: Model
@@ -35,7 +42,9 @@ type Lobby =
 
 module Lobby =
 
-    /// A table for a game that has been dealt, with nobody at it yet.
+    /// A table for a game that has been dealt, with nobody at it yet. A seat nobody has
+    /// taken has no view of its own, so it holds the plain one until somebody arrives and
+    /// says how they would rather read.
     let opened model =
         { Model = model
           Seats =
@@ -43,7 +52,8 @@ module Lobby =
             |> List.map (fun player ->
                 { Player = player.Id
                   Occupant = Empty
-                  Notes = true }) }
+                  Notes = true
+                  View = View.plain }) }
 
     let model lobby = lobby.Model
 
@@ -51,8 +61,8 @@ module Lobby =
 
     let private isEmpty seat = seat.Occupant = Empty
 
-    /// Every seat with somebody actually at it now. A dropped player is still in their
-    /// seat but has nothing to read it with.
+    /// Every seat with somebody actually at it now. A dropped player is still in their seat
+    /// but has nothing to read it with.
     let private consoles lobby =
         lobby.Seats
         |> List.choose (fun seat ->
@@ -69,52 +79,45 @@ module Lobby =
         { lobby with
             Seats = lobby.Seats |> List.map (fun other -> if other.Player = seat.Player then seat else other) }
 
-    /// Nobody plays until every seat is taken. A game dealt for four hands out four
-    /// bags whether or not four people have arrived, so starting early would mean
-    /// somebody playing a bag that is not theirs.
+    /// Nobody plays until every seat is taken. A game dealt for four hands out four bags
+    /// whether or not four people have arrived, so starting early would mean somebody
+    /// playing a bag that is not theirs.
     let private everyoneHere lobby = lobby.Seats |> List.forall (isEmpty >> not)
 
     // --- what a console is shown ------------------------------------------------------
 
-    let private waitingScreen lobby seat =
-        let standing (other: Seat) =
-            let who = Words.player other.Player + (if other.Player = seat.Player then " (you)" else "")
-
-            let holding =
+    /// Who is here and who is not, as a list for a view to lay out. Nothing here decides
+    /// how it reads - a table gathers the facts and the view draws them, the same as with
+    /// a board.
+    let private waitingAt lobby seat =
+        lobby.Seats
+        |> List.map (fun other ->
+            { Player = other.Player
+              Expected = isEmpty other
+              Away =
                 match other.Occupant with
-                | Taken(_, Some _) -> "here"
-                | Taken(_, None) -> "here, but their console has dropped"
-                | Empty -> "still to arrive"
+                | Taken(_, None) -> true
+                | Taken(_, Some _)
+                | Empty -> false
+              Yours = other.Player = seat.Player })
+        |> seat.View.Waiting
 
-            sprintf "    %-15s %s" who holding
-
-        let waiting = lobby.Seats |> List.filter isEmpty |> List.length
-
-        String.concat
-            Environment.NewLine
-            ([ ""
-               "=== Waiting for the table to fill ==="
-               "" ]
-             @ (lobby.Seats |> List.map standing)
-             @ [ ""
-                 $"  {waiting} more to come. The game begins once every seat is taken."
-                 "" ])
-
-    /// The board as one seat sees it, or the lobby if there is no game to look at yet.
+    /// The board as one seat sees it, drawn the way that seat asked for it - or the lobby,
+    /// if there is no game to look at yet.
     let private screenFor lobby (console, seat) =
         let text =
             if not (everyoneHere lobby) then
-                waitingScreen lobby seat
+                waitingAt lobby seat
             else
                 match Game.tryPlayer seat.Player (game lobby) with
-                | Some player -> Render.model seat.Notes player lobby.Model
-                | None -> "Your seat is no longer at this table."
+                | Some player -> seat.View.Board seat.Notes player lobby.Model
+                | None -> seat.View.Says "Your seat is no longer at this table."
 
         { To = console; Say = Screen text }
 
     /// Draw every console its own board. Anything that moves the game ends this way,
-    /// because a change for one player is a change for all of them - and each of them
-    /// has to be told in their own terms.
+    /// because a change for one player is a change for all of them - and each of them has
+    /// to be told in their own terms.
     let private drawAll lobby =
         consoles lobby |> List.map (screenFor lobby)
 
@@ -124,11 +127,15 @@ module Lobby =
 
     /// Take a seat, or come back to one already taken.
     ///
-    /// A token is what tells the two apart: without one the next empty seat is handed
-    /// out, and with one the seat that token claimed is given back, whatever machine the
-    /// player has come back on. `offered` is the token a new seat would be given - minted
-    /// outside, because a table that invented its own would not be a value any more.
-    let join console offered resuming lobby =
+    /// A token is what tells the two apart: without one the next empty seat is handed out,
+    /// and with one the seat that token claimed is given back, whatever machine the player
+    /// has come back on. `offered` is the token a new seat would be given - minted outside,
+    /// because a table that invented its own would not be a value any more.
+    ///
+    /// The view comes in with the player, because they said how they wanted to read before
+    /// they had anything to read, and it comes in again on every return: a console that
+    /// drops and comes back on something else may want a different one.
+    let join console offered resuming (view: View) lobby =
         let byToken token =
             lobby.Seats
             |> List.tryFind (fun seat ->
@@ -141,7 +148,8 @@ module Lobby =
                 lobby
                 |> withSeat
                     { seat with
-                        Occupant = Taken(token, Some console) }
+                        Occupant = Taken(token, Some console)
+                        View = view }
 
             lobby,
             just console (Seated(PlayerId.value seat.Player, token))
@@ -157,9 +165,9 @@ module Lobby =
             | Some seat -> sit seat offered lobby
             | None -> lobby, just console (TurnedAway "Every seat at this table is taken.")
 
-    /// A console has gone. The seat stays taken and keeps its token, so the player can
-    /// come back to it; the game simply waits, because there is nobody else who may
-    /// play their stones for them.
+    /// A console has gone. The seat stays taken and keeps its token, so the player can come
+    /// back to it; the game simply waits, because there is nobody else who may play their
+    /// stones for them.
     let left console lobby =
         match seatAt console lobby with
         | None -> lobby, []
@@ -173,9 +181,9 @@ module Lobby =
 
     // --- what a player may ask for ----------------------------------------------------
 
-    /// The three things a networked table refuses that one keyboard allows. Each of them
-    /// is a move that reaches behind the game rather than playing it, and with more than
-    /// one player at the table there is nobody with the standing to make it.
+    /// The three things a networked table refuses that one keyboard allows. Each of them is
+    /// a move that reaches behind the game rather than playing it, and with more than one
+    /// player at the table there is nobody with the standing to make it.
     let private refused =
         function
         | Undo
@@ -192,35 +200,36 @@ module Lobby =
         | None -> lobby, just console (TurnedAway "You are not sitting at this table.")
         | Some seat ->
 
-        let told text = lobby, just console (Told text)
-        let redraw lobby = lobby, [ screenFor lobby (console, seat) ]
+        let told text = lobby, just console (Told(seat.View.Says text))
+        let redraw seat lobby = lobby, [ screenFor lobby (console, seat) ]
 
         if not (everyoneHere lobby) then
-            redraw lobby
+            redraw seat lobby
         else
 
         match Game.tryPlayer seat.Player (game lobby) with
         | None -> told "Your seat is no longer at this table."
         | Some player ->
 
+        /// Something about this seat has changed rather than something about the game, so
+        /// this one console is drawn again and nobody else hears about it.
+        let mine seat = lobby |> withSeat seat |> redraw seat
+
         match Parse.line typed with
         | Error problem -> told problem
-        | Ok Parse.Nothing -> redraw lobby
-        | Ok Parse.Help -> told Render.help
+        | Ok Parse.Nothing -> redraw seat lobby
+        | Ok Parse.Help -> lobby, just console (Told seat.View.Rules)
         | Ok Parse.Leave -> left console lobby
         | Ok(Parse.Notes wanted) ->
-            let seat =
+            mine
                 { seat with
                     Notes = wanted |> Option.defaultValue (not seat.Notes) }
-
-            let lobby = lobby |> withSeat seat
-            lobby, [ screenFor lobby (console, seat) ]
-        // How a board looks is settled at the console it is drawn on, so this one never
-        // reaches the table - the client answers it before it is sent. If one arrives
-        // anyway, saying so is better than saying nothing.
-        | Ok(Parse.Looking _) -> told "How the board is drawn is your own affair, and is settled at your console."
-        | Ok(Parse.Explain regionId) -> told (Render.explainRule regionId lobby.Model)
-        | Ok Parse.Recount -> told (Render.history player lobby.Model)
+        | Ok(Parse.Looking name) ->
+            match View.byName name with
+            | Ok view -> mine { seat with View = view }
+            | Error problem -> told problem
+        | Ok(Parse.Explain regionId) -> lobby, just console (Told(seat.View.Ruling regionId lobby.Model))
+        | Ok Parse.Recount -> lobby, just console (Told(seat.View.History player lobby.Model))
         | Ok Parse.Keep -> told "The table keeps the record itself, and writes it out after every move."
         | Ok(Parse.Send msg) ->
             match refused msg with

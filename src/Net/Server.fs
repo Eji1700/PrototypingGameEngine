@@ -12,6 +12,7 @@ open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open TCModel.Domain
 open TCModel.App
+open TCModel.Console
 
 /// The one lobby this process is hosting, and the only thing in the whole program that
 /// is not a value.
@@ -49,14 +50,18 @@ type TableHub(held: Held) =
             | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why))
         |> Task.WhenAll
 
-    member this.Join(token: string) =
+    member this.Join(token: string, view: string) =
         let resuming =
             if String.IsNullOrWhiteSpace token then None else Some token
+
+        // A view a table has never heard of is no reason to turn a player away; they can
+        // ask for another once they are sitting down.
+        let view = View.byName view |> Result.defaultValue View.plain
 
         // A fresh token is minted out here and handed in, so the lobby stays a value:
         // a table that invented its own tokens could not be folded twice to the same
         // answer, and nothing in this codebase is allowed to be that sort of thing.
-        held.Change(Lobby.join this.Context.ConnectionId (Guid.NewGuid().ToString "N") resuming)
+        held.Change(Lobby.join this.Context.ConnectionId (Guid.NewGuid().ToString "N") resuming view)
         |> deliver this.Clients
 
     member this.Say(line: string) =

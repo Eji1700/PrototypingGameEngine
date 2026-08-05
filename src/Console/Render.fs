@@ -41,7 +41,7 @@ module Render =
     let private spans row =
         row |> List.map (fun (_, at) -> column at, column at + 2 * step)
 
-    let private mapWidth =
+    let mapWidth =
         (Board.layout |> List.collect sides |> List.max) + 1
 
     /// A region as it is titled on the map: its number and name, and for a home the
@@ -156,7 +156,13 @@ module Render =
 
         String(line).TrimEnd()
 
-    let private mapLines game =
+    /// The map, one line at a time.
+    ///
+    /// Public because both views draw the same honeycomb: it is laid out by counting
+    /// characters into columns, and the geometry of that is not something to have two
+    /// copies of. A view that wants it in colour colours these lines rather than
+    /// laying them out again.
+    let mapLines game =
         let rec draw above rows =
             match rows with
             | [] -> [ mapBetween above [] ]
@@ -166,7 +172,7 @@ module Render =
 
     /// The Flag and the Axe, drawn in the same hand as the map but standing clear of it
     /// and of each other: sharing no wall with anything, they border nothing.
-    let private apartLines game regions =
+    let apartLines game regions =
         let across piece =
             regions |> List.map piece |> String.concat "   "
 
@@ -180,7 +186,7 @@ module Render =
 
     /// The commands in brief, each shown as it would be typed. This sits with the board
     /// because that is where a player is looking; `Render.help` says all of it at length.
-    let private commands =
+    let commands =
         [ ("r b 5", "recruit a Blue stone into 5"), ("n", "negotiate for a stone")
           ("b r 8", "battle in 8 with a Red one"), ("return k", "hand a Black one back")
           ("m k 8 5 2", "march 2 Black from 8 into 5"), ("undo, redo", "walk the game back")
@@ -235,7 +241,7 @@ module Render =
         String.concat Environment.NewLine (heading :: steps Words.rulingMeasure Words.color trace @ [ verdict ])
 
     /// Both winning cascades, written out.
-    let private result game =
+    let result game =
         let factions, factionTrace = Outcome.weighFactions game
 
         let factionVerdict =
@@ -271,7 +277,23 @@ module Render =
     /// told only what they could know, and once it is over there is nothing left to
     /// hold back. Around one keyboard the beholder is whoever is to play; over a
     /// network every console has a beholder of its own and they are all different.
-    let private wording (beholder: Player) model =
+    /// What a screen says it is: whose turn, and what they owe. Public, and used by every
+    /// view rather than written out again in each, because the middle case is the one
+    /// place the drawn stone is named outright - and over a network that heading is read
+    /// by people who did not draw it.
+    let heading (beholder: Player) model =
+        let active = Game.active (Model.game model)
+
+        match Model.session model with
+        | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
+        | InPlay { Phase = AwaitingReturn drawn; Turn = turn } ->
+            let stone =
+                if active.Id = beholder.Id then $"a {Words.color drawn} stone" else "a stone"
+
+            $"Turn {turn} - {Words.player active.Id} drew {stone} and must hand one back"
+        | InPlay { Turn = turn } -> $"Turn {turn} - {Words.player active.Id} to play"
+
+    let wording (beholder: Player) model =
         if Model.isOver model then
             Words.notice
         else
@@ -331,19 +353,7 @@ module Render =
         let notedWhileHidden lines =
             if Model.isOver model then [] else noted lines
 
-        let heading =
-            match Model.session model with
-            | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
-            | InPlay { Phase = AwaitingReturn drawn; Turn = turn } ->
-                // The heading is the one place the drawn stone is named outright, and
-                // over a network it is read by people who did not draw it.
-                let stone =
-                    if active.Id = beholder.Id then $"a {Words.color drawn} stone" else "a stone"
-
-                $"Turn {turn} - {Words.player active.Id} drew {stone} and must hand one back"
-            | InPlay { Turn = turn } -> $"Turn {turn} - {Words.player active.Id} to play"
-
-        sb.AppendLine().AppendLine($"=== {heading} ===").AppendLine() |> ignore
+        sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine() |> ignore
 
         section
             sb
@@ -415,6 +425,29 @@ module Render =
         section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 
         sb.ToString()
+
+    /// A table still filling up. There is no game to draw yet, so this is the one screen
+    /// drawn from a list of who has arrived rather than from a position.
+    let waiting (seats: Waiting list) =
+        let standing seat =
+            let who = Words.player seat.Player + (if seat.Yours then " (you)" else "")
+
+            let holding =
+                if seat.Expected then "still to arrive"
+                elif seat.Away then "here, but their console has dropped"
+                else "here"
+
+            sprintf "    %-15s %s" who holding
+
+        let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
+
+        String.concat
+            Environment.NewLine
+            ([ ""; "=== Waiting for the table to fill ==="; "" ]
+             @ (seats |> List.map standing)
+             @ [ ""
+                 $"  {expected} more to come. The game begins once every seat is taken."
+                 "" ])
 
     let help =
         String.concat

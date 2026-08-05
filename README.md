@@ -1,9 +1,11 @@
 # TCModel
 
 A stone-placement game built as a Model-View-Update loop in F#. The core is pure:
-`Setup.deal` deals a game from a seed, `Update.update` folds a `Msg` into the next
-`Model`, and `Render.model` projects a `Model` to text. Only `Program.fs` touches
-the console, so the view can be swapped for anything later.
+`Setup.deal` deals a game from a seed and `Update.update` folds a `Msg` into the
+next `Model`. Nothing below the console layer knows a screen exists, and every
+screen a player reads goes through a `View` - so how the game looks is swappable,
+and it is: `plain` writes blocks of text, `rich` builds panels and charts, and two
+players at one networked table can each pick their own.
 
 ## Layout
 
@@ -49,11 +51,13 @@ it is, when it ends, when the game does, and everything that has happened so far
 
 | File | Role |
 | --- | --- |
+| [Waiting.fs](src/Console/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
-| [Render.fs](src/Console/Render.fs) | The board as plain text, drawn for one player to read |
+| [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
-| [Tint.fs](src/Console/Tint.fs) | Colour laid over a board that has already been drawn |
-| [View.fs](src/Console/View.fs) | The ways of showing the game, and choosing between them |
+| [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
+| [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
+| [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
 | [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
@@ -376,22 +380,27 @@ game's hands anyway.
 
 ## How the board is shown
 
-The game writes one screen and writes it plainly. `Render` turns a model into text
-and knows nothing about who will read it or on what. A **view**
-([View.fs](src/Console/View.fs)) is the last thing that text passes through before
-a person sees it:
+A **view** ([View.fs](src/Console/View.fs)) is every screen a player ever reads.
+Nothing else in the program prints anything a player would call part of the game,
+so a new way of showing it is written once and everything picks it up - one
+keyboard or five over a network.
 
 ```fsharp
 type View =
     { Name: string
       Describe: string
-      Show: string -> string }
+      Board:   bool -> Player -> Model -> string   // the whole board, for one player
+      History: Player -> Model -> string           // the record of play so far
+      Ruling:  RegionId -> Model -> string         // why a region is ruled as it is
+      Rules:   string                              // the rules and the commands
+      Says:    string -> string                    // one line, with no board to go with it
+      Waiting: Waiting list -> string }            // a table still filling up
 ```
 
 | view | |
 | --- | --- |
-| `plain` | the board as the game writes it, and nothing this terminal has to understand |
-| `rich` | the same board with colour laid over it, via [Spectre.Console](https://spectreconsole.net) |
+| `plain` | blocks of text, and nothing this terminal has to understand |
+| `rich` | panels, tables and charts in colour, via [Spectre.Console](https://spectreconsole.net) |
 
 ```powershell
 dotnet run -- --view rich 3 42        # deal in colour
@@ -401,21 +410,46 @@ dotnet run -- join greg-pc --view rich
 `--view <name>` may sit anywhere in the arguments and is taken out before the rest
 are read, so it never disturbs what is read by position. From the menu, `view rich`;
 from the prompt mid-game, the same. A new view is added to `View.all` and nowhere
-else - the menu, the command line, and the prompt all read that one list.
+else - the menu, the command line and the prompt all read that one list.
 
-**Colour is laid on last, and may not move a character.** The map is drawn by
-counting characters into columns ([Render.fs](src/Console/Render.fs) paints them
-into a blank line one at a time), so an escape code slipped in while it was being
-laid out would push everything after it sideways. So nothing is coloured until the
-writing is done and every column is where it belongs. [view.fsx](tests/view.fsx)
-holds every view to that rule: colour the board, strip the colour off again, and
-what is left must be the board character for character.
+**The endpoints take the model, not somebody else's finished text**, so a view is
+free to lay a screen out however it likes rather than only colouring what it is
+handed. That is the whole difference between the two: `plain` writes the board as
+one block of text, and `rich` ([Rich.fs](src/Console/Rich.fs)) builds it out of
+Spectre's panels, tables and charts - bags drawn stone by stone, a closed bag drawn
+as the row of stones nobody can name, land ruled as a bar chart, what is out of
+sight as a breakdown.
 
-That is also what makes this work over a network. The seam is on the finished text
-rather than on the model, so the wire carries the plain board and the view runs at
-the console it is going to. Two players at the same table can read it two different
-ways and the table neither knows nor cares - the `view` command is answered by the
-client and never sent.
+Adding to the game means adding an endpoint here and answering it in every view.
+That is the trade: a wide seam, but one that cannot be half-implemented without the
+compiler saying so.
+
+**What a view may not do is decide anything.** Two rules keep that honest:
+
+- **What a player may know comes from `Knowledge`**, never from a renderer, and what
+  a notice says comes from `Render.wording`. A second renderer is a second chance to
+  leak, and the way not to take it is not to write that reasoning down twice.
+  [view.fsx](tests/view.fsx) sweeps every view in `View.all` and checks that each one
+  shows a player their own bag, shows them nobody else's, and names a drawn stone
+  only to the player who drew it.
+- **What is true of the position comes from the domain.** How the land stands -
+  ruled, tied, still going spare - is `Game.landStanding`, not a sum each renderer
+  works out for itself, because a second view counting it again could count it
+  differently.
+
+**The honeycomb is kept in both.** It is not decoration: a side shared between two
+regions is a border and a corner touched is not, so the map is the only part of the
+screen that says which regions a player may march between. A grid of tidy boxes
+would lose that. `Render.mapLines` lays it out and `rich` colours those lines rather
+than laying them out again - and colour may not move a character, because the map is
+drawn by counting into columns and an escape code inserted mid-layout would push
+everything after it sideways. So the map is composed plain, then tinted.
+
+**Over a network the view lives at the table.** A view needs the game to lay a screen
+out, and the game is at the table, so the board is drawn per seat: the seat holds the
+view and the client says which one it wants when it sits down. Two people at one table
+can be sent two boards that look nothing alike from the one position, and neither the
+game nor the other player is any the wiser.
 
 ## Playing from different machines
 
@@ -642,7 +676,7 @@ dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone c
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
 dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
-dotnet fsi tests/view.fsx       # that a view may colour the board but never move it
+dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see
 ```
 
 Each script exits non-zero on failure. They load the source directly, so they run

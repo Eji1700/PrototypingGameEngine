@@ -40,10 +40,10 @@ let rec private loop stamp (reading: Reading) model =
 
     /// Everything a player reads goes out through the view they chose, and nothing goes
     /// out any other way.
-    let show (text: string) = printf "%s" (reading.View.Show text)
-    let showLine text = show (text + Environment.NewLine)
+    let showLine (text: string) =
+        printf "%s" (text + Environment.NewLine)
 
-    show (Render.model reading.Notes beholder model)
+    printf "%s" (reading.View.Board reading.Notes beholder model)
     printf "%s" (if Model.isOver model then "(over) > " else "> ")
 
     match Console.ReadLine() with
@@ -53,7 +53,7 @@ let rec private loop stamp (reading: Reading) model =
         | Ok Parse.Nothing -> loop stamp reading model
         | Ok Parse.Leave -> leave stamp model
         | Ok Parse.Help ->
-            showLine Render.help
+            showLine reading.View.Rules
             loop stamp reading model
         | Ok(Parse.Notes wanted) ->
             loop
@@ -66,13 +66,13 @@ let rec private loop stamp (reading: Reading) model =
             | Ok view -> loop stamp { reading with View = view } model
             | Error problem -> loop stamp reading (Update.note problem model)
         | Ok Parse.Recount ->
-            showLine (Render.history beholder model)
+            showLine (reading.View.History beholder model)
             loop stamp reading model
         | Ok Parse.Keep ->
             keep stamp model
             loop stamp reading model
         | Ok(Parse.Explain regionId) ->
-            showLine (Render.explainRule regionId model)
+            showLine (reading.View.Ruling regionId model)
             loop stamp reading model
         | Ok(Parse.Send(Restart _ as msg)) ->
             // The old game's record is closed and kept before the table is cleared.
@@ -182,13 +182,13 @@ let private hostFrom players seed =
 let rec private welcome (view: View) =
     // The menu is shown in the view it is offering, so 'view rich' shows what rich looks
     // like before a whole game is committed to it.
-    printf "%s" (view.Show(Menu.screen view))
+    printf "%s" (view.Says(Menu.screen view))
     printf "> "
 
     /// Say what went wrong and ask again. The menu is the only place to be when there is
     /// no game yet, so nothing here leaves except by being asked to.
     let retry problem =
-        printfn "%s" (view.Show problem)
+        printfn "%s" (view.Says problem)
         welcome view
 
     match Console.ReadLine() with
@@ -198,7 +198,7 @@ let rec private welcome (view: View) =
         | Ok Menu.Waiting -> welcome view
         | Ok Menu.Leave -> Done 0
         | Ok Menu.Rules ->
-            printfn "%s" (view.Show Render.help)
+            printfn "%s" view.Rules
             welcome view
         | Ok(Menu.Looking chosen) -> welcome chosen
         | Ok(Menu.Deal(players, seed)) ->
@@ -268,5 +268,5 @@ let main argv =
             eprintfn "%s" problem
             1
         | Ok model ->
-            printfn "%s" (view.Show Render.help)
+            printfn "%s" view.Rules
             play view model

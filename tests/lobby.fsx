@@ -4,6 +4,8 @@
 //
 //   dotnet fsi tests/lobby.fsx
 
+#r "nuget: Spectre.Console, 0.51.1"
+
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
 #load "../src/App/Session.fs"
@@ -11,13 +13,18 @@
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
 #load "../src/App/Update.fs"
+#load "../src/Console/Waiting.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
 #load "../src/Console/Parse.fs"
+#load "../src/Console/Tint.fs"
+#load "../src/Console/Rich.fs"
+#load "../src/Console/View.fs"
 #load "../src/Net/Protocol.fs"
 #load "../src/Net/Lobby.fs"
 
 open TCModel.App
+open TCModel.Console
 open TCModel.Net
 open Harness
 
@@ -26,7 +33,7 @@ let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
 let private opened () = Lobby.opened dealt
 
 /// One console at the table, in the next empty seat.
-let private sits console token lobby = Lobby.join console token None lobby
+let private sits console token lobby = Lobby.join console token None View.plain lobby
 
 /// Both seats taken, which is the only state a game is played in.
 let private full () =
@@ -85,7 +92,7 @@ report
 // --- coming back --------------------------------------------------------------------
 
 let dropped, _ = full () |> Lobby.left "one"
-let _, resumed = dropped |> Lobby.join "one-again" "tok-fresh" (Some "tok-one")
+let _, resumed = dropped |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") View.plain
 
 report "a token brings a console back to the seat it left" true (heard "one-again" resumed |> mentions "seated at 1")
 
@@ -94,7 +101,7 @@ report
     true
     (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Kx3 (8)")
 
-let _, stranger = full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token")
+let _, stranger = full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token") View.plain
 
 report
     "a token that claimed no seat claims none now"
@@ -151,5 +158,36 @@ report
     true
     (heard "one" seatedTwoPosts |> mentions "Player 2        bag: closed (8)"
      && heard "two" seatedTwoPosts |> mentions "Player 1        bag: closed (8)")
+
+// --- how each console reads it ------------------------------------------------------------
+//
+// A view lays a whole screen out and so needs the game to do it, and the game is here at
+// the table. So the board is drawn per seat, and two people at one table can be sent two
+// boards that look nothing alike from the one position.
+
+let sittingPlain, _ = opened () |> sits "one" "tok-one"
+let mixed, mixedPosts = sittingPlain |> Lobby.join "two" "tok-two" None View.rich
+
+/// Panels are drawn with box characters; nothing in the plain board has one.
+let private panelled = mentions "╭"
+
+report "a console that asked to read richly is sent a board with panels" true (heard "two" mixedPosts |> panelled)
+
+report "and the one beside it, reading plainly, is not" false (heard "one" mixedPosts |> panelled)
+
+let looked, lookedPosts = mixed |> Lobby.said "one" "view rich"
+
+report "a player may change how they read once they are sitting down" true (heard "one" lookedPosts |> panelled)
+
+report "and that is not news to anybody else, so nobody else is drawn again" 1 (List.length lookedPosts)
+
+let refusedView, refusedViewPosts = mixed |> Lobby.said "one" "view fancy"
+
+report
+    "a view nobody has is refused, and the seat keeps the one it had"
+    true
+    (heard "one" refusedViewPosts |> mentions "is not a way of showing the game")
+
+report "and the game does not move for it" 0 (movesMade refusedView)
 
 finish ()
