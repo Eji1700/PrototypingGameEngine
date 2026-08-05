@@ -1,0 +1,26 @@
+# A TCModel game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+#   dotnet run -- replay <this file>
+
+deal 2 639215091636143910
+
+#   1  turn 1, Player 1
+march b 9 11 2
+#      Player 1 marches 2 Blue stone(s) from Windgap into Ironford.
+
+#   2  turn 2, Player 2
+march b 7 4 1
+#      Player 2 marches 1 Blue stone(s) from Stonecradle into Thornwood.
+
+#   3  turn 3, Player 1
+battle b 12
+#      Player 1 battles Dunmoor with a Blue stone, driving 1 Red back to the reserve.
+
+#   4  turn 4, Player 2
+resign
+#      The game is over: the players walked away.

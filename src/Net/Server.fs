@@ -160,6 +160,9 @@ module Server =
         app.MapPost(Html.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
         |> ignore
 
+        app.MapPost(Html.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
+        |> ignore
+
     /// Open a table and wait at it. Blocks until the host stops the process, which is
     /// how a table is closed: there is no move for closing one, because no player at it
     /// has the standing to close it on everybody else.

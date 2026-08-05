@@ -1,7 +1,9 @@
 namespace TCModel.Console
 
 open System
+open System.Text.Json.Serialization
 open Falco.Markup
+open Falco.Datastar
 open TCModel.Domain
 open TCModel.App
 
@@ -49,6 +51,33 @@ module Html =
     [<Literal>]
     let Say = "/say"
 
+    /// What the page holds on the client's behalf, and the whole of it: the line waiting to
+    /// be sent.
+    ///
+    /// One declaration rather than two. The page starts this off, the box at the bottom is
+    /// bound to it, and the table reads it back off a request - and a name that drifted
+    /// between those would leave a browser sending something nobody was listening for,
+    /// silently, which is this seam's whole way of going wrong.
+    ///
+    /// Named twice over on purpose: `Line` for F# to read and `line` for the wire, because
+    /// the wire's spelling is the one the client binds to and it is not F#'s to choose.
+    type Signals =
+        { [<JsonPropertyName("line")>]
+          Line: string }
+
+    /// A page holding nothing typed yet, which is how one arrives and how it is left after
+    /// every line it sends.
+    let nothingTyped = { Line = "" }
+
+    /// Where a page says it has gone wrong.
+    ///
+    /// The person hosting a game cannot see the console of a browser two rooms away, and
+    /// the person in that browser has no reason to know there is one. So anything the page
+    /// throws is carried back here and printed where the game was started - which is the
+    /// only screen anybody is actually watching.
+    [<Literal>]
+    let Amiss = "/amiss"
+
     // --- the small change ------------------------------------------------------------
 
     /// An attribute, with its value escaped.
@@ -65,6 +94,21 @@ module Html =
     /// finally reads is what was written here.
     let private attr name (value: string) =
         Attr.create name (Net.WebUtility.HtmlEncode value)
+
+    /// An attribute of the client's that stands for itself, given an empty value instead.
+    ///
+    /// `data-bind:line` and `data-bind:line=""` say the same thing to the client - it takes
+    /// the key and treats an empty value as no value at all - and only the second is
+    /// well-formed markup, which is what `html.fsx` holds every screen to. So the name
+    /// still comes from `Falco.Datastar`; only how it is written down is settled here.
+    ///
+    /// The value is deliberately not touched. Some of what the library writes is escaped
+    /// already and some is not, and running an escaper over the lot would turn a `&quot;`
+    /// into an `&amp;quot;` and break the one thing that was right.
+    let private valued =
+        function
+        | NonValueAttr name -> KeyValueAttr(name, "")
+        | given -> given
 
     /// A colour's name in lower case, which serves as a CSS class and as the name of the
     /// custom property holding it. Taken from `Words` so that a faction renamed is
@@ -114,7 +158,7 @@ module Html =
         Elem.button
             [ Attr.class' "types"
               attr "title" line
-              attr "data-on-click" $"@post('{Say}?line={Uri.EscapeDataString line}')" ]
+              Ds.onClick (Ds.post $"{Say}?line={Uri.EscapeDataString line}") ]
             [ Text.enc caption ]
 
     // --- the map ----------------------------------------------------------------------
@@ -558,20 +602,44 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                         Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
                         Elem.title [] [ Text.raw "A game of stones" ]
                         Elem.style [] [ Text.raw (styles palette) ]
+                        // Plain script rather than a module, and before the client, so that
+                        // it is listening by the time anything can go wrong. It is the only
+                        // hand-written script on the page and it says nothing about the
+                        // game: it carries what broke back to whoever is hosting.
+                        Elem.script
+                            []
+                            [ Text.raw (
+                                  // Two things stop this feeding itself, and it needs both.
+                                  // Saying so fails like anything else, and a failure while
+                                  // reporting a failure is another failure to report; and a
+                                  // client that keeps retrying something broken has plenty
+                                  // to say. So it swallows its own trouble and stops after
+                                  // a handful - by which point whoever is hosting knows.
+                                  "let left=8;const tell=w=>{if(left-->0)fetch('"
+                                  + Amiss
+                                  + "',{method:'POST',body:w}).catch(()=>{})};"
+                                  + "addEventListener('error',e=>tell((e.message||'')+' at '+(e.filename||'')+':'+(e.lineno||0)));"
+                                  + "addEventListener('unhandledrejection',e=>tell('unsettled: '+e.reason))"
+                              ) ]
                         Elem.script [ attr "type" "module"; Attr.src Client ] [] ]
                   Elem.body
-                      [ attr "data-signals" """{"line": ""}"""
-                        attr "data-init" $"@get('{Stream}?colours={asked}')" ]
+                      // The signals are the line waiting to be typed and nothing else. Said
+                      // as a value rather than as a scrap of JSON, so that what the page
+                      // starts holding and what the table reads back are one declaration.
+                      [ Ds.signals nothingTyped; Ds.onInit (Ds.get $"{Stream}?colours={asked}") ]
                       [ colours palette
                         Elem.main [ Attr.id Screen ] [ Elem.h1 [] [ Text.raw "Sitting down..." ] ]
                         Elem.aside [ Attr.id Told ] []
                         Elem.div
                             [ Attr.class' "prompt" ]
                             [ Elem.input
-                                  [ attr "data-bind-line" ""
-                                    attr "data-on-keydown" $"evt.key === 'Enter' && @post('{Say}')"
+                                  [ valued (Ds.bind "line")
+                                    // Asked as a question rather than with an `&&`, which
+                                    // is two characters markup would rather read as the
+                                    // start of something escaped.
+                                    Ds.onEvent ("keydown", $"evt.key === 'Enter' ? {Ds.post Say} : null")
                                     attr "autofocus" "autofocus"
                                     Attr.autocomplete "off"
                                     attr "placeholder" "type a move - r b 5, b r 8, m g 8 5 2, help" ]
-                              Elem.button [ Attr.class' "types"; attr "data-on-click" $"@post('{Say}')" ] [ Text.raw "send" ] ] ] ]
+                              Elem.button [ Attr.class' "types"; Ds.onClick (Ds.post Say) ] [ Text.raw "send" ] ] ] ]
         )

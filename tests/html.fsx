@@ -16,6 +16,7 @@
 //
 //   dotnet fsi tests/html.fsx
 
+#r "nuget: Falco.Datastar, 1.3.0"
 #r "nuget: Falco.Markup, 1.4.0"
 #r "nuget: Spectre.Console, 0.51.1"
 
@@ -39,7 +40,7 @@
 open System
 open System.Net
 open System.Text.RegularExpressions
-open System.Xml.Linq
+open System.Xml
 open TCModel.Domain
 open TCModel.App
 open TCModel.Console
@@ -83,9 +84,22 @@ let private screens =
 // the mess, and leaves nobody any the wiser - so being well-formed is checked here, where
 // it can still fail out loud.
 
+/// Read a screen as a document, so that being well-formed is checked rather than assumed:
+/// tags balanced, attributes quoted, entities real.
+///
+/// Namespace-unaware on purpose. `data-on:click` is exactly how the client wants an event
+/// written and a perfectly good HTML attribute name, and to anything reading strict XML a
+/// colon means a namespace prefix that was never declared. The question here is whether a
+/// browser can make sense of this, not whether an XML parser can.
+let private read (markup: string) =
+    let document = XmlDocument()
+    use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
+    document.Load reader
+    document
+
 let private parses (markup: string) =
     try
-        XElement.Parse markup |> ignore
+        read markup |> ignore
         true
     with _ ->
         false
@@ -98,14 +112,7 @@ for name, _, markup in screens do
 // forms are HTML, only one is also well-formed, and the price of picking that one is a word
 // each in two places.
 
-report
-    "and so is the page itself"
-    true
-    (try
-        XDocument.Parse page |> ignore
-        true
-     with _ ->
-         false)
+report "and so is the page itself" true (parses page)
 
 // --- and lands where it is aimed ------------------------------------------------------------
 
@@ -113,13 +120,67 @@ for name, slot, markup in screens do
     report
         $"the {name} is one element, carrying the id it will be patched by"
         slot
-        (XElement.Parse(markup).Attribute(XName.Get "id").Value)
+        ((read markup).DocumentElement.GetAttribute "id")
 
 report "the page has a place for a board" true (page.Contains $"id=\"{Html.Screen}\"")
 
 report "and a place for what the game says without one" true (page.Contains $"id=\"{Html.Told}\"")
 
-report "and carries the client rather than sending anybody off to fetch it" true (page.Contains $"src=\"{Html.Client}\"")
+report "and carries the client rather than sending anybody off to fetch it" true (page.Contains Html.Client)
+
+// --- attributes the carried client has actually heard of --------------------------------------
+//
+// This is the check that was missing, and the bug it would have caught cost an afternoon.
+//
+// An attribute that takes a key separates the key from the plugin's name with a colon:
+// `data-on:click`. Written `data-on-click` the client looks for a plugin called `on-click`,
+// does not find one, and says nothing whatsoever - so the page renders, the stream opens,
+// the board draws, and not one button on it does anything. No error, no warning, nothing in
+// the console. A page can be entirely inert and look completely well.
+//
+// So the vocabulary is not taken on trust here. The client is a file in this repository;
+// what it registers can be read out of it, and every attribute the page emits is held
+// against that, split the way the client itself splits them.
+
+let private client =
+    IO.File.ReadAllText(IO.Path.Combine(__SOURCE_DIRECTORY__, "..", "assets", "datastar.js"))
+
+/// The attribute plugins the carried client registers, read out of the client.
+let private known =
+    Regex.Matches(client, @"p\(\{name:""([a-z-]+)""")
+    |> Seq.map (fun found -> found.Groups[1].Value)
+    |> Set.ofSeq
+
+// If the client is ever rebuilt in a shape this cannot read, the checks below would all
+// pass by finding nothing to complain about. So the reading itself is checked first.
+
+report "the carried client's own vocabulary can be read out of it" true (Set.count known > 8 && known.Contains "on")
+
+/// A `data-` attribute as the client parses it: modifiers off the end after `__`, then the
+/// plugin's name off the front at the first colon.
+let private pluginOf (attribute: string) =
+    let withoutData = attribute.Substring 5
+    let beforeMods = (withoutData.Split "__")[0]
+    (beforeMods.Split(':', 2))[0]
+
+let private attributes (markup: string) =
+    Regex.Matches(markup, @"\sdata-([a-zA-Z:._-]+)=")
+    |> Seq.map (fun found -> "data-" + found.Groups[1].Value)
+    |> List.ofSeq
+
+let private everywhere =
+    page :: (screens |> List.map (fun (_, _, markup) -> markup))
+    |> List.collect attributes
+
+report "the page and its screens do carry client attributes at all" true (List.length everywhere > 3)
+
+report
+    "and every one of them names a plugin the carried client registers"
+    []
+    (everywhere
+     |> List.map pluginOf
+     |> List.distinct
+     |> List.filter (known.Contains >> not))
 
 // --- every button types something the game would take ------------------------------------------
 

@@ -677,6 +677,54 @@ no `node_modules`, and nothing to run before `dotnet run`. The markup is built w
 [Falco.Markup](https://github.com/FalcoFramework/Falco.Markup), which is F#, not a
 template language.
 
+**The client's vocabulary is not written out by hand.** An attribute that takes a key
+separates the key from the plugin's name with a **colon** — `data-on:click`, not
+`data-on-click`. Get that wrong and the client looks for a plugin called `on-click`,
+doesn't find one, and says nothing at all: the page renders, the stream opens, the board
+draws, and not one button on it works. No error, no warning, nothing in the console.
+
+That happened. Two things stop it happening again.
+
+Every client attribute comes from
+[Falco.Datastar](https://github.com/FalcoFramework/Falco.Datastar) — `Ds.onClick`,
+`Ds.bind`, `Ds.onInit`, `Ds.signals` — so the spelling is the library's business and a
+typo is a compile error rather than a silent one. That is the whole reason it is here: the
+signal machinery it is really built for, this page barely uses.
+
+And [html.fsx](tests/html.fsx) reads the vocabulary **out of the carried client** and
+holds every attribute the page emits against it, split the way the client itself splits
+them. Not a list anybody typed — the file in `assets/`. So the two can be checked against
+each other, which matters because they version separately: Falco.Datastar's own CDN pin is
+`1.0.0-RC.7` while the client carried here is `1.0.2`. That check is what says they still
+agree.
+
+Two small deviations from what the library emits, both in [Html.fs](src/Console/Html.fs)
+with the reason written down: `data-bind:line` is given an empty value rather than standing
+for itself, and the Enter-key expression asks a question rather than using `&&`. Both are
+so that every screen stays well-formed markup, which is a thing the checks can hold it to.
+
+**The frames are the library's too.** `Response.sseStartResponseWithHeaders` opens the
+stream and `Response.sseStringElements` writes each screen into it, so the event's name and
+the way a screen with newlines in it is carried without arriving in pieces are no longer
+written out in [Browser.fs](src/Net/Browser.fs). They were, and they were the same kind of
+string as `data-on-click`: wrong, and nothing says so.
+
+**And the one signal is declared once.** `Html.Signals` is what the page is started with
+(`Ds.signals`), what the box at the bottom is bound to, and what the table reads back
+(`Request.getSignals`). It is spelled twice inside itself and deliberately — `Line` for F#
+and `line` for the wire, because the wire's is the name the client binds to:
+
+```fsharp
+type Signals =
+    { [<JsonPropertyName("line")>]
+      Line: string }
+```
+
+What is *not* taken is Falco's routing. A hosted table serves terminals over SignalR and
+browsers over SSE at the same time, so `MapHub` stays either way — adopting Falco's
+endpoints would mean two routing idioms where there is currently one, to replace eight
+lines that map five routes with no parameters.
+
 **Every control types a line.** A button is `@post('/say?line=recruit%20r%205')`, and
 the server hands `recruit r 5` to the same `Parse.line` a prompt would. So the page
 cannot offer a move the game would not take - there is nothing else for a button to
@@ -912,6 +960,26 @@ dotnet fsi tests/cli.fsx        # the command surface, and that both halves of i
 dotnet fsi tests/properties.fsx # the invariants, over games the machine thinks up itself
 ```
 
+And one that is not a script, because it needs a browser:
+
+```powershell
+pwsh tools/smoke.ps1            # play the game in a real browser, and say whether it worked
+```
+
+Everything in `tests/` checks what the program **writes**. [smoke.ps1](tools/smoke.ps1)
+checks what a browser **does** with it, which is a different question and the one that has
+already been got wrong: a page can be well-formed, carry every attribute it should, draw a
+board, and have not one working control on it. Nothing that reads markup can tell you that.
+A click can. So it opens a headless browser, waits for the board to arrive over the stream,
+then types a line and presses send, presses Enter in the box, clicks a region, and asks why
+a region is ruled as it is — checking after each that the game moved. That last one earns
+its place: the working behind a ruling is written text rather than elements, and a newline
+is what separates one instruction from the next on the way to the browser, so it is the
+screen that would arrive in pieces if the stream's framing were wrong.
+
+It wants Edge or Chrome on the machine, which is why it is not in CI. Run it after touching
+anything the browser reads.
+
 Each script exits non-zero on failure. They load the source directly, so they run
 without building the console app. `history.fsx` reaches up through the App layer to
 the transcript reader and writer, which is what lets it check a whole game out to
@@ -979,6 +1047,7 @@ to work, so the build says so out loud.
 | [Spectre.Console.Cli](https://spectreconsole.net/cli/) | the command surface: `play`, `host`, `join`, `replay` |
 | [Argu](https://fsprojects.github.io/Argu/) | a command line as a value, so the program can write one |
 | [Falco.Markup](https://github.com/FalcoFramework/Falco.Markup) | the `html` view's elements |
+| [Falco.Datastar](https://github.com/FalcoFramework/Falco.Datastar) | the client's attributes, its stream frames and its signals, so none of those spellings are this repo's to remember |
 | [FsCheck](https://fscheck.github.io/FsCheck/) | the generated games in `properties.fsx` (a test-time reference) |
 | ASP.NET Core + SignalR | the host, its hub, and the streams held open to browsers |
 | `assets/datastar.js` | [Datastar](https://data-star.dev) 1.0.2, committed and embedded rather than fetched |
@@ -988,3 +1057,10 @@ newest would quietly bring a newer rendering library along with it, under `Rich`
 
 Nothing here needs npm, node, or a build step. The one piece of client-side anything is
 that committed `.js`, and it is served by the same process that hosts the game.
+
+`Falco.Datastar` brings `Falco` itself along, and its routing is not used — the endpoints
+are mapped onto ASP.NET directly in [Server.fs](src/Net/Server.fs), because a hosted table
+needs SignalR's `MapHub` beside them regardless. That is a known cost, paid for everything
+else the package carries: the attribute vocabulary, the stream's frames and the signals
+are all spellings this repo would otherwise be remembering by hand, and it had already got
+one of them wrong.

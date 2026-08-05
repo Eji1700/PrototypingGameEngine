@@ -4,11 +4,11 @@ open System
 open System.Collections.Generic
 open System.IO
 open System.Reflection
-open System.Text
-open System.Text.Json
 open System.Threading.Channels
+open Falco.Datastar
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Http.Features
+open Microsoft.Extensions.Primitives
 open TCModel.Console
 
 /// The browser's end of a table.
@@ -117,42 +117,26 @@ module Browser =
 
     // --- what goes down a stream -----------------------------------------------------------
 
-    /// One thing said to a page, in the words its client reads.
+    /// What a page is shown for each thing the table says to it.
     ///
-    /// The payload is written a line at a time because that is what the format allows and
-    /// because the board needs it: the cascades and the rules are laid out as written text,
-    /// newlines and all, and a newline is what separates one instruction from the next. Sent
-    /// as several lines it arrives as one string with the newlines back in it.
-    let private frame event key (payload: string) =
-        let said = StringBuilder()
-        said.Append("event: ").Append(event: string).Append('\n') |> ignore
-
-        for line in payload.Split([| "\r\n"; "\n" |], StringSplitOptions.None) do
-            said.Append("data: ").Append(key: string).Append(' ').Append(line).Append('\n')
-            |> ignore
-
-        said.Append('\n').ToString()
-
-    /// A screen, patched over whatever is standing in its place.
+    /// The fragment and nothing else. Where it goes is not said here and is not `Browser`'s
+    /// to say: every fragment `Html` draws is one element with an id on it, and the client
+    /// puts an element where the element of that id already is - so what decides whether a
+    /// board lands on the board or beside it is the fragment itself, which is the one place
+    /// that knows.
     ///
-    /// Nothing says where it goes. Every fragment `Html` draws is one element with an id on
-    /// it, and the client puts an element where the element of that id already is - so what
-    /// decides whether a board lands on the board or beside it is the fragment itself,
-    /// which is the one place that knows.
-    let private elements = frame "datastar-patch-elements" "elements"
-
-    /// What a page is sent for each thing the table says to it. `Seated` is the exception:
-    /// it says which seat was taken, which the page has no use for - a browser knows itself
-    /// by its cookie - and which is caught on the way past and remembered instead.
+    /// `Seated` is the exception. It says which seat was taken, which the page has no use
+    /// for - a browser knows itself by its cookie - and which is caught on the way past and
+    /// remembered instead.
     let private saying =
         function
         | Screen text
-        | Told text -> Some(elements text)
-        | TurnedAway why -> Some(elements (Html.says why))
+        | Told text -> Some text
+        | TurnedAway why -> Some(Html.says why)
         | Seated _ -> None
 
     let send (pages: Pages) (post: Post) =
-        saying post.Say |> Option.iter (fun frame -> pages.Send(post.To, frame))
+        saying post.Say |> Option.iter (fun screen -> pages.Send(post.To, screen))
 
     // --- the console a browser is -----------------------------------------------------------
 
@@ -216,24 +200,24 @@ module Browser =
         ctx.Response.WriteAsync(Html.page palette)
 
     /// A line typed in a browser. It may come in the address, which is how a button says
-    /// what it does, or in the body, which is how the box at the bottom says what was typed
-    /// into it. Either way it is a line, and it goes to the same parser as any other.
+    /// what it does, or in the signals, which is how the box at the bottom says what was
+    /// typed into it. Either way it is a line, and it goes to the same parser as any other.
+    ///
+    /// The signals are read as `Html.Signals` - the very record the page was started with -
+    /// so the name of the one thing a page holds is settled in one place and read back by
+    /// the same declaration that wrote it.
     let private lineOf (ctx: HttpContext) =
         task {
             match ctx.Request.Query.TryGetValue "line" with
             | true, given when given.Count > 0 -> return string given[0]
             | _ ->
-                use reader = new StreamReader(ctx.Request.Body)
-                let! body = reader.ReadToEndAsync()
-
-                // Nothing typed is a line too - it redraws the board - so a body that says
-                // nothing is answered with nothing rather than with a complaint.
+                // Nothing typed is a line too - it redraws the board - so a request that
+                // carries no signals at all is answered with nothing rather than a
+                // complaint.
                 try
-                    use parsed = JsonDocument.Parse body
-
-                    match parsed.RootElement.TryGetProperty "line" with
-                    | true, value -> return (value.GetString() |> Option.ofObj |> Option.defaultValue "")
-                    | _ -> return ""
+                    match! Request.getSignals<Html.Signals> ctx with
+                    | ValueSome signals -> return (signals.Line |> Option.ofObj |> Option.defaultValue "")
+                    | ValueNone -> return ""
                 with _ ->
                     return ""
         }
@@ -246,9 +230,31 @@ module Browser =
             sitting.Said console line |> sitting.Deliver
 
             // The board comes back down the stream like any other, so all this has to
-            // answer with is an empty box to type the next line into.
-            ctx.Response.ContentType <- "application/json"
-            do! ctx.Response.WriteAsync """{"line": ""}"""
+            // answer with is an empty box to type the next line into - said as the same
+            // record the page was started with.
+            do! Response.ofPatchSignals Html.nothingTyped ctx
+        }
+
+    /// A page saying it has gone wrong, printed where the game was started.
+    ///
+    /// This is the only thing in the program that prints anything the game did not say. It
+    /// earns its place because of how the browser half fails: an expression the client
+    /// cannot make sense of stops that one control and nothing else, on a page that draws
+    /// perfectly, in a browser two rooms from whoever is hosting. Without this, the way
+    /// that gets noticed is somebody mentioning that a button seems dead.
+    ///
+    /// Held to a line, because it is a browser talking and a browser can say anything.
+    let amiss (ctx: HttpContext) =
+        task {
+            use reader = new StreamReader(ctx.Request.Body)
+            let! said = reader.ReadToEndAsync()
+
+            let line =
+                said.Replace('\n', ' ').Replace('\r', ' ')
+                |> fun said -> if said.Length > 300 then said.Substring(0, 300) + "..." else said
+
+            eprintfn "A page reports: %s" line
+            ctx.Response.StatusCode <- 204
         }
 
     /// The stream a page holds open, and everything that happens while it does.
@@ -261,19 +267,20 @@ module Browser =
             let console = consoleOf ctx
             let view = View.html (paletteOf standing ctx)
 
-            ctx.Response.ContentType <- "text/event-stream"
-            ctx.Response.Headers.CacheControl <- "no-cache"
-            // Anything between here and the browser that would rather collect a whole
-            // response before passing it on has to be told not to. A stream that is only
-            // delivered once it ends is not a stream.
-            ctx.Response.Headers["X-Accel-Buffering"] <- "no"
-
             ctx.Features.Get<IHttpResponseBodyFeature>()
             |> Option.ofObj
             |> Option.iter (fun body -> body.DisableBuffering())
 
             let channel = pages.Open console
-            do! ctx.Response.Body.FlushAsync ctx.RequestAborted
+
+            // The headers a stream needs are the client library's business rather than this
+            // file's. The one added here is not: anything between the table and the browser
+            // that would rather collect a whole response before passing it on has to be told
+            // not to, and a stream only delivered once it ends is not a stream.
+            do!
+                Response.sseStartResponseWithHeaders
+                    ctx
+                    [ KeyValuePair<string, StringValues>("X-Accel-Buffering", StringValues "no") ]
 
             let seated = sitting.Watching console view
 
@@ -299,7 +306,11 @@ module Browser =
                         let mutable said = ""
 
                         while channel.Reader.TryRead &said do
-                            do! ctx.Response.WriteAsync(said, ctx.RequestAborted)
+                            // Which is where a screen becomes a patch. What that looks like
+                            // on the wire - the event's name, how a screen with newlines in
+                            // it is carried without arriving in pieces - is the client
+                            // library's to know and no longer written out here.
+                            do! Response.sseStringElements ctx said
 
                         do! ctx.Response.Body.FlushAsync ctx.RequestAborted
             with
