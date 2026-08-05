@@ -21,8 +21,9 @@ module Tint =
 
     // --- the palette, which is the whole of what is decided here ----------------------
 
-    /// Eight-bit colours rather than the sixteen named ones, because black stones drawn
-    /// in black are no use on a black screen, and dark blue is not much better.
+    /// Eight-bit colours rather than the sixteen named ones, and each a good deal brighter
+    /// than the word for it: a stone drawn in the flat version of its own colour is hard to
+    /// pick out of a map, and on a dark screen a dark blue is barely there at all.
     [<Literal>]
     let private RedInk = "red1"
 
@@ -30,14 +31,15 @@ module Tint =
     let private BlueInk = "dodgerblue1"
 
     [<Literal>]
-    let private BlackInk = "grey70"
+    let private GreenInk = "green3"
 
     [<Literal>]
     let private HeadingInk = "bold"
 
-    /// The reader's own seat, and the arrow marking whoever is to play.
+    /// The reader's own seat, and the arrow marking whoever is to play. Warm, so that it
+    /// stands apart from all three factions - it sits right beside a bag full of them.
     [<Literal>]
-    let Yours = "green"
+    let Yours = "gold1"
 
     /// Ground nobody may enter, and stones nobody can see.
     [<Literal>]
@@ -48,29 +50,23 @@ module Tint =
         function
         | Red -> RedInk
         | Blue -> BlueInk
-        | Black -> BlackInk
+        | Green -> GreenInk
 
     /// The same colour as Spectre's own, for the widgets that take one rather than a name.
     let color =
         function
         | Red -> Color.Red1
         | Blue -> Color.DodgerBlue1
-        | Black -> Color.Grey70
+        | Green -> Color.Green3
 
-    /// A colour by its glyph, which is how a stone is written on the map and in a tally.
-    let private inkOfGlyph letter =
+    /// A colour by its first letter, which serves for a stone's glyph and for its name
+    /// alike: the three are written R, B and G and called Red, Blue and Green, so one
+    /// letter tells them apart wherever they are written.
+    let private inkOfLetter letter =
         match letter with
         | 'R' -> RedInk
         | 'B' -> BlueInk
-        | _ -> BlackInk
-
-    /// A colour by its name, which cannot go through the glyph above: Blue and Black
-    /// both begin with a B, and only the whole word tells them apart.
-    let private inkOfName word =
-        match word with
-        | "Red" -> RedInk
-        | "Blue" -> BlueInk
-        | _ -> BlackInk
+        | _ -> GreenInk
 
     let wrap style (text: string) = $"[{style}]{text}[/]"
 
@@ -85,29 +81,29 @@ module Tint =
           @"(?<you>\(you\))"
           @"(?<active>->)"
           @"(?<dead>\bdead\b)"
-          // Colours named in prose: "Red rules the region", "2 Black".
-          @"(?<named>\b(?:Red|Blue|Black)\b)"
+          // Colours named in prose: "Red rules the region", "2 Green".
+          @"(?<named>\b(?:Red|Blue|Green)\b)"
           // A tally, as "Rx4".
-          @"(?<tally>\b[RBK]x[0-9]+)"
+          @"(?<tally>\b[RBG]x[0-9]+)"
           // A home's own colour, as "(R)".
-          @"(?<home>\([RBK]\))"
+          @"(?<home>\([RBG]\))"
           // Who rules a region, as ">R" - the one thing on the map worth spotting from
-          // across the room - and who is level in it, as "=BK".
-          @"(?<rules>>[RBK])"
-          @"(?<tied>=[RBK]+)"
+          // across the room - and who is level in it, as "=BG".
+          @"(?<rules>>[RBG])"
+          @"(?<tied>=[RBG]+)"
           // A stone standing on the map, on its own.
-          @"(?<glyph>(?<![A-Za-z0-9])[RBK](?![A-Za-z0-9]))" ]
+          @"(?<glyph>(?<![A-Za-z0-9])[RBG](?![A-Za-z0-9]))" ]
         |> String.concat "|"
 
     let private rules = Regex(marks, RegexOptions.Multiline ||| RegexOptions.Compiled)
 
     /// Colour every letter of a run one by one, leaving anything else as it was - so
-    /// "=BK" keeps its sign and each colour level in the region keeps its own.
+    /// "=BG" keeps its sign and each colour level in the region keeps its own.
     let private letterByLetter (text: string) =
         text
         |> Seq.map (fun c ->
-            if c = 'R' || c = 'B' || c = 'K' then
-                wrap (inkOfGlyph c) (string c)
+            if c = 'R' || c = 'B' || c = 'G' then
+                wrap (inkOfLetter c) (string c)
             else
                 string c)
         |> String.concat ""
@@ -118,9 +114,11 @@ module Tint =
         if matched "heading" || matched "block" then wrap HeadingInk found.Value
         elif matched "you" || matched "active" then wrap Yours found.Value
         elif matched "dead" then wrap Hidden found.Value
-        elif matched "named" then wrap (inkOfName found.Value) found.Value
-        elif matched "tally" || matched "glyph" then wrap (inkOfGlyph found.Value[0]) found.Value
-        elif matched "rules" then wrap $"bold {inkOfGlyph found.Value[1]}" found.Value
+        // "Green", "Gx4" and a lone "G" all begin with the letter that names the colour,
+        // so all three go the same way.
+        elif matched "named" || matched "tally" || matched "glyph" then
+            wrap (inkOfLetter found.Value[0]) found.Value
+        elif matched "rules" then wrap $"bold {inkOfLetter found.Value[1]}" found.Value
         else letterByLetter found.Value
 
     /// Plain text in, Spectre markup out. The escaping has to come first: the board is

@@ -48,9 +48,14 @@ module Parse =
         | "red" -> Ok Red
         | "b"
         | "blue" -> Ok Blue
+        | "g"
+        | "green"
+        // Green was once called Black and written K, and records written then say so. A
+        // record is meant to replay for good, so the old words are still read even though
+        // nothing writes them any more.
         | "k"
-        | "black" -> Ok Black
-        | _ -> Error $"'{text}' is not a colour. Try red, blue or black."
+        | "black" -> Ok Green
+        | _ -> Error $"'{text}' is not a colour. Try red, blue or green."
 
     let private region text =
         match tryInt text |> Option.bind Board.tryId with

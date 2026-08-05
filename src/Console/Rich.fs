@@ -21,9 +21,35 @@ open TCModel.App
 /// to write that reasoning down twice.
 module Rich =
 
+    /// Characters to a region, and to half of one.
+    ///
+    /// `Board.layout` lies on a triangular lattice: a region is two half-columns wide and
+    /// each row stands half a region across from the one above. Laid out that way the
+    /// regions come out as brickwork, and a brick touches exactly six others - the two
+    /// beside it and two on each of the rows above and below. Those six are its borders.
+    /// So the offset is not decoration: drop it and the map stops saying where a player
+    /// may march.
+    let private across = 26
+    let private half = across / 2
+
+    /// The room inside a region's walls, once the border and its padding are taken off.
+    let private inside = across - 4
+
+    /// A title has less room than that, because it is written into the top wall and the
+    /// wall wants a little of itself either side of it. A name given less room than it
+    /// needs gives up its "The" rather than being cut short.
+    let private titleRoom = across - 6
+
+    /// How far the widest row of the map reaches, taken from the board rather than
+    /// counted out here, so a board laid out differently still gets a screen that fits.
+    let private mapAcross =
+        Board.layout
+        |> List.map (fun row -> (row |> List.map snd |> List.min) * half + List.length row * across)
+        |> List.max
+
     /// Wide enough that the map is never folded, and wide enough besides that the two
     /// panels standing side by side have room for a bag laid out stone by stone.
-    let private width = max (Render.mapWidth + 8) 104
+    let private width = max (mapAcross + 4) 104
 
     let private esc (text: string) = Markup.Escape text
 
@@ -92,11 +118,55 @@ module Rich =
 
     // --- the map ------------------------------------------------------------------------
 
+    /// A region as a box of its own, bordered in the colour of whoever rules it - which
+    /// is the one thing on a board worth seeing from across the room.
+    let private regionPanel game (region: Region) =
+        let border =
+            match region.Kind, Game.ruleOver region.Id game with
+            | Dead, _ -> Color.Grey23
+            | _, RuledBy color -> Tint.color color
+            | _, (Contested _ | Unclaimed) -> Color.Grey37
+
+        let panel = Panel(markup (Tint.markup (Render.standingIn inside game region)))
+        panel.Header <- PanelHeader $"[bold silver] {esc (Render.regionTitle titleRoom region)} [/]"
+        panel.Border <- BoxBorder.Rounded
+        panel.BorderStyle <- Style(border)
+        panel.Padding <- Padding(1, 0, 1, 0)
+        panel.Width <- Nullable across
+        panel :> IRenderable
+
+    /// One row of the map, shoved right by however many half-regions it stands in.
+    let private mapRow game (cells: (RegionId * int) list) =
+        let grid = Grid()
+        grid.Expand <- false
+
+        let column width =
+            let sized = GridColumn()
+            sized.Width <- Nullable width
+            sized.Padding <- Padding(0, 0, 0, 0)
+            sized.NoWrap <- true
+            grid.AddColumn sized |> ignore
+
+        let offset = cells |> List.map snd |> List.min
+
+        // A blank column carrying the half-region offset, where there is one to carry.
+        let lead =
+            if offset > 0 then
+                column (offset * half)
+                [ markup " " ]
+            else
+                []
+
+        cells |> List.iter (fun _ -> column across)
+
+        let panels =
+            cells |> List.map (fst >> Board.region >> regionPanel game)
+
+        grid.AddRow(Array.ofList (lead @ panels)) |> ignore
+        grid :> IRenderable
+
     let private mapOf game =
-        Render.mapLines game
-        |> String.concat Environment.NewLine
-        |> Tint.markup
-        |> markup
+        Board.layout |> List.map (mapRow game) |> rows
 
     /// The Flag and the Axe, which border nothing and so stand outside the map. Here they
     /// are panels of their own rather than boxes drawn in text, which is what standing
@@ -252,9 +322,10 @@ module Rich =
         let mapNotes =
             if notes then
                 [ markup ""
-                  note "Two regions border each other where they share a side, and nowhere else -"
-                  note "regions that meet only at a point do not. A home carries its colour, '>'"
-                  note "marks who rules a region and '=' who is level in it." ]
+                  note "Two regions border each other where they share a wall, and nowhere else -"
+                  note "each one touches the two beside it and two on the row above and below. A"
+                  note "region is bordered in the colour of whoever rules it; '>' says the same,"
+                  note "and '=' marks who is level in it. A home carries its own colour." ]
             else
                 []
 
@@ -277,7 +348,7 @@ module Rich =
             if notes then
                 [ wide
                       "Commands"
-                      (plainly (Render.commands @ [ ""; "  Colours are r, b and k; regions are numbered on the map." ])) ]
+                      (plainly (Render.commands @ [ ""; "  Colours are r, b and g; regions are numbered on the map." ])) ]
             else
                 []
 

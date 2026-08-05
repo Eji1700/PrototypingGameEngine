@@ -11,13 +11,13 @@ module Words =
         function
         | Red -> "Red"
         | Blue -> "Blue"
-        | Black -> "Black"
+        | Green -> "Green"
 
     let glyph =
         function
         | Red -> 'R'
         | Blue -> 'B'
-        | Black -> 'K'
+        | Green -> 'G'
 
     let colors colors =
         colors |> List.map color |> String.concat ", "
@@ -28,7 +28,7 @@ module Words =
 
     let player playerId = $"Player {PlayerId.value playerId}"
 
-    /// Reads as "2 Red and 1 Black"; empty piles read as "nothing".
+    /// Reads as "2 Red and 1 Green"; empty piles read as "nothing".
     let pile stones =
         match Pile.toCounts stones with
         | [] -> "nothing"

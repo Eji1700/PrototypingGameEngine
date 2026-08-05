@@ -6,7 +6,7 @@ open TCModel.Domain
 ///
 /// Moves that the rules refused are kept alongside those that carried. Asking is part
 /// of what happened at the table, and a refusal can tell everyone something - that the
-/// reserve is empty, or that a region holds no black stone - so it belongs in the
+/// reserve is empty, or that a region holds no green stone - so it belongs in the
 /// record just as much as a stone changing hands.
 type Entry =
     { Ordinal: int

@@ -59,7 +59,7 @@ module Board =
     /// wilds and the dead region - takes 1 to 12; the Flag and the Axe, which are no
     /// part of the map, come last.
     let private table =
-        [ "Nightfen", Home Black
+        [ "Nightfen", Home Green
           "Saltmarsh", Wild
           "Greymarket", Wild
           "Thornwood", Wild

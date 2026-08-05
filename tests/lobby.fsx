@@ -99,7 +99,7 @@ report "a token brings a console back to the seat it left" true (heard "one-agai
 report
     "and back to the same stones"
     true
-    (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Kx3 (8)")
+    (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Gx3 (8)")
 
 let _, stranger = full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token") View.plain
 
@@ -139,19 +139,19 @@ let _, drawn = full () |> Lobby.said "one" "negotiate"
 report
     "the player who drew is told the colour"
     true
-    (heard "one" drawn |> mentions "Player 1 draws a Black stone from the reserve")
+    (heard "one" drawn |> mentions "Player 1 draws a Green stone from the reserve")
 
 report
     "and nobody else is"
     true
     (heard "two" drawn |> mentions "Player 1 draws a stone from the reserve"
-     && not (heard "two" drawn |> mentions "Black stone from the reserve"))
+     && not (heard "two" drawn |> mentions "Green stone from the reserve"))
 
 report
     "each console is drawn its own bag"
     true
-    (heard "one" seatedTwoPosts |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Kx3 (8)"
-     && heard "two" seatedTwoPosts |> mentions "Player 2 (you)  bag: Rx3 Bx3 Kx2 (8)")
+    (heard "one" seatedTwoPosts |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Gx3 (8)"
+     && heard "two" seatedTwoPosts |> mentions "Player 2 (you)  bag: Rx3 Bx3 Gx2 (8)")
 
 report
     "and everyone else's closed"

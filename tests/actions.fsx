@@ -11,7 +11,7 @@ let private at n = Board.tryId n |> Option.get
 
 let emberfall = at 5 // Red home, borders 3, 6 and 8
 let crossroads = at 8 // wild, borders 5, 6, 9 and 11
-let nightfen = at 1 // Black home, borders 2 and 4
+let nightfen = at 1 // Green home, borders 2 and 4
 let flag = Board.flag
 let axe = Board.axe
 let waste = at 6 // dead
@@ -22,7 +22,7 @@ report "the map hangs together" [] Board.problems
 
 /// A two-player game: region 8 holds what is asked, Player 1 holds one of each.
 let private game stocked =
-    gameOf [ 8, stocked ] [ [ Red, 1; Blue, 1; Black, 1 ]; [ (Red, 1) ] ]
+    gameOf [ 8, stocked ] [ [ Red, 1; Blue, 1; Green, 1 ]; [ (Red, 1) ] ]
 
 let private refuses name expected outcome =
     report name (Error expected) (outcome |> Result.mapError id |> Result.map (fun _ -> ()))
@@ -49,29 +49,29 @@ report
 
 // --- battle -----------------------------------------------------------------
 
-// Region 8 holds one blue and one black; a blue battle drives the black out.
-let blueVsBlack = game [ Blue, 1; Black, 1 ]
+// Region 8 holds one blue and one green; a blue battle drives the green out.
+let blueVsGreen = game [ Blue, 1; Green, 1 ]
 
 report
     "an unnamed battle drives out all it may"
     (Ok [ Blue, 1 ])
-    (Actions.battle Blue crossroads AsManyAsAllowed blueVsBlack |> stonesIn crossroads)
+    (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen |> stonesIn crossroads)
 
 report
     "the battling stone goes to the Axe"
     (Ok [ Blue, 1 ])
-    (Actions.battle Blue crossroads AsManyAsAllowed blueVsBlack |> stonesIn axe)
+    (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen |> stonesIn axe)
 
 report
     "driven stones go back to the reserve"
     (Ok 1)
-    (Actions.battle Blue crossroads AsManyAsAllowed blueVsBlack
-     |> Result.map (fun (game, _) -> Pile.count Black game.Reserve - Pile.count Black blueVsBlack.Reserve))
+    (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen
+     |> Result.map (fun (game, _) -> Pile.count Green game.Reserve - Pile.count Green blueVsGreen.Reserve))
 
 refuses
     "no stone of the attacking colour"
     (NothingToBattleWith(crossroads, Red))
-    (Actions.battle Red crossroads AsManyAsAllowed blueVsBlack)
+    (Actions.battle Red crossroads AsManyAsAllowed blueVsGreen)
 
 refuses
     "nothing of another colour to drive out"
@@ -81,29 +81,29 @@ refuses
 refuses
     "a battle must drive out something"
     BattleMustDriveOutSomething
-    (Actions.battle Blue crossroads (These []) blueVsBlack)
+    (Actions.battle Blue crossroads (These []) blueVsGreen)
 
 refuses
     "a battle cannot drive out its own colour"
     (CannotDriveOutOwnColour Blue)
-    (Actions.battle Blue crossroads (These [ Blue ]) (game [ Blue, 2; Black, 1 ]))
+    (Actions.battle Blue crossroads (These [ Blue ]) (game [ Blue, 2; Green, 1 ]))
 
 refuses
     "no more driven out than stones matching"
     (MoreDrivenThanAllowed(crossroads, Blue, 1))
-    (Actions.battle Blue crossroads (These [ Black; Red ]) (game [ Blue, 1; Black, 1; Red, 1 ]))
+    (Actions.battle Blue crossroads (These [ Green; Red ]) (game [ Blue, 1; Green, 1; Red, 1 ]))
 
 refuses
     "a real choice goes back to the attacker"
-    (MustChooseCasualties(crossroads, Pile.ofCounts [ Red, 1; Black, 1 ], 1))
-    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 1; Black, 1; Red, 1 ]))
+    (MustChooseCasualties(crossroads, Pile.ofCounts [ Red, 1; Green, 1 ], 1))
+    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 1; Green, 1; Red, 1 ]))
 
 report
     "one losing colour is no choice at all"
-    (Ok [ Blue, 1; Black, 1 ])
-    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 1; Black, 2 ]) |> stonesIn crossroads)
+    (Ok [ Blue, 1; Green, 1 ])
+    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 1; Green, 2 ]) |> stonesIn crossroads)
 
-refuses "a battle cannot target the Axe" (StandsApart axe) (Actions.battle Blue axe AsManyAsAllowed blueVsBlack)
+refuses "a battle cannot target the Axe" (StandsApart axe) (Actions.battle Blue axe AsManyAsAllowed blueVsGreen)
 
 // --- march ------------------------------------------------------------------
 
@@ -156,12 +156,12 @@ let private drawable =
 
 report
     "negotiating draws from the reserve into the bag"
-    (Ok [ Red, 2; Blue, 1; Black, 1 ])
+    (Ok [ Red, 2; Blue, 1; Green, 1 ])
     (Actions.negotiate drawable |> Result.map (fun (game, _, _) -> (Game.active game).Bag |> Pile.toCounts))
 
 report
     "settling hands a stone back"
-    (Ok [ Blue, 1; Black, 1 ])
+    (Ok [ Blue, 1; Green, 1 ])
     (Actions.settle Red (game []) |> bagOf)
 
 report
@@ -201,7 +201,7 @@ conserved
 conserved
     "battling conserves the stones"
     (Actions.battle Blue crossroads AsManyAsAllowed
-        { dealt with Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 1; Black, 1 ]) dealt.Position })
+        { dealt with Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 1; Green, 1 ]) dealt.Position })
 
 conserved
     "a whole negotiation conserves the stones"

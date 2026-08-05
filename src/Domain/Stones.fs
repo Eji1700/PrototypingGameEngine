@@ -6,11 +6,11 @@ open TCModel.Common
 type StoneColor =
     | Red
     | Blue
-    | Black
+    | Green
 
 module StoneColor =
     /// Canonical ordering, used wherever colours are listed or indexed.
-    let all = [ Red; Blue; Black ]
+    let all = [ Red; Blue; Green ]
 
 /// An immutable multiset of stones. Counts are always positive: a colour that is
 /// absent is simply not held, so a pile can never carry a negative or zero count.

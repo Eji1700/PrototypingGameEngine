@@ -115,7 +115,7 @@ move stones between piles, and `tests/actions.fsx` checks the total after each o
 
 ## Rules as implemented
 
-- 21 stones of each colour: red, blue, black (63 in total).
+- 21 stones of each colour: red, blue, green (63 in total).
 - 14 regions: one home per colour, eight wild regions, two special regions and
   one dead region.
 - Each home starts with two stones of its own colour; each wild region draws two
@@ -202,10 +202,10 @@ of step with the board. `rule <region>` shows the working:
 
 ```
 > rule 2
-Saltmarsh holds 1 Blue and 1 Black.
-  stones in the region: Blue 1, Black 1 -> Blue, Black still level
-  stones in the Axe: Blue 0, Black 1 -> Black leads
-  Black rules the region.
+Saltmarsh holds 1 Blue and 1 Green.
+  stones in the region: Blue 1, Green 1 -> Blue, Green still level
+  stones in the Axe: Blue 0, Green 1 -> Green leads
+  Green rules the region.
 ```
 
 ## Winning
@@ -282,7 +282,7 @@ rewound. Undoing a move adds a line saying so rather than erasing the one before
 it, so the record is the game as it was really played, second thoughts and all.
 It keeps refused moves too: asking is part of what happened, and a refusal can
 tell the table something — that the reserve is empty, or that a region holds no
-black stone.
+green stone.
 
 Every entry names the turn and the player who asked. That is the hook the account
 of who-knows-what below hangs on: the record already says who was in a position to
@@ -416,9 +416,23 @@ else - the menu, the command line and the prompt all read that one list.
 free to lay a screen out however it likes rather than only colouring what it is
 handed. That is the whole difference between the two: `plain` writes the board as
 one block of text, and `rich` ([Rich.fs](src/Console/Rich.fs)) builds it out of
-Spectre's panels, tables and charts - bags drawn stone by stone, a closed bag drawn
-as the row of stones nobody can name, land ruled as a bar chart, what is out of
-sight as a breakdown.
+Spectre's panels, tables and charts - every region a panel bordered in the colour of
+whoever rules it, bags drawn stone by stone, a closed bag drawn as the row of stones
+nobody can name, land ruled as a bar chart, what is out of sight as a breakdown.
+
+**The three factions are Red, Blue and Green**, written `R`, `B` and `G`. Each is
+drawn a good deal brighter than the flat version of its own colour, because a stone
+in plain blue is barely there on a dark screen. Because a colour's name and its glyph
+now begin with the same letter, one lookup serves both: `Gx4`, a lone `G` on the map,
+the word "Green" in a sentence, a bar in a chart and a region's border all follow from
+[Tint.fs](src/Console/Tint.fs) and `Words.glyph`. The reader's own seat is marked in
+gold rather than a fourth hue that could be mistaken for a stone.
+
+The green faction was called **Black** and written `K` earlier on, and records written
+then say so. `Parse` still reads `black` and `k`, though nothing writes them any more,
+because a record is meant to replay for good - the game in
+[logs/2026-08-03-193909](logs/2026-08-03-193909-2p-seed639214079490240407.log) has a
+`march k 3 2 1` in it and still plays back exactly as it did.
 
 Adding to the game means adding an endpoint here and answering it in every view.
 That is the trade: a wide seam, but one that cannot be half-implemented without the
@@ -437,13 +451,37 @@ compiler saying so.
   works out for itself, because a second view counting it again could count it
   differently.
 
-**The honeycomb is kept in both.** It is not decoration: a side shared between two
-regions is a border and a corner touched is not, so the map is the only part of the
-screen that says which regions a player may march between. A grid of tidy boxes
-would lose that. `Render.mapLines` lays it out and `rich` colours those lines rather
-than laying them out again - and colour may not move a character, because the map is
-drawn by counting into columns and an escape code inserted mid-layout would push
-everything after it sideways. So the map is composed plain, then tinted.
+**The map is drawn twice, and both drawings say the same thing.** `plain` draws the
+honeycomb by counting characters into columns; `rich` gives every region a panel of
+its own, bordered in the colour of whoever rules it.
+
+What matters is that neither loses adjacency. `Board.layout` lies on a triangular
+lattice - a region is two half-columns wide and each row stands half a region across
+from the one above - so a region touches exactly six others: the two beside it and
+two on each of the rows above and below. Those six are its borders, and the map is
+the only part of the screen that says where a player may march. A honeycomb shows it
+with cut corners; brickwork shows it with the half-region offset. Either is faithful.
+A tidy grid with the offset dropped would not be, which is why `rich` keeps it.
+
+```
+                          ╭─ [ 2] Saltmarsh ───────╮╭─ [ 1] Nightfen (G) ────╮
+                          │ B B                 >B ││ G G                 >G │
+                          ╰────────────────────────╯╰────────────────────────╯
+             ╭─ [ 3] Greymarket ──────╮╭─ [ 4] Thornwood ───────╮
+             │ R R                 >R ││ B G                =BG │
+             ╰────────────────────────╯╰────────────────────────╯
+╭─ [ 5] Emberfall (R) ───╮╭─ [ 6] Hollow Waste ────╮╭─ [ 7] Stonecradle ─────╮
+│ R R                 >R ││ dead                   ││ R B                =RB │
+╰────────────────────────╯╰────────────────────────╯╰────────────────────────╯
+```
+
+What a region *says* is shared: `Render.regionTitle` and `Render.standingIn` both
+take the room they are given, so a name too long for it gives up its "The" the same
+way in either view. Where the regions go is each view's own business.
+
+`plain` composes its map and is then tinted, in that order, because it is laid out by
+counting into columns and an escape code inserted mid-layout would push everything
+after it sideways. Colour goes on once every column is settled.
 
 **Over a network the view lives at the table.** A view needs the game to lay a screen
 out, and the game is at the table, so the board is drawn per seat: the seat holds the
@@ -525,7 +563,7 @@ nothing.
 
 | region | borders |
 | --- | --- |
-| 1 Nightfen (Black home) | 2, 4 |
+| 1 Nightfen (Green home) | 2, 4 |
 | 2 Saltmarsh | 1, 3, 4 |
 | 3 Greymarket | 2, 4, 5, 6 |
 | 4 Thornwood | 1, 2, 3, 6, 7 |
@@ -553,20 +591,20 @@ honeycomb:
 
 ```
                       _/________/ \________\_/________/ \________\_
-                      | [ 2] Saltmarsh      | [ 1] Nightfen (K)   |
-                      | B B              >B | K K              >K |
+                      | [ 2] Saltmarsh      | [ 1] Nightfen (G)   |
+                      | B B              >B | G G              >G |
            _/________/ \________\_/________/ \________\_/________/
            | [ 3] Greymarket     | [ 4] Thornwood      |
-           | R R              >R | B K             =BK |
+           | R R              >R | B G             =BG |
 _/________/ \________\_/________/ \________\_/________/ \________\_
 | [ 5] Emberfall (R)  | [ 6] Hollow Waste   | [ 7] Stonecradle    |
 | R R              >R | dead                | R B             =RB |
  \________\_/________/ \________\_/________/ \________\_/________/ \________\_
            | [ 8] The Crossroads | [ 9] Windgap        | [10] Tidewatch (B)  |
-           | R K             =RK | B K             =BK | B B              >B |
+           | R G             =RG | B G             =BG | B B              >B |
             \________\_/________/ \________\_/________/ \________\_/________/
                       | [11] Ironford       | [12] Dunmoor        |
-                      | B B              >B | B K             =BK |
+                      | B B              >B | B G             =BG |
                        \________\_/________/ \________\_/________/
 ```
 
@@ -656,8 +694,8 @@ the same job from the prompt.
 | `notes [on\|off]` | show or hide the writing that explains the board, and the short list of commands that sits above the log |
 | `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 
-Colours are `r`/`red`, `b`/`blue`, `k`/`black`; regions are numbered as shown on
-the board. So `battle black 2 blue` places a black stone in the Axe and drives one
+Colours are `r`/`red`, `b`/`blue`, `g`/`green`; regions are numbered as shown on
+the board. So `battle green 2 blue` places a green stone in the Axe and drives one
 blue stone out of Saltmarsh, and `march blue 8 5 2` places a blue stone in the Flag
 and moves two blue stones from the Crossroads into Emberfall.
 

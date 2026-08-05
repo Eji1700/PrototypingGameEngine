@@ -41,12 +41,15 @@ module Render =
     let private spans row =
         row |> List.map (fun (_, at) -> column at, column at + 2 * step)
 
-    let mapWidth =
+    let private mapWidth =
         (Board.layout |> List.collect sides |> List.max) + 1
 
     /// A region as it is titled on the map: its number and name, and for a home the
     /// colour that holds it. A name with no room to spare gives up its "The".
-    let private mapTitle (region: Region) =
+    ///
+    /// Takes the room it has, because every view draws a region into a space of its own
+    /// size. What it says is the same in all of them; only how much fits differs.
+    let regionTitle room (region: Region) =
         let titled name =
             match region.Kind with
             | Home color -> sprintf "[%2d] %s (%c)" (Words.number region.Id) name (Words.glyph color)
@@ -56,14 +59,20 @@ module Render =
 
         let full = titled region.Name
 
-        if String.length full <= written || not (region.Name.StartsWith "The ") then
+        if String.length full <= room || not (region.Name.StartsWith "The ") then
             full
         else
             titled (region.Name.Substring 4)
 
+    let private mapTitle region = regionTitle written region
+
     /// What stands in a region, with who rules it held against the right-hand edge.
     /// A full region falls back to the tally rather than run into its neighbour.
-    let private mapStanding game (region: Region) =
+    ///
+    /// Public and taking its room for the same reason as the title: what a region says is
+    /// one decision, and where it is written is another. A view that draws a region as a
+    /// box of its own asks for it at whatever width that box has.
+    let standingIn wall game (region: Region) =
         let ruler =
             match Game.ruleOver region.Id game with
             | RuledBy color -> $">{Words.glyph color}"
@@ -72,7 +81,7 @@ module Render =
 
         // A space between the stones and the ruler keeps the two apart when a region
         // fills up.
-        let room = written - String.length ruler - 1
+        let room = wall - String.length ruler - 1
         let pile = Game.stones region.Id game
 
         let standing =
@@ -87,7 +96,9 @@ module Render =
         let standing =
             if String.length standing > room then standing.Substring(0, room) else standing
 
-        standing.PadRight(written - String.length ruler) + ruler
+        standing.PadRight(wall - String.length ruler) + ruler
+
+    let private mapStanding game region = standingIn written game region
 
     /// The map is laid out by column rather than written left to right, so its lines
     /// are painted onto a blank one.
@@ -156,13 +167,12 @@ module Render =
 
         String(line).TrimEnd()
 
-    /// The map, one line at a time.
+    /// The map, one line at a time: the honeycomb this view draws it as.
     ///
-    /// Public because both views draw the same honeycomb: it is laid out by counting
-    /// characters into columns, and the geometry of that is not something to have two
-    /// copies of. A view that wants it in colour colours these lines rather than
-    /// laying them out again.
-    let mapLines game =
+    /// What a region *says* is shared with every other view - `regionTitle` and
+    /// `standingIn` above - but where the regions are put is this view's own business,
+    /// and `rich` puts them somewhere else entirely.
+    let private mapLines game =
         let rec draw above rows =
             match rows with
             | [] -> [ mapBetween above [] ]
@@ -172,7 +182,7 @@ module Render =
 
     /// The Flag and the Axe, drawn in the same hand as the map but standing clear of it
     /// and of each other: sharing no wall with anything, they border nothing.
-    let apartLines game regions =
+    let private apartLines game regions =
         let across piece =
             regions |> List.map piece |> String.concat "   "
 
@@ -188,8 +198,8 @@ module Render =
     /// because that is where a player is looking; `Render.help` says all of it at length.
     let commands =
         [ ("r b 5", "recruit a Blue stone into 5"), ("n", "negotiate for a stone")
-          ("b r 8", "battle in 8 with a Red one"), ("return k", "hand a Black one back")
-          ("m k 8 5 2", "march 2 Black from 8 into 5"), ("undo, redo", "walk the game back")
+          ("b r 8", "battle in 8 with a Red one"), ("return g", "hand a Green one back")
+          ("m g 8 5 2", "march 2 Green from 8 into 5"), ("undo, redo", "walk the game back")
           ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
           ("notes", "hide this and every note"), ("save", "write the record now")
           ("help", "every command, at length"), ("quit", "leave, saving first") ]
@@ -420,7 +430,7 @@ module Render =
         // The commands go with the notes: a player who has turned them off has turned
         // this off too, and `help` still says all of it.
         if notes then
-            section sb "COMMANDS" (commands @ [ ""; "  Colours are r, b and k; regions are numbered on the map above." ])
+            section sb "COMMANDS" (commands @ [ ""; "  Colours are r, b and g; regions are numbered on the map above." ])
 
         section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 
@@ -487,5 +497,5 @@ module Render =
               "  help                      show this list"
               "  quit                      leave, saving the record on the way out"
               ""
-              "Colours: r/red, b/blue, k/black. Regions are numbered by the board above."
+              "Colours: r/red, b/blue, g/green. Regions are numbered by the board above."
               "Battle and march cannot target the dead region, the Flag or the Axe." ]
