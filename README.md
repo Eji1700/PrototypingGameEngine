@@ -52,6 +52,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | File | Role |
 | --- | --- |
 | [Waiting.fs](src/Console/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
+| [Showing.fs](src/Console/Showing.fs) | What a table shows one console, and which console it is for |
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
 | [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
@@ -60,6 +61,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
 | [Html.fs](src/Console/Html.fs) | The `html` view: every screen as a fragment of a page, and the page they land in |
 | [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
+| [Solo.fs](src/Console/Solo.fs) | The game at one keyboard, as a value: what a typed line does, and what it asks written down |
 | [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
 | [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
 | [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
@@ -71,10 +73,10 @@ last three files here touch a socket.
 
 | File | Role |
 | --- | --- |
-| [Protocol.fs](src/Net/Protocol.fs) | What crosses the wire, and what each end calls the other |
+| [Protocol.fs](src/Net/Protocol.fs) | Where the table listens, and what each end calls the other |
+| [Browser.fs](src/Net/Browser.fs) | A page as a console: the streams held open to them, and what is served. Knows of no table in particular |
 | [Lobby.fs](src/Net/Lobby.fs) | Seats, tokens, and the three rules a table adds to the game |
-| [Browser.fs](src/Net/Browser.fs) | A page as a console: the streams held open to them, and what is served |
-| [Server.fs](src/Net/Server.fs) | The host: one lobby behind a lock, a SignalR hub and a handful of pages over it |
+| [Server.fs](src/Net/Server.fs) | The host, and the local game served to a browser: a table behind a lock, with pages and sockets over it |
 | [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
 
 And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
@@ -604,10 +606,35 @@ line](#two-halves-of-a-command-line).
 
 **Where the state is.** `Lobby` is a value like everything else, and every rule
 above is decided by folding a typed line into it - `Lobby.said` returns the next
-lobby and the list of things to say. [Server.fs](src/Net/Server.fs) holds exactly
-one mutable field, behind a lock, and the hub does nothing but turn a call into a
-fold and the fold's answer back into calls. So the multiplayer rules are testable
-without a socket, and [lobby.fsx](tests/lobby.fsx) tests them that way.
+lobby and the list of things to say. [Server.fs](src/Net/Server.fs) holds one mutable
+field per table, behind a lock, and the hub does nothing but turn a call into a fold
+and the fold's answer back into calls. So the multiplayer rules are testable without
+a socket, and [lobby.fsx](tests/lobby.fsx) tests them that way.
+
+### Two kinds of table
+
+There are two, and they are the same shape: hand one a typed line and it gives back the
+next table and a list of things to show, each addressed to somebody.
+
+| | [Solo.fs](src/Console/Solo.fs) | [Lobby.fs](src/Net/Lobby.fs) |
+| --- | --- | --- |
+| who is at it | one pair of hands, however many are watching | one seat each |
+| whose board is drawn | whoever is to play — it turns over with the turn | whoever is reading it |
+| out of turn | there is nobody else | refused |
+| `undo` / `redo` | allowed | refused — walking a negotiation back reads a bag |
+| `restart` | allowed | refused |
+| seats and tokens | none | that is most of what it is |
+
+`Solo` came out of the prompt's own read/act/print loop, which had been keeping these
+rules since the beginning but kept them wrapped around `Console.ReadLine`. Pulling them
+out was what let a browser play a local game without a second copy of what a typed line
+means — and it made them checkable, which they had never been:
+[solo.fsx](tests/solo.fsx) is what `lobby.fsx` is for the other one.
+
+Writing a file is the only thing the local game ever needs of the world, so `Solo` says
+what it wants written rather than writing it. That is what makes the awkward case
+checkable: a `restart` asks for the record of the game it has just swept off the table,
+under *that* game's name, not the fresh one's.
 
 The table writes its record after every move rather than at the end, because a
 game with people at it can lose its host without warning. The file is the same
@@ -615,15 +642,23 @@ replayable transcript a local game writes.
 
 ### In a browser
 
-The same `host` also serves a page. Open the address it prints instead of running
-`join`, and you sit down at that same table:
+Either kind of game can be read in a browser:
 
 ```powershell
-dotnet run -- host 3          # opens a table for three, for terminals and browsers alike
+dotnet run -- serve 3         # a game for three in a browser here, hot seat, no waiting
+dotnet run -- host 3          # a table for three, for terminals and browsers alike
 ```
 
-**A browser and a terminal can sit at one table**, take turns in order, and each be
-drawn a board of their own. `Lobby` never learns there are two kinds of console: it
+`serve` is `play` with a page instead of a terminal - not `host` with the waiting taken
+out. There are no seats: it is one hot seat and the screen belongs to whoever is to
+play, so it starts the moment it is opened, every move is yours, and `undo` works. Two
+browsers can watch the same hot seat, and both see every move.
+
+`host` deals seats. Open the address it prints instead of running `join`, and you sit
+down at that table.
+
+**A browser and a terminal can sit at one hosted table**, take turns in order, and each
+be drawn a board of their own. `Lobby` never learns there are two kinds of console: it
 addresses a `Post` to a console id, and which sort that is, is written into the id
 ([Browser.fs](src/Net/Browser.fs)).
 
@@ -759,6 +794,8 @@ dotnet run -- play 3           # 3 players, random seed - straight to the board
 dotnet run -- play 3 --seed 42 # the same game again, from a seed
 dotnet run -- play 2 --view rich --colour blue=teal
 
+dotnet run -- serve 3          # the same game, played in a browser on this machine
+
 dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
 
 dotnet run -- host 3                        # open a table at their own machines
@@ -865,6 +902,8 @@ dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone c
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
 dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
+dotnet fsi tests/solo.fsx       # the game at one keyboard: what a line does, and what it
+                                #   asks written down
 dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
                                 #   and that changing the colours changes nothing else
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
@@ -880,7 +919,7 @@ text and back again.
 
 ### Examples, and invariants
 
-The first eight scripts play games somebody thought of.
+The first nine scripts play games somebody thought of.
 [properties.fsx](tests/properties.fsx) is the other kind: it uses
 [FsCheck](https://fscheck.github.io/FsCheck/) to deal from an arbitrary seed and throw
 an arbitrary string of moves at the rules - legal, illegal, out of turn, mid-negotiation,

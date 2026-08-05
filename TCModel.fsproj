@@ -37,6 +37,7 @@
 
   <ItemGroup Label="Console - the only part that talks to a person">
     <Compile Include="src/Console/Waiting.fs" />
+    <Compile Include="src/Console/Showing.fs" />
     <Compile Include="src/Console/Words.fs" />
     <Compile Include="src/Console/Render.fs" />
     <Compile Include="src/Console/Parse.fs" />
@@ -45,6 +46,7 @@
     <Compile Include="src/Console/Rich.fs" />
     <Compile Include="src/Console/Html.fs" />
     <Compile Include="src/Console/View.fs" />
+    <Compile Include="src/Console/Solo.fs" />
     <Compile Include="src/Console/Options.fs" />
     <Compile Include="src/Console/Launch.fs" />
     <Compile Include="src/Console/Shell.fs" />
@@ -54,8 +56,9 @@
 
   <ItemGroup Label="Net - the same game, with the players at different keyboards">
     <Compile Include="src/Net/Protocol.fs" />
-    <Compile Include="src/Net/Lobby.fs" />
+    <!-- Before the lobby, and not after it, because it does not know there is one. -->
     <Compile Include="src/Net/Browser.fs" />
+    <Compile Include="src/Net/Lobby.fs" />
     <Compile Include="src/Net/Server.fs" />
     <Compile Include="src/Net/Client.fs" />
   </ItemGroup>

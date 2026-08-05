@@ -103,37 +103,49 @@ module Shell =
     // type the assembly keeps to itself: marked private, the options below still appear
     // but the arguments quietly do not, and `play 3` comes back as "unknown command '3'".
 
-    /// Every command takes these, because every command ends in somebody reading a board.
-    /// How it is drawn and what colour it is drawn in say nothing about what to deal, so
-    /// they are settings rather than arguments and can be given in any order.
-    [<AbstractClass>]
-    type ReadingSettings() =
-        inherit CommandSettings()
+    /// The colours a command was told to draw in, folded up one at a time.
+    ///
+    /// Said here rather than on the settings below because two of them want it and only one
+    /// has a view to put it in: a game served to a browser is drawn the one way a browser
+    /// can read, and so has a palette to settle and no choice to make.
+    let private painted (given: string array) =
+        given
+        |> Array.fold
+            (fun palette given ->
+                palette
+                |> Result.bind (fun palette ->
+                    match given.Split '=' with
+                    | [| slot; colour |] -> Palette.set (slot.ToLowerInvariant()) (colour.ToLowerInvariant()) palette
+                    | _ -> Error $"'{given}' is not a colour for something. Say it as 'blue=teal'."))
+            (Ok Palette.standard)
 
-        [<CommandOption("--view <NAME>")>]
-        [<Description("how the board is drawn: plain, or rich")>]
-        member val View = "plain" with get, set
+    /// The colours, as every command that draws anywhere takes them.
+    [<AbstractClass>]
+    type ColourSettings() =
+        inherit CommandSettings()
 
         [<CommandOption("--colour|--color <SLOT=COLOUR>")>]
         [<Description("what to draw something in, as 'blue=teal'; may be given more than once")>]
         member val Colours: string array = [||] with get, set
 
+        member this.Palette() = painted this.Colours
+
+    /// And how the board is laid out, for the commands that end at a terminal. How it is
+    /// drawn says nothing about what to deal, so it is a setting rather than an argument
+    /// and can be given in any order.
+    [<AbstractClass>]
+    type ReadingSettings() =
+        inherit ColourSettings()
+
+        [<CommandOption("--view <NAME>")>]
+        [<Description("how the board is drawn: plain, or rich")>]
+        member val View = "plain" with get, set
+
         /// The colours first, then the view built in them - the same order the menu does
         /// it in, and for the same reason: a view is built in a palette and cannot be
         /// handed another afterwards.
         member this.Reading() =
-            let painted =
-                this.Colours
-                |> Array.fold
-                    (fun palette given ->
-                        palette
-                        |> Result.bind (fun palette ->
-                            match given.Split '=' with
-                            | [| slot; colour |] -> Palette.set (slot.ToLowerInvariant()) (colour.ToLowerInvariant()) palette
-                            | _ -> Error $"'{given}' is not a colour for something. Say it as 'blue=teal'."))
-                    (Ok Palette.standard)
-
-            painted
+            this.Palette()
             |> Result.bind (fun palette -> View.byName AtATerminal palette this.View)
 
         override this.Validate() =
@@ -173,6 +185,38 @@ module Shell =
                 eprintfn "%s" problem
                 1
             | Ok view -> opening.Act view (Launch.Deal(settings.Players, Option.ofNullable settings.Seed))
+
+    /// A game to play in a browser. The same two things `play` is dealt from, and no
+    /// `--view`: there is one way of drawing a board a browser can read, and it is not a
+    /// choice anybody would be making.
+    type ServeSettings() =
+        inherit ColourSettings()
+
+        [<CommandArgument(0, "[players]")>]
+        [<Description("how many are playing")>]
+        member val Players = Table.MinPlayers with get, set
+
+        [<CommandOption("-s|--seed <SEED>")>]
+        [<Description("deal from this seed rather than from the clock, for the same game again")>]
+        member val Seed = Nullable<uint64>() with get, set
+
+        override this.Validate() =
+            match this.Palette() with
+            | Error problem -> ValidationResult.Error problem
+            | Ok _ ->
+                match Parse.tryPlayerCount (string this.Players) with
+                | Ok _ -> ValidationResult.Success()
+                | Error problem -> ValidationResult.Error problem
+
+    type ServeCommand(opening: Opening) =
+        inherit Command<ServeSettings>()
+
+        override _.Execute(_, settings) =
+            match settings.Palette() with
+            | Error problem ->
+                eprintfn "%s" problem
+                1
+            | Ok palette -> opening.Act (View.html palette) (Launch.Serve(settings.Players, Option.ofNullable settings.Seed))
 
     type HostCommand(opening: Opening) =
         inherit Command<DealSettings>()
@@ -235,6 +279,13 @@ module Shell =
             .WithDescription("Deal a game and play it at this keyboard.")
             .WithExample("play", "3")
             .WithExample("play", "2", "--seed", "42", "--view", "rich")
+        |> ignore
+
+        config
+            .AddCommand<ServeCommand>("serve")
+            .WithDescription("Deal a game and play it in a browser on this machine.")
+            .WithExample("serve", "3")
+            .WithExample("serve", "2", "--seed", "42", "--colour", "blue=teal")
         |> ignore
 
         config

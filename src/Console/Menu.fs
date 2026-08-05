@@ -17,6 +17,8 @@ module Menu =
         /// Deal a fresh game. A seed left unsaid is taken from the clock, so the game
         /// is a new one every time.
         | Deal of players: int * seed: uint64 option
+        /// Deal one and play it in a browser on this machine instead of at this keyboard.
+        | Serve of players: int * seed: uint64 option
         /// Deal one and wait for the other players to arrive from their own machines.
         | Host of players: int * seed: uint64 option
         /// Sit down at somebody else's table.
@@ -52,6 +54,7 @@ module Menu =
               "  Stones on a map, and a seat each. How many are playing?"
               ""
               choice seatings "deal a game for that many, round this keyboard"
+              choice "serve <players>" "the same, but played in a browser on this machine"
               ""
               "  Or, to play from separate machines:"
               ""
@@ -101,6 +104,14 @@ module Menu =
                     return Host(players, Some seed)
                 }
             | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
+            | "serve", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Serve(n, None))
+            | "serve", [ players; seed ] ->
+                result {
+                    let! players = Parse.tryPlayerCount players
+                    let! seed = Parse.trySeed seed
+                    return Serve(players, Some seed)
+                }
+            | "serve", _ -> Error $"Say 'serve <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
             | "view", [ name ] -> View.byName AtATerminal palette name |> Result.map Looking
             | "view", _ -> Error $"Say 'view <name>', for one of {View.namesFor AtATerminal}."
             | ("colours" | "colors" | "options"), [] -> Ok Options

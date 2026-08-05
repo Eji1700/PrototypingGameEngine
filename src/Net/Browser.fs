@@ -97,15 +97,22 @@ module Browser =
                 | true, token -> Some token
                 | _ -> None)
 
-    /// What the browser side needs of the table it is sitting at: a way to change it, and a
-    /// way to tell everybody what came of that.
+    /// The whole of what the browser side needs of a table: somebody arrives, somebody says
+    /// something, somebody goes, and whatever came of it gets shown.
     ///
-    /// Both come in from outside because delivering reaches consoles this file knows
-    /// nothing about - the players at terminals - and what those are is settled a file
-    /// later. All that matters here is that a change made by a page reaches all of them.
+    /// Four functions rather than the table itself, because there are two kinds of table
+    /// and a page is worth having at both. `Lobby` seats people at their own machines and
+    /// hands out tokens; `Solo` is one hot seat with everybody round it. Neither is named
+    /// here, and nothing below can tell which it is serving.
+    ///
+    /// Delivering comes in from outside for a second reason: at a networked table it
+    /// reaches consoles this file knows nothing about - the players at terminals - and what
+    /// those are is settled a file later.
     [<NoComparison; NoEquality>]
     type Sitting =
-        { Change: (Lobby -> Lobby * Post list) -> Post list
+        { Watching: string -> View -> Post list
+          Said: string -> string -> Post list
+          Gone: string -> Post list
           Deliver: Post list -> unit }
 
     // --- what goes down a stream -----------------------------------------------------------
@@ -169,17 +176,20 @@ module Browser =
             minted
 
     /// The colours this page asked to be drawn in, in the same words a console sends down
-    /// the wire and read by the same function. A page that asks for nothing gets the
-    /// standard ones, and a colour the table has never heard of is passed over rather than
-    /// being a reason to turn anybody away.
+    /// the wire and read by the same function. A colour the table has never heard of is
+    /// passed over rather than being a reason to turn anybody away.
     ///
     /// Said more than once, because that is what a form does: each of the five choosers on
     /// the page is one `colours`, and what they add up to is the palette. Joined back into
     /// the one line `Palette.read` takes, which is also the line that goes down a wire.
-    let private paletteOf (ctx: HttpContext) =
+    ///
+    /// A page that asks for nothing gets `standing` - whatever the command line settled on
+    /// when the game was opened, so that `--colour blue=teal` means something to the first
+    /// browser through the door as well as to a terminal.
+    let private paletteOf standing (ctx: HttpContext) =
         match ctx.Request.Query.TryGetValue "colours" with
         | true, given when given.Count > 0 -> Palette.read (String.Join(" ", given.ToArray()))
-        | _ -> Palette.standard
+        | _ -> standing
 
     // --- what is served ------------------------------------------------------------------------
 
@@ -199,8 +209,8 @@ module Browser =
 
     /// The page itself. It carries no game: it opens a stream and the table answers with a
     /// board, which is the same way every board after it arrives.
-    let page (ctx: HttpContext) =
-        let palette = paletteOf ctx
+    let page standing (ctx: HttpContext) =
+        let palette = paletteOf standing ctx
         consoleOf ctx |> ignore
         ctx.Response.ContentType <- "text/html; charset=utf-8"
         ctx.Response.WriteAsync(Html.page palette)
@@ -233,7 +243,7 @@ module Browser =
             let console = consoleOf ctx
             let! line = lineOf ctx
 
-            sitting.Change(Lobby.said console line) |> sitting.Deliver
+            sitting.Said console line |> sitting.Deliver
 
             // The board comes back down the stream like any other, so all this has to
             // answer with is an empty box to type the next line into.
@@ -246,10 +256,10 @@ module Browser =
     /// Sitting down happens here rather than when the page was served, because a seat is
     /// only worth having while somebody is holding it: a page fetched and closed again has
     /// nobody at it, and the table would be waiting on a chair nobody is in.
-    let stream (sitting: Sitting) (pages: Pages) (ctx: HttpContext) =
+    let stream standing (sitting: Sitting) (pages: Pages) (ctx: HttpContext) =
         task {
             let console = consoleOf ctx
-            let view = View.html (paletteOf ctx)
+            let view = View.html (paletteOf standing ctx)
 
             ctx.Response.ContentType <- "text/event-stream"
             ctx.Response.Headers.CacheControl <- "no-cache"
@@ -265,11 +275,11 @@ module Browser =
             let channel = pages.Open console
             do! ctx.Response.Body.FlushAsync ctx.RequestAborted
 
-            let seated =
-                sitting.Change(Lobby.join console (Guid.NewGuid().ToString "N") (pages.Seat console) view)
+            let seated = sitting.Watching console view
 
             // Which seat this browser was given, kept so that the next visit on the same
-            // cookie comes back to it rather than being handed a stranger's stones.
+            // cookie comes back to it rather than being handed a stranger's stones. A table
+            // with no seats at it says nothing here, and nothing is what gets remembered.
             for post in seated do
                 match post.To, post.Say with
                 | at, Seated(_, token) when at = console -> pages.Remember(console, token)
@@ -299,5 +309,5 @@ module Browser =
                 ()
 
             pages.Close(console, channel)
-            sitting.Change(Lobby.left console) |> sitting.Deliver
+            sitting.Gone console |> sitting.Deliver
         }

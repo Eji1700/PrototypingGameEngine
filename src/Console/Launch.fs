@@ -12,6 +12,8 @@ open Argu
 type Launch =
     /// Deal and play at this keyboard. A seed left unsaid is taken from the clock.
     | Deal of players: int * seed: uint64 option
+    /// The same game, played in a browser on this machine rather than at this keyboard.
+    | Serve of players: int * seed: uint64 option
     /// Deal and wait for the other players to arrive from their own machines.
     | Host of players: int * seed: uint64 option
     /// Sit down at somebody else's table, resuming a seat if a token says which.
@@ -31,6 +33,7 @@ type Launch =
 /// is started rather than the way it is played.
 type Argument =
     | [<CliPrefix(CliPrefix.None); First>] Play of players: int
+    | [<CliPrefix(CliPrefix.None); First>] Serve of players: int
     | [<CliPrefix(CliPrefix.None); First>] Host of players: int
     | [<CliPrefix(CliPrefix.None); First>] Join of address: string
     | [<CliPrefix(CliPrefix.None); First>] Replay of path: string
@@ -41,6 +44,7 @@ type Argument =
         member this.Usage =
             match this with
             | Play _ -> "deal a game for that many and play it at this keyboard"
+            | Serve _ -> "deal a game for that many and play it in a browser here"
             | Host _ -> "open a table for that many and wait for them to arrive"
             | Join _ -> "sit down at a table someone else is hosting"
             | Replay _ -> "play a saved record again"
@@ -55,6 +59,7 @@ module Launch =
     let private arguments launch =
         match launch with
         | Launch.Deal(players, seed) -> [ Play players ] @ (seed |> Option.toList |> List.map Seed)
+        | Launch.Serve(players, seed) -> [ Argument.Serve players ] @ (seed |> Option.toList |> List.map Seed)
         | Launch.Host(players, seed) -> [ Argument.Host players ] @ (seed |> Option.toList |> List.map Seed)
         | Launch.Join(address, token) -> [ Argument.Join address ] @ (token |> Option.toList |> List.map Token)
         | Launch.Replay path -> [ Argument.Replay path ]
@@ -97,6 +102,7 @@ module Launch =
 
             match taken.GetAllResults() |> List.tryHead with
             | Some(Play players) -> Ok(Launch.Deal(players, seed))
+            | Some(Serve players) -> Ok(Launch.Serve(players, seed))
             | Some(Host players) -> Ok(Launch.Host(players, seed))
             | Some(Join address) -> Ok(Launch.Join(address, token))
             | Some(Replay path) -> Ok(Launch.Replay path)

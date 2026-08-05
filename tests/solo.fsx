@@ -1,0 +1,274 @@
+// The game at one keyboard: what a typed line does, and what it asks to be written down.
+//
+// These are the rules the local game has always had - the prompt has been keeping them
+// since the beginning - but until `Solo` they lived inside a loop wrapped around
+// `Console.ReadLine`, and a rule you cannot reach without a keyboard is a rule nobody
+// checks. [lobby.fsx](lobby.fsx) does the same job for the networked table; this is the
+// other half, and between them every rule that is about a *table* rather than about the
+// game is now held to something.
+//
+// Two things are worth the trouble here. The first is that walking the game back and forth
+// is allowed at one keyboard and refused at a networked table, which is the sharpest
+// difference between the two and easy to lose. The second is the record: a value cannot
+// write a file, so `Solo` says what it wants written and something else does it, and the
+// case that matters is a restart - the record it asks for is the game that has just been
+// swept off the table, not the one that replaced it.
+//
+//   dotnet fsi tests/solo.fsx
+
+#r "nuget: Falco.Markup, 1.4.0"
+#r "nuget: Spectre.Console, 0.51.1"
+
+#load "Harness.fsx"
+#load "../src/App/Messages.fs"
+#load "../src/App/Session.fs"
+#load "../src/App/Timeline.fs"
+#load "../src/App/Journal.fs"
+#load "../src/App/Model.fs"
+#load "../src/App/Update.fs"
+#load "../src/Console/Waiting.fs"
+#load "../src/Console/Showing.fs"
+#load "../src/Console/Words.fs"
+#load "../src/Console/Render.fs"
+#load "../src/Console/Parse.fs"
+#load "../src/Console/Palette.fs"
+#load "../src/Console/Tint.fs"
+#load "../src/Console/Rich.fs"
+#load "../src/Console/Html.fs"
+#load "../src/Console/View.fs"
+#load "../src/Console/Solo.fs"
+
+open TCModel.Domain
+open TCModel.App
+open TCModel.Console
+open Harness
+
+let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
+
+let private reading =
+    { Notes = true
+      View = View.plain Palette.standard }
+
+/// A game with one person at it, which is the ordinary case.
+let private sitting =
+    Solo.opened "first" dealt |> Solo.watching "keyboard" reading |> fst
+
+/// Type a line and take what came of it. The stamp handed in is only ever used by a line
+/// that deals a fresh game, so it is named for that here.
+let private say line solo = Solo.said "afresh" "keyboard" line solo
+
+let private turn solo = Solo.said "afresh" "keyboard" "" solo
+
+let private next line solo =
+    let solo, _, _ = say line solo
+    solo
+
+let private screens (posts: Post list) =
+    posts
+    |> List.choose (fun post ->
+        match post.Say with
+        | Screen text -> Some text
+        | _ -> None)
+
+let private saidTo (posts: Post list) =
+    posts
+    |> List.choose (fun post ->
+        match post.Say with
+        | Told text
+        | TurnedAway text -> Some text
+        | _ -> None)
+
+// --- sitting down -------------------------------------------------------------------------
+
+report
+    "sitting down draws you a board"
+    1
+    (Solo.watching "one" reading (Solo.opened "s" dealt)
+     |> snd
+     |> screens
+     |> List.length)
+
+report
+    "a line typed by somebody who is not watching is turned away"
+    [ "You are not watching this game." ]
+    (Solo.said "afresh" "stranger" "negotiate" (Solo.opened "s" dealt)
+     |> fun (_, posts, _) -> saidTo posts)
+
+// Two people can watch one hot seat - the same game open in two browsers - and a move
+// made in either is drawn to both, because there is only the one game to look at.
+
+let private watched = sitting |> Solo.watching "other" reading |> fst
+
+report
+    "a move is drawn to everybody watching the one hot seat"
+    2
+    (say "recruit r 1" watched |> fun (_, posts, _) -> screens posts |> List.length)
+
+report
+    "but changing how you read is drawn only to you"
+    1
+    (say "notes off" watched |> fun (_, posts, _) -> screens posts |> List.length)
+
+// --- the screen changes hands with the turn ---------------------------------------------------
+//
+// One keyboard, so the board belongs to whoever is to play. Over a network it belongs to
+// whoever is reading it, and that is the whole of the difference between `Solo` and `Lobby`.
+
+let private boardSays (solo: Solo) (needle: string) =
+    match Solo.board "keyboard" solo with
+    | Some board -> board.Contains needle
+    | None -> false
+
+report "the board is drawn for whoever is to play" true (boardSays sitting "Player 1 (you)")
+
+report "and turns over with the turn" true (boardSays (next "recruit r 1" sitting) "Player 2 (you)")
+
+// --- walking the game back and forth -------------------------------------------------------
+//
+// Allowed here and refused at a networked table. There is nobody else at this one, so there
+// is no bag being read over anybody's shoulder and nobody whose move is being taken back
+// for them.
+
+let private moved = sitting |> next "recruit r 1"
+
+report "undo takes the last move back" (Model.session dealt) (Model.session (Solo.model (next "undo" moved)))
+
+report
+    "and redo makes it again"
+    (Model.session (Solo.model moved))
+    (Model.session (Solo.model (moved |> next "undo" |> next "redo")))
+
+report "a restart deals a fresh game to the same players" true (Journal.isEmpty (Solo.model (next "restart" moved)).Journal)
+
+// --- what the world is asked to do -------------------------------------------------------------
+//
+// The only thing a local game ever needs of the world is a file. `Solo` says whether, what,
+// and under which name; something else does it. That split is what makes the case below
+// checkable at all.
+
+let private errandOf line solo =
+    let _, _, doing = say line solo
+    doing
+
+report
+    "an ordinary move asks for nothing"
+    true
+    (match errandOf "recruit r 1" sitting with
+     | Carrying -> true
+     | _ -> false)
+
+report
+    "'save' asks for the record, and to be told where it went"
+    true
+    (match errandOf "save" moved with
+     | Keeping(_, "first", true) -> true
+     | _ -> false)
+
+report
+    "'quit' asks for it too, and resigns first so the record says how it ended"
+    true
+    (match errandOf "quit" moved with
+     | Leaving(model, "first") -> Model.isOver model
+     | _ -> false)
+
+// The one that would be easy to get wrong, and was worth pulling out of the loop to be able
+// to ask: a restart writes the game it has just cleared away, under the name that game was
+// being kept under - not the fresh one, and not under the fresh one's name.
+
+report
+    "a restart writes the game it swept away, under that game's own name"
+    true
+    (match errandOf "restart" moved with
+     | Keeping(model, "first", false) -> Journal.entries model.Journal |> List.length = 1
+     | _ -> false)
+
+report "and the game that replaces it is kept under the new name" "afresh" (Solo.stamp (next "restart" moved))
+
+// A game that ends on its own writes itself down without being asked, and without saying so.
+
+let private resigning = sitting |> next "resign"
+
+report
+    "a game that has just ended writes itself down unasked"
+    true
+    (match errandOf "resign" sitting with
+     | Keeping(model, "first", false) -> Model.isOver model
+     | _ -> false)
+
+report
+    "but a line typed after it is already over asks for nothing more"
+    true
+    (match errandOf "resign" resigning with
+     | Carrying -> true
+     | _ -> false)
+
+// --- reading it your own way ---------------------------------------------------------------------
+
+report
+    "a view can be changed from the prompt"
+    "rich"
+    (let solo = next "view rich" sitting
+
+     match Solo.board "keyboard" solo with
+     | Some board when board.Contains "[" -> "rich"
+     | _ -> "plain")
+
+report
+    "and a view this reader could not show is refused"
+    true
+    (say "view html" sitting
+     |> fun (_, posts, _) ->
+         saidTo posts
+         |> List.exists (fun said -> said.Contains "is not a way of showing the game here"))
+
+report "an empty line simply draws the board again" 1 (turn sitting |> fun (_, posts, _) -> screens posts |> List.length)
+
+report
+    "and a line the parser cannot read is answered, leaving the game alone"
+    (Model.session dealt)
+    (let solo, posts, _ = say "frobnicate" sitting
+     ignore (saidTo posts)
+     Model.session (Solo.model solo))
+
+// --- said after the fact ---------------------------------------------------------------------------
+//
+// Where a record went is not something a value can know, so it is said by whoever wrote the
+// file - but it still has to reach the player in the words their own view speaks. Said as
+// bare text it would read fine at a terminal and go missing entirely in a browser, which is
+// the sort of difference that only shows up in the one place nobody is looking.
+
+let private inABrowser =
+    Solo.opened "first" dealt
+    |> Solo.watching
+        "page"
+        { Notes = true
+          View = View.html Palette.standard }
+    |> fst
+
+report
+    "a word after the fact reaches a terminal as a line"
+    [ "Record saved to somewhere.log" ]
+    (Solo.saying "keyboard" "Record saved to somewhere.log" sitting |> saidTo)
+
+report
+    "and reaches a page as something a page can put somewhere"
+    true
+    (match Solo.saying "page" "Record saved to somewhere.log" inABrowser |> saidTo with
+     | [ said ] ->
+         said.StartsWith $"<aside id=\"{Html.Told}\""
+         && said.Contains "Record saved to somewhere.log"
+     | _ -> false)
+
+report "and nobody who is not watching is told anything" [] (Solo.saying "stranger" "Record saved to somewhere.log" sitting)
+
+// --- going --------------------------------------------------------------------------------------
+
+report
+    "somebody who stops watching stops being drawn to"
+    0
+    (Solo.gone "other" watched
+     |> fst
+     |> say "recruit r 1"
+     |> fun (_, posts, _) -> posts |> List.filter (fun post -> post.To = "other") |> List.length)
+
+finish ()

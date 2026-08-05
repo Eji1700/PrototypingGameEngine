@@ -36,17 +36,5 @@ module Protocol =
         [<Literal>]
         let TurnedAway = "TurnedAway"
 
-/// What the table says back to one console. Only strings and numbers go over the wire,
-/// so nothing has to teach a serialiser how the game's own types are shaped.
-type ToPlayer =
-    /// You are sitting at this seat, and this token is what brings you back to it.
-    | Seated of seat: int * token: string
-    /// A board to look at, drawn for the console it is going to and nobody else.
-    | Screen of text: string
-    /// A line of news with no board to go with it.
-    | Told of text: string
-    /// There is no seat here for you, and this is why.
-    | TurnedAway of why: string
-
-/// One thing to say and the console to say it to.
-type Post = { To: string; Say: ToPlayer }
+// What actually crosses - `ToPlayer` and `Post` - is in the Console layer, because a table
+// at one keyboard says the same things and has no wire to say them over.

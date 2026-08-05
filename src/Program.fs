@@ -14,88 +14,64 @@ let private clockSeed () = uint64 DateTime.UtcNow.Ticks
 let private stampNow () =
     DateTime.Now.ToString "yyyy-MM-dd-HHmmss"
 
-let private keep stamp model =
-    let path = Transcript.save stamp model.Journal
-    printfn "Record saved to %s" (Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
+/// The console watching its own game. There is only ever one of these at a keyboard, so
+/// what it is called matters no more than that `Solo` and this agree on it.
+[<Literal>]
+let private Keyboard = "keyboard"
 
-/// Save without saying so, for the times the game ends on its own and the player has not
-/// asked for anything.
-let private keepQuietly stamp model =
-    if not (Journal.isEmpty model.Journal) then
-        Transcript.save stamp model.Journal |> ignore
-
-/// How the person at this keyboard is reading the game: whether the board comes with the
-/// writing that explains it, and in what hand it is drawn.
+/// Do what a typed line asked of the world.
 ///
-/// Neither is part of the game. Both are how it is being read rather than how it is being
-/// played, so they stay out of the model and out of the record - and a fresh deal is still
-/// read the way the player was reading the last one.
-[<NoComparison; NoEquality>]
-type private Reading = { Notes: bool; View: View }
+/// Writing a file is the whole of what that ever is. `Solo` decides *whether* - including
+/// the awkward case where a restart has to write the game it just swept away rather than
+/// the one in hand - and this does it, which is the only reason there is a `Program.fs`
+/// between a keyboard and a fold.
+let private errand doing =
+    let write model stamp announce =
+        if announce then
+            let path = Transcript.save stamp model.Journal
+            printfn "Record saved to %s" (Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
+        elif not (Journal.isEmpty model.Journal) then
+            Transcript.save stamp model.Journal |> ignore
 
-/// Fold console input into the model. Once the game is over the loop stays open, so the
+    match doing with
+    | Carrying -> ()
+    | Keeping(model, stamp, announce) -> write model stamp announce
+    | Leaving(model, stamp) -> if not (Journal.isEmpty model.Journal) then write model stamp true
+
+/// Fold what is typed here into the game. Once it is over the loop stays open, so the
 /// record can be read and walked back through before the table is cleared.
-let rec private loop stamp (reading: Reading) model =
-    // One keyboard, so the screen belongs to whoever is to play and the beholder
-    // changes hands with the turn. Over a network each console has a seat of its own.
-    let beholder = Game.active (Model.game model)
+///
+/// What a line *means* is `Solo`'s, not this file's. All that is left here is a keyboard,
+/// a screen and a file - which is why the local game can be checked without any of the
+/// three, the same way the networked one can.
+let rec private loop solo =
+    // A terminal cannot patch a screen in place, so the board is drawn afresh each turn -
+    // and the `Screen` posts below are dropped, because this is them.
+    Solo.board Keyboard solo |> Option.iter (printf "%s")
+    printf "%s" (if Model.isOver (Solo.model solo) then "(over) > " else "> ")
 
-    /// Everything a player reads goes out through the view they chose, and nothing goes
-    /// out any other way.
-    let showLine (text: string) =
-        printf "%s" (text + Environment.NewLine)
+    let heard line =
+        let next, posts, doing = Solo.said (stampNow ()) Keyboard line solo
 
-    printf "%s" (reading.View.Board reading.Notes beholder model)
-    printf "%s" (if Model.isOver model then "(over) > " else "> ")
+        for post in posts do
+            match post.Say with
+            | Told text
+            | TurnedAway text -> printf "%s" (text + Environment.NewLine)
+            | Screen _
+            | Seated _ -> ()
+
+        errand doing
+
+        match doing with
+        | Leaving _ -> Solo.model next
+        | Carrying
+        | Keeping _ -> loop next
 
     match Console.ReadLine() with
-    | null -> leave stamp model
-    | line ->
-        match Parse.line line with
-        | Ok Parse.Nothing -> loop stamp reading model
-        | Ok Parse.Leave -> leave stamp model
-        | Ok Parse.Help ->
-            showLine reading.View.Rules
-            loop stamp reading model
-        | Ok(Parse.Notes wanted) ->
-            loop
-                stamp
-                { reading with
-                    Notes = wanted |> Option.defaultValue (not reading.Notes) }
-                model
-        | Ok(Parse.Looking name) ->
-            match View.byName reading.View.Shown reading.View.Palette name with
-            | Ok view -> loop stamp { reading with View = view } model
-            | Error problem -> loop stamp reading (Update.note problem model)
-        | Ok Parse.Recount ->
-            showLine (reading.View.History beholder model)
-            loop stamp reading model
-        | Ok Parse.Keep ->
-            keep stamp model
-            loop stamp reading model
-        | Ok(Parse.Explain regionId) ->
-            showLine (reading.View.Ruling regionId model)
-            loop stamp reading model
-        | Ok(Parse.Send(Restart _ as msg)) ->
-            // The old game's record is closed and kept before the table is cleared.
-            keepQuietly stamp model
-            loop (stampNow ()) reading (Update.update msg model)
-        | Ok(Parse.Send msg) ->
-            let next = Update.update msg model
-            // A game that has just ended writes itself down without being asked.
-            if Model.isOver next && not (Model.isOver model) then keepQuietly stamp next
-
-            loop stamp reading next
-        | Error problem -> loop stamp reading (Update.note problem model)
-
-/// Put the game down. One still in play is resigned first, so the record says how it
-/// ended rather than simply stopping.
-and private leave stamp model =
-    let model = if Model.isOver model then model else Update.update (Make Resign) model
-
-    if not (Journal.isEmpty model.Journal) then keep stamp model
-
-    model
+    // Nothing more coming. The same as saying so, and answered the same way, so that a
+    // game piped in from a file still ends up written down.
+    | null -> heard "quit"
+    | line -> heard line
 
 /// Deal a game. The table is the only thing that can refuse, and it says why, so a
 /// count that came from a person is answered in their words rather than swallowed.
@@ -120,6 +96,26 @@ let private replayFrom path =
                 printfn "Take them back with 'undo', or read them with 'history'."
                 model))
 
+/// Deal a game and serve it to a browser on this machine. Nothing comes back: like a
+/// hosted table it runs until the process is stopped, because a page has no way of saying
+/// the game is over and done with.
+let private serveFor palette players seed =
+    match dealt players seed with
+    | Error problem ->
+        eprintfn "%s" problem
+        1
+    | Ok model ->
+        let keep model stamp =
+            if Journal.isEmpty model.Journal then
+                None
+            else
+                let path = Transcript.save stamp model.Journal
+                Some(Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
+
+        // Nobody is watching yet. A browser adds itself when it opens its stream, which is
+        // the only moment anybody is really there.
+        Server.serve Protocol.DefaultPort palette (Solo.opened (stampNow ()) model) stampNow keep
+
 /// Open a table for players at their own machines. Nothing comes back: the table waits
 /// until whoever opened it stops the process, because no one player may close it on all
 /// the others.
@@ -130,7 +126,10 @@ let private hostFor players seed =
         1
     | Ok model ->
         let stamp = stampNow ()
-        Server.host Protocol.DefaultPort model (keepQuietly stamp)
+
+        Server.host Protocol.DefaultPort model (fun model ->
+            if not (Journal.isEmpty model.Journal) then
+                Transcript.save stamp model.Journal |> ignore)
 
 /// What the menu settled on: a game to play at this keyboard, or a way of playing that
 /// runs to its own end and only has an exit code to give back.
@@ -189,6 +188,10 @@ let rec private welcome (view: View) =
             match dealt players (seed |> Option.defaultValue (clockSeed ())) with
             | Ok model -> Play(model, view)
             | Error problem -> retry problem
+        | Ok(Menu.Serve(players, seed)) ->
+            // In whatever colours the player settled on here, which is the same promise
+            // the command line's --colour keeps.
+            Done(serveFor view.Palette players (seed |> Option.defaultValue (clockSeed ())))
         | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
         | Ok(Menu.Join(address, token)) -> Done(Client.join address token view)
         | Ok(Menu.Replay path) ->
@@ -197,8 +200,15 @@ let rec private welcome (view: View) =
             | Error problem -> retry problem
         | Error problem -> retry problem
 
+/// Sit down at a game and play it here. The board the player is looking at when they
+/// arrive is drawn by the same code that draws every one after it, because sitting down is
+/// simply the first thing that happens at the table.
 let private play view model =
-    loop (stampNow ()) { Notes = true; View = view } model |> ignore
+    let solo, _ =
+        Solo.opened (stampNow ()) model
+        |> Solo.watching Keyboard { Notes = true; View = view }
+
+    loop solo |> ignore
     0
 
 /// Act on what a command line asked for.
@@ -219,6 +229,7 @@ let private opening (view: View) launch =
 
     match launch with
     | Launch.Deal(players, seed) -> orElse (dealt players (seed |> Option.defaultValue (clockSeed ())))
+    | Launch.Serve(players, seed) -> serveFor view.Palette players (seed |> Option.defaultValue (clockSeed ()))
     | Launch.Host(players, seed) -> hostFor players (seed |> Option.defaultValue (clockSeed ()))
     | Launch.Join(address, token) -> Client.join address token view
     | Launch.Replay path -> orElse (replayFrom path)

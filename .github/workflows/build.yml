@@ -46,6 +46,7 @@ jobs:
       - name: Console and net
         run: |
           dotnet fsi tests/lobby.fsx
+          dotnet fsi tests/solo.fsx
           dotnet fsi tests/view.fsx
           dotnet fsi tests/html.fsx
           dotnet fsi tests/cli.fsx

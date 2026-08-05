@@ -14,8 +14,7 @@ open TCModel.Domain
 open TCModel.App
 open TCModel.Console
 
-/// The one lobby this process is hosting, and the only thing in the whole program that
-/// is not a value.
+/// The one lobby this process is hosting.
 ///
 /// Every change goes through here under a lock, so the pure fold inside never sees two
 /// players at once and the game can never be half-moved. What comes back out is the list
@@ -32,6 +31,46 @@ type Held(opening: Lobby, keep: Model -> unit) =
             // a table with people at it can lose its host without warning.
             keep (Lobby.model next)
             posts)
+
+/// The same, for the one hot seat this process is serving to a browser.
+///
+/// `Solo` says what a typed line does and what it wants written down; this does the writing
+/// and hands back what to show. The record goes out after every change here too, for a
+/// reason a local game did not have before: a page has no way of putting the game down on
+/// its way out, so there is no last moment to save at.
+type Aside(opening: Solo, fresh: unit -> string, keep: Model -> string -> string option) =
+    let gate = obj ()
+    let mutable solo = opening
+
+    member _.Change(change: Solo -> Solo * Post list) =
+        lock gate (fun () ->
+            let next, posts = change solo
+            solo <- next
+            posts)
+
+    member _.Said(console, line) =
+        lock gate (fun () ->
+            let next, posts, doing = Solo.said (fresh ()) console line solo
+            solo <- next
+
+            // A record the player asked for is answered where they asked - the board is
+            // already on its way down the stream, and a file's name is not part of a board.
+            // Through the table rather than as a bare `Told`, so that it comes out in the
+            // words the reader's own view speaks: a page wants markup where a terminal
+            // wants a line.
+            let alsoTold model stamp announce =
+                match keep model stamp with
+                | Some path when announce -> Solo.saying console $"Record saved to {path}." next
+                | Some _
+                | None -> []
+
+            let said =
+                match doing with
+                | Carrying -> []
+                | Keeping(model, stamp, announce) -> alsoTold model stamp announce
+                | Leaving(model, stamp) -> alsoTold model stamp true
+
+            posts @ said)
 
 /// Everything the table says, said.
 ///
@@ -105,6 +144,22 @@ module Server =
         with _ ->
             []
 
+    /// The four addresses a browser needs, mapped over whatever table is behind them.
+    ///
+    /// The same four whether there is a lobby back there or one hot seat, which is the
+    /// whole point of `Sitting` being four functions: a page is a page.
+    let private serving (app: WebApplication) standing sitting pages =
+        app.MapGet(Html.Client, RequestDelegate(fun ctx -> Browser.script ctx))
+        |> ignore
+
+        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page standing ctx)) |> ignore
+
+        app.MapGet(Html.Stream, RequestDelegate(fun ctx -> Browser.stream standing sitting pages ctx :> Task))
+        |> ignore
+
+        app.MapPost(Html.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
+        |> ignore
+
     /// Open a table and wait at it. Blocks until the host stops the process, which is
     /// how a table is closed: there is no move for closing one, because no player at it
     /// has the standing to close it on everybody else.
@@ -132,19 +187,14 @@ module Server =
         let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
 
         let sitting: Browser.Sitting =
-            { Change = held.Change
+            { Watching = fun console view -> held.Change(Lobby.join console (Guid.NewGuid().ToString "N") None view)
+              Said = fun console line -> held.Change(Lobby.said console line)
+              Gone = fun console -> held.Change(Lobby.left console)
               Deliver = fun posts -> Wire.deliver hub.Clients pages posts |> ignore }
 
-        app.MapGet(Html.Client, RequestDelegate(fun ctx -> Browser.script ctx))
-        |> ignore
-
-        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page ctx)) |> ignore
-
-        app.MapGet(Html.Stream, RequestDelegate(fun ctx -> Browser.stream sitting pages ctx :> Task))
-        |> ignore
-
-        app.MapPost(Html.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
-        |> ignore
+        // A hosted table settles nothing about colour on anybody's behalf: a console says
+        // what it wants when it joins, and so does a page.
+        serving app Palette.standard sitting pages
 
         let seats = Game.playerCount (Model.game model)
 
@@ -163,6 +213,51 @@ module Server =
         printfn "  localhost:%d          (for anyone on this machine)" port
         printfn ""
         printfn "  The game begins once all %d seats are taken. Ctrl+C closes the table." seats
+        printfn ""
+
+        app.Run()
+        0
+
+    /// Play a game here, in a browser, with nobody else involved.
+    ///
+    /// This is `play` with a page instead of a terminal, not `host` with the waiting taken
+    /// out. There are no seats: it is the one hot seat a keyboard has, and the screen
+    /// belongs to whoever is to play, so it starts the moment it is opened and every move
+    /// is yours to make. Which is also why there is no hub here - there is nobody to reach.
+    let serve port standing solo fresh keep =
+        let builder = WebApplication.CreateBuilder()
+
+        let aside = Aside(solo, fresh, keep)
+        let pages = Browser.Pages()
+
+        builder.Logging.ClearProviders() |> ignore
+        builder.WebHost.UseUrls($"http://0.0.0.0:{port}") |> ignore
+
+        let app = builder.Build()
+
+        let sitting: Browser.Sitting =
+            { Watching = fun console view -> aside.Change(Solo.watching console { Notes = true; View = view })
+              Said = fun console line -> aside.Said(console, line)
+              Gone = fun console -> aside.Change(Solo.gone console)
+              Deliver = fun posts -> posts |> List.iter (Browser.send pages) }
+
+        serving app standing sitting pages
+
+        let seats = Game.playerCount (Model.game (Solo.model solo))
+
+        printfn ""
+        printfn "=== A game for %d, to play in a browser ===" seats
+        printfn ""
+        printfn "  Open:"
+        printfn ""
+        printfn "    http://localhost:%d" port
+        printfn ""
+        printfn "  One seat, and it changes hands with the turn - the same as playing at"
+        printfn "  this keyboard. Ctrl+C puts it down."
+        printfn ""
+        printfn "  Others on this network can watch and play too, at:"
+        printfn ""
+        reachableAt port |> List.iter (printfn "%s")
         printfn ""
 
         app.Run()

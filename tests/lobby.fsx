@@ -15,6 +15,7 @@
 #load "../src/App/Model.fs"
 #load "../src/App/Update.fs"
 #load "../src/Console/Waiting.fs"
+#load "../src/Console/Showing.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
 #load "../src/Console/Parse.fs"
