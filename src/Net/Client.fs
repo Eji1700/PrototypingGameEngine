@@ -3,6 +3,7 @@ namespace TCModel.Net
 open System
 open System.Threading.Tasks
 open Microsoft.AspNetCore.SignalR.Client
+open TCModel.Console
 
 /// A console at somebody else's table.
 ///
@@ -32,14 +33,18 @@ module Client =
 
     /// Print what arrived, then the prompt again, so a board that lands while the player
     /// is reading does not leave them staring at a bare line.
-    let private show (text: string) =
-        Console.Write text
-        Console.Write "> "
-        Console.Out.Flush()
+    ///
+    /// The table sends the board plainly and it is made to look like something here, at
+    /// the console it is going to. So a player picks how they read the game for
+    /// themselves, and two people at the same table can pick differently.
+    let private show (view: View) (text: string) =
+        System.Console.Write(view.Show text)
+        System.Console.Write "> "
+        System.Console.Out.Flush()
 
     let private wait (task: Task) = task.GetAwaiter().GetResult()
 
-    let join given resuming =
+    let join given resuming (chosen: View) =
         match endpoint given with
         | Error problem ->
             eprintfn "%s" problem
@@ -49,14 +54,22 @@ module Client =
         let connection =
             HubConnectionBuilder().WithUrl(url).WithAutomaticReconnect().Build()
 
-        // The token the table gives back. Kept so a console that drops can come back to
-        // the same seat rather than being handed a new one - or worse, none at all.
-        let mutable token = resuming |> Option.defaultValue ""
+        // Both of these are read from inside the handlers below, which is why they are
+        // cells rather than plain mutables.
+        //
+        // The token is what the table gives back, kept so a console that drops can come
+        // back to the same seat rather than being handed a new one - or worse, none.
+        let token = ref (resuming |> Option.defaultValue "")
+
+        // The view never crosses the wire: the table sends one plain board and each
+        // console makes of it what it likes, so a player can change their mind mid-game
+        // without the game hearing about it.
+        let view = ref chosen
 
         connection.On<int, string>(
             Protocol.Call.Seated,
             fun seat mine ->
-                token <- mine
+                token.Value <- mine
                 printfn ""
                 printfn "You are Player %d. If you drop, this brings you back to the same seat:" seat
                 printfn ""
@@ -64,8 +77,10 @@ module Client =
         )
         |> ignore
 
-        connection.On<string>(Protocol.Call.Screen, show) |> ignore
-        connection.On<string>(Protocol.Call.Told, fun text -> show (text + Environment.NewLine)) |> ignore
+        connection.On<string>(Protocol.Call.Screen, fun text -> show view.Value text) |> ignore
+
+        connection.On<string>(Protocol.Call.Told, (fun text -> show view.Value (text + Environment.NewLine)))
+        |> ignore
 
         connection.On<string>(
             Protocol.Call.TurnedAway,
@@ -77,7 +92,7 @@ module Client =
 
         // Coming back after a drop has to say who this console was, or the table would
         // hand it an empty seat and the player would lose their stones.
-        connection.add_Reconnected(fun _ -> connection.InvokeAsync(Protocol.Call.Join, box token))
+        connection.add_Reconnected(fun _ -> connection.InvokeAsync(Protocol.Call.Join, box token.Value))
 
         try
             wait (connection.StartAsync())
@@ -85,13 +100,23 @@ module Client =
             eprintfn "There is no table at %s - %s" url problem.Message
             exit 1
 
-        wait (connection.InvokeAsync(Protocol.Call.Join, box token))
+        wait (connection.InvokeAsync(Protocol.Call.Join, box token.Value))
 
         let rec loop () =
-            match Console.ReadLine() with
+            match System.Console.ReadLine() with
             | null -> ()
             | line ->
-                wait (connection.InvokeAsync(Protocol.Call.Say, box line))
+                // How the board is drawn is this console's own business, so it is
+                // answered here and never sent. Everything else is the table's.
+                match Parse.line line with
+                | Ok(Parse.Looking name) ->
+                    match View.byName name with
+                    | Ok chosen ->
+                        view.Value <- chosen
+                        show view.Value ""
+                    | Error problem -> show view.Value (problem + Environment.NewLine)
+                | _ -> wait (connection.InvokeAsync(Protocol.Call.Say, box line))
+
                 loop ()
 
         loop ()

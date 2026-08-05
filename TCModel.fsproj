@@ -39,6 +39,8 @@
     <Compile Include="src/Console/Words.fs" />
     <Compile Include="src/Console/Render.fs" />
     <Compile Include="src/Console/Parse.fs" />
+    <Compile Include="src/Console/Tint.fs" />
+    <Compile Include="src/Console/View.fs" />
     <Compile Include="src/Console/Menu.fs" />
     <Compile Include="src/Console/Transcript.fs" />
   </ItemGroup>
@@ -57,6 +59,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+    <PackageReference Include="Spectre.Console" Version="0.51.1" />
   </ItemGroup>
 
 </Project>

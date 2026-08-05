@@ -22,52 +22,70 @@ let private keepQuietly stamp model =
     if not (Journal.isEmpty model.Journal) then
         Transcript.save stamp model.Journal |> ignore
 
+/// How the person at this keyboard is reading the game: whether the board comes with the
+/// writing that explains it, and in what hand it is drawn.
+///
+/// Neither is part of the game. Both are how it is being read rather than how it is being
+/// played, so they stay out of the model and out of the record - and a fresh deal is still
+/// read the way the player was reading the last one.
+[<NoComparison; NoEquality>]
+type private Reading = { Notes: bool; View: View }
+
 /// Fold console input into the model. Once the game is over the loop stays open, so the
 /// record can be read and walked back through before the table is cleared.
-///
-/// `notes` is the one thing the shell remembers for itself: whether the board comes with
-/// the writing that explains it. It is how the game is being read rather than how it is
-/// being played, so it stays out of the model and out of the record, and a fresh deal is
-/// still read the way the player was reading the last one.
-let rec private loop stamp notes model =
+let rec private loop stamp (reading: Reading) model =
     // One keyboard, so the screen belongs to whoever is to play and the beholder
     // changes hands with the turn. Over a network each console has a seat of its own.
     let beholder = Game.active (Model.game model)
 
-    printf "%s" (Render.model notes beholder model)
+    /// Everything a player reads goes out through the view they chose, and nothing goes
+    /// out any other way.
+    let show (text: string) = printf "%s" (reading.View.Show text)
+    let showLine text = show (text + Environment.NewLine)
+
+    show (Render.model reading.Notes beholder model)
     printf "%s" (if Model.isOver model then "(over) > " else "> ")
 
     match Console.ReadLine() with
     | null -> leave stamp model
     | line ->
         match Parse.line line with
-        | Ok Parse.Nothing -> loop stamp notes model
+        | Ok Parse.Nothing -> loop stamp reading model
         | Ok Parse.Leave -> leave stamp model
         | Ok Parse.Help ->
-            printfn "%s" Render.help
-            loop stamp notes model
-        | Ok(Parse.Notes wanted) -> loop stamp (wanted |> Option.defaultValue (not notes)) model
+            showLine Render.help
+            loop stamp reading model
+        | Ok(Parse.Notes wanted) ->
+            loop
+                stamp
+                { reading with
+                    Notes = wanted |> Option.defaultValue (not reading.Notes) }
+                model
+        | Ok(Parse.Looking name) ->
+            match View.byName name with
+            | Ok view -> loop stamp { reading with View = view } model
+            | Error problem -> loop stamp reading (Update.note problem model)
         | Ok Parse.Recount ->
-            printfn "%s" (Render.history beholder model)
-            loop stamp notes model
+            showLine (Render.history beholder model)
+            loop stamp reading model
         | Ok Parse.Keep ->
             keep stamp model
-            loop stamp notes model
+            loop stamp reading model
         | Ok(Parse.Explain regionId) ->
-            printfn "%s" (Render.explainRule regionId model)
-            loop stamp notes model
+            showLine (Render.explainRule regionId model)
+            loop stamp reading model
         | Ok(Parse.Send(Restart _ as msg)) ->
             // The old game's record is closed and kept before the table is cleared.
             keepQuietly stamp model
-            loop (stampNow ()) notes (Update.update msg model)
+            loop (stampNow ()) reading (Update.update msg model)
         | Ok(Parse.Send msg) ->
             let next = Update.update msg model
             // A game that has just ended writes itself down without being asked.
             if Model.isOver next && not (Model.isOver model) then
                 keepQuietly stamp next
 
-            loop stamp notes next
-        | Error problem -> loop stamp notes (Update.note problem model)
+            loop stamp reading next
+        | Error problem -> loop stamp reading (Update.note problem model)
 
 /// Put the game down. One still in play is resigned first, so the record says how it
 /// ended rather than simply stopping.
@@ -139,8 +157,9 @@ let private hostFor players seed =
 
 /// What the menu settled on: a game to play at this keyboard, or a way of playing that
 /// runs to its own end and only has an exit code to give back.
+[<NoComparison; NoEquality>]
 type private Opening =
-    | Play of Model
+    | Play of Model * View
     | Done of code: int
 
 /// Command line: host <players> [seed], read the same way the menu reads them.
@@ -160,40 +179,57 @@ let private hostFrom players seed =
 /// The start menu, which runs until it has settled on one of those. Everything it offers
 /// either opens a game or comes back round to here, so there is no way out of it but the
 /// two, and no way to be at the prompt with nothing to play.
-let rec private welcome () =
-    printf "%s" Menu.screen
+let rec private welcome (view: View) =
+    // The menu is shown in the view it is offering, so 'view rich' shows what rich looks
+    // like before a whole game is committed to it.
+    printf "%s" (view.Show(Menu.screen view))
     printf "> "
 
     /// Say what went wrong and ask again. The menu is the only place to be when there is
     /// no game yet, so nothing here leaves except by being asked to.
     let retry problem =
-        printfn "%s" problem
-        welcome ()
+        printfn "%s" (view.Show problem)
+        welcome view
 
     match Console.ReadLine() with
     | null -> Done 0
     | line ->
         match Menu.choose line with
-        | Ok Menu.Waiting -> welcome ()
+        | Ok Menu.Waiting -> welcome view
         | Ok Menu.Leave -> Done 0
         | Ok Menu.Rules ->
-            printfn "%s" Render.help
-            welcome ()
+            printfn "%s" (view.Show Render.help)
+            welcome view
+        | Ok(Menu.Looking chosen) -> welcome chosen
         | Ok(Menu.Deal(players, seed)) ->
             match dealt players (seed |> Option.defaultValue (clockSeed ())) with
-            | Ok model -> Play model
+            | Ok model -> Play(model, view)
             | Error problem -> retry problem
         | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
-        | Ok(Menu.Join(address, token)) -> Done(Client.join address token)
+        | Ok(Menu.Join(address, token)) -> Done(Client.join address token view)
         | Ok(Menu.Replay path) ->
             match replayFrom path with
-            | Ok model -> Play model
+            | Ok model -> Play(model, view)
             | Error problem -> retry problem
         | Error problem -> retry problem
 
-let private play model =
-    loop (stampNow ()) true model |> ignore
+let private play view model =
+    loop (stampNow ()) { Notes = true; View = view } model |> ignore
     0
+
+/// Take "--view <name>" out of the arguments, wherever in them it sits, and give back the
+/// view it names along with everything else still in the order it was given. How a board
+/// is drawn says nothing about what to deal, so it has no place among the arguments that
+/// do - and pulling it out first is what lets the rest go on being read by position.
+let private viewFrom (argv: string array) =
+    let rec sift taken chosen =
+        match taken with
+        | "--view" :: name :: rest -> View.byName name |> Result.bind (fun view -> sift rest (Some view))
+        | [ "--view" ] -> Error $"Say '--view <name>', for one of {View.names}."
+        | word :: rest -> sift rest chosen |> Result.map (fun (view, kept) -> view, word :: kept)
+        | [] -> Ok(chosen |> Option.defaultValue View.plain, [])
+
+    sift (List.ofArray argv) None |> Result.map (fun (view, kept) -> view, Array.ofList kept)
 
 [<EntryPoint>]
 let main argv =
@@ -204,17 +240,23 @@ let main argv =
         1
     | [] ->
 
+    match viewFrom argv with
+    | Error problem ->
+        eprintfn "%s" problem
+        1
+    | Ok(view, argv) ->
+
     // Arguments say what to deal and go straight to the board, so a game can still be
     // started from a script or a shortcut exactly as before. With none, the menu asks.
     match argv with
     | [||] ->
-        match welcome () with
-        | Play model -> play model
+        match welcome view with
+        | Play(model, view) -> play view model
         | Done code -> code
     | [| "host"; players |] -> hostFrom players None
     | [| "host"; players; seed |] -> hostFrom players (Some seed)
-    | [| "join"; address |] -> Client.join address None
-    | [| "join"; address; token |] -> Client.join address (Some token)
+    | [| "join"; address |] -> Client.join address None view
+    | [| "join"; address; token |] -> Client.join address (Some token) view
     | _ ->
         let opening =
             match argv with
@@ -226,5 +268,5 @@ let main argv =
             eprintfn "%s" problem
             1
         | Ok model ->
-            printfn "%s" Render.help
-            play model
+            printfn "%s" (view.Show Render.help)
+            play view model

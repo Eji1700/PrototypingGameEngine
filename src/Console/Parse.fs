@@ -16,6 +16,9 @@ module Parse =
         /// Show or hide the notes that explain the board. Saying neither turns them
         /// whichever way they are not.
         | Notes of showing: bool option
+        /// Read the game a different way. Only the name is taken here: which views there
+        /// are is a question for whatever is doing the showing, not for the parser.
+        | Looking of view: string
         | Explain of RegionId
         /// Show the record of the game so far.
         | Recount
@@ -127,6 +130,8 @@ module Parse =
         | [ "notes"; "on" ] -> Ok(Notes(Some true))
         | [ "notes"; "off" ] -> Ok(Notes(Some false))
         | "notes" :: _ -> Error "Say 'notes' to turn them the other way, or 'notes on' or 'notes off'."
+        | [ "view"; name ] -> Ok(Looking name)
+        | "view" :: _ -> Error "Say 'view <name>' to change how the board is drawn."
         | [ "undo" ] | [ "u" ] -> Ok(Send Undo)
         | [ "redo" ] -> Ok(Send Redo)
         | [ "resign" ] -> Ok(Send(Make Resign))

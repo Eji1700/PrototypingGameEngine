@@ -12,6 +12,7 @@ module Menu =
 
     /// What the menu was asked for. Every one of these either starts a game or comes
     /// back round to the menu, so there is nothing else for the front door to do.
+    [<NoComparison; NoEquality>]
     type Choice =
         /// Deal a fresh game. A seed left unsaid is taken from the clock, so the game
         /// is a new one every time.
@@ -23,6 +24,8 @@ module Menu =
         | Replay of path: string
         /// Show the rules and the commands at length.
         | Rules
+        /// Read the game a different way from here on.
+        | Looking of View
         | Leave
         /// Nothing was typed, so the menu simply asks again.
         | Waiting
@@ -34,7 +37,9 @@ module Menu =
 
     let private choice typed does = sprintf "    %-22s %s" typed does
 
-    let screen =
+    /// The menu is shown in the view it is offering, so a player choosing one can see
+    /// what they are choosing before they commit a game to it.
+    let screen (showing: View) =
         String.concat
             Environment.NewLine
             [ ""
@@ -53,6 +58,7 @@ module Menu =
               ""
               choice "<players> <seed>" "the same game again, from a seed"
               choice "replay <file>" "play a saved record again"
+              choice $"view <{View.names}>" $"how the board is drawn - now {showing.Name}, {showing.Describe}"
               choice "rules" "the rules and the commands, at length"
               choice "quit" "leave"
               "" ]
@@ -86,6 +92,8 @@ module Menu =
                     return Host(players, Some seed)
                 }
             | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
+            | "view", [ name ] -> View.byName name |> Result.map Looking
+            | "view", _ -> Error $"Say 'view <name>', for one of {View.names}."
             | "join", [ address ] -> Ok(Join(address, None))
             | "join", [ address; token ] -> Ok(Join(address, Some token))
             | "join", _ -> Error "Say 'join <address>', naming the machine that is hosting."

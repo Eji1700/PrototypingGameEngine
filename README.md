@@ -50,8 +50,10 @@ it is, when it ends, when the game does, and everything that has happened so far
 | File | Role |
 | --- | --- |
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
-| [Render.fs](src/Console/Render.fs) | `bool -> Model -> string`: the board, with or without the notes that explain it |
+| [Render.fs](src/Console/Render.fs) | The board as plain text, drawn for one player to read |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
+| [Tint.fs](src/Console/Tint.fs) | Colour laid over a board that has already been drawn |
+| [View.fs](src/Console/View.fs) | The ways of showing the game, and choosing between them |
 | [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
@@ -372,6 +374,49 @@ property of the view, not of what is stored. `Render` reads the journal through
 `save` mid-game does put a full account on disk, where the file is out of the
 game's hands anyway.
 
+## How the board is shown
+
+The game writes one screen and writes it plainly. `Render` turns a model into text
+and knows nothing about who will read it or on what. A **view**
+([View.fs](src/Console/View.fs)) is the last thing that text passes through before
+a person sees it:
+
+```fsharp
+type View =
+    { Name: string
+      Describe: string
+      Show: string -> string }
+```
+
+| view | |
+| --- | --- |
+| `plain` | the board as the game writes it, and nothing this terminal has to understand |
+| `rich` | the same board with colour laid over it, via [Spectre.Console](https://spectreconsole.net) |
+
+```powershell
+dotnet run -- --view rich 3 42        # deal in colour
+dotnet run -- join greg-pc --view rich
+```
+
+`--view <name>` may sit anywhere in the arguments and is taken out before the rest
+are read, so it never disturbs what is read by position. From the menu, `view rich`;
+from the prompt mid-game, the same. A new view is added to `View.all` and nowhere
+else - the menu, the command line, and the prompt all read that one list.
+
+**Colour is laid on last, and may not move a character.** The map is drawn by
+counting characters into columns ([Render.fs](src/Console/Render.fs) paints them
+into a blank line one at a time), so an escape code slipped in while it was being
+laid out would push everything after it sideways. So nothing is coloured until the
+writing is done and every column is where it belongs. [view.fsx](tests/view.fsx)
+holds every view to that rule: colour the board, strip the colour off again, and
+what is left must be the board character for character.
+
+That is also what makes this work over a network. The seam is on the finished text
+rather than on the model, so the wire carries the plain board and the view runs at
+the console it is going to. Two players at the same table can read it two different
+ways and the table neither knows nor cares - the `view` command is answered by the
+client and never sent.
+
 ## Playing from different machines
 
 One player hosts a table and the rest join it:
@@ -551,6 +596,7 @@ started from a script or a shortcut. With none, the menu
 
     <players> <seed>       the same game again, from a seed
     replay <file>          play a saved record again
+    view <plain, rich>     how the board is drawn - now plain, plain text, and nothing this terminal has to understand
     rules                  the rules and the commands, at length
     quit                   leave
 ```
@@ -596,6 +642,7 @@ dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone c
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
 dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
+dotnet fsi tests/view.fsx       # that a view may colour the board but never move it
 ```
 
 Each script exits non-zero on failure. They load the source directly, so they run

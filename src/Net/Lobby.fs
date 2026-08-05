@@ -215,6 +215,10 @@ module Lobby =
 
             let lobby = lobby |> withSeat seat
             lobby, [ screenFor lobby (console, seat) ]
+        // How a board looks is settled at the console it is drawn on, so this one never
+        // reaches the table - the client answers it before it is sent. If one arrives
+        // anyway, saying so is better than saying nothing.
+        | Ok(Parse.Looking _) -> told "How the board is drawn is your own affair, and is settled at your console."
         | Ok(Parse.Explain regionId) -> told (Render.explainRule regionId lobby.Model)
         | Ok Parse.Recount -> told (Render.history player lobby.Model)
         | Ok Parse.Keep -> told "The table keeps the record itself, and writes it out after every move."
