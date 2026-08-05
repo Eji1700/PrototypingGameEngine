@@ -41,7 +41,22 @@
     <Compile Include="src/Console/Parse.fs" />
     <Compile Include="src/Console/Menu.fs" />
     <Compile Include="src/Console/Transcript.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Net - the same game, with the players at different keyboards">
+    <Compile Include="src/Net/Protocol.fs" />
+    <Compile Include="src/Net/Lobby.fs" />
+    <Compile Include="src/Net/Server.fs" />
+    <Compile Include="src/Net/Client.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="The way in">
     <Compile Include="src/Console/Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
   </ItemGroup>
 
 </Project>

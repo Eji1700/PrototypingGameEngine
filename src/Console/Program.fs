@@ -4,6 +4,7 @@ open System
 open System.IO
 open TCModel.Domain
 open TCModel.App
+open TCModel.Net
 
 let private clockSeed () = uint64 DateTime.UtcNow.Ticks
 
@@ -29,7 +30,11 @@ let private keepQuietly stamp model =
 /// being played, so it stays out of the model and out of the record, and a fresh deal is
 /// still read the way the player was reading the last one.
 let rec private loop stamp notes model =
-    printf "%s" (Render.model notes model)
+    // One keyboard, so the screen belongs to whoever is to play and the beholder
+    // changes hands with the turn. Over a network each console has a seat of its own.
+    let beholder = Game.active (Model.game model)
+
+    printf "%s" (Render.model notes beholder model)
     printf "%s" (if Model.isOver model then "(over) > " else "> ")
 
     match Console.ReadLine() with
@@ -43,7 +48,7 @@ let rec private loop stamp notes model =
             loop stamp notes model
         | Ok(Parse.Notes wanted) -> loop stamp (wanted |> Option.defaultValue (not notes)) model
         | Ok Parse.Recount ->
-            printfn "%s" (Render.history model)
+            printfn "%s" (Render.history beholder model)
             loop stamp notes model
         | Ok Parse.Keep ->
             keep stamp model
@@ -120,35 +125,69 @@ let private replayFrom path =
                 printfn "Take them back with 'undo', or read them with 'history'."
                 model))
 
-/// The start menu, which runs until there is a game to play or nobody left to play it.
-/// Everything it offers either deals a game or comes back round to here, so what it
-/// hands on is a game or nothing at all.
+/// Open a table for players at their own machines. Nothing comes back: the table waits
+/// until whoever opened it stops the process, because no one player may close it on all
+/// the others.
+let private hostFor players seed =
+    match dealt players seed with
+    | Error problem ->
+        eprintfn "%s" problem
+        1
+    | Ok model ->
+        let stamp = stampNow ()
+        Server.host Protocol.DefaultPort model (keepQuietly stamp)
+
+/// What the menu settled on: a game to play at this keyboard, or a way of playing that
+/// runs to its own end and only has an exit code to give back.
+type private Opening =
+    | Play of Model
+    | Done of code: int
+
+/// Command line: host <players> [seed], read the same way the menu reads them.
+let private hostFrom players seed =
+    let seed =
+        match seed with
+        | None -> Ok(clockSeed ())
+        | Some given -> Parse.trySeed given
+
+    match Parse.tryPlayerCount players, seed with
+    | Ok players, Ok seed -> hostFor players seed
+    | Error problem, _
+    | _, Error problem ->
+        eprintfn "%s" problem
+        1
+
+/// The start menu, which runs until it has settled on one of those. Everything it offers
+/// either opens a game or comes back round to here, so there is no way out of it but the
+/// two, and no way to be at the prompt with nothing to play.
 let rec private welcome () =
     printf "%s" Menu.screen
     printf "> "
 
-    /// Say what went wrong and ask again. The menu is the only place to be when there
-    /// is no game yet, so nothing here can leave except by being asked to.
+    /// Say what went wrong and ask again. The menu is the only place to be when there is
+    /// no game yet, so nothing here leaves except by being asked to.
     let retry problem =
         printfn "%s" problem
         welcome ()
 
     match Console.ReadLine() with
-    | null -> None
+    | null -> Done 0
     | line ->
         match Menu.choose line with
         | Ok Menu.Waiting -> welcome ()
-        | Ok Menu.Leave -> None
+        | Ok Menu.Leave -> Done 0
         | Ok Menu.Rules ->
             printfn "%s" Render.help
             welcome ()
         | Ok(Menu.Deal(players, seed)) ->
             match dealt players (seed |> Option.defaultValue (clockSeed ())) with
-            | Ok model -> Some model
+            | Ok model -> Play model
             | Error problem -> retry problem
+        | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
+        | Ok(Menu.Join(address, token)) -> Done(Client.join address token)
         | Ok(Menu.Replay path) ->
             match replayFrom path with
-            | Ok model -> Some model
+            | Ok model -> Play model
             | Error problem -> retry problem
         | Error problem -> retry problem
 
@@ -170,8 +209,12 @@ let main argv =
     match argv with
     | [||] ->
         match welcome () with
-        | Some model -> play model
-        | None -> 0
+        | Play model -> play model
+        | Done code -> code
+    | [| "host"; players |] -> hostFrom players None
+    | [| "host"; players; seed |] -> hostFrom players (Some seed)
+    | [| "join"; address |] -> Client.join address None
+    | [| "join"; address; token |] -> Client.join address (Some token)
     | _ ->
         let opening =
             match argv with

@@ -7,7 +7,7 @@ the console, so the view can be swapped for anything later.
 
 ## Layout
 
-Four layers, each depending only on the ones above it.
+Five layers, each depending only on the ones above it.
 
 **`src/Common`** — generic, and knows nothing about the game.
 
@@ -54,7 +54,20 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
 | [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
-| [Program.fs](src/Console/Program.fs) | The read/update/render loop |
+
+**`src/Net`** — the same game with the players at different keyboards. Only the
+last two files here touch a socket.
+
+| File | Role |
+| --- | --- |
+| [Protocol.fs](src/Net/Protocol.fs) | What crosses the wire, and what each end calls the other |
+| [Lobby.fs](src/Net/Lobby.fs) | Seats, tokens, and the three rules a table adds to the game |
+| [Server.fs](src/Net/Server.fs) | The host: one lobby behind a lock, and a SignalR hub over it |
+| [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
+
+And [Program.fs](src/Console/Program.fs), compiled last, is the way in: the start
+menu, the read/update/render loop, and the choice between playing here and playing
+over a wire.
 
 ## Keeping invalid states out
 
@@ -359,6 +372,71 @@ property of the view, not of what is stored. `Render` reads the journal through
 `save` mid-game does put a full account on disk, where the file is out of the
 game's hands anyway.
 
+## Playing from different machines
+
+One player hosts a table and the rest join it:
+
+```powershell
+dotnet run -- host 3          # opens a table for three and waits
+dotnet run -- join greg-pc    # each of the others, from their own machine
+```
+
+The host prints the addresses it can be reached at. A player says a machine name,
+an address, or a whole URL; the port and the path are filled in
+([Client.fs](src/Net/Client.fs)). Nobody plays until every seat is taken - a game
+dealt for three hands out three bags whether or not three people have arrived, so
+starting early would mean somebody playing a bag that is not theirs.
+
+**The server is the only thing that holds a game.** A client holds no model and
+knows no rules: it sends the line that was typed and prints what comes back, which
+is already a board drawn for that player and nobody else. There is nothing in a
+client that could show a player something they should not see, because there is
+nothing in a client to show. This is why hidden information has to live where it
+does - had `Render` filtered a shared screen at the last moment, a client would
+have had to be trusted with the unfiltered one.
+
+There is no second wire format either. The player sends the line they would have
+typed at their own keyboard and `Parse.line` reads it; what comes back is what
+`Render.model` would have drawn. Only strings and numbers cross the wire, so no
+serialiser has to be taught the shape of the game's own types.
+
+**What a table refuses that one keyboard allows** ([Lobby.fs](src/Net/Lobby.fs)):
+
+- **Acting out of turn.** The one rule a single keyboard never needed, because
+  there was only ever one pair of hands. A player who moves early is told whose
+  turn it is and the game does not shift.
+- **Undo and redo.** A game with more than one player at it only goes forward.
+  Beyond the question of who would have the standing to take back somebody else's
+  move, walking the timeline back and forward again is a way of *reading a bag*:
+  undo a negotiation and redo it and you have watched a stone that was meant to be
+  private. Undo stays a single-keyboard command.
+- **Restart, and changing the number of players.** Seats are handed out against a
+  dealt game, so redealing underneath the people sitting at it is not something one
+  player may do to the others. A table plays the game it was opened with.
+
+**Seats and tokens.** A seat is empty until somebody takes it, and once taken it
+keeps its token for good. A console that drops leaves the seat *taken but empty*,
+so the player can come back to their own stones rather than the seat being handed
+to a stranger:
+
+```powershell
+dotnet run -- join greg-pc 3c3f9af9e8bc4bb88807a61de6e389af
+```
+
+The client prints that line when it sits down, and re-joins with the token by
+itself when SignalR reconnects. A token that claimed no seat claims none now.
+
+**Where the state is.** `Lobby` is a value like everything else, and every rule
+above is decided by folding a typed line into it - `Lobby.said` returns the next
+lobby and the list of things to say. [Server.fs](src/Net/Server.fs) holds exactly
+one mutable field, behind a lock, and the hub does nothing but turn a call into a
+fold and the fold's answer back into calls. So the multiplayer rules are testable
+without a socket, and [lobby.fsx](tests/lobby.fsx) tests them that way.
+
+The table writes its record after every move rather than at the end, because a
+game with people at it can lose its host without warning. The file is the same
+replayable transcript a local game writes.
+
 ## The map
 
 Borders are declared once in `Board.declaredBorders` and symmetrised, so a border
@@ -447,6 +525,10 @@ dotnet run -- 3           # 3 players, random seed - straight to the board
 dotnet run -- 3 42        # 3 players, reproducible game from seed 42
 
 dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log   # play a saved record again
+
+dotnet run -- host 3      # open a table for three at their own machines
+dotnet run -- join greg-pc            # sit down at one someone else opened
+dotnet run -- join greg-pc <token>    # come back to the seat you were in
 ```
 
 Arguments say what to deal and go straight to the board, so a game can still be
@@ -458,7 +540,12 @@ started from a script or a shortcut. With none, the menu
 
   Stones on a map, and a seat each. How many are playing?
 
-    2  3  4  5             deal a game for that many
+    2  3  4  5             deal a game for that many, round this keyboard
+
+  Or, to play from separate machines:
+
+    host <players>         open a table and wait for them to arrive
+    join <address>         sit down at a table someone else is hosting
 
   Or:
 
@@ -508,6 +595,7 @@ dotnet fsi tests/outcome.fsx    # both winning cascades
 dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone conservation
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
+dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
 ```
 
 Each script exits non-zero on failure. They load the source directly, so they run

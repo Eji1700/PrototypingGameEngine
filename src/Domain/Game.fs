@@ -16,6 +16,8 @@ module Game =
 
     let players game = Table.players game.Table
 
+    let tryPlayer playerId game = Table.tryPlayer playerId game.Table
+
     let playerCount game = Table.count game.Table
 
     let stones regionId game = Position.stones regionId game.Position

@@ -16,6 +16,10 @@ module Menu =
         /// Deal a fresh game. A seed left unsaid is taken from the clock, so the game
         /// is a new one every time.
         | Deal of players: int * seed: uint64 option
+        /// Deal one and wait for the other players to arrive from their own machines.
+        | Host of players: int * seed: uint64 option
+        /// Sit down at somebody else's table.
+        | Join of address: string * token: string option
         | Replay of path: string
         /// Show the rules and the commands at length.
         | Rules
@@ -38,7 +42,12 @@ module Menu =
               ""
               "  Stones on a map, and a seat each. How many are playing?"
               ""
-              choice seatings "deal a game for that many"
+              choice seatings "deal a game for that many, round this keyboard"
+              ""
+              "  Or, to play from separate machines:"
+              ""
+              choice "host <players>" "open a table and wait for them to arrive"
+              choice "join <address>" "sit down at a table someone else is hosting"
               ""
               "  Or:"
               ""
@@ -69,6 +78,17 @@ module Menu =
             | ("rules" | "help" | "?"), [] -> Ok Rules
             | "replay", [ path ] -> Ok(Replay path)
             | "replay", _ -> Error "Say 'replay <file>', naming one saved record."
+            | "host", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Host(n, None))
+            | "host", [ players; seed ] ->
+                result {
+                    let! players = Parse.tryPlayerCount players
+                    let! seed = Parse.trySeed seed
+                    return Host(players, Some seed)
+                }
+            | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
+            | "join", [ address ] -> Ok(Join(address, None))
+            | "join", [ address; token ] -> Ok(Join(address, Some token))
+            | "join", _ -> Error "Say 'join <address>', naming the machine that is hosting."
             | "players", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(n, None))
             | "players", [ players; seed ] -> dealing players seed
             | players, [] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(n, None))

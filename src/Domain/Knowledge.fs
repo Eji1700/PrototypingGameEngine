@@ -56,10 +56,8 @@ module Knowledge =
           Unseen = unseen beholder.Bag game }
 
     /// Everything, for when the game is over and there is nothing left to hold back.
-    /// The view still belongs to whoever was to play, so the table reads the same way.
-    let laidBare (game: Game) =
-        let beholder = Game.active game
-
+    /// The view still belongs to somebody, so the table reads the same way as it did.
+    let laidBare (beholder: Player) (game: Game) =
         { Beholder = beholder.Id
           Position = game.Position
           Bags = Game.players game |> List.map (fun player -> player.Id, Open player.Bag)

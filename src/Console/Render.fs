@@ -191,10 +191,12 @@ module Render =
             sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
 
     /// A player and their bag as the reader sees it - their own laid out, everyone
-    /// else's closed. The reader is whoever is to play, so the same arrow marks both.
-    let private playerLine active (playerId, bag) =
+    /// else's closed. The arrow marks whoever is to play, which over a network is not
+    /// always the one reading, so the reader's own seat is named as well.
+    let private playerLine active beholder (playerId, bag) =
         let marker = if playerId = active then "->" else "  "
-        sprintf "  %s %-9s bag: %s" marker (Words.player playerId) (Words.sight bag)
+        let name = Words.player playerId + (if playerId = beholder then " (you)" else "")
+        sprintf "  %s %-15s bag: %s" marker name (Words.sight bag)
 
     let private section (sb: StringBuilder) (title: string) lines =
         sb.AppendLine(title) |> ignore
@@ -265,19 +267,20 @@ module Render =
         @ factionVerdict
         @ players
 
-    /// How a notice reads to whoever is at the screen. That is the player to act, and
-    /// while the game runs they are told only what they could know. Once it is over
-    /// there is nothing left to hold back.
-    let private wording model =
+    /// How a notice reads to the player at this screen: while the game runs they are
+    /// told only what they could know, and once it is over there is nothing left to
+    /// hold back. Around one keyboard the beholder is whoever is to play; over a
+    /// network every console has a beholder of its own and they are all different.
+    let private wording (beholder: Player) model =
         if Model.isOver model then
             Words.notice
         else
-            Words.noticeSeenBy (Game.active (Model.game model)).Id
+            Words.noticeSeenBy beholder.Id
 
     /// The record of the game so far, as the player reading it may know it. The journal
     /// itself keeps the whole of what happened, and `Transcript.write` saves it that way.
-    let history model =
-        let told = wording model
+    let history beholder model =
+        let told = wording beholder model
 
         let entry (entry: Entry) =
             let asked =
@@ -298,24 +301,28 @@ module Render =
         | entries ->
             String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + standing ])
 
-    /// Render the whole game as a block of text. `notes` says whether the writing that
-    /// explains the board comes with it: turned off, what is left is the position and
-    /// nothing else, for a player who already knows how to read it.
-    let model notes model =
+    /// Render the whole game as a block of text for one player to read. `notes` says
+    /// whether the writing that explains the board comes with it: turned off, what is
+    /// left is the position and nothing else, for a player who already knows how to
+    /// read it.
+    ///
+    /// `beholder` is whose screen this is. Around one keyboard that is always the
+    /// player to act; over a network it is one of several, each being drawn a board of
+    /// their own from the same game.
+    let model notes (beholder: Player) model =
         let sb = StringBuilder()
         let game = Model.game model
         let active = Game.active game
 
-        // The screen belongs to whoever is sitting at it, and that is whoever is to
-        // play. Everything below is drawn from what they can see rather than from the
+        // Everything below is drawn from what the beholder can see rather than from the
         // game itself - until the game is over, when the table is turned face up.
         let seen =
             if Model.isOver model then
-                Knowledge.laidBare game
+                Knowledge.laidBare beholder game
             else
-                Knowledge.seenBy active game
+                Knowledge.seenBy beholder game
 
-        let told = wording model
+        let told = wording beholder model
 
         /// Lines that are there to be read once, and only while they are still wanted.
         let noted lines = if notes then lines else []
@@ -328,7 +335,12 @@ module Render =
             match Model.session model with
             | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
             | InPlay { Phase = AwaitingReturn drawn; Turn = turn } ->
-                $"Turn {turn} - {Words.player active.Id} drew a {Words.color drawn} stone and must hand one back"
+                // The heading is the one place the drawn stone is named outright, and
+                // over a network it is read by people who did not draw it.
+                let stone =
+                    if active.Id = beholder.Id then $"a {Words.color drawn} stone" else "a stone"
+
+                $"Turn {turn} - {Words.player active.Id} drew {stone} and must hand one back"
             | InPlay { Turn = turn } -> $"Turn {turn} - {Words.player active.Id} to play"
 
         sb.AppendLine().AppendLine($"=== {heading} ===").AppendLine() |> ignore
@@ -355,7 +367,7 @@ module Render =
                 [ $"  negotiations in a row: {play.Negotiations} of {Game.playerCount game} - the game ends on the last" ]
             | Finished _ -> []
 
-        section sb "PLAYERS" ((seen.Bags |> List.map (playerLine seen.Beholder)) @ run)
+        section sb "PLAYERS" ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
 
         let ruled =
             Game.standings game

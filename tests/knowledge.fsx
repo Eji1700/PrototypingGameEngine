@@ -51,7 +51,7 @@ report
 
 // --- once it is over ---------------------------------------------------------------
 
-let private bare = Knowledge.laidBare dealt
+let private bare = Knowledge.laidBare beholder dealt
 
 report
     "a game laid bare holds no bag back"

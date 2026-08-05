@@ -49,6 +49,11 @@ module Table =
 
     let active table = table.Seats[table.ActiveSeat]
 
+    /// The player with that id, if they are at this table. An id minted for one game
+    /// says nothing about another, so this can answer no.
+    let tryPlayer playerId table =
+        table.Seats |> List.tryFind (fun player -> player.Id = playerId)
+
     /// Pass the active seat to the next player round the table.
     let advance table =
         { table with ActiveSeat = (table.ActiveSeat + 1) % count table }
