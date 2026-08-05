@@ -9,12 +9,14 @@ open TCModel.Domain
 /// reserve is empty, or that a region holds no green stone - so it belongs in the
 /// record just as much as a stone changing hands.
 type Entry =
-    { Ordinal: int
-      Turn: int
-      /// The player to act when the move was asked for.
-      Actor: PlayerId
-      Asked: Msg
-      Told: Notice list }
+    {
+        Ordinal: int
+        Turn: int
+        /// The player to act when the move was asked for.
+        Actor: PlayerId
+        Asked: Msg
+        Told: Notice list
+    }
 
 /// The record of one dealt game, in the order things happened.
 ///
@@ -23,10 +25,12 @@ type Entry =
 /// back and all - and reading it from the top plays that same game again.
 type Journal =
     private
-        { Players: int
-          Seed: uint64
-          /// Newest first.
-          Written: Entry list }
+        {
+            Players: int
+            Seed: uint64
+            /// Newest first.
+            Written: Entry list
+        }
 
 module Journal =
 

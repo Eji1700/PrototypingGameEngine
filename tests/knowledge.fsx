@@ -15,8 +15,12 @@ let private dealt = Setup.deal 3 7UL |> Result.toOption |> Option.get
 
 let private beholder = Game.active dealt
 let private view = Knowledge.seenBy beholder dealt
-let private others = Game.players dealt |> List.filter (fun player -> player.Id <> beholder.Id)
-let private bag playerId = view.Bags |> List.filter (fst >> (=) playerId) |> List.map snd
+
+let private others =
+    Game.players dealt |> List.filter (fun player -> player.Id <> beholder.Id)
+
+let private bag playerId =
+    view.Bags |> List.filter (fst >> (=) playerId) |> List.map snd
 
 // --- what is kept back -----------------------------------------------------------
 
@@ -33,7 +37,10 @@ report "the reserve shows its size and nothing else" (Closed(Pile.total dealt.Re
 
 report
     "what is out of sight is the reserve and the other bags together"
-    (Pile.toCounts (others |> List.fold (fun pile player -> Pile.merge player.Bag pile) dealt.Reserve))
+    (Pile.toCounts (
+        others
+        |> List.fold (fun pile player -> Pile.merge player.Bag pile) dealt.Reserve
+    ))
     (Pile.toCounts view.Unseen)
 
 report
@@ -47,16 +54,16 @@ report
     (Game.players dealt
      |> List.map (fun player ->
          let seen = Knowledge.seenBy player dealt
-         Pile.total (Position.total seen.Position) + Pile.total player.Bag + Pile.total seen.Unseen))
+
+         Pile.total (Position.total seen.Position)
+         + Pile.total player.Bag
+         + Pile.total seen.Unseen))
 
 // --- once it is over ---------------------------------------------------------------
 
 let private bare = Knowledge.laidBare beholder dealt
 
-report
-    "a game laid bare holds no bag back"
-    (Game.players dealt |> List.map (fun player -> player.Id, Open player.Bag))
-    bare.Bags
+report "a game laid bare holds no bag back" (Game.players dealt |> List.map (fun player -> player.Id, Open player.Bag)) bare.Bags
 
 report "a game laid bare opens the reserve too" (Open dealt.Reserve) bare.Reserve
 

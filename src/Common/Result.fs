@@ -14,4 +14,5 @@ module Validation =
     let result = ResultBuilder()
 
     /// Nothing to say when the condition holds; otherwise the objection to it.
-    let require condition objection = if condition then Ok() else Error objection
+    let require condition objection =
+        if condition then Ok() else Error objection

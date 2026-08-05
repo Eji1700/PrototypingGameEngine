@@ -36,21 +36,25 @@ module Update =
     let private endTurn negotiated (play: Play) =
         let rec handOver play events =
             if play.Negotiations >= Game.playerCount play.Game then
-                let ending =
-                    if Game.allBagsEmpty play.Game then AllPlayedOut else AllNegotiated
+                let ending = if Game.allBagsEmpty play.Game then AllPlayedOut else AllNegotiated
 
                 finish ending play, events @ [ GameEnded ending ]
             else
                 let play =
                     { play with
-                        Game = { play.Game with Table = Table.advance play.Game.Table }
+                        Game =
+                            { play.Game with
+                                Table = Table.advance play.Game.Table }
                         Phase = AwaitingAction
                         Turn = play.Turn + 1 }
 
                 let player = Game.active play.Game
 
                 if Player.isEmptyHanded player then
-                    handOver { play with Negotiations = play.Negotiations + 1 } (events @ [ TurnSkipped player.Id ])
+                    handOver
+                        { play with
+                            Negotiations = play.Negotiations + 1 }
+                        (events @ [ TurnSkipped player.Id ])
                 else
                     InPlay play, events
 
@@ -69,13 +73,20 @@ module Update =
     let private carry move (play: Play) =
         match move with
         | Recruit(color, into) -> Actions.recruit color into play.Game |> Result.map (thenEndTurn false play)
-        | Battle(color, target, driven) -> Actions.battle color target driven play.Game |> Result.map (thenEndTurn false play)
+        | Battle(color, target, driven) ->
+            Actions.battle color target driven play.Game
+            |> Result.map (thenEndTurn false play)
         | March(color, from, into, count) ->
-            Actions.march color from into count play.Game |> Result.map (thenEndTurn false play)
+            Actions.march color from into count play.Game
+            |> Result.map (thenEndTurn false play)
         | Negotiate ->
             Actions.negotiate play.Game
             |> Result.map (fun (game, drawn, event) ->
-                InPlay { play with Game = game; Phase = AwaitingReturn drawn }, [ event ])
+                InPlay
+                    { play with
+                        Game = game
+                        Phase = AwaitingReturn drawn },
+                [ event ])
         | Settle color -> Actions.settle color play.Game |> Result.map (thenEndTurn true play)
         | Resign -> Ok(finish Abandoned play, [ GameEnded Abandoned ])
 
@@ -132,7 +143,8 @@ module Update =
 
     /// Record something the shell could not make sense of. It never became a move, so
     /// it stays out of the record and merely goes up on screen.
-    let note text model = model |> Model.record (Misunderstood text)
+    let note text model =
+        model |> Model.record (Misunderstood text)
 
     /// Deal the first game of a session.
     let start players seed = deal players seed

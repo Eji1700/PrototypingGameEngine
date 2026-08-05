@@ -10,15 +10,19 @@ module Cascade =
 
     [<NoComparison; NoEquality>]
     type Measure<'Label, 'T> =
-        { Label: 'Label
-          /// The higher the score, the better. Negate a count to make fewest win.
-          Score: 'T -> int
-          /// The standing to report, which for a negated score is the plain count.
-          Shown: 'T -> int }
+        {
+            Label: 'Label
+            /// The higher the score, the better. Negate a count to make fewest win.
+            Score: 'T -> int
+            /// The standing to report, which for a negated score is the plain count.
+            Shown: 'T -> int
+        }
 
     /// A measure where the reported standing is the score itself.
     let by label score =
-        { Label = label; Score = score; Shown = score }
+        { Label = label
+          Score = score
+          Shown = score }
 
     /// A measure where the fewest wins, reported as the plain count.
     let byFewest label count =

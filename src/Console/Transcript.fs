@@ -60,7 +60,8 @@ module Transcript =
             |> List.ofArray
 
         let words (line: string) =
-            line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofArray
+            line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+            |> List.ofArray
 
         let move outcome line =
             outcome

@@ -131,7 +131,9 @@ module Rich =
             | _, RuledBy color -> Tint.color palette color
             | _, (Contested _ | Unclaimed) -> Color.Grey37
 
-        let panel = Panel(markup (Tint.markup palette (Render.standingIn inside game region)))
+        let panel =
+            Panel(markup (Tint.markup palette (Render.standingIn inside game region)))
+
         panel.Header <- PanelHeader $"[bold silver] {esc (Render.regionTitle titleRoom region)} [/]"
         panel.Border <- BoxBorder.Rounded
         panel.BorderStyle <- Style(border)
@@ -163,8 +165,7 @@ module Rich =
 
         cells |> List.iter (fun _ -> column across)
 
-        let panels =
-            cells |> List.map (fst >> Board.region >> regionPanel palette game)
+        let panels = cells |> List.map (fst >> Board.region >> regionPanel palette game)
 
         grid.AddRow(Array.ofList (lead @ panels)) |> ignore
         grid :> IRenderable
@@ -212,11 +213,7 @@ module Rich =
         table.AddColumn(TableColumn "") |> ignore
 
         for playerId, bag in seen.Bags do
-            let marker =
-                if playerId = active then
-                    Tint.wrap (Tint.yours palette) "->"
-                else
-                    " "
+            let marker = if playerId = active then Tint.wrap (Tint.yours palette) "->" else " "
 
             let name =
                 if playerId = seen.Beholder then
@@ -231,9 +228,7 @@ module Rich =
             | InPlay play ->
                 let seats = Game.playerCount (Model.game model)
 
-                [ markup (
-                      Tint.wrap (Tint.hidden palette) (esc $"negotiations in a row: {play.Negotiations} of {seats}")
-                  ) ]
+                [ markup (Tint.wrap (Tint.hidden palette) (esc $"negotiations in a row: {play.Negotiations} of {seats}")) ]
             | Finished _ -> []
 
         rows ([ table :> IRenderable ] @ run)
@@ -268,7 +263,8 @@ module Rich =
         breakdown.Width <- 40
 
         for color, n in Pile.toCounts seen.Unseen do
-            breakdown.AddItem(Words.color color, float n, Tint.color palette color) |> ignore
+            breakdown.AddItem(Words.color color, float n, Tint.color palette color)
+            |> ignore
 
         rows [ table :> IRenderable; markup ""; breakdown :> IRenderable ]
 
@@ -310,10 +306,7 @@ module Rich =
         let active = Game.active game
 
         let seen =
-            if Model.isOver model then
-                Knowledge.laidBare beholder game
-            else
-                Knowledge.seenBy beholder game
+            if Model.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
 
         let told = Render.wording beholder model
 
@@ -351,10 +344,7 @@ module Rich =
                 []
 
         let result =
-            if Model.isOver model then
-                [ wide "Result" (plainly palette (Render.result game)) ]
-            else
-                []
+            if Model.isOver model then [ wide "Result" (plainly palette (Render.result game)) ] else []
 
         let commands =
             if notes then
@@ -387,8 +377,7 @@ module Rich =
         let told = Render.wording beholder model
 
         match Journal.entries model.Journal with
-        | [] ->
-            Tint.renderAt width (panel "The record" (markup (Tint.wrap (Tint.hidden palette) Render.nothingYet)))
+        | [] -> Tint.renderAt width (panel "The record" (markup (Tint.wrap (Tint.hidden palette) Render.nothingYet)))
         | entries ->
 
         let table = Table()
@@ -427,9 +416,7 @@ module Rich =
 
     /// The working behind who rules a region.
     let ruling palette regionId model =
-        Tint.renderAt
-            width
-            (wide $"Region {Words.number regionId}" (plainly palette [ Render.explainRule regionId model ]))
+        Tint.renderAt width (wide $"Region {Words.number regionId}" (plainly palette [ Render.explainRule regionId model ]))
 
     /// The rules and the commands, at length. The words are `Render`'s - they say what the
     /// game is, which is not a thing for a view to have an opinion about - laid out here.
@@ -452,22 +439,15 @@ module Rich =
                     Words.player seat.Player
 
             let holding =
-                if seat.Expected then
-                    Tint.wrap (Tint.hidden palette) "still to arrive"
-                elif seat.Away then
-                    Tint.wrap (Tint.hidden palette) "here, but their console has dropped"
-                else
-                    Tint.wrap (Tint.yours palette) "here"
+                if seat.Expected then Tint.wrap (Tint.hidden palette) "still to arrive"
+                elif seat.Away then Tint.wrap (Tint.hidden palette) "here, but their console has dropped"
+                else Tint.wrap (Tint.yours palette) "here"
 
             table.AddRow(markup who, markup holding) |> ignore
 
         let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
 
         let footer =
-            Tint.wrap
-                (Tint.hidden palette)
-                (esc $"{expected} more to come. The game begins once every seat is taken.")
+            Tint.wrap (Tint.hidden palette) (esc $"{expected} more to come. The game begins once every seat is taken.")
 
-        Tint.renderAt
-            width
-            (panel "Waiting for the table to fill" (rows [ table :> IRenderable; markup ""; markup footer ]))
+        Tint.renderAt width (panel "Waiting for the table to fill" (rows [ table :> IRenderable; markup ""; markup footer ]))

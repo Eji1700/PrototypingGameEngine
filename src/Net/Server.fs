@@ -50,8 +50,7 @@ type TableHub(held: Held) =
         |> Task.WhenAll
 
     member this.Join(token: string, view: string, palette: string) =
-        let resuming =
-            if String.IsNullOrWhiteSpace token then None else Some token
+        let resuming = if String.IsNullOrWhiteSpace token then None else Some token
 
         // A view a table has never heard of is no reason to turn a player away; they can
         // ask for another once they are sitting down. Colours the table does not know are

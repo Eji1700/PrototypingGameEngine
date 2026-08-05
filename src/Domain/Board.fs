@@ -85,7 +85,8 @@ module Board =
 
     let ids = regions |> List.map (fun region -> region.Id)
 
-    let private byId = regions |> List.map (fun region -> region.Id, region) |> Map.ofList
+    let private byId =
+        regions |> List.map (fun region -> region.Id, region) |> Map.ofList
 
     /// Total, because a RegionId can only have come from this board.
     let region regionId = byId |> Map.find regionId
@@ -168,11 +169,7 @@ module Board =
     /// what `problems` checks the tables against each other for. The Flag and the Axe
     /// lie nowhere, being no part of the map.
     let private places =
-        [ 2, [ 2; 1 ]
-          1, [ 3; 4 ]
-          0, [ 5; 6; 7 ]
-          1, [ 8; 9; 10 ]
-          2, [ 11; 12 ] ]
+        [ 2, [ 2; 1 ]; 1, [ 3; 4 ]; 0, [ 5; 6; 7 ]; 1, [ 8; 9; 10 ]; 2, [ 11; 12 ] ]
 
     let private placed =
         places
@@ -191,14 +188,12 @@ module Board =
             [ for row in placed do
                   for one, here in row do
                       for other, there in row do
-                          if one <> other && abs (here - there) = 2 then
-                              yield asPair one other
+                          if one <> other && abs (here - there) = 2 then yield asPair one other
 
               for above, below in List.pairwise placed do
                   for one, here in above do
                       for other, there in below do
-                          if abs (here - there) = 1 then
-                              yield asPair one other ]
+                          if abs (here - there) = 1 then yield asPair one other ]
 
     let private namedBorders =
         Set.ofList
@@ -215,7 +210,9 @@ module Board =
             | regionId :: rest when Set.contains regionId seen -> walk seen rest
             | regionId :: rest ->
                 let next =
-                    neighbours regionId |> Set.filter (fun id -> not (Set.contains id blocked)) |> Set.toList
+                    neighbours regionId
+                    |> Set.filter (fun id -> not (Set.contains id blocked))
+                    |> Set.toList
 
                 walk (Set.add regionId seen) (next @ rest)
 
@@ -226,8 +223,7 @@ module Board =
     /// start rather than dealing onto a broken map.
     let problems =
         [ for from, borders in declaredBorders do
-              if Option.isNone (tryId from) then
-                  yield $"Region {from} is not on the board."
+              if Option.isNone (tryId from) then yield $"Region {from} is not on the board."
 
               for other in borders do
                   if Option.isNone (tryId other) then
@@ -247,7 +243,10 @@ module Board =
                   yield $"The map lays out region {n}, which is not on the board."
 
           for region in regions do
-              let times = List.concat placed |> List.filter (fst >> (=) (RegionId.value region.Id)) |> List.length
+              let times =
+                  List.concat placed
+                  |> List.filter (fst >> (=) (RegionId.value region.Id))
+                  |> List.length
 
               match RegionKind.isIsolated region.Kind, times with
               | true, 0

@@ -1,0 +1,47 @@
+root = true
+
+# The working tree is LF throughout and .gitattributes keeps it that way, so the
+# formatter is told the same thing. Left to guess, it writes the platform's own endings
+# and every file on a Windows machine comes out as one enormous diff.
+[*]
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{fs,fsi,fsx}]
+indent_size = 4
+
+# Wider than the default 120. The comments here are prose and run to the right-hand
+# margin, and a few lines - a long refusal, a sprintf laying out a column - read better
+# whole than folded.
+max_line_length = 130
+
+# A one-line `if a then b` or `if a then b else c` is one thought and stays on one line.
+# Left alone, the first is always folded and the second folded past 60 characters, which
+# turns a guard clause into a paragraph.
+fsharp_max_if_then_short_width = 80
+fsharp_max_if_then_else_short_width = 100
+
+# The one that matters most here. This codebase answers the awkward cases first and
+# then carries on at the same indentation:
+#
+#     match seatAt console lobby with
+#     | None -> lobby, just console (TurnedAway "You are not sitting at this table.")
+#     | Some seat ->
+#
+#     let told text = ...
+#
+# Without this, every such body is pushed a level right, and the files that lean on it
+# hardest - `Lobby`, `Client`, `Rich` - are exactly the ones that were flattened this
+# way on purpose. "Experimental" here means the setting, not the F# it produces: the
+# undented form has always been legal.
+fsharp_experimental_keep_indent_in_branch = true
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+indent_size = 2
+trim_trailing_whitespace = false

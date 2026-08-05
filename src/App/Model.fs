@@ -8,13 +8,15 @@ open TCModel.Domain
 /// so there is one place a state can come from and no way for a stored "current game"
 /// to drift from the history behind it.
 type Model =
-    { Timeline: Timeline
-      /// The durable record of play, saved when the game is done.
-      Journal: Journal
-      /// Newest first: the last few lines of chatter for the screen. This is not the
-      /// record - it also carries input the shell could not make sense of, which never
-      /// became a move at all.
-      Log: Notice list }
+    {
+        Timeline: Timeline
+        /// The durable record of play, saved when the game is done.
+        Journal: Journal
+        /// Newest first: the last few lines of chatter for the screen. This is not the
+        /// record - it also carries input the shell could not make sense of, which never
+        /// became a move at all.
+        Log: Notice list
+    }
 
 module Model =
 

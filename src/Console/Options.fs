@@ -65,7 +65,10 @@ module Options =
     let choose palette (text: string) : Result<Step, string> =
         match Parse.words text |> List.map (fun word -> word.ToLowerInvariant()) with
         | [] -> Ok Same
-        | [ "done" ] | [ "back" ] | [ "menu" ] | [ "q" ] -> Ok Done
+        | [ "done" ]
+        | [ "back" ]
+        | [ "menu" ]
+        | [ "q" ] -> Ok Done
         | [ "reset" ] -> Ok(Changed Palette.standard)
         | [ slot; colour ] -> Palette.set slot colour palette |> Result.map Changed
         | word :: _ -> Error $"I don't know how to '{word}'. Say '<what> <colour>', or 'done'."

@@ -29,17 +29,17 @@ let report name expected actual =
 let finish () =
     printfn ""
 
-    if failures = 0 then
-        printfn "all checks passed"
-    else
-        printfn "%d check(s) failed" failures
+    if failures = 0 then printfn "all checks passed" else printfn "%d check(s) failed" failures
 
     exit failures
 
 /// A game with the given regions stocked and the given bags held; everything else
 /// is emptied. Regions are named by number.
 let gameOf stocked bags =
-    let game = Setup.deal (max Table.MinPlayers (List.length bags)) 1UL |> Result.toOption |> Option.get
+    let game =
+        Setup.deal (max Table.MinPlayers (List.length bags)) 1UL
+        |> Result.toOption
+        |> Option.get
 
     let position =
         Board.regions

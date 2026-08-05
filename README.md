@@ -60,6 +60,8 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
 | [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
 | [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
+| [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
+| [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
 | [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
@@ -406,12 +408,13 @@ type View =
 | `rich` | panels, tables and charts in colour, via [Spectre.Console](https://spectreconsole.net) |
 
 ```powershell
-dotnet run -- --view rich 3 42        # deal in colour
+dotnet run -- play 3 --seed 42 --view rich
 dotnet run -- join greg-pc --view rich
 ```
 
-`--view <name>` may sit anywhere in the arguments and is taken out before the rest
-are read, so it never disturbs what is read by position. From the menu, `view rich`;
+`--view <name>` goes with every command, because every command ends in somebody
+reading a board - and how a board is drawn says nothing about what to deal, so it is
+an option rather than an argument and can sit anywhere. From the menu, `view rich`;
 from the prompt mid-game, the same. A new view is added to `View.all` and nowhere
 else - the menu, the command line and the prompt all read that one list.
 
@@ -575,11 +578,16 @@ so the player can come back to their own stones rather than the seat being hande
 to a stranger:
 
 ```powershell
-dotnet run -- join greg-pc 3c3f9af9e8bc4bb88807a61de6e389af
+dotnet run -- join greg-pc --token 3c3f9af9e8bc4bb88807a61de6e389af
 ```
 
 The client prints that line when it sits down, and re-joins with the token by
 itself when SignalR reconnects. A token that claimed no seat claims none now.
+
+That line is not written by hand. It comes from `Launch.write`, which builds it from the
+same declaration the command line is read by - so what a player is told to type is
+something the program is certain to accept. See [Two halves of a command
+line](#two-halves-of-a-command-line).
 
 **Where the state is.** `Lobby` is a value like everything else, and every rule
 above is decided by folding a typed line into it - `Lobby.said` returns the next
@@ -675,20 +683,52 @@ ready for the dead region to obstruct movement).
 ## Running
 
 ```powershell
-dotnet run                # the start menu, which asks how many are playing
-dotnet run -- 3           # 3 players, random seed - straight to the board
-dotnet run -- 3 42        # 3 players, reproducible game from seed 42
+dotnet run                     # the start menu, which asks how many are playing
+dotnet run -- play 3           # 3 players, random seed - straight to the board
+dotnet run -- play 3 --seed 42 # the same game again, from a seed
+dotnet run -- play 2 --view rich --colour blue=teal
 
-dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log   # play a saved record again
+dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
 
-dotnet run -- host 3      # open a table for three at their own machines
-dotnet run -- join greg-pc            # sit down at one someone else opened
-dotnet run -- join greg-pc <token>    # come back to the seat you were in
+dotnet run -- host 3                        # open a table at their own machines
+dotnet run -- join greg-pc                  # sit down at one someone else opened
+dotnet run -- join greg-pc --token <token>  # come back to the seat you were in
+
+dotnet run -- --help           # every command; --help works on each of them too
 ```
 
-Arguments say what to deal and go straight to the board, so a game can still be
-started from a script or a shortcut. With none, the menu
-([Menu.fs](src/Console/Menu.fs)) asks:
+### Two halves of a command line
+
+The arguments go through [Spectre.Console.Cli](https://spectreconsole.net/cli/), which
+owns the command surface: the four commands, the options that go with each, `--help`,
+and the checking. A count the table would refuse, a view nobody has, a colour nobody
+has - each is answered at the door, in the same words the game would have used, before
+anything is dealt:
+
+```
+> dotnet run -- play 9
+Error: 9 players? The game takes 2 to 5.
+```
+
+[Argu](https://fsprojects.github.io/Argu/) owns the other half: a command line as a
+*value*, in [Launch.fs](src/Console/Launch.fs). That exists because the program has to
+**write** one. A player whose console drops off a networked table is shown the line that
+brings them back to their seat, and that line is a command line the program will later
+be asked to read. Written by hand it is a second spelling of the command surface, free
+to drift from what the shell accepts; written from Argu's own declaration, it is
+generated by the same thing that parses it.
+
+The two are pinned together by [cli.fsx](tests/cli.fsx): every line `Launch` can write
+is fed to the real `Shell.describe` - not a copy of it - and has to come out the far end
+as the launch that went in. Rename an option on one side and that check fails.
+
+It is the same bargain the record keeps, one level out. A move is written in the words
+the prompt takes, so a record always replays; a session is written in the words the
+shell takes, so an instruction the program prints is always one it will accept.
+
+Everything that reads a command line stops at a `Launch` and hands it on, so there is
+one place that knows what opening a game involves rather than a road through `main` per
+entry point. With no arguments at all, the menu ([Menu.fs](src/Console/Menu.fs)) asks:
 
 ```
 === TCModel ===
@@ -755,9 +795,65 @@ dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot 
 dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
 dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
                                 #   and that changing the colours changes nothing else
+dotnet fsi tests/cli.fsx        # the command surface, and that both halves of it agree
+dotnet fsi tests/properties.fsx # the invariants, over games the machine thinks up itself
 ```
 
 Each script exits non-zero on failure. They load the source directly, so they run
 without building the console app. `history.fsx` reaches up through the App layer to
 the transcript reader and writer, which is what lets it check a whole game out to
 text and back again.
+
+### Examples, and invariants
+
+The first seven scripts play games somebody thought of.
+[properties.fsx](tests/properties.fsx) is the other kind: it uses
+[FsCheck](https://fscheck.github.io/FsCheck/) to deal from an arbitrary seed and throw
+an arbitrary string of moves at the rules - legal, illegal, out of turn, mid-negotiation,
+after the game is over - and asserts what has to be true of whatever comes out:
+
+- every colour still has all 21 of its stones
+- a move the rules refuse leaves the position untouched
+- whoever rules a region is holding as many stones there as anyone
+- a player sees their own bag, the size of everyone else's, and nothing more
+- **a game written to a file and read back is the same game, state for state**
+- taking the last move back and making it again leaves the game where it stood
+
+The generated moves are deliberately *not* filtered for legality; roughly a quarter of
+them carry, which is about what a person at a prompt manages. When one fails, FsCheck
+cuts moves out until it has the shortest game that still fails.
+
+That last property is the one to keep. It is the promise the whole design rests on, and
+before this it was checked on one nine-move game.
+
+The suite earned its keep on the first run. It shrank a failure to two moves - `recruit`,
+`undo` - and the finding was that the check itself was wrong, not the game: when `undo`
+is refused at the deal, a `redo` left over from an earlier undo carries the game
+*forward*. That is `redo` keeping its own promise. The property now says which case it
+means rather than quietly covering both.
+
+## Tooling
+
+```powershell
+dotnet tool restore              # once
+dotnet fantomas src tests        # format
+dotnet fantomas --check src tests # or just say what is unformatted
+```
+
+[Fantomas](https://fsprojects.github.io/fantomas/) is pinned in
+[.config/dotnet-tools.json](.config/dotnet-tools.json), so everyone runs the same
+formatter, and it is configured in [.editorconfig](.editorconfig). Three settings there
+are not defaults and are worth knowing about:
+
+- `fsharp_experimental_keep_indent_in_branch` - this codebase answers the awkward cases
+  first and then carries on at the same indentation. Without it every such body is
+  pushed a level right, and the files that lean on it hardest are the ones flattened
+  that way on purpose.
+- `fsharp_max_if_then_short_width` / `..._if_then_else_short_width` - a one-line `if` is
+  one thought and stays on one line.
+- `max_line_length = 130` - the comments here are prose and run to the margin.
+
+[.github/workflows/build.yml](.github/workflows/build.yml) runs the build with
+`-warnaserror`, the format check, every test script, and one more thing: it replays the
+oldest committed record. That file is the oldest thing in the repository that still has
+to work, so the build says so out loud.

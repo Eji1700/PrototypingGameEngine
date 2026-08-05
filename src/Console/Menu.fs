@@ -35,7 +35,9 @@ module Menu =
     /// The seatings on offer, taken from the table rather than written out, so the menu
     /// cannot come to offer a number the table would refuse.
     let private seatings =
-        [ Table.MinPlayers .. Table.MaxPlayers ] |> List.map string |> String.concat "  "
+        [ Table.MinPlayers .. Table.MaxPlayers ]
+        |> List.map string
+        |> String.concat "  "
 
     let private choice typed does = sprintf "    %-22s %s" typed does
 

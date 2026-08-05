@@ -34,7 +34,8 @@ let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
 let private opened () = Lobby.opened dealt
 
 /// One console at the table, in the next empty seat.
-let private sits console token lobby = Lobby.join console token None (View.plain Palette.standard) lobby
+let private sits console token lobby =
+    Lobby.join console token None (View.plain Palette.standard) lobby
 
 /// Both seats taken, which is the only state a game is played in.
 let private full () =
@@ -57,7 +58,8 @@ let private heard console posts =
 
 let private mentions (needle: string) (text: string) = text.Contains needle
 
-let private movesMade lobby = Timeline.movesMade (Lobby.model lobby).Timeline
+let private movesMade lobby =
+    Timeline.movesMade (Lobby.model lobby).Timeline
 
 // --- taking a seat ------------------------------------------------------------------
 
@@ -93,21 +95,20 @@ report
 // --- coming back --------------------------------------------------------------------
 
 let dropped, _ = full () |> Lobby.left "one"
-let _, resumed = dropped |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") (View.plain Palette.standard)
+
+let _, resumed =
+    dropped
+    |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") (View.plain Palette.standard)
 
 report "a token brings a console back to the seat it left" true (heard "one-again" resumed |> mentions "seated at 1")
 
-report
-    "and back to the same stones"
-    true
-    (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Gx3 (8)")
+report "and back to the same stones" true (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Gx3 (8)")
 
-let _, stranger = full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token") (View.plain Palette.standard)
+let _, stranger =
+    full ()
+    |> Lobby.join "four" "tok-fresh" (Some "not-a-token") (View.plain Palette.standard)
 
-report
-    "a token that claimed no seat claims none now"
-    true
-    (heard "four" stranger |> mentions "That is not a seat at this table.")
+report "a token that claimed no seat claims none now" true (heard "four" stranger |> mentions "That is not a seat at this table.")
 
 // --- who may act ----------------------------------------------------------------------
 
@@ -167,7 +168,9 @@ report
 // boards that look nothing alike from the one position.
 
 let sittingPlain, _ = opened () |> sits "one" "tok-one"
-let mixed, mixedPosts = sittingPlain |> Lobby.join "two" "tok-two" None (View.rich Palette.standard)
+
+let mixed, mixedPosts =
+    sittingPlain |> Lobby.join "two" "tok-two" None (View.rich Palette.standard)
 
 /// Panels are drawn with box characters; nothing in the plain board has one.
 let private panelled = mentions "╭"

@@ -7,9 +7,7 @@ namespace TCModel.Common
 /// a value and folding a message over it stay a pure function - so a seed and a list
 /// of messages reproduce a game exactly, and a restart can draw its next seed from
 /// the generator already in play.
-type Rng =
-    private
-    | Rng of state: uint64
+type Rng = private Rng of state: uint64
 
 module Rng =
 

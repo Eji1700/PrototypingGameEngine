@@ -28,7 +28,8 @@ let private refuses name expected outcome =
     report name (Error expected) (outcome |> Result.mapError id |> Result.map (fun _ -> ()))
 
 let private stonesIn regionId outcome =
-    outcome |> Result.map (fun (game, _) -> Game.stones regionId game |> Pile.toCounts)
+    outcome
+    |> Result.map (fun (game, _) -> Game.stones regionId game |> Pile.toCounts)
 
 let private bagOf outcome =
     outcome |> Result.map (fun (game, _) -> (Game.active game).Bag |> Pile.toCounts)
@@ -38,14 +39,13 @@ let private bagOf outcome =
 report
     "recruit puts the stone on the map"
     (Ok [ Red, 1 ])
-    (Actions.recruit Red emberfall (game []) |> stonesIn emberfall |> Result.map (List.filter (fst >> (=) Red)))
+    (Actions.recruit Red emberfall (game [])
+     |> stonesIn emberfall
+     |> Result.map (List.filter (fst >> (=) Red)))
 
 refuses "recruit cannot enter the dead region" (DeadGround waste) (Actions.recruit Red waste (game []))
 
-report
-    "recruit may enter the Flag"
-    (Ok [ Red, 1 ])
-    (Actions.recruit Red flag (game []) |> stonesIn flag)
+report "recruit may enter the Flag" (Ok [ Red, 1 ]) (Actions.recruit Red flag (game []) |> stonesIn flag)
 
 // --- battle -----------------------------------------------------------------
 
@@ -55,7 +55,8 @@ let blueVsGreen = game [ Blue, 1; Green, 1 ]
 report
     "an unnamed battle drives out all it may"
     (Ok [ Blue, 1 ])
-    (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen |> stonesIn crossroads)
+    (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen
+     |> stonesIn crossroads)
 
 report
     "the battling stone goes to the Axe"
@@ -78,10 +79,7 @@ refuses
     (NothingToDriveOut(crossroads, Blue))
     (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 2 ]))
 
-refuses
-    "a battle must drive out something"
-    BattleMustDriveOutSomething
-    (Actions.battle Blue crossroads (These []) blueVsGreen)
+refuses "a battle must drive out something" BattleMustDriveOutSomething (Actions.battle Blue crossroads (These []) blueVsGreen)
 
 refuses
     "a battle cannot drive out its own colour"
@@ -101,7 +99,8 @@ refuses
 report
     "one losing colour is no choice at all"
     (Ok [ Blue, 1; Green, 1 ])
-    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 1; Green, 2 ]) |> stonesIn crossroads)
+    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 1; Green, 2 ])
+     |> stonesIn crossroads)
 
 refuses "a battle cannot target the Axe" (StandsApart axe) (Actions.battle Blue axe AsManyAsAllowed blueVsGreen)
 
@@ -109,10 +108,7 @@ refuses "a battle cannot target the Axe" (StandsApart axe) (Actions.battle Blue 
 
 let twoBlue = game [ Blue, 2 ]
 
-report
-    "marching empties the source"
-    (Ok [])
-    (Actions.march Blue crossroads emberfall 2 twoBlue |> stonesIn crossroads)
+report "marching empties the source" (Ok []) (Actions.march Blue crossroads emberfall 2 twoBlue |> stonesIn crossroads)
 
 report
     "marching fills the destination"
@@ -120,15 +116,9 @@ report
     (Actions.march Blue crossroads emberfall 2 (gameOf [ 8, [ Blue, 2 ]; 5, [ Red, 2 ] ] [ [ (Blue, 1) ]; [ (Red, 1) ] ])
      |> stonesIn emberfall)
 
-report
-    "the marching stone goes to the Flag"
-    (Ok [ Blue, 1 ])
-    (Actions.march Blue crossroads emberfall 1 twoBlue |> stonesIn flag)
+report "the marching stone goes to the Flag" (Ok [ Blue, 1 ]) (Actions.march Blue crossroads emberfall 1 twoBlue |> stonesIn flag)
 
-refuses
-    "nothing of that colour to march"
-    (NothingToMarch(crossroads, Red))
-    (Actions.march Red crossroads emberfall 1 twoBlue)
+refuses "nothing of that colour to march" (NothingToMarch(crossroads, Red)) (Actions.march Red crossroads emberfall 1 twoBlue)
 
 refuses
     "not enough of that colour to march"
@@ -137,10 +127,7 @@ refuses
 
 refuses "a march moves at least one stone" MarchNeedsAStone (Actions.march Blue crossroads emberfall 0 twoBlue)
 
-refuses
-    "a march must cross a border"
-    (NotAdjacent(crossroads, nightfen))
-    (Actions.march Blue crossroads nightfen 1 twoBlue)
+refuses "a march must cross a border" (NotAdjacent(crossroads, nightfen)) (Actions.march Blue crossroads nightfen 1 twoBlue)
 
 refuses "a march cannot enter the dead region" (DeadGround waste) (Actions.march Blue crossroads waste 1 twoBlue)
 
@@ -152,17 +139,16 @@ refuses
 // --- negotiate --------------------------------------------------------------
 
 let private drawable =
-    { game [] with Reserve = Pile.ofCounts [ (Red, 1) ] }
+    { game [] with
+        Reserve = Pile.ofCounts [ (Red, 1) ] }
 
 report
     "negotiating draws from the reserve into the bag"
     (Ok [ Red, 2; Blue, 1; Green, 1 ])
-    (Actions.negotiate drawable |> Result.map (fun (game, _, _) -> (Game.active game).Bag |> Pile.toCounts))
+    (Actions.negotiate drawable
+     |> Result.map (fun (game, _, _) -> (Game.active game).Bag |> Pile.toCounts))
 
-report
-    "settling hands a stone back"
-    (Ok [ Blue, 1; Green, 1 ])
-    (Actions.settle Red (game []) |> bagOf)
+report "settling hands a stone back" (Ok [ Blue, 1; Green, 1 ]) (Actions.settle Red (game []) |> bagOf)
 
 report
     "a negotiation leaves the bag the size it began"
@@ -196,15 +182,26 @@ conserved "recruiting conserves the stones" (Actions.recruit (held dealt) emberf
 
 conserved
     "marching conserves the stones"
-    (Actions.march Blue crossroads emberfall 2 { dealt with Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 2 ]) dealt.Position })
+    (Actions.march
+        Blue
+        crossroads
+        emberfall
+        2
+        { dealt with
+            Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 2 ]) dealt.Position })
 
 conserved
     "battling conserves the stones"
-    (Actions.battle Blue crossroads AsManyAsAllowed
-        { dealt with Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 1; Green, 1 ]) dealt.Position })
+    (Actions.battle
+        Blue
+        crossroads
+        AsManyAsAllowed
+        { dealt with
+            Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 1; Green, 1 ]) dealt.Position })
 
 conserved
     "a whole negotiation conserves the stones"
-    (Actions.negotiate dealt |> Result.bind (fun (game, drawn, _) -> Actions.settle drawn game))
+    (Actions.negotiate dealt
+     |> Result.bind (fun (game, drawn, _) -> Actions.settle drawn game))
 
 finish ()

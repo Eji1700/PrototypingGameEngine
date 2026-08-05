@@ -10,7 +10,8 @@ let private clockSeed () = uint64 DateTime.UtcNow.Ticks
 
 /// Names the file one game's record will be kept in. Taken once when the game is dealt,
 /// so every save of that game writes over the same file.
-let private stampNow () = DateTime.Now.ToString "yyyy-MM-dd-HHmmss"
+let private stampNow () =
+    DateTime.Now.ToString "yyyy-MM-dd-HHmmss"
 
 let private keep stamp model =
     let path = Transcript.save stamp model.Journal
@@ -81,8 +82,7 @@ let rec private loop stamp (reading: Reading) model =
         | Ok(Parse.Send msg) ->
             let next = Update.update msg model
             // A game that has just ended writes itself down without being asked.
-            if Model.isOver next && not (Model.isOver model) then
-                keepQuietly stamp next
+            if Model.isOver next && not (Model.isOver model) then keepQuietly stamp next
 
             loop stamp reading next
         | Error problem -> loop stamp reading (Update.note problem model)
@@ -90,14 +90,9 @@ let rec private loop stamp (reading: Reading) model =
 /// Put the game down. One still in play is resigned first, so the record says how it
 /// ended rather than simply stopping.
 and private leave stamp model =
-    let model =
-        if Model.isOver model then
-            model
-        else
-            Update.update (Make Resign) model
+    let model = if Model.isOver model then model else Update.update (Make Resign) model
 
-    if not (Journal.isEmpty model.Journal) then
-        keep stamp model
+    if not (Journal.isEmpty model.Journal) then keep stamp model
 
     model
 
@@ -108,25 +103,6 @@ let private dealt players seed =
     | Ok model -> Ok model
     | Error(TooFewPlayers n) -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
     | Error(TooManyPlayers n) -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
-
-/// Command line: [players] [seed], either of which may be left off.
-let private dealFrom (argv: string array) =
-    let usage = $"Usage: dotnet run -- [players {Table.MinPlayers}-{Table.MaxPlayers}] [seed]"
-
-    let players =
-        match argv with
-        | [||] -> Ok Table.MinPlayers
-        | _ -> Parse.tryPlayerCount argv[0] |> Result.mapError (fun _ -> usage)
-
-    let seed =
-        match argv with
-        | [| _; given |] -> Parse.trySeed given |> Result.mapError (fun _ -> "Usage: the seed must be a whole number.")
-        | _ -> Ok(clockSeed ())
-
-    match players, seed with
-    | Ok players, Ok seed -> dealt players seed |> Result.mapError (fun _ -> usage)
-    | Error problem, _
-    | _, Error problem -> Error problem
 
 /// Play a saved game again and stop where it left off, from where `undo` walks back
 /// through every state it passed on the way.
@@ -161,20 +137,6 @@ let private hostFor players seed =
 type private Opening =
     | Play of Model * View
     | Done of code: int
-
-/// Command line: host <players> [seed], read the same way the menu reads them.
-let private hostFrom players seed =
-    let seed =
-        match seed with
-        | None -> Ok(clockSeed ())
-        | Some given -> Parse.trySeed given
-
-    match Parse.tryPlayerCount players, seed with
-    | Ok players, Ok seed -> hostFor players seed
-    | Error problem, _
-    | _, Error problem ->
-        eprintfn "%s" problem
-        1
 
 /// The colour screen, which runs until the player is done with it and gives back the view
 /// they came in reading - the same one, in whatever colours they settled on.
@@ -238,24 +200,27 @@ let private play view model =
     loop (stampNow ()) { Notes = true; View = view } model |> ignore
     0
 
-/// Take "--view <name>" out of the arguments, wherever in them it sits, and give back the
-/// view it names along with everything else still in the order it was given. How a board
-/// is drawn says nothing about what to deal, so it has no place among the arguments that
-/// do - and pulling it out first is what lets the rest go on being read by position.
+/// Act on what a command line asked for.
 ///
-/// Whichever it names is built in the standard colours: a game started straight from a
-/// shortcut never passes the menu, and the colour screen is on the other side of it.
-let private viewFrom (argv: string array) =
-    let rec sift taken chosen =
-        match taken with
-        | "--view" :: name :: rest ->
-            View.byName Palette.standard name
-            |> Result.bind (fun view -> sift rest (Some view))
-        | [ "--view" ] -> Error $"Say '--view <name>', for one of {View.names}."
-        | word :: rest -> sift rest chosen |> Result.map (fun (view, kept) -> view, word :: kept)
-        | [] -> Ok(chosen |> Option.defaultValue (View.plain Palette.standard), [])
+/// Everything that reads a command line - `Shell` at the door, `Launch` reading a line the
+/// program wrote itself - stops at a `Launch` and hands it here. So there is one place
+/// that knows what opening a game actually involves, and adding a way in means adding a
+/// case rather than another road through `main`.
+let private opening (view: View) launch =
+    let orElse outcome =
+        match outcome with
+        | Ok model ->
+            printfn "%s" view.Rules
+            play view model
+        | Error problem ->
+            eprintfn "%s" problem
+            1
 
-    sift (List.ofArray argv) None |> Result.map (fun (view, kept) -> view, Array.ofList kept)
+    match launch with
+    | Launch.Deal(players, seed) -> orElse (dealt players (seed |> Option.defaultValue (clockSeed ())))
+    | Launch.Host(players, seed) -> hostFor players (seed |> Option.defaultValue (clockSeed ()))
+    | Launch.Join(address, token) -> Client.join address token view
+    | Launch.Replay path -> orElse (replayFrom path)
 
 [<EntryPoint>]
 let main argv =
@@ -266,33 +231,13 @@ let main argv =
         1
     | [] ->
 
-    match viewFrom argv with
-    | Error problem ->
-        eprintfn "%s" problem
-        1
-    | Ok(view, argv) ->
-
-    // Arguments say what to deal and go straight to the board, so a game can still be
-    // started from a script or a shortcut exactly as before. With none, the menu asks.
+    // Arguments say what to open and go straight to it, so a game can still be started
+    // from a script or a shortcut. With none, the menu asks - and a game opened from the
+    // menu is read in whatever the player set there rather than in what the shell would
+    // have defaulted to.
     match argv with
     | [||] ->
-        match welcome view with
+        match welcome (View.plain Palette.standard) with
         | Play(model, view) -> play view model
         | Done code -> code
-    | [| "host"; players |] -> hostFrom players None
-    | [| "host"; players; seed |] -> hostFrom players (Some seed)
-    | [| "join"; address |] -> Client.join address None view
-    | [| "join"; address; token |] -> Client.join address (Some token) view
-    | _ ->
-        let opening =
-            match argv with
-            | [| "replay"; path |] -> replayFrom path
-            | _ -> dealFrom argv
-
-        match opening with
-        | Error problem ->
-            eprintfn "%s" problem
-            1
-        | Ok model ->
-            printfn "%s" view.Rules
-            play view model
+    | _ -> Shell.run opening argv

@@ -8,9 +8,7 @@ module PlayerId =
     let value (PlayerId n) = n
 
 /// A player commands no faction of their own: the bag holds stones of any colour.
-type Player =
-    { Id: PlayerId
-      Bag: Pile }
+type Player = { Id: PlayerId; Bag: Pile }
 
 module Player =
     let isEmptyHanded player = Pile.isEmpty player.Bag
@@ -23,7 +21,9 @@ type Table =
         { Seats: Player list
           ActiveSeat: int }
 
-type TableTooBig = TooFewPlayers of int | TooManyPlayers of int
+type TableTooBig =
+    | TooFewPlayers of int
+    | TooManyPlayers of int
 
 module Table =
 
@@ -56,12 +56,15 @@ module Table =
 
     /// Pass the active seat to the next player round the table.
     let advance table =
-        { table with ActiveSeat = (table.ActiveSeat + 1) % count table }
+        { table with
+            ActiveSeat = (table.ActiveSeat + 1) % count table }
 
     /// Replace the active player, who is the only one an action can change.
     let withActive player table =
         { table with
-            Seats = table.Seats |> List.mapi (fun seat other -> if seat = table.ActiveSeat then player else other) }
+            Seats =
+                table.Seats
+                |> List.mapi (fun seat other -> if seat = table.ActiveSeat then player else other) }
 
     /// The players in turn order, beginning with whoever acts next. A player's place
     /// in this list is how long they would wait for a turn.

@@ -83,7 +83,9 @@ module Parse =
     let private colors words =
         words
         |> List.fold
-            (fun outcome word -> outcome |> Result.bind (fun found -> color word |> Result.map (fun c -> found @ [ c ])))
+            (fun outcome word ->
+                outcome
+                |> Result.bind (fun found -> color word |> Result.map (fun c -> found @ [ c ])))
             (Ok [])
 
     let private recruit c r =
@@ -127,9 +129,13 @@ module Parse =
     let line (text: string) : Result<Command, string> =
         match words text |> List.map (fun word -> word.ToLowerInvariant()) with
         | [] -> Ok Nothing
-        | [ "help" ] | [ "?" ] -> Ok Help
-        | [ "quit" ] | [ "exit" ] | [ "q" ] -> Ok Leave
-        | [ "history" ] | [ "log" ] -> Ok Recount
+        | [ "help" ]
+        | [ "?" ] -> Ok Help
+        | [ "quit" ]
+        | [ "exit" ]
+        | [ "q" ] -> Ok Leave
+        | [ "history" ]
+        | [ "log" ] -> Ok Recount
         | [ "save" ] -> Ok Keep
         | [ "notes" ] -> Ok(Notes None)
         | [ "notes"; "on" ] -> Ok(Notes(Some true))
@@ -137,7 +143,8 @@ module Parse =
         | "notes" :: _ -> Error "Say 'notes' to turn them the other way, or 'notes on' or 'notes off'."
         | [ "view"; name ] -> Ok(Looking name)
         | "view" :: _ -> Error "Say 'view <name>' to change how the board is drawn."
-        | [ "undo" ] | [ "u" ] -> Ok(Send Undo)
+        | [ "undo" ]
+        | [ "u" ] -> Ok(Send Undo)
         | [ "redo" ] -> Ok(Send Redo)
         | [ "resign" ] -> Ok(Send(Make Resign))
         | [ "rule"; r ] -> region r |> Result.map Explain
@@ -154,6 +161,7 @@ module Parse =
         | ("battle" | "b") :: c :: target :: driven -> battle c target driven
         | [ ("march" | "m"); c; from; into ] -> march c from into "1"
         | [ ("march" | "m"); c; from; into; count ] -> march c from into count
-        | [ "negotiate" ] | [ "n" ] -> Ok(Send(Make Negotiate))
+        | [ "negotiate" ]
+        | [ "n" ] -> Ok(Send(Make Negotiate))
         | [ "return"; c ] -> color c |> Result.map (Settle >> Make >> Send)
         | word :: _ -> Error $"I don't know how to '{word}'. Type help."

@@ -35,7 +35,8 @@ module Game =
     let flagStones game = stones Board.flag game
 
     let withActive player game =
-        { game with Table = Table.withActive player game.Table }
+        { game with
+            Table = Table.withActive player game.Table }
 
     /// Who rules a region, with the Axe and the Flag standing by to break ties.
     let ruleOver regionId game =
@@ -70,7 +71,8 @@ module Game =
     /// differently.
     let landStanding game =
         let open' =
-            landRulings game |> List.filter (fun (region, _) -> RegionKind.isOpen region.Kind)
+            landRulings game
+            |> List.filter (fun (region, _) -> RegionKind.isOpen region.Kind)
 
         let counting predicate =
             open' |> List.filter (snd >> predicate) |> List.length

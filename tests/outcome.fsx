@@ -58,31 +58,26 @@ let greenWins = [ 1, [ (Green, 2) ]; 2, [ (Green, 2) ]; 4, [ (Red, 2) ] ]
 /// Hand the active seat to the last player, so Player 1 is the one who acts next.
 let private lastToAct game =
     [ 2 .. Game.playerCount game ]
-    |> List.fold (fun game _ -> { game with Table = Table.advance game.Table }) game
+    |> List.fold
+        (fun game _ ->
+            { game with
+                Table = Table.advance game.Table })
+        game
 
 let player name expected bags =
     report name expected (gameOf greenWins bags |> lastToAct |> Outcome.verdict |> seated)
 
 // The example as given: P1 holds KKR, P2 holds KBR.
-player
-    "most stones of the winning faction"
-    (WonBy(Green, 1))
-    [ [ Green, 2; Red, 1 ]; [ Green, 1; Blue, 1; Red, 1 ] ]
+player "most stones of the winning faction" (WonBy(Green, 1)) [ [ Green, 2; Red, 1 ]; [ Green, 1; Blue, 1; Red, 1 ] ]
 
 // The second example: both hold 2 green, so fewest losing stones decides.
-player
-    "level on green, fewest losing stones decides"
-    (WonBy(Green, 1))
-    [ [ Green, 2; Red, 1 ]; [ Green, 2; Blue, 1; Red, 1 ] ]
+player "level on green, fewest losing stones decides" (WonBy(Green, 1)) [ [ Green, 2; Red, 1 ]; [ Green, 2; Blue, 1; Red, 1 ] ]
 
 // Identical bags: the player who would act next takes it.
 player "identical bags go to whoever acts next" (WonBy(Green, 1)) [ [ Green, 2; Red, 1 ]; [ Green, 2; Red, 1 ] ]
 
 // A player out on green cannot win on holding fewer losing stones.
-player
-    "player out on the winning colour cannot win on losing stones"
-    (WonBy(Green, 2))
-    [ [ (Green, 1) ]; [ Green, 3; Red, 5 ] ]
+player "player out on the winning colour cannot win on losing stones" (WonBy(Green, 2)) [ [ (Green, 1) ]; [ Green, 3; Red, 5 ] ]
 
 player "every bag played out is a draw" (DrawnBecause(EveryBagPlayedOut Green)) [ []; [] ]
 

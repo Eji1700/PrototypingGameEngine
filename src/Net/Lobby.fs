@@ -77,12 +77,15 @@ module Lobby =
     // `Table` in the domain has seats of its own, so this one says which it means.
     let private withSeat seat (lobby: Lobby) =
         { lobby with
-            Seats = lobby.Seats |> List.map (fun other -> if other.Player = seat.Player then seat else other) }
+            Seats =
+                lobby.Seats
+                |> List.map (fun other -> if other.Player = seat.Player then seat else other) }
 
     /// Nobody plays until every seat is taken. A game dealt for four hands out four bags
     /// whether or not four people have arrived, so starting early would mean somebody
     /// playing a bag that is not theirs.
-    let private everyoneHere lobby = lobby.Seats |> List.forall (isEmpty >> not)
+    let private everyoneHere lobby =
+        lobby.Seats |> List.forall (isEmpty >> not)
 
     // --- what a console is shown ------------------------------------------------------
 
@@ -151,9 +154,7 @@ module Lobby =
                         Occupant = Taken(token, Some console)
                         View = view }
 
-            lobby,
-            just console (Seated(PlayerId.value seat.Player, token))
-            @ drawAll lobby
+            lobby, just console (Seated(PlayerId.value seat.Player, token)) @ drawAll lobby
 
         match resuming with
         | Some token ->
@@ -174,7 +175,11 @@ module Lobby =
         | Some seat ->
             let lobby =
                 match seat.Occupant with
-                | Taken(token, _) -> lobby |> withSeat { seat with Occupant = Taken(token, None) }
+                | Taken(token, _) ->
+                    lobby
+                    |> withSeat
+                        { seat with
+                            Occupant = Taken(token, None) }
                 | Empty -> lobby
 
             lobby, drawAll lobby
@@ -190,7 +195,8 @@ module Lobby =
         | Redo ->
             Some
                 "Undo is not played over a network. With more than one player at the table a game only goes forward - and walking it back would show you a bag you are not meant to see."
-        | Restart(Some _, _) -> Some "How many are playing is settled when the table is opened, not once people are sitting at it."
+        | Restart(Some _, _) ->
+            Some "How many are playing is settled when the table is opened, not once people are sitting at it."
         | Restart(None, _) -> Some "A networked table plays the one game it was dealt. Open another to play again."
         | Make _ -> None
 
@@ -200,8 +206,11 @@ module Lobby =
         | None -> lobby, just console (TurnedAway "You are not sitting at this table.")
         | Some seat ->
 
-        let told text = lobby, just console (Told(seat.View.Says text))
-        let redraw seat lobby = lobby, [ screenFor lobby (console, seat) ]
+        let told text =
+            lobby, just console (Told(seat.View.Says text))
+
+        let redraw seat lobby =
+            lobby, [ screenFor lobby (console, seat) ]
 
         if not (everyoneHere lobby) then
             redraw seat lobby

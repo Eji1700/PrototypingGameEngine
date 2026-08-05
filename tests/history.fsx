@@ -39,10 +39,7 @@ let private nextMove model =
     | Finished _ -> Undo
 
 let rec private playOn n model =
-    if n <= 0 then
-        model
-    else
-        playOn (n - 1) (Update.update (nextMove model) model)
+    if n <= 0 then model else playOn (n - 1) (Update.update (nextMove model) model)
 
 let private send msgs model =
     msgs |> List.fold (fun model msg -> Update.update msg model) model
@@ -55,15 +52,9 @@ let after = Update.update move before
 
 report "a move moves the game on" false (Model.session before = Model.session after)
 
-report
-    "taking it back puts the game back exactly"
-    (Model.session before)
-    (Model.session (Update.update Undo after))
+report "taking it back puts the game back exactly" (Model.session before) (Model.session (Update.update Undo after))
 
-report
-    "making it again puts it forward exactly"
-    (Model.session after)
-    (Model.session (send [ Undo; Redo ] after))
+report "making it again puts it forward exactly" (Model.session after) (Model.session (send [ Undo; Redo ] after))
 
 report "there is nothing to take back at the deal" (Model.session (start ())) (Model.session (Update.update Undo (start ())))
 
@@ -96,7 +87,10 @@ report
     9
     (recorded (Update.update (Make(March(Red, at 13, at 14, 1))) (Update.update Undo (playOn 7 (start ())))))
 
-report "a refusal leaves the position alone" (Model.session after) (Model.session (Update.update (Make(March(Red, at 13, at 14, 1))) after))
+report
+    "a refusal leaves the position alone"
+    (Model.session after)
+    (Model.session (Update.update (Make(March(Red, at 13, at 14, 1))) after))
 
 // A move made after taking one back closes off the road not taken.
 let branched = send [ Undo; Undo; nextMove (send [ Undo; Undo ] after) ] after

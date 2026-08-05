@@ -1,0 +1,3 @@
+# Everything is LF, on every machine. Without this, a checkout on Windows brings the
+# files over as CRLF, the formatter writes them back as LF, and the two argue for ever.
+* text=auto eol=lf

@@ -43,13 +43,15 @@ type Palette =
 /// them knew about would be a slot a player could not use.
 [<NoComparison; NoEquality>]
 type Slot =
-    { Says: string
-      Draws: string
-      /// A scrap of board written in that colour, so the list of choices is also a look at
-      /// them. The words are the board's own, so what is shown here is what will be seen.
-      Shows: string
-      Of: Palette -> Shade
-      Set: Shade -> Palette -> Palette }
+    {
+        Says: string
+        Draws: string
+        /// A scrap of board written in that colour, so the list of choices is also a look at
+        /// them. The words are the board's own, so what is shown here is what will be seen.
+        Shows: string
+        Of: Palette -> Shade
+        Set: Shade -> Palette -> Palette
+    }
 
 module Palette =
 
@@ -139,8 +141,7 @@ module Palette =
               Of = fun palette -> palette.Hidden
               Set = fun shade palette -> { palette with Hidden = shade } } ]
 
-    let names =
-        shades |> List.map (fun shade -> shade.Name) |> String.concat ", "
+    let names = shades |> List.map (fun shade -> shade.Name) |> String.concat ", "
 
     let private slotNames =
         slots |> List.map (fun slot -> slot.Says) |> String.concat ", "

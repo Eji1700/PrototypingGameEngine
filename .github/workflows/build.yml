@@ -1,0 +1,61 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The tool manifest pins Fantomas, so this is the same formatter every machine runs.
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Restore
+        run: dotnet restore
+
+      # Warnings are the standard here, not something to look at later.
+      - name: Build
+        run: dotnet build --no-restore -warnaserror
+
+      - name: Check formatting
+        run: dotnet fantomas --check src tests
+
+      # Every script is loaded straight from source and exits non-zero on the first
+      # failing check, so the shell's own `set -e` is enough to fail the job. They are
+      # named one by one rather than globbed so that a script added without being
+      # listed here shows up as a missing line in a review.
+      - name: Domain and app
+        run: |
+          dotnet fsi tests/ruling.fsx
+          dotnet fsi tests/outcome.fsx
+          dotnet fsi tests/actions.fsx
+          dotnet fsi tests/history.fsx
+          dotnet fsi tests/knowledge.fsx
+
+      - name: Console and net
+        run: |
+          dotnet fsi tests/lobby.fsx
+          dotnet fsi tests/view.fsx
+          dotnet fsi tests/cli.fsx
+
+      # Slower than the rest, and the only ones that generate their own games, so they
+      # run last and on their own.
+      - name: Properties
+        run: dotnet fsi tests/properties.fsx
+
+      # A record is meant to replay for good. The committed one is the oldest thing in
+      # the repository that still has to work, so the build says so out loud.
+      - name: Replay the committed record
+        run: |
+          echo quit | dotnet run --no-build -- replay logs/2026-08-03-193909-2p-seed639214079490240407.log | head -2

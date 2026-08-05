@@ -102,8 +102,7 @@ module Words =
         | MarchNeedsAStone -> "A march moves at least one stone."
         | NotAdjacent(from, into) -> $"{region from} does not border {region into}."
         | ReserveEmpty -> "The reserve is empty - there is nothing to negotiate for."
-        | EmptyHandedCannotNegotiate p ->
-            $"{player p} holds nothing, and only a player with a stone in the bag may negotiate."
+        | EmptyHandedCannotNegotiate p -> $"{player p} holds nothing, and only a player with a stone in the bag may negotiate."
         | MustSettleFirst drawn ->
             $"Settle the negotiation first: a stone must go back to the reserve, and the {color drawn} stone just drawn may be it."
         | NothingToSettle -> "There is no negotiation to settle."
@@ -112,7 +111,8 @@ module Words =
     /// words the prompt takes, so a game can be read back and played again without a
     /// second language standing between the two.
     let command msg =
-        let short color = (glyph color |> string).ToLowerInvariant()
+        let short color =
+            (glyph color |> string).ToLowerInvariant()
 
         match msg with
         | Make(Recruit(c, into)) -> $"recruit {short c} {number into}"

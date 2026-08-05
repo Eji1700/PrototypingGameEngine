@@ -22,33 +22,35 @@ open TCModel.App
 /// `byName` is for.
 [<NoComparison; NoEquality>]
 type View =
-    { Name: string
-      Describe: string
+    {
+        Name: string
+        Describe: string
 
-      /// The colours this one was built with. Every endpoint below has them already, so
-      /// nothing needs to be told them twice; this is here so that a player who changes
-      /// their colours can be handed the same view built again in the new ones, and so a
-      /// console joining a table can say what it wants a board drawn in.
-      Palette: Palette
+        /// The colours this one was built with. Every endpoint below has them already, so
+        /// nothing needs to be told them twice; this is here so that a player who changes
+        /// their colours can be handed the same view built again in the new ones, and so a
+        /// console joining a table can say what it wants a board drawn in.
+        Palette: Palette
 
-      /// The whole board, drawn for one player. The flag is whether the writing that
-      /// explains the board comes with it.
-      Board: bool -> Player -> Model -> string
+        /// The whole board, drawn for one player. The flag is whether the writing that
+        /// explains the board comes with it.
+        Board: bool -> Player -> Model -> string
 
-      /// The record of play so far, as the player reading it may know it.
-      History: Player -> Model -> string
+        /// The record of play so far, as the player reading it may know it.
+        History: Player -> Model -> string
 
-      /// The working behind who rules a region.
-      Ruling: RegionId -> Model -> string
+        /// The working behind who rules a region.
+        Ruling: RegionId -> Model -> string
 
-      /// The rules and the commands, at length.
-      Rules: string
+        /// The rules and the commands, at length.
+        Rules: string
 
-      /// One line the game has said, with no board to go with it.
-      Says: string -> string
+        /// One line the game has said, with no board to go with it.
+        Says: string -> string
 
-      /// A table still waiting for people to arrive, in seating order.
-      Waiting: Waiting list -> string }
+        /// A table still waiting for people to arrive, in seating order.
+        Waiting: Waiting list -> string
+    }
 
 module View =
 

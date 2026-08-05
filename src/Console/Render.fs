@@ -41,8 +41,7 @@ module Render =
     let private spans row =
         row |> List.map (fun (_, at) -> column at, column at + 2 * step)
 
-    let private mapWidth =
-        (Board.layout |> List.collect sides |> List.max) + 1
+    let private mapWidth = (Board.layout |> List.collect sides |> List.max) + 1
 
     /// A region as it is titled on the map: its number and name, and for a home the
     /// colour that holds it. A name with no room to spare gives up its "The".
@@ -130,12 +129,14 @@ module Render =
         let ground = spans above @ spans below
         let line = Array.create mapWidth ' '
         let middle (left, right) = (left + right) / 2
-        let covered at = ground |> List.exists (fun (left, right) -> left <= at && at <= right)
+
+        let covered at =
+            ground |> List.exists (fun (left, right) -> left <= at && at <= right)
 
         // Each sloping side runs from a region's upright side to the point of the region
         // beyond it, which is the ground between the two.
         for left, right in ground do
-            for at in left .. right do
+            for at in left..right do
                 line[at] <- '_'
 
         // Cut the ground away either side of a point, leaving the point itself and any
@@ -225,8 +226,7 @@ module Render =
           ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
           ("notes", "hide this and every note"), ("save", "write the record now")
           ("help", "every command, at length"), ("quit", "leave, saving first") ]
-        |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) ->
-            sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
+        |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) -> sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
 
     /// A player and their bag as the reader sees it - their own laid out, everyone
     /// else's closed. The arrow marks whoever is to play, which over a network is not
@@ -268,7 +268,8 @@ module Render =
             | [ color ] -> $"  {Words.color color} rules the region."
             | tied -> $"  {Words.colors tied} are level after every tie-breaker, so the region is tied and has no ruler."
 
-        let heading = $"{Words.region regionId} holds {Words.pile (Game.stones regionId game)}."
+        let heading =
+            $"{Words.region regionId} holds {Words.pile (Game.stones regionId game)}."
 
         String.concat Environment.NewLine (heading :: steps Words.rulingMeasure Words.color trace @ [ verdict ])
 
@@ -284,7 +285,9 @@ module Render =
         let players =
             match factions with
             | [ winning ] when Game.allBagsEmpty game ->
-                [ ""; "THE WINNING PLAYER"; "  Every player has played out their bag, so nobody wins." ]
+                [ ""
+                  "THE WINNING PLAYER"
+                  "  Every player has played out their bag, so nobody wins." ]
             | [ winning ] ->
                 let _, trace = Outcome.weighPlayers winning game
 
@@ -318,7 +321,8 @@ module Render =
 
         match Model.session model with
         | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
-        | InPlay { Phase = AwaitingReturn drawn; Turn = turn } ->
+        | InPlay { Phase = AwaitingReturn drawn
+                   Turn = turn } ->
             let stone =
                 if active.Id = beholder.Id then $"a {Words.color drawn} stone" else "a stone"
 
@@ -326,10 +330,7 @@ module Render =
         | InPlay { Turn = turn } -> $"Turn {turn} - {Words.player active.Id} to play"
 
     let wording (beholder: Player) model =
-        if Model.isOver model then
-            Words.notice
-        else
-            Words.noticeSeenBy beholder.Id
+        if Model.isOver model then Words.notice else Words.noticeSeenBy beholder.Id
 
     /// The record of the game so far, as the player reading it may know it. The journal
     /// itself keeps the whole of what happened, and `Transcript.write` saves it that way.
@@ -340,12 +341,12 @@ module Render =
             let asked =
                 sprintf "  %3d  turn %-4d %-9s %s" entry.Ordinal entry.Turn (Words.player entry.Actor) (Words.command entry.Asked)
 
-            asked :: (entry.Told |> List.map (fun notice -> String.replicate 26 " " + told notice))
+            asked
+            :: (entry.Told |> List.map (fun notice -> String.replicate 26 " " + told notice))
 
         match Journal.entries model.Journal with
         | [] -> nothingYet
-        | entries ->
-            String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + recordStanding model ])
+        | entries -> String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + recordStanding model ])
 
     /// Render the whole game as a block of text for one player to read. `notes` says
     /// whether the writing that explains the board comes with it: turned off, what is
@@ -363,10 +364,7 @@ module Render =
         // Everything below is drawn from what the beholder can see rather than from the
         // game itself - until the game is over, when the table is turned face up.
         let seen =
-            if Model.isOver model then
-                Knowledge.laidBare beholder game
-            else
-                Knowledge.seenBy beholder game
+            if Model.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
 
         let told = wording beholder model
 
@@ -377,7 +375,8 @@ module Render =
         let notedWhileHidden lines =
             if Model.isOver model then [] else noted lines
 
-        sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine() |> ignore
+        sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine()
+        |> ignore
 
         section
             sb
@@ -438,8 +437,7 @@ module Render =
 
         // The commands go with the notes: a player who has turned them off has turned
         // this off too, and `help` still says all of it.
-        if notes then
-            section sb "COMMANDS" (commands @ [ ""; "  " + shorthand ])
+        if notes then section sb "COMMANDS" (commands @ [ ""; "  " + shorthand ])
 
         section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 

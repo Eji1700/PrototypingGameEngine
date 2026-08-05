@@ -41,7 +41,8 @@ module Actions =
     let private placeFromBag color regionId game =
         takeFromBag color game
         |> Result.map (fun game ->
-            { game with Position = Position.add color 1 regionId game.Position })
+            { game with
+                Position = Position.add color 1 regionId game.Position })
 
     /// Lift the named stones out of a region, objecting if any is not standing there.
     let private takeStones colors regionId game =
@@ -142,7 +143,10 @@ module Actions =
 
             let game =
                 { game with
-                    Position = game.Position |> Position.remove color count from |> Position.add color count into }
+                    Position =
+                        game.Position
+                        |> Position.remove color count from
+                        |> Position.add color count into }
 
             return game, Marched(player.Id, color, from, into, count)
         }
@@ -161,8 +165,12 @@ module Actions =
             | None -> return! Error ReserveEmpty
             | Some(color, reserve) ->
                 let game =
-                    { game with Rng = rng; Reserve = reserve }
-                    |> Game.withActive { player with Bag = Pile.add color 1 player.Bag }
+                    { game with
+                        Rng = rng
+                        Reserve = reserve }
+                    |> Game.withActive
+                        { player with
+                            Bag = Pile.add color 1 player.Bag }
 
                 return game, color, Drew(player.Id, color)
         }
@@ -176,7 +184,8 @@ module Actions =
         | None -> Error(NotInBag(player.Id, color))
         | Some bag ->
             let game =
-                { game with Reserve = Pile.add color 1 game.Reserve }
+                { game with
+                    Reserve = Pile.add color 1 game.Reserve }
                 |> Game.withActive { player with Bag = bag }
 
             Ok(game, HandedBack(player.Id, color))

@@ -33,9 +33,7 @@ module Setup =
         |> List.fold
             (fun (position, supply) region ->
                 match region.Kind with
-                | Home color ->
-                    position |> Position.add color HomeSeedStones region.Id,
-                    Pile.remove color HomeSeedStones supply
+                | Home color -> position |> Position.add color HomeSeedStones region.Id, Pile.remove color HomeSeedStones supply
                 | Wild
                 | Special
                 | Dead -> position, supply)

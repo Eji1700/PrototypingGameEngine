@@ -12,11 +12,13 @@ type Step = { Move: Msg; After: Session }
 /// time, not rolling again.
 type Timeline =
     private
-        { Dealt: Session
-          /// Newest first. The head's `After` is the present.
-          Made: Step list
-          /// Next to make again first.
-          TakenBack: Step list }
+        {
+            Dealt: Session
+            /// Newest first. The head's `After` is the present.
+            Made: Step list
+            /// Next to make again first.
+            TakenBack: Step list
+        }
 
 module Timeline =
 
@@ -72,4 +74,5 @@ module Timeline =
     /// Every state the game has stood in on the way here, oldest first, the deal first
     /// of all.
     let states timeline =
-        timeline.Dealt :: (timeline.Made |> List.rev |> List.map (fun step -> step.After))
+        timeline.Dealt
+        :: (timeline.Made |> List.rev |> List.map (fun step -> step.After))

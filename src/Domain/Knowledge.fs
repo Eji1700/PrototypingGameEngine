@@ -14,16 +14,18 @@ type Sight =
 /// the map nor in the beholder's own bag must be out there in the reserve or in another
 /// player's bag - and that much can be worked out exactly.
 type Knowledge =
-    { /// Whose view this is.
-      Beholder: PlayerId
-      /// The map, which is open to everyone.
-      Position: Position
-      /// Every player and their bag in seating order, the beholder's own open.
-      Bags: (PlayerId * Sight) list
-      Reserve: Sight
-      /// Stones that must be out of sight somewhere: every stone in the game, less the
-      /// ones on the map and the ones the beholder holds.
-      Unseen: Pile }
+    {
+        /// Whose view this is.
+        Beholder: PlayerId
+        /// The map, which is open to everyone.
+        Position: Position
+        /// Every player and their bag in seating order, the beholder's own open.
+        Bags: (PlayerId * Sight) list
+        Reserve: Sight
+        /// Stones that must be out of sight somewhere: every stone in the game, less the
+        /// ones on the map and the ones the beholder holds.
+        Unseen: Pile
+    }
 
 module Knowledge =
 
@@ -46,10 +48,7 @@ module Knowledge =
             Game.players game
             |> List.map (fun player ->
                 let bag =
-                    if player.Id = beholder.Id then
-                        Open player.Bag
-                    else
-                        Closed(Pile.total player.Bag)
+                    if player.Id = beholder.Id then Open player.Bag else Closed(Pile.total player.Bag)
 
                 player.Id, bag)
           Reserve = Closed(Pile.total game.Reserve)

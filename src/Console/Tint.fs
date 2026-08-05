@@ -28,10 +28,12 @@ module Tint =
     let private HeadingInk = "bold"
 
     /// A faction's colour as markup says it.
-    let ink palette color = Palette.ink (Palette.forColor color palette)
+    let ink palette color =
+        Palette.ink (Palette.forColor color palette)
 
     /// The same colour as Spectre's own, for the widgets that take one rather than a name.
-    let color palette faction = (Palette.forColor faction palette).Color
+    let color palette faction =
+        (Palette.forColor faction palette).Color
 
     /// The reader's own seat, and the arrow marking whoever is to play.
     let yours (palette: Palette) = Palette.ink palette.Yours
@@ -81,19 +83,18 @@ module Tint =
     /// "=BG" keeps its sign and each colour level in the region keeps its own.
     let private letterByLetter palette (text: string) =
         text
-        |> Seq.map (fun c ->
-            if c = 'R' || c = 'B' || c = 'G' then
-                wrap (inkOfLetter palette c) (string c)
-            else
-                string c)
+        |> Seq.map (fun c -> if c = 'R' || c = 'B' || c = 'G' then wrap (inkOfLetter palette c) (string c) else string c)
         |> String.concat ""
 
     let private mark palette (found: Match) =
         let matched (name: string) = found.Groups[name].Success
 
-        if matched "heading" || matched "block" then wrap HeadingInk found.Value
-        elif matched "you" || matched "active" then wrap (yours palette) found.Value
-        elif matched "dead" then wrap (hidden palette) found.Value
+        if matched "heading" || matched "block" then
+            wrap HeadingInk found.Value
+        elif matched "you" || matched "active" then
+            wrap (yours palette) found.Value
+        elif matched "dead" then
+            wrap (hidden palette) found.Value
         // "Green", "Gx4" and a lone "G" all begin with the letter that names the colour,
         // so all three go the same way.
         elif matched "named" || matched "tally" || matched "glyph" then

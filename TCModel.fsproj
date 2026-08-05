@@ -45,6 +45,8 @@
     <Compile Include="src/Console/Rich.fs" />
     <Compile Include="src/Console/View.fs" />
     <Compile Include="src/Console/Options.fs" />
+    <Compile Include="src/Console/Launch.fs" />
+    <Compile Include="src/Console/Shell.fs" />
     <Compile Include="src/Console/Menu.fs" />
     <Compile Include="src/Console/Transcript.fs" />
   </ItemGroup>
@@ -62,8 +64,10 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Argu" Version="6.2.5" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
     <PackageReference Include="Spectre.Console" Version="0.51.1" />
+    <PackageReference Include="Spectre.Console.Cli" Version="0.51.1" />
   </ItemGroup>
 
 </Project>

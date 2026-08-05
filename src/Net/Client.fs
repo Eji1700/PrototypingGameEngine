@@ -22,11 +22,9 @@ module Client =
         | true, uri ->
             let builder = UriBuilder(uri)
 
-            if uri.IsDefaultPort then
-                builder.Port <- Protocol.DefaultPort
+            if uri.IsDefaultPort then builder.Port <- Protocol.DefaultPort
 
-            if builder.Path = "/" then
-                builder.Path <- Protocol.Path
+            if builder.Path = "/" then builder.Path <- Protocol.Path
 
             Ok(builder.Uri.ToString())
         | _ -> Error $"'{given}' is not an address I can reach."
@@ -64,12 +62,7 @@ module Client =
         /// colours go with it for the same reason: a board arrives already coloured, so a
         /// palette chosen at this end is no use unless the other end has it.
         let sitDown () =
-            connection.InvokeAsync(
-                Protocol.Call.Join,
-                box token.Value,
-                box chosen.Name,
-                box (Palette.write chosen.Palette)
-            )
+            connection.InvokeAsync(Protocol.Call.Join, box token.Value, box chosen.Name, box (Palette.write chosen.Palette))
 
         connection.On<int, string>(
             Protocol.Call.Seated,
@@ -78,12 +71,16 @@ module Client =
                 printfn ""
                 printfn "You are Player %d. If you drop, this brings you back to the same seat:" seat
                 printfn ""
-                printfn "  dotnet run -- join %s %s" given mine
+                // Written from the same declaration the command line is read by, so what
+                // a player is told to type is something the program is certain to accept.
+                printfn "  dotnet run -- %s" (Launch.write (Launch.Join(given, Some mine)))
         )
         |> ignore
 
         connection.On<string>(Protocol.Call.Screen, show) |> ignore
-        connection.On<string>(Protocol.Call.Told, fun text -> show (text + Environment.NewLine)) |> ignore
+
+        connection.On<string>(Protocol.Call.Told, fun text -> show (text + Environment.NewLine))
+        |> ignore
 
         connection.On<string>(
             Protocol.Call.TurnedAway,
@@ -95,7 +92,7 @@ module Client =
 
         // Coming back after a drop has to say who this console was, or the table would
         // hand it an empty seat and the player would lose their stones.
-        connection.add_Reconnected(fun _ -> sitDown ())
+        connection.add_Reconnected (fun _ -> sitDown ())
 
         try
             wait (connection.StartAsync())

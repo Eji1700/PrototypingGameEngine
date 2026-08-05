@@ -9,10 +9,12 @@ open TCModel.Domain
 /// that does the showing, so that a view can lay it out like everything else and nothing
 /// above this layer has to know how a screen is put together.
 type Waiting =
-    { Player: PlayerId
-      /// Nobody has taken this seat yet.
-      Expected: bool
-      /// Taken, but whoever took it has lost their console.
-      Away: bool
-      /// The seat belonging to whoever is reading.
-      Yours: bool }
+    {
+        Player: PlayerId
+        /// Nobody has taken this seat yet.
+        Expected: bool
+        /// Taken, but whoever took it has lost their console.
+        Away: bool
+        /// The seat belonging to whoever is reading.
+        Yours: bool
+    }

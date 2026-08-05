@@ -10,12 +10,14 @@ type Phase =
 
 /// A game still being played.
 type Play =
-    { Game: Game
-      Phase: Phase
-      /// Turns spent negotiating, or skipped for want of stones, without a stone
-      /// being played in between. The game ends when every player has done so in a row.
-      Negotiations: int
-      Turn: int }
+    {
+        Game: Game
+        Phase: Phase
+        /// Turns spent negotiating, or skipped for want of stones, without a stone
+        /// being played in between. The game ends when every player has done so in a row.
+        Negotiations: int
+        Turn: int
+    }
 
 /// A game that has finished. There is no phase and no turn to take.
 type Over =

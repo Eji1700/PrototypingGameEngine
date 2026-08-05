@@ -40,11 +40,15 @@ let private seats = Game.players (Model.game dealt)
 /// Colour taken back off, leaving what a person would actually see. The escape itself
 /// has to go with the codes; stripping only the codes leaves it sitting between the
 /// letters, and a check for "R R R" would then never find one.
-let private seen text = Regex.Replace(text, "\u001b\\[[0-9;]*m", "")
+let private seen text =
+    Regex.Replace(text, "\u001b\\[[0-9;]*m", "")
 
 /// A bag stone by stone, which is how `rich` draws one that is open.
 let private laidOut (player: Player) =
-    player.Bag |> Pile.toColors |> List.map (Words.glyph >> string) |> String.concat " "
+    player.Bag
+    |> Pile.toColors
+    |> List.map (Words.glyph >> string)
+    |> String.concat " "
 
 /// The same bag counted, which is how `plain` draws it. Between them these are every way
 /// a bag is written anywhere in the program, and so every shape a leak could take.
@@ -77,8 +81,7 @@ for view in views do
 
 // --- a stone drawn stays with the player who drew it ---------------------------------------
 
-let private drawn =
-    dealt |> Update.update (Make Negotiate)
+let private drawn = dealt |> Update.update (Make Negotiate)
 
 let private drewColor =
     match Model.session drawn with
@@ -114,15 +117,9 @@ report "and does colour it" true (rich.Says Render.help |> mentions "[")
 
 report "every view answers to its own name" [ "plain"; "rich" ] (views |> List.map (fun view -> view.Name))
 
-report
-    "a view can be asked for by name"
-    (Ok "rich")
-    (View.byName Palette.standard "rich" |> Result.map (fun view -> view.Name))
+report "a view can be asked for by name" (Ok "rich") (View.byName Palette.standard "rich" |> Result.map (fun view -> view.Name))
 
-report
-    "and is not case-fussy about it"
-    (Ok "plain")
-    (View.byName Palette.standard "PLAIN" |> Result.map (fun view -> view.Name))
+report "and is not case-fussy about it" (Ok "plain") (View.byName Palette.standard "PLAIN" |> Result.map (fun view -> view.Name))
 
 report
     "a name nobody answers to is refused, and says what there is"
@@ -147,7 +144,8 @@ let private redIsTeal =
 /// nobody reading this file could see.
 let private escape = string (char 0x1b)
 
-let private inked code text = text |> mentions $"{escape}[38;5;{code}m"
+let private inked code text =
+    text |> mentions $"{escape}[38;5;{code}m"
 
 report
     "a colour is changed by the words a person types"
@@ -160,7 +158,10 @@ report
     (Ok [ "crimson"; "moss"; "gold"; "slate" ])
     (Palette.set "blue" "teal" Palette.standard
      |> Result.map (fun palette ->
-         [ palette.Red.Name; palette.Green.Name; palette.Yours.Name; palette.Hidden.Name ]))
+         [ palette.Red.Name
+           palette.Green.Name
+           palette.Yours.Name
+           palette.Hidden.Name ]))
 
 report
     "a colour nobody has is refused, and says what there is"
@@ -174,15 +175,9 @@ report
     (Error "There is nothing called 'walls' to colour. There is red, blue, green, yours, hidden.")
     (Palette.set "walls" "teal" Palette.standard |> Result.map (fun _ -> ()))
 
-report
-    "the rich board is drawn in the palette it is given"
-    true
-    ((View.rich redIsTeal).Board true beholder dealt |> inked 45)
+report "the rich board is drawn in the palette it is given" true ((View.rich redIsTeal).Board true beholder dealt |> inked 45)
 
-report
-    "and not in the one it was not"
-    false
-    ((View.rich redIsTeal).Board true beholder dealt |> inked 196)
+report "and not in the one it was not" false ((View.rich redIsTeal).Board true beholder dealt |> inked 196)
 
 report
     "colouring moves not one character of the board"
@@ -202,21 +197,23 @@ report
     [ "teal"; "azure"; "moss"; "gold"; "slate" ]
     (let there = Palette.read (Palette.write redIsTeal)
 
-     [ there.Red.Name; there.Blue.Name; there.Green.Name; there.Yours.Name; there.Hidden.Name ])
+     [ there.Red.Name
+       there.Blue.Name
+       there.Green.Name
+       there.Yours.Name
+       there.Hidden.Name ])
 
-report
-    "and a word the far end does not know leaves that one as it was"
-    "crimson"
-    (Palette.read "red=beige blue=teal").Red.Name
+report "and a word the far end does not know leaves that one as it was" "crimson" (Palette.read "red=beige blue=teal").Red.Name
 
 // --- the screen that offers them ------------------------------------------------------------
 
-report "two words are a colour for something" (Ok "teal") (
-    match Options.choose Palette.standard "blue teal" with
-    | Ok(Options.Changed palette) -> Ok palette.Blue.Name
-    | Ok _ -> Error "no change"
-    | Error problem -> Error problem
-)
+report
+    "two words are a colour for something"
+    (Ok "teal")
+    (match Options.choose Palette.standard "blue teal" with
+     | Ok(Options.Changed palette) -> Ok palette.Blue.Name
+     | Ok _ -> Error "no change"
+     | Error problem -> Error problem)
 
 report
     "'reset' puts them all back"
