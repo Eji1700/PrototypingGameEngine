@@ -40,9 +40,11 @@
     <Compile Include="src/Console/Words.fs" />
     <Compile Include="src/Console/Render.fs" />
     <Compile Include="src/Console/Parse.fs" />
+    <Compile Include="src/Console/Palette.fs" />
     <Compile Include="src/Console/Tint.fs" />
     <Compile Include="src/Console/Rich.fs" />
     <Compile Include="src/Console/View.fs" />
+    <Compile Include="src/Console/Options.fs" />
     <Compile Include="src/Console/Menu.fs" />
     <Compile Include="src/Console/Transcript.fs" />
   </ItemGroup>

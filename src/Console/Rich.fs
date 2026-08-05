@@ -19,6 +19,10 @@ open TCModel.App
 /// `Knowledge`, and what a notice says comes from `Render.wording`, the same as the plain
 /// view - a second renderer is a second chance to leak, and the way not to take it is not
 /// to write that reasoning down twice.
+///
+/// Nor does anything here decide what colour to use. Every one of them is read out of the
+/// palette that comes in, which is the player's own, so two people at one table can be
+/// drawn the same board in colours that look nothing alike.
 module Rich =
 
     /// Characters to a region, and to half of one.
@@ -79,55 +83,55 @@ module Rich =
 
     /// Writing that is there to be read once: shown while the notes are on, and gone the
     /// moment they are turned off.
-    let private note (text: string) =
-        markup (Tint.wrap Tint.Hidden (esc text))
+    let private note palette (text: string) =
+        markup (Tint.wrap (Tint.hidden palette) (esc text))
 
     // --- stones -------------------------------------------------------------------------
 
     /// Stones laid out one by one, each in its own colour.
-    let private laid pile =
+    let private laid palette pile =
         match Pile.toColors pile with
-        | [] -> Tint.wrap Tint.Hidden "-"
+        | [] -> Tint.wrap (Tint.hidden palette) "-"
         | colors ->
             colors
-            |> List.map (fun color -> Tint.wrap (Tint.ink color) (string (Words.glyph color)))
+            |> List.map (fun color -> Tint.wrap (Tint.ink palette color) (string (Words.glyph color)))
             |> String.concat " "
 
     /// The same, counted rather than laid out, for where there are too many to draw.
-    let private counted pile =
+    let private counted palette pile =
         match Pile.toCounts pile with
-        | [] -> Tint.wrap Tint.Hidden "-"
+        | [] -> Tint.wrap (Tint.hidden palette) "-"
         | counts ->
             counts
-            |> List.map (fun (color, n) -> Tint.wrap (Tint.ink color) $"{Words.glyph color}x{n}")
+            |> List.map (fun (color, n) -> Tint.wrap (Tint.ink palette color) $"{Words.glyph color}x{n}")
             |> String.concat "  "
 
     /// Stones nobody can name, drawn as the stones they are. A closed bag of eight is
     /// eight of these: a player can see how much is in it and nothing else, which is
     /// exactly the state of affairs the game means them to be in.
-    let private unnamed n =
+    let private unnamed palette n =
         if n = 0 then
-            Tint.wrap Tint.Hidden "-"
+            Tint.wrap (Tint.hidden palette) "-"
         else
-            Tint.wrap Tint.Hidden (List.replicate n "?" |> String.concat " ")
+            Tint.wrap (Tint.hidden palette) (List.replicate n "?" |> String.concat " ")
 
-    let private sighted =
+    let private sighted palette =
         function
-        | Open pile -> $"{laid pile}   ({Pile.total pile})"
-        | Closed n -> $"{unnamed n}   ({n})"
+        | Open pile -> $"{laid palette pile}   ({Pile.total pile})"
+        | Closed n -> $"{unnamed palette n}   ({n})"
 
     // --- the map ------------------------------------------------------------------------
 
     /// A region as a box of its own, bordered in the colour of whoever rules it - which
     /// is the one thing on a board worth seeing from across the room.
-    let private regionPanel game (region: Region) =
+    let private regionPanel palette game (region: Region) =
         let border =
             match region.Kind, Game.ruleOver region.Id game with
             | Dead, _ -> Color.Grey23
-            | _, RuledBy color -> Tint.color color
+            | _, RuledBy color -> Tint.color palette color
             | _, (Contested _ | Unclaimed) -> Color.Grey37
 
-        let panel = Panel(markup (Tint.markup (Render.standingIn inside game region)))
+        let panel = Panel(markup (Tint.markup palette (Render.standingIn inside game region)))
         panel.Header <- PanelHeader $"[bold silver] {esc (Render.regionTitle titleRoom region)} [/]"
         panel.Border <- BoxBorder.Rounded
         panel.BorderStyle <- Style(border)
@@ -136,7 +140,7 @@ module Rich =
         panel :> IRenderable
 
     /// One row of the map, shoved right by however many half-regions it stands in.
-    let private mapRow game (cells: (RegionId * int) list) =
+    let private mapRow palette game (cells: (RegionId * int) list) =
         let grid = Grid()
         grid.Expand <- false
 
@@ -160,30 +164,32 @@ module Rich =
         cells |> List.iter (fun _ -> column across)
 
         let panels =
-            cells |> List.map (fst >> Board.region >> regionPanel game)
+            cells |> List.map (fst >> Board.region >> regionPanel palette game)
 
         grid.AddRow(Array.ofList (lead @ panels)) |> ignore
         grid :> IRenderable
 
-    let private mapOf game =
-        Board.layout |> List.map (mapRow game) |> rows
+    let private mapOf palette game =
+        Board.layout |> List.map (mapRow palette game) |> rows
 
     /// The Flag and the Axe, which border nothing and so stand outside the map. Here they
     /// are panels of their own rather than boxes drawn in text, which is what standing
     /// apart ought to look like.
-    let private apart game =
+    let private apart palette game =
         let held (region: Region) =
             let ruling =
                 match Game.ruleOver region.Id game with
-                | RuledBy color -> Tint.wrap $"bold {Tint.ink color}" (Words.color color)
+                | RuledBy color -> Tint.wrap $"bold {Tint.ink palette color}" (Words.color color)
                 | Contested tied ->
-                    (tied |> List.map (fun c -> Tint.wrap (Tint.ink c) (Words.color c)) |> String.concat ", ")
+                    (tied
+                     |> List.map (fun c -> Tint.wrap (Tint.ink palette c) (Words.color c))
+                     |> String.concat ", ")
                     + " level"
-                | Unclaimed -> Tint.wrap Tint.Hidden "unclaimed"
+                | Unclaimed -> Tint.wrap (Tint.hidden palette) "unclaimed"
 
             // Padded to a width that clears the title, because a panel drawn no wider than
             // its own contents will cut its heading short to fit.
-            let standing = laid (Game.stones region.Id game)
+            let standing = laid palette (Game.stones region.Id game)
             let room = 16 - Pile.total (Game.stones region.Id game) * 2 |> max 1
 
             panel $"[{Words.number region.Id}] {region.Name}" (markup (standing + String(' ', room) + ruling))
@@ -200,7 +206,7 @@ module Rich =
 
     // --- the players ----------------------------------------------------------------------
 
-    let private players (seen: Knowledge) active model =
+    let private players palette (seen: Knowledge) active model =
         let table = Table()
         table.Border <- TableBorder.None
         table.ShowHeaders <- false
@@ -209,29 +215,35 @@ module Rich =
         table.AddColumn(TableColumn "") |> ignore
 
         for playerId, bag in seen.Bags do
-            let marker = if playerId = active then Tint.wrap Tint.Yours "->" else " "
+            let marker =
+                if playerId = active then
+                    Tint.wrap (Tint.yours palette) "->"
+                else
+                    " "
 
             let name =
                 if playerId = seen.Beholder then
-                    Tint.wrap Tint.Yours $"{Words.player playerId} (you)"
+                    Tint.wrap (Tint.yours palette) $"{Words.player playerId} (you)"
                 else
                     Words.player playerId
 
-            table.AddRow(markup marker, markup name, markup (sighted bag)) |> ignore
+            table.AddRow(markup marker, markup name, markup (sighted palette bag)) |> ignore
 
         let run =
             match Model.session model with
             | InPlay play ->
                 let seats = Game.playerCount (Model.game model)
 
-                [ markup (Tint.wrap Tint.Hidden (esc $"negotiations in a row: {play.Negotiations} of {seats}")) ]
+                [ markup (
+                      Tint.wrap (Tint.hidden palette) (esc $"negotiations in a row: {play.Negotiations} of {seats}")
+                  ) ]
             | Finished _ -> []
 
         rows ([ table :> IRenderable ] @ run)
 
     // --- what is where --------------------------------------------------------------------
 
-    let private supply (seen: Knowledge) =
+    let private supply palette (seen: Knowledge) =
         let table = Table()
         table.Border <- TableBorder.None
         table.ShowHeaders <- false
@@ -239,17 +251,18 @@ module Rich =
         table.AddColumn(TableColumn "") |> ignore
 
         let line label what =
-            table.AddRow(markup (Tint.wrap Tint.Hidden (esc label)), markup what) |> ignore
+            table.AddRow(markup (Tint.wrap (Tint.hidden palette) (esc label)), markup what)
+            |> ignore
 
-        line "on the board" (counted (Position.total seen.Position))
+        line "on the board" (counted palette (Position.total seen.Position))
 
         line
             "in reserve"
             (match seen.Reserve with
-             | Open pile -> counted pile
-             | Closed n -> Tint.wrap Tint.Hidden $"?x{n}")
+             | Open pile -> counted palette pile
+             | Closed n -> Tint.wrap (Tint.hidden palette) $"?x{n}")
 
-        line "out of sight" (counted seen.Unseen)
+        line "out of sight" (counted palette seen.Unseen)
 
         // Every stone that is not on the map and not in the reader's own bag is somewhere
         // out there, and though nobody can say where, the colours are known exactly. That
@@ -258,11 +271,11 @@ module Rich =
         breakdown.Width <- 40
 
         for color, n in Pile.toCounts seen.Unseen do
-            breakdown.AddItem(Words.color color, float n, Tint.color color) |> ignore
+            breakdown.AddItem(Words.color color, float n, Tint.color palette color) |> ignore
 
         rows [ table :> IRenderable; markup ""; breakdown :> IRenderable ]
 
-    let private landRuled game =
+    let private landRuled palette game =
         // How the land stands is the game's own reckoning, not this view's. A second
         // renderer counting it again for itself is a second chance to count it differently.
         let standing = Game.landStanding game
@@ -271,7 +284,7 @@ module Rich =
         bars.Width <- width - 6
 
         for color in StoneColor.all do
-            bars.AddItem(Words.color color, float (Map.find color standing.Ruled), Tint.color color)
+            bars.AddItem(Words.color color, float (Map.find color standing.Ruled), Tint.color palette color)
             |> ignore
 
         bars.AddItem("tied", float standing.Tied, Color.Grey37) |> ignore
@@ -280,22 +293,22 @@ module Rich =
 
     // --- everything the game has said ---------------------------------------------------
 
-    let private log told (model: Model) =
+    let private log palette told (model: Model) =
         match model.Log with
-        | [] -> markup (Tint.wrap Tint.Hidden "nothing yet")
+        | [] -> markup (Tint.wrap (Tint.hidden palette) "nothing yet")
         | notices ->
             notices
             |> List.rev
-            |> List.map (told >> Tint.markup)
+            |> List.map (told >> Tint.markup palette)
             |> String.concat Environment.NewLine
             |> markup
 
-    let private plainly (lines: string list) =
-        lines |> String.concat Environment.NewLine |> Tint.markup |> markup
+    let private plainly palette (lines: string list) =
+        lines |> String.concat Environment.NewLine |> Tint.markup palette |> markup
 
     // --- the whole screen ------------------------------------------------------------------
 
-    let board notes (beholder: Player) model =
+    let board palette notes (beholder: Player) model =
         let game = Model.game model
         let active = Game.active game
 
@@ -319,6 +332,8 @@ module Rich =
             grid.AddRow(left, right) |> ignore
             grid :> IRenderable
 
+        let note = note palette
+
         let mapNotes =
             if notes then
                 [ markup ""
@@ -340,7 +355,7 @@ module Rich =
 
         let result =
             if Model.isOver model then
-                [ wide "Result" (plainly (Render.result game)) ]
+                [ wide "Result" (plainly palette (Render.result game)) ]
             else
                 []
 
@@ -348,21 +363,24 @@ module Rich =
             if notes then
                 [ wide
                       "Commands"
-                      (plainly (Render.commands @ [ ""; "  Colours are r, b and g; regions are numbered on the map." ])) ]
+                      (plainly
+                          palette
+                          (Render.commands
+                           @ [ ""; "  Colours are r, b and g; regions are numbered on the map." ])) ]
             else
                 []
 
         rows (
             [ rule :> IRenderable
-              wide "The map" (rows ([ mapOf game ] @ mapNotes))
-              apart game
+              wide "The map" (rows ([ mapOf palette game ] @ mapNotes))
+              apart palette game
               beside
-                  (panel "Players" (players seen active.Id model))
-                  (panel "Supply" (rows ([ supply seen ] @ hiddenNote)))
-              wide "Land ruled" (landRuled game) ]
+                  (panel "Players" (players palette seen active.Id model))
+                  (panel "Supply" (rows ([ supply palette seen ] @ hiddenNote)))
+              wide "Land ruled" (landRuled palette game) ]
             @ result
             @ commands
-            @ [ wide "Log" (log told model) ]
+            @ [ wide "Log" (log palette told model) ]
         )
         |> Tint.renderAt width
 
@@ -373,11 +391,14 @@ module Rich =
     // in every view, and the compiler says so if one is missed.
 
     /// The record of play, as a table: what was asked, by whom, and what came of it.
-    let history (beholder: Player) model =
+    let history palette (beholder: Player) model =
         let told = Render.wording beholder model
 
         match Journal.entries model.Journal with
-        | [] -> Tint.renderAt width (panel "The record" (markup (Tint.wrap Tint.Hidden "Nothing has happened yet.")))
+        | [] ->
+            Tint.renderAt
+                width
+                (panel "The record" (markup (Tint.wrap (Tint.hidden palette) "Nothing has happened yet.")))
         | entries ->
 
         let table = Table()
@@ -393,11 +414,14 @@ module Rich =
             let outcome =
                 match entry.Told with
                 | [] -> ""
-                | notices -> notices |> List.map (told >> Tint.markup) |> String.concat Environment.NewLine
+                | notices ->
+                    notices
+                    |> List.map (told >> Tint.markup palette)
+                    |> String.concat Environment.NewLine
 
             table.AddRow(
-                markup (Tint.wrap Tint.Hidden (esc $"{entry.Ordinal}  turn {entry.Turn}")),
-                markup (Tint.markup $"{Words.player entry.Actor}: {asked}"),
+                markup (Tint.wrap (Tint.hidden palette) (esc $"{entry.Ordinal}  turn {entry.Turn}")),
+                markup (Tint.markup palette $"{Words.player entry.Actor}: {asked}"),
                 markup outcome
             )
             |> ignore
@@ -412,19 +436,26 @@ module Rich =
 
         Tint.renderAt
             width
-            (wide "The record" (rows [ table :> IRenderable; markup ""; markup (Tint.wrap Tint.Hidden (esc standing)) ]))
+            (wide
+                "The record"
+                (rows
+                    [ table :> IRenderable
+                      markup ""
+                      markup (Tint.wrap (Tint.hidden palette) (esc standing)) ]))
 
     /// The working behind who rules a region.
-    let ruling regionId model =
-        Tint.renderAt width (wide $"Region {Words.number regionId}" (plainly [ Render.explainRule regionId model ]))
+    let ruling palette regionId model =
+        Tint.renderAt
+            width
+            (wide $"Region {Words.number regionId}" (plainly palette [ Render.explainRule regionId model ]))
 
     /// The rules and the commands, at length. The words are `Render`'s - they say what the
     /// game is, which is not a thing for a view to have an opinion about - laid out here.
-    let rules =
-        Tint.renderAt width (wide "How the game goes" (plainly [ Render.help ]))
+    let rules palette =
+        Tint.renderAt width (wide "How the game goes" (plainly palette [ Render.help ]))
 
     /// A table still filling up, before there is any game to draw.
-    let waiting (seats: Waiting list) =
+    let waiting palette (seats: Waiting list) =
         let table = Table()
         table.Border <- TableBorder.None
         table.ShowHeaders <- false
@@ -434,21 +465,26 @@ module Rich =
         for seat in seats do
             let who =
                 if seat.Yours then
-                    Tint.wrap Tint.Yours $"{Words.player seat.Player} (you)"
+                    Tint.wrap (Tint.yours palette) $"{Words.player seat.Player} (you)"
                 else
                     Words.player seat.Player
 
             let holding =
-                if seat.Expected then Tint.wrap Tint.Hidden "still to arrive"
-                elif seat.Away then Tint.wrap Tint.Hidden "here, but their console has dropped"
-                else Tint.wrap Tint.Yours "here"
+                if seat.Expected then
+                    Tint.wrap (Tint.hidden palette) "still to arrive"
+                elif seat.Away then
+                    Tint.wrap (Tint.hidden palette) "here, but their console has dropped"
+                else
+                    Tint.wrap (Tint.yours palette) "here"
 
             table.AddRow(markup who, markup holding) |> ignore
 
         let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
 
         let footer =
-            Tint.wrap Tint.Hidden (esc $"{expected} more to come. The game begins once every seat is taken.")
+            Tint.wrap
+                (Tint.hidden palette)
+                (esc $"{expected} more to come. The game begins once every seat is taken.")
 
         Tint.renderAt
             width

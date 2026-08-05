@@ -62,7 +62,7 @@ let rec private loop stamp (reading: Reading) model =
                     Notes = wanted |> Option.defaultValue (not reading.Notes) }
                 model
         | Ok(Parse.Looking name) ->
-            match View.byName name with
+            match View.byName reading.View.Palette name with
             | Ok view -> loop stamp { reading with View = view } model
             | Error problem -> loop stamp reading (Update.note problem model)
         | Ok Parse.Recount ->
@@ -176,6 +176,26 @@ let private hostFrom players seed =
         eprintfn "%s" problem
         1
 
+/// The colour screen, which runs until the player is done with it and gives back the view
+/// they came in reading - the same one, in whatever colours they settled on.
+///
+/// It is shown through that view, so the sample colours on it are drawn by the very thing
+/// that will be drawing the board.
+let rec private colouring (view: View) =
+    printf "%s" (view.Says(Options.screen view.Palette))
+    printf "> "
+
+    match Console.ReadLine() with
+    | null -> view
+    | line ->
+        match Options.choose view.Palette line with
+        | Ok Options.Done -> view
+        | Ok Options.Same -> colouring view
+        | Ok(Options.Changed palette) -> colouring (View.recoloured palette view)
+        | Error problem ->
+            printfn "%s" (view.Says problem)
+            colouring view
+
 /// The start menu, which runs until it has settled on one of those. Everything it offers
 /// either opens a game or comes back round to here, so there is no way out of it but the
 /// two, and no way to be at the prompt with nothing to play.
@@ -194,13 +214,14 @@ let rec private welcome (view: View) =
     match Console.ReadLine() with
     | null -> Done 0
     | line ->
-        match Menu.choose line with
+        match Menu.choose view.Palette line with
         | Ok Menu.Waiting -> welcome view
         | Ok Menu.Leave -> Done 0
         | Ok Menu.Rules ->
             printfn "%s" view.Rules
             welcome view
         | Ok(Menu.Looking chosen) -> welcome chosen
+        | Ok Menu.Options -> welcome (colouring view)
         | Ok(Menu.Deal(players, seed)) ->
             match dealt players (seed |> Option.defaultValue (clockSeed ())) with
             | Ok model -> Play(model, view)
@@ -221,13 +242,18 @@ let private play view model =
 /// view it names along with everything else still in the order it was given. How a board
 /// is drawn says nothing about what to deal, so it has no place among the arguments that
 /// do - and pulling it out first is what lets the rest go on being read by position.
+///
+/// Whichever it names is built in the standard colours: a game started straight from a
+/// shortcut never passes the menu, and the colour screen is on the other side of it.
 let private viewFrom (argv: string array) =
     let rec sift taken chosen =
         match taken with
-        | "--view" :: name :: rest -> View.byName name |> Result.bind (fun view -> sift rest (Some view))
+        | "--view" :: name :: rest ->
+            View.byName Palette.standard name
+            |> Result.bind (fun view -> sift rest (Some view))
         | [ "--view" ] -> Error $"Say '--view <name>', for one of {View.names}."
         | word :: rest -> sift rest chosen |> Result.map (fun (view, kept) -> view, word :: kept)
-        | [] -> Ok(chosen |> Option.defaultValue View.plain, [])
+        | [] -> Ok(chosen |> Option.defaultValue (View.plain Palette.standard), [])
 
     sift (List.ofArray argv) None |> Result.map (fun (view, kept) -> view, Array.ofList kept)
 

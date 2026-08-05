@@ -19,54 +19,34 @@ open TCModel.Domain
 /// here to turn it into something a game can hand about.
 module Tint =
 
-    // --- the palette, which is the whole of what is decided here ----------------------
-
-    /// Eight-bit colours rather than the sixteen named ones, and each a good deal brighter
-    /// than the word for it: a stone drawn in the flat version of its own colour is hard to
-    /// pick out of a map, and on a dark screen a dark blue is barely there at all.
-    [<Literal>]
-    let private RedInk = "red1"
-
-    [<Literal>]
-    let private BlueInk = "dodgerblue1"
-
-    [<Literal>]
-    let private GreenInk = "green3"
+    // --- reading a palette ------------------------------------------------------------
+    //
+    // Which colour is drawn for what is `Palette`'s to say, and a player's to change. What
+    // is left here is where each one is used, which is not.
 
     [<Literal>]
     let private HeadingInk = "bold"
 
-    /// The reader's own seat, and the arrow marking whoever is to play. Warm, so that it
-    /// stands apart from all three factions - it sits right beside a bag full of them.
-    [<Literal>]
-    let Yours = "gold1"
-
-    /// Ground nobody may enter, and stones nobody can see.
-    [<Literal>]
-    let Hidden = "grey37"
-
-    /// A colour as markup says it.
-    let ink =
-        function
-        | Red -> RedInk
-        | Blue -> BlueInk
-        | Green -> GreenInk
+    /// A faction's colour as markup says it.
+    let ink palette color = Palette.ink (Palette.forColor color palette)
 
     /// The same colour as Spectre's own, for the widgets that take one rather than a name.
-    let color =
-        function
-        | Red -> Color.Red1
-        | Blue -> Color.DodgerBlue1
-        | Green -> Color.Green3
+    let color palette faction = (Palette.forColor faction palette).Color
+
+    /// The reader's own seat, and the arrow marking whoever is to play.
+    let yours (palette: Palette) = Palette.ink palette.Yours
+
+    /// Ground nobody may enter, and stones nobody can see.
+    let hidden (palette: Palette) = Palette.ink palette.Hidden
 
     /// A colour by its first letter, which serves for a stone's glyph and for its name
     /// alike: the three are written R, B and G and called Red, Blue and Green, so one
     /// letter tells them apart wherever they are written.
-    let private inkOfLetter letter =
+    let private inkOfLetter palette letter =
         match letter with
-        | 'R' -> RedInk
-        | 'B' -> BlueInk
-        | _ -> GreenInk
+        | 'R' -> ink palette Red
+        | 'B' -> ink palette Blue
+        | _ -> ink palette Green
 
     let wrap style (text: string) = $"[{style}]{text}[/]"
 
@@ -99,32 +79,35 @@ module Tint =
 
     /// Colour every letter of a run one by one, leaving anything else as it was - so
     /// "=BG" keeps its sign and each colour level in the region keeps its own.
-    let private letterByLetter (text: string) =
+    let private letterByLetter palette (text: string) =
         text
         |> Seq.map (fun c ->
             if c = 'R' || c = 'B' || c = 'G' then
-                wrap (inkOfLetter c) (string c)
+                wrap (inkOfLetter palette c) (string c)
             else
                 string c)
         |> String.concat ""
 
-    let private mark (found: Match) =
+    let private mark palette (found: Match) =
         let matched (name: string) = found.Groups[name].Success
 
         if matched "heading" || matched "block" then wrap HeadingInk found.Value
-        elif matched "you" || matched "active" then wrap Yours found.Value
-        elif matched "dead" then wrap Hidden found.Value
+        elif matched "you" || matched "active" then wrap (yours palette) found.Value
+        elif matched "dead" then wrap (hidden palette) found.Value
         // "Green", "Gx4" and a lone "G" all begin with the letter that names the colour,
         // so all three go the same way.
         elif matched "named" || matched "tally" || matched "glyph" then
-            wrap (inkOfLetter found.Value[0]) found.Value
-        elif matched "rules" then wrap $"bold {inkOfLetter found.Value[1]}" found.Value
-        else letterByLetter found.Value
+            wrap (inkOfLetter palette found.Value[0]) found.Value
+        elif matched "rules" then
+            wrap $"bold {inkOfLetter palette found.Value[1]}" found.Value
+        else
+            letterByLetter palette found.Value
 
     /// Plain text in, Spectre markup out. The escaping has to come first: the board is
     /// full of square brackets - every region is numbered "[ 5]" - and to Spectre a
     /// square bracket opens a colour.
-    let markup (text: string) = rules.Replace(Markup.Escape text, mark)
+    let markup palette (text: string) =
+        rules.Replace(Markup.Escape text, mark palette)
 
     // --- putting it through Spectre -----------------------------------------------------
 
@@ -149,9 +132,9 @@ module Tint =
         writer.ToString()
 
     /// Plain text in, the same text in colour out.
-    let paint (text: string) =
+    let paint palette (text: string) =
         try
-            renderAt 1000 (Markup(markup text))
+            renderAt 1000 (Markup(markup palette text))
         with _ ->
             // Colour is decoration. If it cannot be had the game is still perfectly
             // readable without it, and losing a turn to a bad escape would not be.

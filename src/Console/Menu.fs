@@ -26,6 +26,8 @@ module Menu =
         | Rules
         /// Read the game a different way from here on.
         | Looking of View
+        /// Settle what is drawn in what colour.
+        | Options
         | Leave
         /// Nothing was typed, so the menu simply asks again.
         | Waiting
@@ -59,13 +61,18 @@ module Menu =
               choice "<players> <seed>" "the same game again, from a seed"
               choice "replay <file>" "play a saved record again"
               choice $"view <{View.names}>" $"how the board is drawn - now {showing.Name}, {showing.Describe}"
+              choice "colours" "which colour is drawn for what"
               choice "rules" "the rules and the commands, at length"
               choice "quit" "leave"
               "" ]
 
     /// A typed line as a choice. A bare number is the answer to the question the menu
     /// asks, so it needs no command word in front of it.
-    let choose (text: string) : Result<Choice, string> =
+    ///
+    /// The palette comes in because a view is built in one: asking for another way of
+    /// reading keeps whatever colours have been settled on rather than going back to the
+    /// ones the game started in.
+    let choose (palette: Palette) (text: string) : Result<Choice, string> =
         let dealing players seed =
             result {
                 let! players = Parse.tryPlayerCount players
@@ -92,8 +99,10 @@ module Menu =
                     return Host(players, Some seed)
                 }
             | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
-            | "view", [ name ] -> View.byName name |> Result.map Looking
+            | "view", [ name ] -> View.byName palette name |> Result.map Looking
             | "view", _ -> Error $"Say 'view <name>', for one of {View.names}."
+            | ("colours" | "colors" | "options"), [] -> Ok Options
+            | ("colours" | "colors" | "options"), _ -> Error "Say 'colours' on its own; the screen it opens says the rest."
             | "join", [ address ] -> Ok(Join(address, None))
             | "join", [ address; token ] -> Ok(Join(address, Some token))
             | "join", _ -> Error "Say 'join <address>', naming the machine that is hosting."

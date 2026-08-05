@@ -60,9 +60,16 @@ module Client =
         let token = ref (resuming |> Option.defaultValue "")
 
         /// Sitting down says who this console is and how it would like to read, because a
-        /// board is drawn at the table and the table has to know before it draws one.
+        /// board is drawn at the table and the table has to know before it draws one. The
+        /// colours go with it for the same reason: a board arrives already coloured, so a
+        /// palette chosen at this end is no use unless the other end has it.
         let sitDown () =
-            connection.InvokeAsync(Protocol.Call.Join, box token.Value, box chosen.Name)
+            connection.InvokeAsync(
+                Protocol.Call.Join,
+                box token.Value,
+                box chosen.Name,
+                box (Palette.write chosen.Palette)
+            )
 
         connection.On<int, string>(
             Protocol.Call.Seated,

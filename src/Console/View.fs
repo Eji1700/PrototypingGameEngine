@@ -25,6 +25,12 @@ type View =
     { Name: string
       Describe: string
 
+      /// The colours this one was built with. Every endpoint below has them already, so
+      /// nothing needs to be told them twice; this is here so that a player who changes
+      /// their colours can be handed the same view built again in the new ones, and so a
+      /// console joining a table can say what it wants a board drawn in.
+      Palette: Palette
+
       /// The whole board, drawn for one player. The flag is whether the writing that
       /// explains the board comes with it.
       Board: bool -> Player -> Model -> string
@@ -47,10 +53,12 @@ type View =
 module View =
 
     /// The board as `Render` writes it: blocks of text, and nothing this terminal has to
-    /// understand.
-    let plain =
+    /// understand. It draws in no colour at all, and still carries the palette, so that a
+    /// player who sets their colours here and then asks for `rich` gets the ones they set.
+    let plain palette =
         { Name = "plain"
           Describe = "plain text, and nothing this terminal has to understand"
+          Palette = palette
           Board = Render.model
           History = Render.history
           Ruling = Render.explainRule
@@ -59,26 +67,39 @@ module View =
           Waiting = Render.waiting }
 
     /// The same game built out of panels, tables and charts, in colour.
-    let rich =
+    let rich palette =
         { Name = "rich"
           Describe = "panels, charts and colour, for a terminal that can show them"
-          Board = Rich.board
-          History = Rich.history
-          Ruling = Rich.ruling
-          Rules = Rich.rules
-          Says = Tint.paint
-          Waiting = Rich.waiting }
+          Palette = palette
+          Board = Rich.board palette
+          History = Rich.history palette
+          Ruling = Rich.ruling palette
+          Rules = Rich.rules palette
+          Says = Tint.paint palette
+          Waiting = Rich.waiting palette }
 
     /// Every view on offer, in the order they are offered. A new one is added here and
     /// nowhere else: the menu, the command line and the prompt all read this list rather
     /// than keeping their own.
-    let all = [ plain; rich ]
+    let all palette = [ plain palette; rich palette ]
 
-    let names = all |> List.map (fun view -> view.Name) |> String.concat ", "
+    /// What there is to choose from. Which views there are does not depend on what colour
+    /// they are drawn in, so this asks for the list in the standard ones and reads off the
+    /// names.
+    let names =
+        all Palette.standard |> List.map (fun view -> view.Name) |> String.concat ", "
 
-    let byName (name: string) =
+    let byName palette (name: string) =
         let wanted = name.ToLowerInvariant()
 
-        match all |> List.tryFind (fun view -> view.Name = wanted) with
+        match all palette |> List.tryFind (fun view -> view.Name = wanted) with
         | Some view -> Ok view
         | None -> Error $"'{name}' is not a way of showing the game. There is {names}."
+
+    /// The same view, built again in different colours. A view is its endpoints, and those
+    /// have the old palette baked into them, so changing colours means asking for the view
+    /// afresh rather than putting a new palette on the one in hand.
+    let recoloured palette (view: View) =
+        all palette
+        |> List.tryFind (fun other -> other.Name = view.Name)
+        |> Option.defaultValue (plain palette)

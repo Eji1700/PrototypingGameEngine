@@ -53,7 +53,7 @@ module Lobby =
                 { Player = player.Id
                   Occupant = Empty
                   Notes = true
-                  View = View.plain }) }
+                  View = View.plain Palette.standard }) }
 
     let model lobby = lobby.Model
 
@@ -225,7 +225,9 @@ module Lobby =
                 { seat with
                     Notes = wanted |> Option.defaultValue (not seat.Notes) }
         | Ok(Parse.Looking name) ->
-            match View.byName name with
+            // In whatever colours this seat is already reading in: a player who set them
+            // before sitting down does not lose them by changing how the board is laid out.
+            match View.byName seat.View.Palette name with
             | Ok view -> mine { seat with View = view }
             | Error problem -> told problem
         | Ok(Parse.Explain regionId) -> lobby, just console (Told(seat.View.Ruling regionId lobby.Model))

@@ -50,13 +50,15 @@ type TableHub(held: Held) =
             | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why))
         |> Task.WhenAll
 
-    member this.Join(token: string, view: string) =
+    member this.Join(token: string, view: string, palette: string) =
         let resuming =
             if String.IsNullOrWhiteSpace token then None else Some token
 
         // A view a table has never heard of is no reason to turn a player away; they can
-        // ask for another once they are sitting down.
-        let view = View.byName view |> Result.defaultValue View.plain
+        // ask for another once they are sitting down. Colours the table does not know are
+        // passed over the same way, one at a time, by `Palette.read`.
+        let palette = Palette.read palette
+        let view = View.byName palette view |> Result.defaultValue (View.plain palette)
 
         // A fresh token is minted out here and handed in, so the lobby stays a value:
         // a table that invented its own tokens could not be folded twice to the same

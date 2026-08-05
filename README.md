@@ -55,9 +55,11 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
 | [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
+| [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
 | [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
 | [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
+| [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
 | [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
@@ -389,6 +391,7 @@ keyboard or five over a network.
 type View =
     { Name: string
       Describe: string
+      Palette: Palette                             // the colours it was built with
       Board:   bool -> Player -> Model -> string   // the whole board, for one player
       History: Player -> Model -> string           // the record of play so far
       Ruling:  RegionId -> Model -> string         // why a region is ruled as it is
@@ -427,6 +430,41 @@ now begin with the same letter, one lookup serves both: `Gx4`, a lone `G` on the
 the word "Green" in a sentence, a bar in a chart and a region's border all follow from
 [Tint.fs](src/Console/Tint.fs) and `Words.glyph`. The reader's own seat is marked in
 gold rather than a fourth hue that could be mistaken for a stone.
+
+### Colours a player chooses
+
+Which colour is drawn for what is a **palette** ([Palette.fs](src/Console/Palette.fs)),
+and `colours` at the menu opens the screen that changes one:
+
+```
+    red      Red   R R   >R          crimson   Red stones, and the regions Red rules
+    blue     Blue   B B   >B         teal      Blue stones, and the regions Blue rules
+    green    Green   G G   >G        moss      Green stones, and the regions Green rules
+    yours    (you)   ->              gold      your own seat, and whose turn it is
+    hidden   dead                    slate     what is held back from you, and ground nobody may enter
+
+    Say 'blue teal' to change one, 'reset' to put them all back, or 'done'.
+```
+
+Five things take a colour and nineteen colours are on offer, each with a short word of
+its own rather than Spectre's `mediumpurple1`. The five live in one list, so the screen
+that offers them, the line that changes one and the two halves of sending a palette down
+a wire cannot come to disagree about what there is.
+
+The samples in the middle column are not written out for the screen: they are the board's
+own words - a stone's glyph, `>R`, `(you)`, `dead` - and the screen is shown through the
+very view built in the palette it is offering. So `Tint` colours them exactly as it will
+colour the board, and choosing is looking.
+
+A palette travels with the view, not with the model: the same position drawn twice in two
+palettes is the same position, so it stays out of the record and out of the game. That is
+also what lets a networked table draw one board five ways - a joining console sends its
+colours along with the view it wants, in the same words a person would have typed
+(`red=crimson blue=teal ...`), read back by the same `Palette.set` that reads them at the
+prompt. Two people at one table really do read the same stones in different colours.
+
+`plain` carries a palette too, though it draws in none, so a player who sets their colours
+and *then* asks for `rich` gets the ones they set.
 
 The green faction was called **Black** and written `K` earlier on, and records written
 then say so. `Parse` still reads `black` and `k`, though nothing writes them any more,
@@ -669,6 +707,7 @@ started from a script or a shortcut. With none, the menu
     <players> <seed>       the same game again, from a seed
     replay <file>          play a saved record again
     view <plain, rich>     how the board is drawn - now plain, plain text, and nothing this terminal has to understand
+    colours                which colour is drawn for what
     rules                  the rules and the commands, at length
     quit                   leave
 ```
@@ -714,7 +753,8 @@ dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone c
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
 dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
-dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see
+dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
+                                #   and that changing the colours changes nothing else
 ```
 
 Each script exits non-zero on failure. They load the source directly, so they run

@@ -17,6 +17,7 @@
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
 #load "../src/Console/Parse.fs"
+#load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
 #load "../src/Console/View.fs"
@@ -33,7 +34,7 @@ let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
 let private opened () = Lobby.opened dealt
 
 /// One console at the table, in the next empty seat.
-let private sits console token lobby = Lobby.join console token None View.plain lobby
+let private sits console token lobby = Lobby.join console token None (View.plain Palette.standard) lobby
 
 /// Both seats taken, which is the only state a game is played in.
 let private full () =
@@ -92,7 +93,7 @@ report
 // --- coming back --------------------------------------------------------------------
 
 let dropped, _ = full () |> Lobby.left "one"
-let _, resumed = dropped |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") View.plain
+let _, resumed = dropped |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") (View.plain Palette.standard)
 
 report "a token brings a console back to the seat it left" true (heard "one-again" resumed |> mentions "seated at 1")
 
@@ -101,7 +102,7 @@ report
     true
     (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Gx3 (8)")
 
-let _, stranger = full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token") View.plain
+let _, stranger = full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token") (View.plain Palette.standard)
 
 report
     "a token that claimed no seat claims none now"
@@ -166,7 +167,7 @@ report
 // boards that look nothing alike from the one position.
 
 let sittingPlain, _ = opened () |> sits "one" "tok-one"
-let mixed, mixedPosts = sittingPlain |> Lobby.join "two" "tok-two" None View.rich
+let mixed, mixedPosts = sittingPlain |> Lobby.join "two" "tok-two" None (View.rich Palette.standard)
 
 /// Panels are drawn with box characters; nothing in the plain board has one.
 let private panelled = mentions "╭"
