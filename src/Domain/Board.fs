@@ -112,6 +112,12 @@ module Board =
     let landRegions =
         regions |> List.filter (fun region -> RegionKind.isLand region.Kind)
 
+    /// The other two: bought with stones, but no part of the map and no part of the
+    /// land. Every view draws them clear of the map, so which they are is asked here
+    /// rather than worked out again in each.
+    let apartRegions =
+        regions |> List.filter (fun region -> RegionKind.isIsolated region.Kind)
+
     /// Region numbers paired with the regions they border. Borders are symmetrised
     /// below, so a border only has to be named from one end: each region names only
     /// the neighbours numbered above it, which - given the numbering above - are

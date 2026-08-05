@@ -8,7 +8,6 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
-open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open TCModel.Domain
 open TCModel.App

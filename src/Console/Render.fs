@@ -194,6 +194,28 @@ module Render =
           across (fun region -> inside (mapStanding game region))
           across (fun _ -> half + "\\_/" + half) ]
 
+    // --- what both views say ------------------------------------------------------------
+    //
+    // A view lays a screen out as it likes, but what the screen says about the game is one
+    // decision and not one per view. Anything below is written once and read by both, so
+    // two boards can look nothing alike and still not disagree.
+
+    /// How a stone and a region are named at the prompt, for a player looking at a board
+    /// rather than at the help.
+    let shorthand = "Colours are r, b and g; regions are numbered on the map above."
+
+    /// Where the game stands between the deal and here, once moves have been taken back.
+    let recordStanding model =
+        let made = Timeline.movesMade model.Timeline
+        let back = Timeline.movesTakenBack model.Timeline
+
+        match back with
+        | 0 -> $"{made} move(s) stand between the deal and here."
+        | _ -> $"{made} move(s) stand between the deal and here, with {back} taken back and waiting to be made again."
+
+    /// A record with nothing in it yet.
+    let nothingYet = "Nothing has happened yet."
+
     /// The commands in brief, each shown as it would be typed. This sits with the board
     /// because that is where a player is looking; `Render.help` says all of it at length.
     let commands =
@@ -320,18 +342,10 @@ module Render =
 
             asked :: (entry.Told |> List.map (fun notice -> String.replicate 26 " " + told notice))
 
-        let standing =
-            let made = Timeline.movesMade model.Timeline
-            let back = Timeline.movesTakenBack model.Timeline
-
-            match back with
-            | 0 -> $"{made} move(s) stand between the deal and here."
-            | _ -> $"{made} move(s) stand between the deal and here, with {back} taken back and waiting to be made again."
-
         match Journal.entries model.Journal with
-        | [] -> "Nothing has happened yet."
+        | [] -> nothingYet
         | entries ->
-            String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + standing ])
+            String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + recordStanding model ])
 
     /// Render the whole game as a block of text for one player to read. `notes` says
     /// whether the writing that explains the board comes with it: turned off, what is
@@ -378,7 +392,7 @@ module Render =
         section
             sb
             "STANDING APART"
-            (apartLines game (Board.regions |> List.filter (fun region -> RegionKind.isIsolated region.Kind))
+            (apartLines game Board.apartRegions
              @ noted [ ""; "  Bought with stones, but no part of the map and no part of the land." ])
 
         let run =
@@ -389,25 +403,20 @@ module Render =
 
         section sb "PLAYERS" ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
 
+        // How the land stands is the game's own reckoning, not this view's - dead ground
+        // is unclaimed and always will be, and which regions count at all is a question
+        // about the board rather than about how it is written down.
+        let standing = Game.landStanding game
+
         let ruled =
-            Game.standings game
-            |> Map.toList
-            |> List.sortBy (fun (color, _) -> List.findIndex ((=) color) StoneColor.all)
-            |> List.map (fun (color, n) -> $"{Words.color color} {n}")
+            StoneColor.all
+            |> List.map (fun color -> $"{Words.color color} {Map.find color standing.Ruled}")
             |> String.concat "   "
-
-        // Dead ground is unclaimed and always will be, so counting it says nothing
-        // about how much of the map is still going spare.
-        let contested =
-            Game.landRulings game |> List.filter (fun (region, _) -> RegionKind.isOpen region.Kind)
-
-        let counted predicate =
-            contested |> List.filter (snd >> predicate) |> List.length
 
         section
             sb
             "LAND RULED"
-            ([ $"  {ruled}   tied {counted (function Contested _ -> true | _ -> false)}   unclaimed {counted (function Unclaimed -> true | _ -> false)}" ]
+            ([ $"  {ruled}   tied {standing.Tied}   unclaimed {standing.Unclaimed}" ]
              @ noted
                  [ "  (the Flag and the Axe are manoeuvres rather than land, and the dead region"
                    "  is nobody's to take, so none of the three are counted here)" ])
@@ -430,7 +439,7 @@ module Render =
         // The commands go with the notes: a player who has turned them off has turned
         // this off too, and `help` still says all of it.
         if notes then
-            section sb "COMMANDS" (commands @ [ ""; "  Colours are r, b and g; regions are numbered on the map above." ])
+            section sb "COMMANDS" (commands @ [ ""; "  " + shorthand ])
 
         section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 

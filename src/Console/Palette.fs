@@ -139,9 +139,8 @@ module Palette =
               Of = fun palette -> palette.Hidden
               Set = fun shade palette -> { palette with Hidden = shade } } ]
 
-    let private words = shades |> List.map (fun shade -> shade.Name)
-
-    let names = words |> String.concat ", "
+    let names =
+        shades |> List.map (fun shade -> shade.Name) |> String.concat ", "
 
     let private slotNames =
         slots |> List.map (fun slot -> slot.Says) |> String.concat ", "

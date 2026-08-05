@@ -46,10 +46,6 @@ module Journal =
     /// Every entry, oldest first.
     let entries journal = List.rev journal.Written
 
-    /// The last `n` entries, oldest first.
-    let recent n journal =
-        journal.Written |> List.truncate n |> List.rev
-
     let write turn actor asked told journal =
         { journal with
             Written =

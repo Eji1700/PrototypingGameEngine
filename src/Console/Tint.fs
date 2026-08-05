@@ -13,7 +13,7 @@ open TCModel.Domain
 /// so nothing may be coloured until every column is where it belongs. What happens here
 /// cannot move a single character: it only wraps some of them.
 ///
-/// `render` is the other half: Spectre writes to a console, and this one writes into a
+/// `renderAt` is the other half: Spectre writes to a console, and this one writes into a
 /// string, so what comes back can be printed, sent down a wire, or written to a file like
 /// any other text. `Rich` builds a board out of Spectre's own widgets and comes through
 /// here to turn it into something a game can hand about.

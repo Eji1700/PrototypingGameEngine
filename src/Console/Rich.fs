@@ -194,10 +194,7 @@ module Rich =
 
             panel $"[{Words.number region.Id}] {region.Name}" (markup (standing + String(' ', room) + ruling))
 
-        let standing =
-            Board.regions
-            |> List.filter (fun region -> RegionKind.isIsolated region.Kind)
-            |> List.map held
+        let standing = Board.apartRegions |> List.map held
 
         let grid = Grid()
         standing |> List.iter (fun _ -> grid.AddColumn() |> ignore)
@@ -361,12 +358,7 @@ module Rich =
 
         let commands =
             if notes then
-                [ wide
-                      "Commands"
-                      (plainly
-                          palette
-                          (Render.commands
-                           @ [ ""; "  Colours are r, b and g; regions are numbered on the map." ])) ]
+                [ wide "Commands" (plainly palette (Render.commands @ [ ""; "  " + Render.shorthand ])) ]
             else
                 []
 
@@ -396,9 +388,7 @@ module Rich =
 
         match Journal.entries model.Journal with
         | [] ->
-            Tint.renderAt
-                width
-                (panel "The record" (markup (Tint.wrap (Tint.hidden palette) "Nothing has happened yet.")))
+            Tint.renderAt width (panel "The record" (markup (Tint.wrap (Tint.hidden palette) Render.nothingYet)))
         | entries ->
 
         let table = Table()
@@ -426,14 +416,6 @@ module Rich =
             )
             |> ignore
 
-        let made = Timeline.movesMade model.Timeline
-        let back = Timeline.movesTakenBack model.Timeline
-
-        let standing =
-            match back with
-            | 0 -> $"{made} move(s) stand between the deal and here."
-            | _ -> $"{made} move(s) stand between the deal and here, with {back} taken back."
-
         Tint.renderAt
             width
             (wide
@@ -441,7 +423,7 @@ module Rich =
                 (rows
                     [ table :> IRenderable
                       markup ""
-                      markup (Tint.wrap (Tint.hidden palette) (esc standing)) ]))
+                      markup (Tint.wrap (Tint.hidden palette) (esc (Render.recordStanding model))) ]))
 
     /// The working behind who rules a region.
     let ruling palette regionId model =
