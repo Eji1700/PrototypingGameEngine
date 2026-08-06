@@ -1,7 +1,5 @@
 namespace TCModel.Console
 
-open System
-
 /// The colour screen: what is drawn in what, and how a person changes it.
 ///
 /// Pure, like the rest of the console layer. It says what the screen reads like and what a
@@ -35,30 +33,52 @@ module Options =
         Palette.shades
         |> List.map (fun shade -> shade.Name)
         |> inRows
-        |> List.mapi (fun i row -> sprintf "  %-11s%s" (if i = 0 then "Colours:" else "") row)
+        |> List.mapi (fun i row -> sprintf "%-11s%s" (if i = 0 then "Colours:" else "") row)
 
-    let private standing palette (slot: Slot) =
-        sprintf "    %-9s%-24s%-10s%s" slot.Says slot.Shows (slot.Of palette).Name slot.Draws
+    /// The screen, in whatever colours have been settled on so far.
+    ///
+    /// Left and right walk one slot through the nineteen. There is nothing to remember
+    /// between presses: what a slot is drawn in now is in the palette this was built from,
+    /// so the step is read off that and the line says the whole of the change - and because
+    /// the screen comes straight back in the new palette, the sample beside the name changes
+    /// under the cursor as it is walked.
+    let screen palette : Keys.Screen =
+        let walking (slot: Slot) step =
+            let at =
+                Palette.shades
+                |> List.tryFindIndex (fun shade -> shade.Name = (slot.Of palette).Name)
+                |> Option.defaultValue 0
 
-    let screen palette =
-        String.concat
-            Environment.NewLine
-            ([ ""
-               "=== Colours ==="
-               ""
-               "  Which colour is drawn for what. This is how the game is read rather than how it"
-               "  is played, so it is nobody's business but yours - it stays out of the record, and"
-               "  at a table over a network everyone reads in their own."
-               "" ]
-             @ (Palette.slots |> List.map (standing palette))
-             @ [ ""
-                 "    Say 'blue teal' to change one, 'reset' to put them all back, or 'done'."
-                 "" ]
-             @ offered
-             @ [ ""
-                 "  Only the rich view draws in colour. Set them from either - plain carries them"
-                 "  along until you ask for rich, and then they are what it draws in."
-                 "" ])
+            let count = List.length Palette.shades
+
+            $"{slot.Says} {Palette.shades[((at + step) % count + count) % count].Name}"
+
+        let standing at (slot: Slot) =
+            Keys.sends
+                (Keys.nth at)
+                slot.Says
+                (sprintf "%-24s%-10s%s" slot.Shows (slot.Of palette).Name slot.Draws)
+                (walking slot 1)
+            |> Keys.turning (walking slot)
+
+        { Title = "Colours"
+          Prose =
+            [ "Which colour is drawn for what. This is how the game is read rather than how it is"
+              "played, so it is nobody's business but yours - it stays out of the record, and at a"
+              "table over a network everyone reads in their own." ]
+          Rows =
+            (Palette.slots |> List.mapi standing)
+            @ [ Keys.sends (Keys.nth (List.length Palette.slots)) "reset" "put them all back" "reset"
+                Keys.sends (Some '0') "done" "back to the menu" "done" ]
+          Note =
+            [ "Left and right walk the one marked -> through the colours, or say 'blue teal' to"
+              "name one outright."
+              "" ]
+            @ offered
+            @ [ ""
+                "Only the rich view draws in colour. Set them from either - plain carries them along"
+                "until you ask for rich, and then they are what it draws in." ]
+          Backs = Some "done" }
 
     /// A typed line as a step. Two words are a colour for something; the rest are the ways
     /// out.

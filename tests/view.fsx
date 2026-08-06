@@ -23,6 +23,7 @@
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
 #load "../src/Console/Parse.fs"
+#load "../src/Console/Keys.fs"
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
@@ -390,6 +391,6 @@ report
 
 let private offering = View.rich redIsTeal
 
-report "the colour screen shows what it is offering" true (offering.Says(Options.screen redIsTeal) |> inked 45)
+report "the colour screen shows what it is offering" true (offering.Says(Keys.draw None (Options.screen redIsTeal)) |> inked 45)
 
 finish ()

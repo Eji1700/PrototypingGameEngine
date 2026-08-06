@@ -152,67 +152,115 @@ type private Opening =
     | Play of Model * View * Skill list
     | Done of code: int
 
+/// Whether there is somebody at the keyboard to steer with. A line piped in cannot press an
+/// arrow, and a redirected console throws rather than answering for one, so a screen shown
+/// to one of those is shown whole and read a line at a time exactly as it always was.
+let private steering () = not Console.IsInputRedirected
+
+/// Nothing here is worth losing a turn over: a console that will not clear is a console the
+/// menu scrolls in, which is how it read before there was anything to move.
+let private cleared () =
+    try
+        Console.Clear()
+    with _ ->
+        ()
+
+/// Hold the screen until a key, for the one thing the menu prints that is longer than the
+/// menu. It is about to be wiped, and nobody reads the rules in the time it takes to press
+/// something.
+let private held () =
+    if steering () then
+        printf "Press any key."
+        Console.ReadKey true |> ignore
+
+/// Ask a screen for a line.
+///
+/// What comes back is a line in the words a person would have typed, so on the other side of
+/// this is the same reader that has always been there - the arrows are a way of typing
+/// rather than a second way of meaning something. Where the highlight was left comes back
+/// with it: walking a colour along changes the palette, which builds the screen again, and
+/// the cursor has to still be on the slot that is being changed.
+let private asking (view: View) said screen at =
+    let rec steer standing =
+        let showing, index = Keys.facing standing
+        cleared ()
+        printf "%s" (view.Says(Keys.draw (Some index) showing))
+
+        if said <> "" then printfn "%s" (view.Says said)
+
+        printf "> %s" standing.Buffer
+
+        match Keys.answer (Keys.pressed (Keys.typing standing) (Console.ReadKey true)) standing with
+        | Keys.Steering next -> steer next
+        | Keys.Answered line -> Some line, Keys.started standing
+
+    if steering () then
+        steer (Keys.standing screen at)
+    else
+        printf "%s" (view.Says(Keys.draw None screen))
+
+        if said <> "" then printfn "%s" (view.Says said)
+
+        printf "> "
+
+        match Console.ReadLine() with
+        | null -> None, at
+        | line -> Some line, at
+
 /// The colour screen, which runs until the player is done with it and gives back the view
 /// they came in reading - the same one, in whatever colours they settled on.
 ///
 /// It is shown through that view, so the sample colours on it are drawn by the very thing
 /// that will be drawing the board.
-let rec private colouring (view: View) =
-    printf "%s" (view.Says(Options.screen view.Palette))
-    printf "> "
-
-    match Console.ReadLine() with
-    | null -> view
-    | line ->
+let rec private colouring (view: View) at said =
+    match asking view said (Options.screen view.Palette) at with
+    | None, _ -> view
+    | Some line, at ->
         match Options.choose view.Palette line with
         | Ok Options.Done -> view
-        | Ok Options.Same -> colouring view
-        | Ok(Options.Changed palette) -> colouring (View.recoloured palette view)
-        | Error problem ->
-            printfn "%s" (view.Says problem)
-            colouring view
+        | Ok Options.Same -> colouring view at ""
+        | Ok(Options.Changed palette) -> colouring (View.recoloured palette view) at ""
+        | Error problem -> colouring view at problem
 
 /// The start menu, which runs until it has settled on one of those. Everything it offers
 /// either opens a game or comes back round to here, so there is no way out of it but the
 /// two, and no way to be at the prompt with nothing to play.
-let rec private welcome (view: View) =
+let rec private welcome (view: View) at said =
     // The menu is shown in the view it is offering, so 'view rich' shows what rich looks
     // like before a whole game is committed to it.
-    printf "%s" (view.Says(Menu.screen view))
-    printf "> "
+    match asking view said (Menu.screen view) at with
+    | None, _ -> Done 0
+    | Some line, at ->
 
-    /// Say what went wrong and ask again. The menu is the only place to be when there is
-    /// no game yet, so nothing here leaves except by being asked to.
-    let retry problem =
-        printfn "%s" (view.Says problem)
-        welcome view
+    /// Say what went wrong and ask again, with the cursor where it was left. The menu is the
+    /// only place to be when there is no game yet, so nothing here leaves except by being
+    /// asked to.
+    let retry problem = welcome view at problem
 
-    match Console.ReadLine() with
-    | null -> Done 0
-    | line ->
-        match Menu.choose view.Palette line with
-        | Ok Menu.Waiting -> welcome view
-        | Ok Menu.Leave -> Done 0
-        | Ok Menu.Rules ->
-            printfn "%s" view.Rules
-            welcome view
-        | Ok(Menu.Looking chosen) -> welcome chosen
-        | Ok Menu.Options -> welcome (colouring view)
-        | Ok(Menu.Deal(players, seed, rivals)) ->
-            match dealt players (seed |> Option.defaultValue (clockSeed ())) with
-            | Ok model -> Play(model, view, rivals)
-            | Error problem -> retry problem
-        | Ok(Menu.Serve(players, seed, rivals)) ->
-            // In whatever colours the player settled on here, which is the same promise
-            // the command line's --colour keeps.
-            Done(serveFor view.Palette rivals players (seed |> Option.defaultValue (clockSeed ())))
-        | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
-        | Ok(Menu.Join(address, token)) -> Done(Client.join address token view)
-        | Ok(Menu.Replay path) ->
-            match replayFrom path with
-            | Ok model -> Play(model, view, [])
-            | Error problem -> retry problem
+    match Menu.choose view.Palette line with
+    | Ok Menu.Waiting -> welcome view at ""
+    | Ok Menu.Leave -> Done 0
+    | Ok Menu.Rules ->
+        printfn "%s" view.Rules
+        held ()
+        welcome view at ""
+    | Ok(Menu.Looking chosen) -> welcome chosen at ""
+    | Ok Menu.Options -> welcome (colouring view 0 "") at ""
+    | Ok(Menu.Deal(players, seed, rivals)) ->
+        match dealt players (seed |> Option.defaultValue (clockSeed ())) with
+        | Ok model -> Play(model, view, rivals)
         | Error problem -> retry problem
+    | Ok(Menu.Serve(players, seed, rivals)) ->
+        // In whatever colours the player settled on here, which is the same promise
+        // the command line's --colour keeps.
+        Done(serveFor view.Palette rivals players (seed |> Option.defaultValue (clockSeed ())))
+    | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
+    | Ok(Menu.Join(address, token)) -> Done(Client.join address token view)
+    | Ok(Menu.Replay path) ->
+        match replayFrom path with
+        | Ok model -> Play(model, view, [])
+        | Error problem -> retry problem
+    | Error problem -> retry problem
 
 /// Sit down at a game and play it here. The board the player is looking at when they
 /// arrive is drawn by the same code that draws every one after it, because sitting down is
@@ -270,7 +318,7 @@ let main argv =
     // have defaulted to.
     match argv with
     | [||] ->
-        match welcome (View.plain Palette.standard) with
+        match welcome (View.plain Palette.standard) 0 "" with
         | Play(model, view, rivals) -> play view rivals model
         | Done code -> code
     | _ -> Shell.run opening argv

@@ -44,6 +44,8 @@
     <Compile Include="src/Console/Words.fs" />
     <Compile Include="src/Console/Render.fs" />
     <Compile Include="src/Console/Parse.fs" />
+    <!-- Beside `Parse`, and for the same reason: one reads a line, the other a key. -->
+    <Compile Include="src/Console/Keys.fs" />
     <Compile Include="src/Console/Palette.fs" />
     <Compile Include="src/Console/Tint.fs" />
     <Compile Include="src/Console/Rich.fs" />

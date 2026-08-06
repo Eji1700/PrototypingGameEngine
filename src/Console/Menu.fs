@@ -1,6 +1,5 @@
 namespace TCModel.Console
 
-open System
 open TCModel.Common
 open TCModel.Domain
 open TCModel.App
@@ -36,46 +35,95 @@ module Menu =
         /// Nothing was typed, so the menu simply asks again.
         | Waiting
 
-    /// The seatings on offer, taken from the table rather than written out, so the menu
-    /// cannot come to offer a number the table would refuse.
-    let private seatings =
-        [ Table.MinPlayers .. Table.MaxPlayers ]
-        |> List.map string
-        |> String.concat "  "
+    /// How many are playing, asked the same way wherever the answer is wanted - round this
+    /// keyboard, in a browser, or at a table other machines will join.
+    ///
+    /// The numbers are taken from the table rather than written out, so the menu cannot come
+    /// to offer one the table would refuse, and each is picked by its own digit: the key
+    /// that says three *is* the three, rather than being the third thing on a list.
+    let private seating title asked word : Keys.Screen =
+        { Title = title
+          Prose = [ asked ]
+          Rows =
+            [ for players in Table.MinPlayers .. Table.MaxPlayers ->
+                  Keys.sends
+                      (Some(char (int '0' + players)))
+                      $"{players} players"
+                      ""
+                      (if word = "" then string players else $"{word} {players}") ]
+          Note = [ $"Or type the number with a seed after it, for the same game again: '{Table.MinPlayers} 42'." ]
+          Backs = None }
 
-    let private choice typed does = sprintf "    %-22s %s" typed does
+    /// The machines on offer, read off `Rival` rather than written out here, so a fourth
+    /// way of playing is offered the moment there is one.
+    let private facing: Keys.Screen =
+        { Title = "Against the program"
+          Prose = [ "One seat for you and one for the machine." ]
+          Rows =
+            Rival.all
+            |> List.mapi (fun at skill -> Keys.sends (Keys.nth at) skill.Name skill.Describe $"vs {skill.Name}")
+          Note = [ "For more than one, type 'vs easy hard' - a seat for you, and one for each machine named." ]
+          Backs = None }
 
-    /// The menu is shown in the view it is offering, so a player choosing one can see
-    /// what they are choosing before they commit a game to it.
-    let screen (showing: View) =
-        String.concat
-            Environment.NewLine
-            [ ""
-              "=== TCModel ==="
+    /// The menu is shown in the view it is offering, so a player choosing one can see what
+    /// they are choosing before they commit a game to it.
+    ///
+    /// Every row here stands for a line the menu itself can read, so nothing on the screen
+    /// is a second way of meaning something: picking with the arrows and typing the words
+    /// arrive at `choose` together.
+    let screen (showing: View) : Keys.Screen =
+        // Left and right walk the ways of drawing a board, rather than opening a list of
+        // two. What is on offer comes from `View`, and where in it the reader already is
+        // comes from the view doing the showing - so this needs to remember nothing.
+        let looking step =
+            let names =
+                View.offered AtATerminal showing.Palette |> List.map (fun view -> view.Name)
+
+            let at =
+                names
+                |> List.tryFindIndex (fun name -> name = showing.Name)
+                |> Option.defaultValue 0
+
+            let count = List.length names
+
+            $"view {names[((at + step) % count + count) % count]}"
+
+        let drawn =
+            Keys.sends (Keys.nth 6) "How it is drawn" $"now {showing.Name} - {showing.Describe}" (looking 1)
+            |> Keys.turning looking
+
+        { Title = "TCModel"
+          Prose = [ "Stones on a map, and a seat each." ]
+          Rows =
+            [ Keys.opens
+                  (Keys.nth 0)
+                  "Play here"
+                  "everyone round this keyboard"
+                  (seating "Playing here" "How many are playing?" "")
+              Keys.opens (Keys.nth 1) "Against the program" $"the machine plays {Rival.names}" facing
+              Keys.opens
+                  (Keys.nth 2)
+                  "In a browser"
+                  "the same game, read as a page on this machine"
+                  (seating "In a browser" "How many are playing?" "serve")
+              Keys.opens
+                  (Keys.nth 3)
+                  "Host a table"
+                  "the others sit down from their own machines"
+                  (seating "Hosting a table" "How many seats to wait for?" "host")
+              Keys.types (Keys.nth 4) "Join a table" "sit down at one somebody else is hosting" "join "
+              Keys.types (Keys.nth 5) "Replay a record" "a saved game, played through again" "replay "
+              drawn
+              Keys.sends (Keys.nth 7) "Colours" "which colour is drawn for what" "colours"
+              Keys.sends (Keys.nth 8) "Rules" "the rules and the commands, at length" "rules"
+              Keys.sends (Keys.nth 9) "Quit" "" "quit" ]
+          Note =
+            [ "Move with the arrows or w and s. Enter takes the one marked ->, and so does its number."
               ""
-              "  Stones on a map, and a seat each. How many are playing?"
-              ""
-              choice seatings "deal a game for that many, round this keyboard"
-              choice "serve <players>" "the same, but played in a browser on this machine"
-              ""
-              "  Or, against the program:"
-              ""
-              choice "vs <skill>..." $"one seat each - the machine plays {Rival.names}"
-              ""
-              "  Or, to play from separate machines:"
-              ""
-              choice "host <players>" "open a table and wait for them to arrive"
-              choice "join <address>" "sit down at a table someone else is hosting"
-              ""
-              "  Or:"
-              ""
-              choice "<players> <seed>" "the same game again, from a seed"
-              choice "replay <file>" "play a saved record again"
-              choice $"view <{View.namesFor AtATerminal}>" $"how the board is drawn - now {showing.Name}, {showing.Describe}"
-              choice "colours" "which colour is drawn for what"
-              choice "rules" "the rules and the commands, at length"
-              choice "quit" "leave"
-              "" ]
+              "Or type it: '3' for a game of three, '3 42' for that same game again, 'serve 3',"
+              $"'vs <skill>...' for {Rival.names}, 'host 3', 'join <address>', 'replay <file>',"
+              $"'view <{View.namesFor AtATerminal}>', 'colours', 'rules', 'quit'." ]
+          Backs = None }
 
     /// A typed line as a choice. A bare number is the answer to the question the menu
     /// asks, so it needs no command word in front of it.

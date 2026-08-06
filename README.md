@@ -34,7 +34,7 @@ nothing else, and it picks a `Move` - the very thing a typed line turns into.
 ## Running
 
 ```powershell
-dotnet run                     # the start menu, which asks how many are playing
+dotnet run                     # the start menu: arrows or wasd to move, a number to pick
 dotnet run -- play 3           # 3 players, random seed - straight to the board
 dotnet run -- play 3 --seed 42 # the same game again, from a seed
 dotnet run -- play 2 --view rich --colour blue=teal
@@ -493,13 +493,16 @@ Which colour is drawn for what is a **palette** ([Palette.fs](src/Console/Palett
 and `colours` at the menu opens the screen that changes one:
 
 ```
-    red      Red   R R   >R          crimson   Red stones, and the regions Red rules
-    blue     Blue   B B   >B         teal      Blue stones, and the regions Blue rules
-    green    Green   G G   >G        moss      Green stones, and the regions Green rules
-    yours    (you)   ->              gold      your own seat, and whose turn it is
-    hidden   dead                    slate     what is held back from you, and ground nobody may enter
+     1  red     Red   R R   >R          crimson   Red stones, and the regions Red rules
+  -> 2  blue    Blue   B B   >B         teal      Blue stones, and the regions Blue rules
+     3  green   Green   G G   >G        moss      Green stones, and the regions Green rules
+     4  yours   (you)   ->              gold      your own seat, and whose turn it is
+     5  hidden  dead                    slate     what is held back from you, and ground nobody may enter
+     6  reset   put them all back
+     0  done    back to the menu
 
-    Say 'blue teal' to change one, 'reset' to put them all back, or 'done'.
+  Left and right walk the one marked -> through the colours, or say 'blue teal' to
+  name one outright.
 ```
 
 Five things take a colour and nineteen colours are on offer, each with a short word of
@@ -511,6 +514,14 @@ The samples in the middle column are not written out for the screen: they are th
 own words - a stone's glyph, `>R`, `(you)`, `dead` - and the screen is shown through the
 very view built in the palette it is offering. So `Tint` colours them exactly as it will
 colour the board, and choosing is looking.
+
+Left and right walk the marked slot through the nineteen, and the sample beside it changes
+under the cursor as they do. Nothing is remembered between presses: what a slot is drawn in
+now is in the palette the screen was built from, so the step is read off that and the line
+the press stands for - `red ember` - says the whole of the change. It goes through the same
+`Options.choose` a person typing those two words would have reached, the screen comes
+straight back in the new palette, and walking right round the list arrives back at the
+colour it set out from.
 
 A palette travels with the view, not with the model: the same position drawn twice in two
 palettes is the same position, so it stays out of the record and out of the game. That is
@@ -1075,6 +1086,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
 | [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
+| [Keys.fs](src/Console/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
 | [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
 | [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
@@ -1084,7 +1096,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
 | [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
 | [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
-| [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
+| [Menu.fs](src/Console/Menu.fs) | The start menu: what there is to open, and what a typed line asks for |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
 **`src/Net`** — the same game with the players at different keyboards. Only the
@@ -1177,39 +1189,63 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Console/Menu.fs))
 ```
 === TCModel ===
 
-  Stones on a map, and a seat each. How many are playing?
+  Stones on a map, and a seat each.
 
-    2  3  4  5             deal a game for that many, round this keyboard
-    serve <players>        the same, but played in a browser on this machine
+  -> 1  Play here            everyone round this keyboard
+     2  Against the program  the machine plays easy, medium, hard
+     3  In a browser         the same game, read as a page on this machine
+     4  Host a table         the others sit down from their own machines
+     5  Join a table         sit down at one somebody else is hosting
+     6  Replay a record      a saved game, played through again
+     7  How it is drawn      now plain - plain text, and nothing this terminal has to understand
+     8  Colours              which colour is drawn for what
+     9  Rules                the rules and the commands, at length
+     0  Quit
 
-  Or, against the program:
+  Move with the arrows or w and s. Enter takes the one marked ->, and so does its number.
 
-    vs <skill>...          one seat each - the machine plays easy, medium, hard
-
-  Or, to play from separate machines:
-
-    host <players>         open a table and wait for them to arrive
-    join <address>         sit down at a table someone else is hosting
-
-  Or:
-
-    <players> <seed>       the same game again, from a seed
-    replay <file>          play a saved record again
-    view <plain, rich>     how the board is drawn - now plain, plain text, and nothing this terminal has to understand
-    colours                which colour is drawn for what
-    rules                  the rules and the commands, at length
-    quit                   leave
+  Or type it: '3' for a game of three, '3 42' for that same game again, 'serve 3',
+  'vs <skill>...' for easy, medium, hard, 'host 3', 'join <address>', 'replay <file>',
+  'view <plain, rich>', 'colours', 'rules', 'quit'.
 ```
 
-A bare number is the answer to the question the menu asks, so it needs no command
-word in front of it. The seatings on offer are read off `Table.MinPlayers` and
-`Table.MaxPlayers` rather than written out, so the menu cannot come to offer a
-number the table would refuse. `vs` does not ask how many are playing, because
-saying who you are playing has already said it: one seat for you and one for each
-machine named, so `vs easy hard` is a table of three. Like the rest of the console
-layer `Menu` is pure - it says what the menu reads like and what a typed line means,
-and `Program` does the reading and the writing. Once a game is dealt, `players <n>`
-and `restart` do the same job from the prompt.
+### Picking, and typing, are the same thing
+
+The arrows move the mark, `w`/`a`/`s`/`d` do the same, a number takes that row outright,
+and Enter takes whatever is marked. What makes that cheap rather than a second front door
+is that **a row is not a second way of meaning something — it stands for a line.** Picking
+one hands that line to `Menu.choose`, which is the very function a person typing the words
+would have reached. There is one grammar, and the keys are a way into it.
+
+So the rows that need a number open a list of the seatings, and picking `3` there sends
+the line `3`; the row that joins a table writes `join ` into the prompt and waits, because
+no list holds every address; and `Backs`, the line that escape stands for, is a line too.
+The seatings are still read off `Table.MinPlayers` and `Table.MaxPlayers`, and each is
+picked by *its own* digit rather than by its place on the list, so the key that says three
+is the three. `vs` does not ask how many are playing, because saying who you are playing
+has already said it: one seat for you and one for each machine named, so `vs easy hard` is
+a table of three. Once a game is dealt, `players <n>` and `restart` do the same job from
+the prompt.
+
+The one place the two readings of a key meet is the steering letters. With nothing typed
+they steer; with a line underway every letter belongs to it, or an address with an `a` in
+it could not be spelt out at all.
+
+[Keys.fs](src/Console/Keys.fs) holds the shape of such a screen and what a press comes to,
+including where a person has got to — which list they have opened into, where the mark is,
+what they have typed. All of it is a value, so walking about can be checked without a
+keyboard, and `Program` is left with drawing what it says and asking for the next key. That
+is also why none of this reaches the views: the mark is written `->`, the arrow `Tint`
+already draws in the reader's own colour to say *whose turn it is*, so `rich` picks out the
+marked row without having been told there are menus.
+
+A console reading a piped line has no arrow to press — `Console.ReadKey` throws at one —
+so when the input is redirected the screen is shown whole with nothing marked and read a
+line at a time, exactly as it was before any of this. Every script that drives the program
+by feeding it lines is untouched.
+
+Like the rest of the console layer `Menu` and `Options` are pure: they say what a screen
+reads like and what a line means, and `Program` does the reading and the writing.
 
 ## Tests
 
@@ -1234,7 +1270,8 @@ dotnet fsi tests/view.fsx       # that no view shows a player anything they shou
                                 #   that changing the colours changes nothing else
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
                                 #   and has no control on it the game would not take
-dotnet fsi tests/cli.fsx        # the command surface, and that both halves of it agree
+dotnet fsi tests/cli.fsx        # the command surface, that both halves of it agree, and that
+                                #   every row of every menu stands for a line the menu can read
 dotnet fsi tests/properties.fsx # the invariants, over games FsCheck thinks up itself
 dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays legally, that it
                                 #   plays fairly, and that the skills mean something

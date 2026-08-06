@@ -31,11 +31,13 @@
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
 #load "../src/Console/Parse.fs"
+#load "../src/Console/Keys.fs"
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
 #load "../src/Console/Html.fs"
 #load "../src/Console/View.fs"
+#load "../src/Console/Options.fs"
 #load "../src/Console/Launch.fs"
 #load "../src/Console/Shell.fs"
 #load "../src/Console/Menu.fs"
@@ -278,6 +280,203 @@ report
 
 report "a bare number is still a table of people" (Ok("deal", 4, None, [])) (dealing (chosen "4"))
 
-report "and the menu says the machine is on offer" true ((Menu.screen (View.plain Palette.standard)).Contains "vs <skill>...")
+report
+    "and the menu says the machine is on offer"
+    true
+    ((Keys.draw None (Menu.screen (View.plain Palette.standard))).Contains "vs <skill>...")
+
+// --- the same door, opened with the arrow keys ------------------------------------------------
+//
+// A row on a screen is not a second way of meaning something: it stands for a line, and
+// choosing it hands that line to the very reader a person typing it would have reached. That
+// is the whole design, and it is only worth anything if it is true of every row - including
+// the ones two lists down, which nobody scrolls past on the way to anywhere.
+//
+// So the first check here walks the whole tree and insists the reader understands every line
+// on it. A row that came to offer something `Menu.choose` has never heard of would be a dead
+// end a player finds by pressing Enter on it, and nothing else in the program would notice.
+
+let private front = Menu.screen (View.plain Palette.standard)
+
+let rec private everyRow (screen: Keys.Screen) =
+    screen.Rows
+    |> List.collect (fun row ->
+        row
+        :: (match row.Pick with
+            | Keys.Opens under -> everyRow under
+            | _ -> []))
+
+let rec private everyScreen (screen: Keys.Screen) =
+    screen
+    :: (screen.Rows
+        |> List.collect (fun row ->
+            match row.Pick with
+            | Keys.Opens under -> everyScreen under
+            | _ -> []))
+
+/// Every line one row can come to: the one it stands for, and the two its left and right
+/// make. A row that only writes the start of a line is finished off with something standing
+/// in for the file or the address, because what is being checked is the grammar around it.
+let private linesOf (row: Keys.Row) =
+    (match row.Pick with
+     | Keys.Sends line -> [ line ]
+     | Keys.Types text -> [ text + "something" ]
+     | Keys.Opens _ -> [])
+    @ (match row.Turns with
+       | Some turn -> [ turn -1; turn 1 ]
+       | None -> [])
+
+let private unread reader screen =
+    everyRow screen
+    |> List.collect linesOf
+    |> List.filter (fun line ->
+        match reader line with
+        | Ok _ -> false
+        | Error _ -> true)
+
+report "every row the menu offers stands for a line the menu itself can read" [] (unread chosen front)
+
+report
+    "and the same on the colour screen, where left and right walk a slot through the colours"
+    []
+    (unread (Options.choose Palette.standard) (Options.screen Palette.standard))
+
+report
+    "the way back out of a screen is a line too"
+    true
+    (match (Options.screen Palette.standard).Backs with
+     | Some line ->
+         match Options.choose Palette.standard line with
+         | Ok Options.Done -> true
+         | _ -> false
+     | None -> false)
+
+report
+    "and no two rows on one screen answer to the same number"
+    []
+    (everyScreen front
+     |> List.collect (fun screen -> screen.Rows |> List.choose (fun row -> row.Digit) |> List.countBy id)
+     |> List.filter (fun (_, many) -> many > 1))
+
+// --- and that the keys reach them -------------------------------------------------------------
+
+let private key press =
+    ConsoleKeyInfo('\000', press, false, false, false)
+
+let private letter (typed: char) =
+    ConsoleKeyInfo(typed, enum<ConsoleKey> 0, false, false, false)
+
+/// A screen, walked over by a run of key presses, and whatever line it gave up.
+let private walking screen keys =
+    let rec next standing keys =
+        match keys with
+        | [] -> None
+        | key :: rest ->
+            match Keys.answer (Keys.pressed (Keys.typing standing) key) standing with
+            | Keys.Steering standing -> next standing rest
+            | Keys.Answered line -> Some line
+
+    next (Keys.standing screen 0) keys
+
+let private walked keys = walking front keys
+
+report "the number of a row picks it outright" (Some "colours") (walked [ letter '8' ])
+
+report "and a number on the list it opens is the answer to what that list asked" (Some "3") (walked [ letter '1'; letter '3' ])
+
+report "which is the same line typing it would have sent" (Ok("deal", 3, None, [])) (dealing (chosen "3"))
+
+let private taking down =
+    walked (List.replicate 8 down @ [ key ConsoleKey.Enter ])
+
+report "the arrows walk down the list" (Some "rules") (taking (key ConsoleKey.DownArrow))
+
+report "and w and s are the same two keys" (Some "rules") (taking (letter 's'))
+
+report "up from the top of the list is the bottom of it" (Some "quit") (walked [ letter 'w'; key ConsoleKey.Enter ])
+
+report
+    "a row that needs more writes the part it knows and waits for the rest"
+    (Some "join elsewhere")
+    (walked (
+        [ letter '5' ]
+        @ ([ 'e'; 'l'; 's'; 'e'; 'w'; 'h'; 'e'; 'r'; 'e' ] |> List.map letter)
+        @ [ key ConsoleKey.Enter ]
+    ))
+
+// The one place the two readings of a key meet. With nothing typed the letters steer; with a
+// line underway every letter belongs to it, or an address with an 'a' in it could not be
+// spelt out at all.
+
+report
+    "and once a line is underway the steering letters are letters again"
+    (Some "join sad")
+    (walked (
+        [ 'j'; 'o'; 'i'; 'n'; ' '; 's'; 'a'; 'd' ]
+        |> List.map letter
+        |> fun keys -> keys @ [ key ConsoleKey.Enter ]
+    ))
+
+report
+    "backing out of a list opened by mistake comes back to the one it was opened from"
+    (Some "quit")
+    (walked [ letter '1'; key ConsoleKey.Escape; letter '0' ])
+
+report
+    "and backing out of the front door does nothing, there being nothing behind it"
+    (Some "quit")
+    (walked [ key ConsoleKey.Escape; letter '0' ])
+
+// Left and right on the colour screen walk one slot through the nineteen. Nothing is
+// remembered between presses - the line says the whole of the change - so walking the list
+// right round has to come back to the colour it set out from.
+
+let private colours = Options.screen Palette.standard
+
+let private walkedRight times palette =
+    List.replicate times (key ConsoleKey.RightArrow)
+    |> List.fold
+        (fun palette press ->
+            match walking (Options.screen palette) [ press ] with
+            | Some line ->
+                match Options.choose palette line with
+                | Ok(Options.Changed changed) -> changed
+                | _ -> palette
+            | None -> palette)
+        palette
+
+report "right walks a slot on to the next colour" (Some "red ember") (walking colours [ key ConsoleKey.RightArrow ])
+
+report
+    "and left to the one before, which from the first is the last"
+    (Some "red slate")
+    (walking colours [ key ConsoleKey.LeftArrow ])
+
+report
+    "walking right round the colours comes back where it started"
+    [ "ember"; "crimson" ]
+    [ (walkedRight 1 Palette.standard).Red.Name
+      (walkedRight (List.length Palette.shades) Palette.standard).Red.Name ]
+
+// Where the cursor was left comes back with the line, because the screen is built again from
+// the palette every time one changes and the cursor has to still be on the slot being walked.
+
+report
+    "and the cursor comes back where it was left, however deep it went"
+    3
+    (let rec next standing keys =
+        match keys with
+        | [] -> Keys.started standing
+        | key :: rest ->
+            match Keys.answer (Keys.pressed (Keys.typing standing) key) standing with
+            | Keys.Steering standing -> next standing rest
+            | Keys.Answered _ -> Keys.started standing
+
+     next
+         (Keys.standing colours 0)
+         [ key ConsoleKey.DownArrow
+           key ConsoleKey.DownArrow
+           key ConsoleKey.DownArrow
+           key ConsoleKey.RightArrow ])
 
 finish ()
