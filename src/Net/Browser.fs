@@ -4,7 +4,9 @@ open System
 open System.Collections.Generic
 open System.IO
 open System.Reflection
+open System.Threading
 open System.Threading.Channels
+open System.Threading.Tasks
 open Falco.Datastar
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Http.Features
@@ -36,6 +38,15 @@ module Browser =
     let Prefix = "page-"
 
     let isPage (console: string) = console.StartsWith Prefix
+
+    /// How often a stream with nothing to say says something anyway.
+    ///
+    /// Well inside the minute or so that the usual things standing between a browser and a
+    /// table out on the internet - a tunnel, a proxy, a load balancer - wait before deciding
+    /// a quiet connection is a dead one. The page allows for a few of these going missing
+    /// before it does anything about it, so this is short enough to be sure and long enough
+    /// to be nothing.
+    let private Beat = TimeSpan.FromSeconds 15.0
 
     // --- who is reading ------------------------------------------------------------------
 
@@ -156,6 +167,22 @@ module Browser =
 
     // --- the console a browser is -----------------------------------------------------------
 
+    /// How anything this table hands a browser to keep is kept.
+    ///
+    /// `Secure` is settled per request rather than once, because whether a browser is
+    /// talking to this over https is not something the table knows about itself: with a
+    /// tunnel or a proxy in front, the encryption ends there and the request arrives here in
+    /// the clear, carrying the header that says what it was. Marked secure on a plain
+    /// connection the cookie would be dropped and never sent back, which at a table means a
+    /// player who loses their seat on every reload.
+    let private kept (ctx: HttpContext) =
+        CookieOptions(
+            HttpOnly = true,
+            Secure = ctx.Request.IsHttps,
+            SameSite = SameSiteMode.Strict,
+            MaxAge = TimeSpan.FromDays 7.0
+        )
+
     /// Which console this browser is, minting one if it has not been here before.
     ///
     /// The cookie is the whole of a page's identity. It is not a claim on a seat - the table
@@ -167,11 +194,7 @@ module Browser =
         | _ ->
             let minted = Prefix + Guid.NewGuid().ToString "N"
 
-            ctx.Response.Cookies.Append(
-                Cookie,
-                minted,
-                CookieOptions(HttpOnly = true, SameSite = SameSiteMode.Strict, MaxAge = TimeSpan.FromDays 7.0)
-            )
+            ctx.Response.Cookies.Append(Cookie, minted, kept ctx)
 
             minted
 
@@ -190,6 +213,64 @@ module Browser =
         match ctx.Request.Query.TryGetValue "colours" with
         | true, given when given.Count > 0 -> Palette.read (String.Join(" ", given.ToArray()))
         | _ -> standing
+
+    // --- the word at the door ---------------------------------------------------------------
+    //
+    // A table further away than a network is reachable by everybody, which includes everybody
+    // who was not invited - and a seat, once taken, is kept for whoever took it. There is no
+    // move for standing a stranger up again, and there should not be: the same rule is what
+    // lets a player close their laptop and come back to their own stones. So the stranger has
+    // to be stopped at the door, and here is where a request meets it.
+    //
+    // Nothing here decides anything. `Reach.admits` does that, on a value, where it can be
+    // checked; this only finds what was presented and says what a refusal looks like.
+
+    /// Everything this request presents as the word, wherever it was carried.
+    ///
+    /// Three places, because there are three kinds of arrival and each can only manage some
+    /// of them. A browser sent a whole address carries it in the address the first time and
+    /// in a cookie ever after; a console at a terminal has no address bar and no cookie jar,
+    /// so it sets a header on everything it sends.
+    let presented (ctx: HttpContext) =
+        [ (match ctx.Request.Query.TryGetValue Reach.Asked with
+           | true, given when given.Count > 0 -> Some(string given[0])
+           | _ -> None)
+          (match ctx.Request.Headers.TryGetValue Reach.Header with
+           | true, given when given.Count > 0 -> Some(string given[0])
+           | _ -> None)
+          (match ctx.Request.Cookies.TryGetValue Reach.Cookie with
+           | true, given -> Some given
+           | _ -> None) ]
+        |> List.choose id
+
+    /// Hand a browser that got it right the word back, so that the rest of what a page
+    /// fetches - its client, its stream, every line it types - carries it without the
+    /// address having to. It is not a key to anything: it is the same word they just
+    /// presented, kept so they need not present it again by hand.
+    let remember reach (ctx: HttpContext) =
+        match Reach.word reach with
+        | None -> ()
+        | Some code ->
+            match ctx.Request.Cookies.TryGetValue Reach.Cookie with
+            | true, held when held = code -> ()
+            | _ -> ctx.Response.Cookies.Append(Reach.Cookie, code, kept ctx)
+
+    /// And what somebody who got it wrong is shown.
+    ///
+    /// Whoever is on the other side of this is a player who was sent an address, so the
+    /// front door answers with something they can act on: a page with one box on it. Every
+    /// other address answers with the bare refusal, because nothing else here is opened by a
+    /// person - they are the page's own fetches, and a stream handed a form instead of a
+    /// board would be a stranger sort of failure than the one it is reporting.
+    let turned standing (ctx: HttpContext) =
+        if ctx.Request.Method = HttpMethods.Get && ctx.Request.Path = PathString "/" then
+            ctx.Response.StatusCode <- 401
+            ctx.Response.ContentType <- "text/html; charset=utf-8"
+            ctx.Response.WriteAsync(Html.locked (paletteOf standing ctx) (not (List.isEmpty (presented ctx))))
+        else
+            ctx.Response.StatusCode <- 403
+            ctx.Response.ContentType <- "text/plain; charset=utf-8"
+            ctx.Response.WriteAsync "This table has a word at the door, and that is not it."
 
     // --- what is served ------------------------------------------------------------------------
 
@@ -263,7 +344,15 @@ module Browser =
     let amiss (ctx: HttpContext) =
         task {
             use reader = new StreamReader(ctx.Request.Body)
-            let! said = reader.ReadToEndAsync()
+
+            // As much as is going to be printed and not a character more. What is at the far
+            // end of this is a browser, and out past a network it is not necessarily one of
+            // ours: reading to the end of whatever a stranger cares to send is not a thing to
+            // do on the strength of a line that is about to be trimmed to three hundred
+            // characters anyway.
+            let held = Array.zeroCreate<char> 400
+            let! read = reader.ReadBlockAsync(held, 0, held.Length)
+            let said = String(held, 0, read)
 
             let line =
                 said.Replace('\n', ' ').Replace('\r', ' ')
@@ -313,8 +402,28 @@ module Browser =
             try
                 let mutable reading = true
 
+                // One waiter at a time, kept across the loop rather than asked for again
+                // each time round it: the loop now comes round for two reasons, and a fresh
+                // waiter on every beat would leave a queue of them on the channel.
+                let mutable waiting = channel.Reader.WaitToReadAsync(ctx.RequestAborted).AsTask()
+
                 while reading do
-                    let! more = channel.Reader.WaitToReadAsync ctx.RequestAborted
+                    // Nothing said for a while is the state a turn-based game between people
+                    // who are thinking is *usually* in, and it is indistinguishable - from
+                    // both ends - from a connection that has quietly died. Out past a local
+                    // network something in between will close an idle stream inside a
+                    // minute. So the table says something harmless every so often, which
+                    // keeps the wire warm and gives the page a silence worth measuring.
+                    use beat = CancellationTokenSource.CreateLinkedTokenSource ctx.RequestAborted
+                    let! settled = Task.WhenAny(waiting, Task.Delay(Beat, beat.Token))
+                    beat.Cancel()
+
+                    if not (Object.ReferenceEquals(settled, waiting)) then
+                        do! Response.sseExecuteScript ctx Html.Alive
+                        do! ctx.Response.Body.FlushAsync ctx.RequestAborted
+                    else
+
+                    let! more = waiting
 
                     if not more then
                         reading <- false
@@ -333,6 +442,7 @@ module Browser =
                             | Doing script -> do! Response.sseExecuteScript ctx script
 
                         do! ctx.Response.Body.FlushAsync ctx.RequestAborted
+                        waiting <- channel.Reader.WaitToReadAsync(ctx.RequestAborted).AsTask()
             with
             // The page has gone. That is how a browser says goodbye - there is no other
             // way for it to - so it is the ordinary ending rather than a failure.

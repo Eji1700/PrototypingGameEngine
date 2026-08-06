@@ -49,9 +49,13 @@ dotnet run -- serve 2 --rival hard
 dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
 
 dotnet run -- host 3                        # open a table at their own machines
-dotnet run -- join greg-pc                  # sit down at one someone else opened
+dotnet run -- host 3 --open                 # ...with no word at the door, for a room you trust
+dotnet run -- join greg-pc --code <word>    # sit down at one someone else opened
 dotnet run -- join greg-pc --token <token>  # come back to the seat you were in
-                                            # or open greg-pc:5000 in a browser
+                                            # or open the address it prints in a browser
+
+dotnet run -- host 3 --behind --at stones.example.org   # https ends at a tunnel or proxy
+dotnet run -- host 3 --cert stones.pfx --cert-password <pw>  # ...or is held here
 
 dotnet run -- --help           # every command; --help works on each of them too
 ```
@@ -621,16 +625,18 @@ game nor the other player is any the wiser.
 One player hosts a table and the rest join it:
 
 ```powershell
-dotnet run -- host 3          # opens a table for three and waits
-dotnet run -- join greg-pc    # each of the others, from their own machine
+dotnet run -- host 3                        # opens a table for three and waits
+dotnet run -- join greg-pc --code <word>    # each of the others, from their own machine
 ```
 
 At the menu it is a seating with anybody joining in it — `play you hard joins` opens a
 table for three, plays the middle seat here, and waits for the other two consoles.
 
-The host prints the addresses it can be reached at. A player says a machine name,
+The host prints the addresses it can be reached at, the word at its door, and the whole
+line each of the others types — that line is written by `Launch.write`, so what somebody is
+told to type is something the program is certain to accept. A player says a machine name,
 an address, or a whole URL; the port and the path are filled in
-([Client.fs](src/Net/Client.fs)). Nobody plays until every seat a person has is taken - a
+([Reach.fs](src/Console/Reach.fs)). Nobody plays until every seat a person has is taken - a
 game dealt for three hands out three bags whether or not three people have arrived, so
 starting early would mean somebody playing a bag that is not theirs. A seat the program
 plays was never empty and is not waited for.
@@ -686,6 +692,106 @@ field per table, behind a lock, and the hub does nothing but turn a call into a 
 and the fold's answer back into calls. So the multiplayer rules are testable without
 a socket, and [lobby.fsx](tests/lobby.fsx) tests them that way.
 
+### Further than a network
+
+A table on a network everybody in the room is on is guarded by the room: whoever can reach
+the address was invited. Hosted where players are in different places, it is guarded by
+nothing, and three things that were fair assumptions on a LAN stop being true.
+
+**Anybody who finds the port can take a seat, and a seat once taken is kept.** That is not a
+bug to fix at the far end — it is the rule that lets a player close their laptop and come
+back to their own stones, and there is deliberately no move for standing somebody up again.
+So a stranger has to be stopped at the door, and the door is one word:
+
+```
+  The word at this table's door:  82xv-33yd-cx7w
+
+  2 are somebody else's, from their own machines. Each of them runs:
+
+    dotnet run -- join https://stones.example.org --code 82xv-33yd-cx7w
+
+  or open https://stones.example.org/?code=82xv-33yd-cx7w in a browser.
+```
+
+Twelve letters from the machine's own source of randomness — not from `Rng`, which is
+random the way a deal is random and would tell anybody holding the seed what came next.
+No `o` or `0`, no `l` or `1`, because it gets read out loud as often as it gets copied, and
+the case and the dashes are forgiven when it comes back. Words are held up against each other
+a letter at a time whatever they are, so how long the answer took says nothing about how
+much of it was right.
+
+**A table gets one whether or not anybody asked**, and `--open` is how you say a room you
+trust. That way round because the failure is silent and one-way: nobody notices the open
+door until somebody is sitting in their seat.
+
+It travels the one way each kind of console can manage. A browser carries it in the address
+the first time and is handed a cookie for everything after — its client, its stream, every
+line it types. A console at a terminal has no address bar and no cookie jar, so it sets a
+header on every request it makes. One piece of middleware in front of the whole table reads
+all three, because the ways in are not all pages: a terminal arrives at the SignalR hub,
+which no page routing would have covered.
+
+Somebody who turns up at the front door without it gets a page with one box on it rather
+than a number — they are a player who was sent an address, and `403` is not an instruction
+anybody can act on.
+
+**Everything crosses in the clear over http**, which at this game means the boards going
+past are somebody's stones. Two ways out, and the second is the one most people hosting one
+of these actually have:
+
+| | what it means |
+| --- | --- |
+| `--cert <file.pfx> [--cert-password <pw>]` | https ends here; Kestrel is bound with the certificate |
+| `--behind` | https ends at a tunnel or proxy in front, which forwards plain http to this |
+| `--at <address>` | what to tell players, when it is not this machine's own name |
+
+`--behind` is not `--cert` with the checking off. It changes what this process believes
+about the player at the far end: the forwarded headers are read, so `Request.IsHttps` is the
+browser's answer rather than this socket's, and the cookies a table hands out are marked
+`secure` exactly when the browser is on a connection that will send them back. Guessing
+either way breaks something — marked secure over plain http the cookie is dropped and the
+player loses their seat on every reload.
+
+The two schemes are kept apart on purpose. What a player types is `https://stones.example.org`;
+what is listening *here* is `http://localhost:5000`, because the encryption ended at the
+machine next door. Both are printed, each labelled with who it is for.
+
+**A wire between houses goes quiet, and then goes away.** Three defaults were written for
+requests that take a moment, and this is a socket held open across a game that takes an
+evening:
+
+- **A stream with nothing on it looks idle**, and a tunnel or proxy will close an idle
+  connection inside a minute — while a turn-based game between people who are thinking is
+  idle by nature. So the table says something harmless down each page's stream every fifteen
+  seconds. It is a script rather than an SSE comment for the second half of the reason: a
+  comment keeps the wire warm but the page cannot *see* one, and a connection that has
+  silently stopped arriving is indistinguishable from a game where nobody has moved.
+- **So the page counts the silence.** Four missed beats and it says so, then tries the
+  address every few seconds until something answers and reloads. A reload loses nothing —
+  the board is drawn at the table, the seat is remembered by the cookie — which is why it is
+  the right answer rather than a crude one. The stream is also asked to stay open while the
+  tab is hidden, without which being told your turn came round while you were elsewhere
+  could not work at all: being elsewhere is the state this game is played in.
+- **A console at a terminal waits longer and tries forever.** Sixty seconds before deciding
+  the table has gone, and a retry policy that backs off to half a minute and then stays
+  there — because the seat is *kept*, nobody else may take it, and the game will wait all
+  evening. A line typed while the wire is down says so and stays typeable, rather than
+  taking the process down with it.
+
+**What this is not.** There are no accounts and no per-player secrets: one word lets you
+into the table, and which seat you get is the table's business. The thing that identifies a
+player afterwards is the seat token, which is minted per seat and is what `--token` and the
+browser's cookie carry. A game is worth exactly this much ceremony and not more.
+
+Where it is checked: [reach.fsx](tests/reach.fsx) holds the door and the address filling as
+values, without opening a port — the deciding is `Reach.admits`, which takes a list of
+whatever was presented and answers yes or no. [cli.fsx](tests/cli.fsx) writes every one of
+these options out and reads it back through the real command surface, which is how
+`--cert-password` was found to be spelt two ways by the two libraries. And
+[smoke.ps1](tools/smoke.ps1) drives a real browser at a real locked table: turned away
+without the word, seated with it, and still hearing the table's heartbeat a whole interval
+later.
+
 ### Two kinds of table
 
 There are two, and they are the same shape: hand one a typed line and it gives back the
@@ -732,7 +838,9 @@ play, so it starts the moment it is opened, every move is yours, and `undo` work
 browsers can watch the same hot seat, and both see every move.
 
 `host` deals seats. Open the address it prints instead of running `join`, and you sit
-down at that table.
+down at that table. Both take the same flags for how far they can be reached and what it
+takes to sit down — a port, a door, a certificate — because a page on this machine and a
+table people join are the same problem the moment either is further away than a room.
 
 **A browser and a terminal can sit at one hosted table**, take turns in order, and each
 be drawn a board of their own. `Lobby` never learns there are two kinds of console: it
@@ -746,6 +854,8 @@ addresses a `Post` to a console id, and which sort that is, is written into the 
 | who you are | a token you are shown and can retype | a cookie, kept for you |
 | what draws the board | the table, per seat | the table, per seat |
 | how it says it is your turn | the bell, `\a` | the tab title, and a notification if allowed |
+| the word at the door | a header on everything it sends | the address once, then a cookie |
+| when the wire goes | SignalR reconnects, and it re-takes its seat by token | the table's heartbeat stops, and the page tries the address until it answers, then reloads |
 
 **Essentially no JavaScript, and none of it written here.**
 [Datastar](https://data-star.dev) is one 34 KB file, committed under `assets/` and
@@ -775,6 +885,15 @@ them. Not a list anybody typed — the file in `assets/`. So the two can be chec
 each other, which matters because they version separately: Falco.Datastar's own CDN pin is
 `1.0.0-RC.7` while the client carried here is `1.0.2`. That check is what says they still
 agree.
+
+They do not agree everywhere, and the stream is where it shows. The page asks for one
+request option — that its stream stays open while the tab is hidden, without which the turn
+arriving could not reach anybody who was elsewhere — and that one crosses intact. The knobs
+for how hard the client should *retry* a broken stream do not: the library drops `retry`
+entirely and spells the wait `retryMaxWaitMs` where the carried client reads `retryMaxWait`.
+So the page does not lean on them. It keeps its own watch instead, which it would have
+wanted anyway: neither knob covers a stream that ended tidily, or one that stopped arriving
+without saying so.
 
 Two small deviations from what the library emits, both in [Html.fs](src/Console/Html.fs)
 with the reason written down: `data-bind:line` is given an empty value rather than standing
@@ -1107,6 +1226,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
 | [Keys.fs](src/Console/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
 | [Seating.fs](src/Console/Seating.fs) | Who is in each seat before a game is dealt, and everything that falls out of it |
+| [Reach.fs](src/Console/Reach.fs) | How far a table can be reached and what it takes to sit down at one: the port, the word at the door, what it is all wrapped in, and an address as somebody says it |
 | [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
 | [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
@@ -1127,7 +1247,7 @@ last three files here touch a socket.
 | [Protocol.fs](src/Net/Protocol.fs) | Where the table listens, and what each end calls the other |
 | [Browser.fs](src/Net/Browser.fs) | A page as a console: the streams held open to them, and what is served. Knows of no table in particular |
 | [Lobby.fs](src/Net/Lobby.fs) | Seats, tokens, and the three rules a table adds to the game |
-| [Server.fs](src/Net/Server.fs) | The host, and the local game served to a browser: a table behind a lock, with pages and sockets over it |
+| [Server.fs](src/Net/Server.fs) | The host, and the local game served to a browser: a table behind a lock, with pages and sockets over it, and the door everybody arrives at |
 | [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
 
 And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
@@ -1352,6 +1472,8 @@ dotnet fsi tests/view.fsx       # that no view shows a player anything they shou
                                 #   that changing the colours changes nothing else
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
                                 #   and has no control on it the game would not take
+dotnet fsi tests/reach.fsx      # the word at a table's door, and an address as somebody says
+                                #   it filled out into one a console can reach
 dotnet fsi tests/cli.fsx        # the command surface, that both halves of it agree, and that
                                 #   every row of every menu - including every seat list there
                                 #   could be - stands for a line the menu can read
@@ -1362,18 +1484,18 @@ dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays lega
 
 **Together, because nearly all of it is compiling.** Each script is its own `dotnet fsi`,
 and each of those recompiles the same sources from scratch: `lobby.fsx` takes five seconds,
-and two tenths of one of them are spent on its checks. Twelve of those in a row is fifty
-seconds of one core while the rest of the machine watches. They share nothing — separate
+and two tenths of one of them are spent on its checks. Thirteen of those in a row is most of
+a minute of one core while the rest of the machine watches. They share nothing — separate
 processes folding values from fixed seeds — so there is no order between them to get wrong,
 and running them at once cannot change what any of them decides. Started together they take
-twelve seconds, and the runner caps how many at once by the number of cores, so a two-core
+fourteen seconds, and the runner caps how many at once by the number of cores, so a two-core
 build machine still gets half its time back rather than thrashing.
 
 The obvious next step is not taken: the scripts could `#r` the built `TCModel.dll` instead
 of `#load`ing the sources, which would cut each one from five seconds to under two. It is
 declined because it changes what is being tested. `#load` cannot go stale, needs no build,
 and tests the source in the working tree; a reference tests whatever was last compiled, and
-a forgotten build turns a red run green. Twelve seconds is not worth that.
+a forgotten build turns a red run green. Fourteen seconds is not worth that.
 
 And one that is not a script, because it needs a browser:
 
@@ -1400,12 +1522,22 @@ the stream has carried until then has been a piece of the page, landing where th
 its id already was, and a nudge is not a piece of anything. See [When the turn comes
 round](#when-the-turn-comes-round).
 
-**Nothing in it waits a fixed length of time.** Every wait is for the thing being waited on
-— the board arriving, a heading changing, the knock landing — which is both quicker and the
+It also arrives at a table with a **word at its door** — which is what a table gets when
+nobody says otherwise, so what is driven is the way this is really served rather than a way
+round it. A stranger with no word is turned away and shown the door page; the browser is sent
+the address with the word in it, and everything it fetches afterwards rides the cookie the
+table hands back. And it waits out a whole interval of quiet at the end to see the table's
+**heartbeat** arrive: a page can take every board perfectly and never hear one of those, and
+over a long wire that page goes silent within the minute.
+
+**Nothing else in it waits a fixed length of time.** Every wait is for the thing being waited
+on — the board arriving, a heading changing, the knock landing — which is both quicker and the
 only version that is honest: a pause long enough to be safe on a loaded machine is wasted on
 every run that did not need it, and a run that did need it fails looking exactly like a page
 with a dead button on it. It went from thirty-three seconds to eight, and the second of those
-is the point.
+is the point. The heartbeat is the one exception, and it is a real one: what is being checked
+there is that something arrives when *nothing* has happened, so there is nothing to wait on
+but the clock.
 
 `-Rival` serves the same game with the program in the second seat, and checks the two things
 about that which only a browser can show: that the page is told whose seat it is, and that

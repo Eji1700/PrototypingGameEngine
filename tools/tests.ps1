@@ -2,7 +2,7 @@
 #
 # Each script is its own `dotnet fsi` process, and each of those spends nearly all of its
 # time compiling the same sources over again: `lobby.fsx` takes five seconds and two tenths
-# of one is spent on the checks. Twelve of those in a row is most of a minute of one core
+# of one is spent on the checks. Thirteen of those in a row is most of a minute of one core
 # doing what fifteen others are not.
 #
 # So they are run together instead. They share nothing - each is a fresh process folding
@@ -38,7 +38,7 @@ $root = Split-Path -Parent $PSScriptRoot
 # it, then the two that play or generate whole games of their own.
 $scripts = @(
     "ruling", "outcome", "actions", "history", "knowledge"
-    "lobby", "solo", "view", "html", "cli"
+    "lobby", "solo", "view", "html", "reach", "cli"
     "properties", "rival"
 )
 

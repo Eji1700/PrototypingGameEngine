@@ -33,6 +33,7 @@
 #load "../src/Console/Parse.fs"
 #load "../src/Console/Keys.fs"
 #load "../src/Console/Seating.fs"
+#load "../src/Console/Reach.fs"
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
@@ -72,6 +73,17 @@ let private holds name property =
 
 // --- anything the program can be asked to open --------------------------------------------
 
+/// Somewhere for a certificate to be.
+///
+/// The command line looks for the file before it opens anything, which is worth doing - a
+/// table that fell over on the certificate after dealing would have taken the game with it -
+/// and means a line naming one has to name a real file if the far end of the round trip is
+/// to accept it. Nothing here reads it, and nothing here is a certificate.
+let private certificate =
+    let path = IO.Path.Combine(IO.Path.GetTempPath(), "tcmodel-check.pfx")
+    IO.File.WriteAllText(path, "not a certificate")
+    path
+
 let private launches =
     let players = Gen.choose (Table.MinPlayers, Table.MaxPlayers)
 
@@ -85,7 +97,31 @@ let private launches =
 
     let token = Gen.elements [ None; Some "a1b2c3"; Some "0f9e8d7cb6a5" ]
 
+    let code = Gen.elements [ None; Some "kbd4-9mtx-7rfp" ]
+
     let path = Gen.elements [ "logs/one.log"; "C:/Games/My Records/last night.log" ]
+
+    // How far a table can be reached, said every way the program can write one. These are in
+    // here for the round trip below: a table now says several things about its own door on
+    // its way out and has to come back holding all of them, and an option spelt one way by
+    // the writer and another by the reader is precisely the failure this file exists for.
+    let reach =
+        Gen.elements
+            [ Reach.ajar
+              { Reach.ajar with
+                  Doorway = Locked "kbd4-9mtx-7rfp" }
+              { Reach.ajar with
+                  Port = 8443
+                  Doorway = Locked "one-two-three" }
+              { Reach.ajar with
+                  Wrapping = Ahead
+                  Address = Some "https://stones.example.org" }
+              { Reach.ajar with
+                  Wrapping = Kept(certificate, None)
+                  Address = Some "stones.example.org" }
+              { Reach.ajar with
+                  Port = 443
+                  Wrapping = Kept(certificate, Some "hunter two") } ]
 
     // A table with the machine at some of it. Never at more seats than there are after the
     // first: the first is yours, and a line the program could not have written is not a line
@@ -105,9 +141,12 @@ let private launches =
 
     Gen.oneof
         [ dealing |> Gen.map Launch.Deal
-          dealing |> Gen.map Launch.Serve
-          Gen.zip players seed |> Gen.map Launch.Host
-          Gen.zip address token |> Gen.map Launch.Join
+          Gen.zip dealing reach
+          |> Gen.map (fun ((players, seed, rivals), reach) -> Launch.Serve(players, seed, rivals, reach))
+          Gen.zip (Gen.zip players seed) reach
+          |> Gen.map (fun ((players, seed), reach) -> Launch.Host(players, seed, reach))
+          Gen.zip (Gen.zip address token) code
+          |> Gen.map (fun ((address, token), code) -> Launch.Join(address, token, code))
           path |> Gen.map Launch.Replay ]
     |> Arb.fromGen
 
@@ -119,7 +158,7 @@ holds
 
 report
     "a line still carrying the runner in front of it is read all the same"
-    (Ok(Launch.Join("greg-pc", Some "a1b2c3")))
+    (Ok(Launch.Join("greg-pc", Some "a1b2c3", None)))
     (Launch.read [ "dotnet"; "run"; "--"; "join"; "greg-pc"; "--token"; "a1b2c3" ])
 
 report
@@ -222,10 +261,95 @@ report
     (0, Some(Launch.Deal(3, None, [ Rival.hard; Rival.easy ])))
     (through [ "play"; "3"; "--rival"; "hard"; "--rival"; "easy" ])
 
+// A table that opens a port makes up a word for its door when nobody says otherwise, so the
+// two commands that do cannot be held up whole against anything: what the word is, is not
+// knowable from out here, which is the entire point of it. So the door is taken off for the
+// checks about everything else, and put back for the checks about doors.
+
+let private without launch =
+    match launch with
+    | Launch.Serve(players, seed, rivals, reach) -> Launch.Serve(players, seed, rivals, { reach with Doorway = Ajar })
+    | Launch.Host(players, seed, reach) -> Launch.Host(players, seed, { reach with Doorway = Ajar })
+    | opened -> opened
+
+let private unlocked words =
+    let code, opened = through words
+    code, opened |> Option.map without
+
 report
     "a browser's table takes them the same way"
-    (0, Some(Launch.Serve(2, Some 42UL, [ Rival.medium ])))
-    (through [ "serve"; "2"; "--seed"; "42"; "-r"; "medium" ])
+    (0, Some(Launch.Serve(2, Some 42UL, [ Rival.medium ], Reach.ajar)))
+    (unlocked [ "serve"; "2"; "--seed"; "42"; "-r"; "medium" ])
+
+// --- how far a table is opened ------------------------------------------------------------
+//
+// A table on a network everybody in the room is on is guarded by the room. One reachable from
+// anywhere is guarded by nothing, and a seat once taken is kept for whoever took it - so the
+// first stranger through the door ends the game for somebody, and there is no move for
+// standing them up again. Hence a word at the door by default, and hence the flags: every one
+// of them is a way of saying how far this table is meant to reach.
+
+let private door words =
+    match through words with
+    | 0, Some(Launch.Host(_, _, reach)) -> Ok reach.Doorway
+    | 0, Some(Launch.Serve(_, _, _, reach)) -> Ok reach.Doorway
+    | code, _ -> Error code
+
+report
+    "a table opened with nothing said about its door gets a word for it"
+    true
+    (match door [ "host"; "3" ] with
+     | Ok(Locked code) -> code.Length >= 12
+     | Ok Ajar
+     | Error _ -> false)
+
+report
+    "and so does a game served to a browser"
+    true
+    (match door [ "serve"; "2" ] with
+     | Ok(Locked _) -> true
+     | _ -> false)
+
+report "a word given is the word used" (Ok(Locked "open sesame")) (door [ "host"; "3"; "--code"; "open sesame" ])
+
+report "and a table said to be open has no word at all" (Ok Ajar) (door [ "host"; "3"; "--open" ])
+
+report "the same word twice running is the same word" (door [ "host"; "3" ]) (door [ "serve"; "2" ])
+
+// Everything below is somebody meaning one of two quite different things, and there is no
+// way to tell which - so each is refused at the door rather than settled quietly.
+
+report "a table cannot be both open and locked" true (turnedAway [ "host"; "3"; "--open"; "--code"; "sesame" ])
+
+report "nor be its own word for nothing" true (turnedAway [ "host"; "3"; "--code"; "  " ])
+
+report "a certificate nobody has is refused before anything is dealt" true (turnedAway [ "host"; "3"; "--cert"; "nowhere.pfx" ])
+
+report
+    "and https cannot both end here and end in front of this"
+    true
+    (turnedAway [ "host"; "3"; "--cert"; certificate; "--behind" ])
+
+report
+    "a password with no certificate to unlock says so"
+    true
+    (turnedAway [ "host"; "3"; "--behind"; "--cert-password"; "hunter two" ])
+
+report "and a port nobody has is not a port" true (turnedAway [ "host"; "3"; "--port"; "70000" ])
+
+report
+    "a table behind something that holds the certificate speaks https all the same"
+    (0,
+     Some(
+         Launch.Host(
+             3,
+             None,
+             { Reach.ajar with
+                 Wrapping = Ahead
+                 Address = Some "stones.example.org" }
+         )
+     ))
+    (unlocked [ "host"; "3"; "--behind"; "--at"; "stones.example.org"; "--open" ])
 
 // --- the other door ---------------------------------------------------------------------------
 //
@@ -332,6 +456,24 @@ report
     "and the menu says the machine is on offer"
     true
     ((Keys.draw None (Menu.screen (View.plain Palette.standard))).Contains "vs <skill>...")
+
+// A table somebody was told about is an address and a word, so that is what the menu takes.
+// Coming back to a seat already held is the other thing, and is a command line - written by
+// the program, for the player to hand back to it - rather than anything typed here.
+
+report
+    "a table joined from the menu carries the word at its door"
+    true
+    (match chosen "join stones.example.org kbd4-9mtx-7rfp" with
+     | Ok(Menu.Join(address, Some code)) -> address = "stones.example.org" && code = "kbd4-9mtx-7rfp"
+     | _ -> false)
+
+report
+    "and one with no word said says none"
+    true
+    (match chosen "join greg-pc" with
+     | Ok(Menu.Join(_, None)) -> true
+     | _ -> false)
 
 // --- the same door, opened with the arrow keys ------------------------------------------------
 //

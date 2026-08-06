@@ -9,11 +9,12 @@ namespace TCModel.Net
 module Protocol =
 
     /// Where the table listens. A player joining says an address; this is the rest.
+    ///
+    /// The port that goes with it is `Reach.DefaultPort`, and lives there rather than here
+    /// because how far a table can be reached is settled before there is a wire: the command
+    /// line says it, and the console filling out an address needs it.
     [<Literal>]
     let Path = "/table"
-
-    [<Literal>]
-    let DefaultPort = 5000
 
     /// The calls each end makes on the other, named once so both spell them the same.
     module Call =

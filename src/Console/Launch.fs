@@ -14,12 +14,14 @@ type Launch =
     /// Deal and play at this keyboard. A seed left unsaid is taken from the clock, and the
     /// skills are the seats after the first, in order, that the machine is to play.
     | Deal of players: int * seed: uint64 option * rivals: Skill list
-    /// The same game, played in a browser on this machine rather than at this keyboard.
-    | Serve of players: int * seed: uint64 option * rivals: Skill list
+    /// The same game, played in a browser rather than at this keyboard. It opens a port, so
+    /// it says how far it can be reached like anything else that does.
+    | Serve of players: int * seed: uint64 option * rivals: Skill list * reach: Reach
     /// Deal and wait for the other players to arrive from their own machines.
-    | Host of players: int * seed: uint64 option
-    /// Sit down at somebody else's table, resuming a seat if a token says which.
-    | Join of address: string * token: string option
+    | Host of players: int * seed: uint64 option * reach: Reach
+    /// Sit down at somebody else's table, resuming a seat if a token says which, and saying
+    /// the word at the door if that table has one.
+    | Join of address: string * token: string option * code: string option
     | Replay of path: string
 
 /// The same thing as a command line, in the words a person types.
@@ -42,6 +44,16 @@ type Argument =
     | [<AltCommandLine("-s")>] Seed of seed: uint64
     | [<AltCommandLine("-t")>] Token of token: string
     | [<AltCommandLine("-r")>] Rival of skill: string
+    | [<AltCommandLine("-p")>] Port of port: int
+    | Code of code: string
+    | Open
+    | Cert of certificate: string
+    // Spelt out, because the two libraries would otherwise spell it differently - this one
+    // runs the words together and the shell's own hyphenates them - and a line written here
+    // that the front door will not take is exactly what the checks in `cli.fsx` are for.
+    | [<CustomCommandLine("--cert-password")>] CertPassword of password: string
+    | At of address: string
+    | Behind
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -54,6 +66,13 @@ type Argument =
             | Seed _ -> "deal from this seed rather than from the clock"
             | Token _ -> "come back to the seat this token claimed"
             | Rival _ -> $"let the machine play the next seat, at {Rival.names}"
+            | Port _ -> $"listen on this port rather than {Reach.DefaultPort}"
+            | Code _ -> "the word players say at the door, rather than one made up here"
+            | Open -> "no word at the door: whoever can reach the address may sit down"
+            | Cert _ -> "hold this certificate and speak https (a .pfx file)"
+            | CertPassword _ -> "the password that certificate is locked with"
+            | At _ -> "the address to tell players, when it is not this machine's own name"
+            | Behind -> "https is ended by something in front of this, which forwards to it"
 
 module Launch =
 
@@ -64,12 +83,43 @@ module Launch =
         (seed |> Option.toList |> List.map Seed)
         @ (rivals |> List.map (fun skill -> Rival skill.Name))
 
+    /// How far a table reaches, written out. Every part of it is said outright, including
+    /// the parts that happen to be the usual ones - a line the program writes has to read
+    /// back as the very table it was written from, and a door left unmentioned is a door
+    /// the reader would have to guess at.
+    let private reaching (reach: Reach) =
+        [ if reach.Port <> Reach.DefaultPort then yield Port reach.Port
+
+          match reach.Doorway with
+          | Ajar -> yield Open
+          | Locked code -> yield Code code
+
+          match reach.Wrapping with
+          | InTheClear -> ()
+          | Ahead -> yield Behind
+          | Kept(certificate, password) ->
+              yield Cert certificate
+
+              match password with
+              | Some password -> yield CertPassword password
+              | None -> ()
+
+          match reach.Address with
+          | Some address -> yield At address
+          | None -> () ]
+
     let private arguments launch =
         match launch with
         | Launch.Deal(players, seed, rivals) -> [ Play players ] @ said seed rivals
-        | Launch.Serve(players, seed, rivals) -> [ Argument.Serve players ] @ said seed rivals
-        | Launch.Host(players, seed) -> [ Argument.Host players ] @ (seed |> Option.toList |> List.map Seed)
-        | Launch.Join(address, token) -> [ Argument.Join address ] @ (token |> Option.toList |> List.map Token)
+        | Launch.Serve(players, seed, rivals, reach) -> [ Argument.Serve players ] @ said seed rivals @ reaching reach
+        | Launch.Host(players, seed, reach) ->
+            [ Argument.Host players ]
+            @ (seed |> Option.toList |> List.map Seed)
+            @ reaching reach
+        | Launch.Join(address, token, code) ->
+            [ Argument.Join address ]
+            @ (token |> Option.toList |> List.map Token)
+            @ (code |> Option.toList |> List.map Code)
         | Launch.Replay path -> [ Argument.Replay path ]
 
     /// A launch as the words a shell would hand the program, one to an entry.
@@ -107,6 +157,23 @@ module Launch =
 
             let seed = taken.TryGetResult Seed
             let token = taken.TryGetResult Token
+            let code = taken.TryGetResult Code
+
+            // A door said neither way is a door left ajar. That is not the command line's
+            // answer to the same silence - `Shell` makes a word up, because a table opened
+            // for strangers ought to have one and nobody would think to ask - and it cannot
+            // be, because this has to give the same answer twice and making one up does not.
+            // Nothing the program writes leaves it unsaid, which is what keeps the two from
+            // ever meeting.
+            let reach =
+                { Port = taken.TryGetResult Port |> Option.defaultValue Reach.DefaultPort
+                  Doorway = code |> Option.map Locked |> Option.defaultValue Ajar
+                  Wrapping =
+                    match taken.TryGetResult Cert, taken.Contains Behind with
+                    | Some certificate, _ -> Kept(certificate, taken.TryGetResult CertPassword)
+                    | None, true -> Ahead
+                    | None, false -> InTheClear
+                  Address = taken.TryGetResult At }
 
             // Read back as skills rather than as the words they were written in, so a line
             // naming a way of playing that does not exist stops here rather than at a seat.
@@ -124,13 +191,20 @@ module Launch =
 
             match taken.GetAllResults() |> List.tryHead with
             | Some(Play players) -> Ok(Launch.Deal(players, seed, rivals))
-            | Some(Serve players) -> Ok(Launch.Serve(players, seed, rivals))
-            | Some(Host players) -> Ok(Launch.Host(players, seed))
-            | Some(Join address) -> Ok(Launch.Join(address, token))
+            | Some(Serve players) -> Ok(Launch.Serve(players, seed, rivals, reach))
+            | Some(Host players) -> Ok(Launch.Host(players, seed, reach))
+            | Some(Join address) -> Ok(Launch.Join(address, token, code))
             | Some(Replay path) -> Ok(Launch.Replay path)
             | Some(Seed _)
             | Some(Token _)
             | Some(Rival _)
+            | Some(Port _)
+            | Some(Code _)
+            | Some Open
+            | Some(Cert _)
+            | Some(CertPassword _)
+            | Some(At _)
+            | Some Behind
             | None ->
                 let line = String.concat " " words
                 Error $"'{line}' does not say what to open."

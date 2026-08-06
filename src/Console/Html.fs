@@ -81,6 +81,23 @@ module Html =
     [<Literal>]
     let Nudge = "nudged()"
 
+    /// And what is sent down it when there is nothing to say, which over a long wire is the
+    /// most important thing on it.
+    ///
+    /// Two failures it answers, and neither is the game's. A stream with no traffic on it
+    /// looks idle to everything it passes through, and the usual arrangement out on the
+    /// internet - a tunnel, a proxy, a load balancer - closes an idle connection after a
+    /// minute or so; a turn-based game between people who are thinking is idle by nature.
+    /// And a connection that has silently stopped arriving looks exactly like one where
+    /// nobody has moved yet, so a page that is not told anything cannot tell the two apart.
+    ///
+    /// So the table says something harmless on a timer, and the page below counts the
+    /// silence between. It is a script rather than a comment for the second reason: a
+    /// comment keeps the wire warm but the page cannot see one, and being seen is half of
+    /// what this is for.
+    [<Literal>]
+    let Alive = "alive()"
+
     /// The one control on the page that is not a move and not a colour: the button that
     /// asks the browser for leave to say so out loud. Named here because the markup writes
     /// it and the page's own script goes looking for it, and a name that drifted between
@@ -528,6 +545,13 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
 }
 .prompt input:focus { outline: none; border-color: var(--yours); }
 
+.door { display: flex; gap: .5rem; max-width: 44ch; }
+.door input {
+  flex: 1; font: inherit; color: var(--ink); background: var(--ground);
+  border: 1px solid var(--edge); border-radius: .25rem; padding: .35rem .6rem;
+}
+.door input:focus { outline: none; border-color: var(--yours); }
+
 .corner { position: fixed; top: .6rem; right: 1rem; z-index: 1;
           display: flex; gap: .6rem; align-items: flex-start; }
 .colours summary { color: var(--edge); cursor: pointer; list-style: none; }
@@ -571,6 +595,42 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
     ///
     /// The button is written for the case it is good for and takes itself off the page
     /// otherwise, which is the only state a browser will let it read.
+    /// What the page does when the table stops answering.
+    ///
+    /// The client reopens a stream that fails, and keeps at it for a good while - so this is
+    /// what happens *after* that has run out, which over a long wire it eventually does: a
+    /// laptop shut for an hour, a phone that changed networks, a tunnel restarted at the
+    /// other end. What is wanted then is the thing a person would do, which is to try the
+    /// address again every few seconds and come back to the game when it answers.
+    ///
+    /// A reload rather than anything cleverer, because a page here holds nothing worth
+    /// keeping: the board is drawn at the table, the seat is remembered by a cookie, and
+    /// what comes back is the game exactly where it was left. The one thing lost is a line
+    /// half-typed into the box, which is a fair price for a page that heals itself.
+    ///
+    /// It is asked for two ways because the stream fails two ways. One is the client giving
+    /// up, which it says out loud on the document; the other is a connection that stops
+    /// arriving without ever failing - which nothing announces, and which is why the table
+    /// says something harmless on a timer for this to count the gaps between.
+    let private holding =
+        String.concat
+            ""
+            [ "let beat=0,going=false;"
+              "const regain=()=>{if(going)return;going=true;"
+              $"const said=document.getElementById('{Told}');"
+              "if(said)said.textContent='The table stopped answering. Trying to reach it again...';"
+              "const again=()=>fetch(location.href,{method:'HEAD',cache:'no-store'})"
+              ".then(()=>location.reload()).catch(()=>setTimeout(again,3000));"
+              "setTimeout(again,1000)};"
+              // Four missed beats before anything is done about it, so that a tab left in
+              // the background - where a browser is free to run a timer late - is not
+              // reloaded out from under somebody for being patient.
+              "const watch=()=>{clearTimeout(beat);beat=setTimeout(regain,90000)};"
+              "window.alive=watch;watch();"
+              "document.addEventListener('datastar-fetch',e=>{"
+              "const doing=e.detail?e.detail.type:'';"
+              "if(doing==='retries-failed')regain();else if(doing==='started')watch()});" ]
+
     let private answering =
         String.concat
             ""
@@ -640,6 +700,24 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
     /// properties rather than in colours of its own, which is what lets two people at one
     /// table be sent the same board and read it in colours that have nothing to do with
     /// each other.
+    /// How the page holds its stream open.
+    ///
+    /// One change from what the client would do left alone, and it is about a game rather
+    /// than a dashboard: the stream stays open while the tab is hidden. Being elsewhere is
+    /// the state this game is played in - a stream that closed itself the moment somebody
+    /// looked at another tab could not knock when their turn came round, which is the one
+    /// thing it is there for.
+    ///
+    /// What is deliberately *not* set here is how hard the client tries to reopen a stream
+    /// that failed. Two of those knobs are spelt differently by the library and by the
+    /// client carried in `assets` - they version separately, which is what
+    /// [html.fsx](tests/html.fsx) exists to notice - and none of them covers a stream that
+    /// ended tidily or one that stopped arriving without saying so. So the page keeps its
+    /// own watch instead, above, and this asks for the one thing that is unambiguous.
+    let private streaming =
+        { RequestOptions.Defaults with
+            OpenWhenHidden = true }
+
     let page palette =
         let asked = Uri.EscapeDataString(Palette.write palette)
 
@@ -676,7 +754,8 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                       // The signals are the line waiting to be typed and nothing else. Said
                       // as a value rather than as a scrap of JSON, so that what the page
                       // starts holding and what the table reads back are one declaration.
-                      [ Ds.signals nothingTyped; Ds.onInit (Ds.get $"{Stream}?colours={asked}") ]
+                      [ Ds.signals nothingTyped
+                        Ds.onInit (Ds.get ($"{Stream}?colours={asked}", streaming)) ]
                       [ Elem.div
                             [ Attr.class' "corner" ]
                             [ Elem.button
@@ -699,7 +778,53 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                                     Attr.autocomplete "off"
                                     attr "placeholder" "type a move - r b 5, b r 8, m g 8 5 2, help" ]
                               Elem.button [ Attr.class' "types"; Ds.onClick (Ds.post Say) ] [ Text.raw "send" ] ]
-                        // Last, and not in the head with the other one, because it wires
-                        // itself to a control further up the page and has to find it there.
-                        Elem.script [] [ Text.raw answering ] ] ]
+                        // Last, and not in the head with the other one, because they wire
+                        // themselves to things further up the page and have to find them
+                        // there: a button, and the corner the table's news lands in.
+                        Elem.script [] [ Text.raw answering ]
+                        Elem.script [] [ Text.raw holding ] ] ]
+        )
+
+    /// The door, for somebody who arrived at a table without the word for it.
+    ///
+    /// A page rather than a bare refusal, because the person on the other side of this is a
+    /// player who was sent an address, and "403" is not an instruction anybody can act on.
+    /// It is a plain form: no client, no stream, nothing of the game - the table has said
+    /// nothing to this browser yet and will not until it comes back with the word.
+    ///
+    /// What it asks for is written into the address, which is where the word is read from
+    /// anyway - so somebody who was given the whole address in the first place never sees
+    /// this page, and somebody who was given the two halves separately can put them
+    /// together here.
+    let locked palette (again: bool) =
+        renderHtml (
+            Elem.html
+                [ Attr.lang "en" ]
+                [ Elem.head
+                      []
+                      [ Elem.meta [ Attr.create "charset" "utf-8" ]
+                        Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
+                        Elem.title [] [ Text.raw "A game of stones" ]
+                        Elem.style [] [ Text.raw (styles palette) ] ]
+                  Elem.body
+                      []
+                      [ Elem.main
+                            [ Attr.id Screen ]
+                            [ Elem.h1 [] [ Text.raw "This table has a word at the door" ]
+                              block
+                                  "The word"
+                                  [ Elem.form
+                                        [ attr "method" "get"; attr "action" "/"; Attr.class' "door" ]
+                                        [ Elem.input
+                                              [ attr "name" Reach.Asked
+                                                attr "autofocus" "autofocus"
+                                                Attr.autocomplete "off"
+                                                attr "placeholder" "the word whoever opened the table read out" ]
+                                          Elem.button [ Attr.class' "types" ] [ Text.raw "sit down" ] ]
+                                    note (
+                                        if again then
+                                            "That is not the word for this table. Whoever opened it can read it out again."
+                                        else
+                                            "Whoever opened this table was shown a word for it. It goes here, or on the end of the address."
+                                    ) ] ] ] ]
         )

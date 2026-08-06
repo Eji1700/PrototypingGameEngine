@@ -7,6 +7,7 @@ open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
 open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
@@ -136,14 +137,126 @@ module Server =
 
     /// Every address this machine can be reached at, so whoever is hosting can read one
     /// out to the room.
-    let private reachableAt port =
+    let private reachableAt reach =
         try
             Dns.GetHostAddresses(Dns.GetHostName())
             |> Array.filter (fun address -> address.AddressFamily = AddressFamily.InterNetwork)
-            |> Array.map (fun address -> $"  {address}:{port}")
+            |> Array.map (fun address -> Reach.at reach (string address), "on this network")
             |> List.ofArray
         with _ ->
             []
+
+    /// Where this table is, in the order the addresses are worth trying, with a word on each
+    /// saying who it is for.
+    ///
+    /// What was given with `--at` comes first and is not checked against anything: it is the
+    /// name in somebody's DNS, the tunnel that forwards here, the port a router sends on.
+    /// None of that is knowable from inside this process, and the one machine that does know
+    /// is the one whoever typed it is sitting at.
+    let private addresses reach =
+        (Reach.told reach
+         |> Option.map (fun given -> given, "what you told them to use")
+         |> Option.toList)
+        @ reachableAt reach
+        @ [ Reach.at reach "localhost", "for anyone on this machine" ]
+
+    /// What a player is told to type, and what they are told to open. Both written from the
+    /// declaration the command line is read by, so what is read out to somebody is something
+    /// this program is certain to accept.
+    let private takeSeatAt reach where =
+        [ ""
+          $"    dotnet run -- {Launch.write (Launch.Join(where, None, Reach.word reach))}"
+          ""
+          $"  or open {Reach.opened reach where} in a browser."
+          "" ]
+
+    /// How long a table waits on a console before deciding it has gone.
+    ///
+    /// The defaults were written for a request that takes a moment; this is a socket held
+    /// open across a game that takes an evening, over whatever is between two houses. So the
+    /// table speaks up more often than it is asked to - a connection with nothing on it is
+    /// closed by things in the middle, and the same silence that a browser's stream has to
+    /// keep warm has to be kept warm here - and it waits a good deal longer before giving up
+    /// on the far end, because a console that has merely gone quiet for twenty seconds is
+    /// not a console that has gone.
+    ///
+    /// Losing one costs a player their seat until they come back to it, which they can, so
+    /// none of this is a correctness matter. It is the difference between a game that
+    /// survives a bad minute and one that spends it reconnecting.
+    ///
+    /// And a cap on how much a console may say at once, which is new here and is nothing to
+    /// do with latency: a table anybody can reach is a table anybody can send anything to,
+    /// and what a player is ever entitled to send is one typed line.
+    let private waiting (options: HubOptions) =
+        options.KeepAliveInterval <- TimeSpan.FromSeconds 15.0
+        options.ClientTimeoutInterval <- TimeSpan.FromSeconds 60.0
+        options.HandshakeTimeout <- TimeSpan.FromSeconds 30.0
+        options.MaximumReceiveMessageSize <- Nullable 32768L
+
+    /// Where the table listens, and what it is wrapped in on the way out.
+    ///
+    /// A certificate held here is bound with the port; everything else listens in the clear,
+    /// including a table behind a tunnel or a proxy - there the encryption ends at that
+    /// door, and what reaches this one is plain http from the machine next to it. What the
+    /// difference costs is that this process can no longer see whether a player is speaking
+    /// https, which is why the forwarded headers below are read: a table that guessed would
+    /// mark its cookies for a connection the browser is not using.
+    let private listening (builder: WebApplicationBuilder) reach =
+        match reach.Wrapping with
+        | Kept(certificate, password) ->
+            builder.WebHost.ConfigureKestrel(fun options ->
+                options.ListenAnyIP(
+                    reach.Port,
+                    fun listen ->
+                        match password with
+                        | Some password -> listen.UseHttps(certificate, password) |> ignore
+                        | None -> listen.UseHttps certificate |> ignore
+                ))
+            |> ignore
+        | InTheClear
+        | Ahead -> builder.WebHost.UseUrls $"http://0.0.0.0:{reach.Port}" |> ignore
+
+    /// And what stands in front of the whole of it: what somebody in front of this said
+    /// about the player, and the word at the door.
+    let private guarded (app: WebApplication) standing reach =
+        match reach.Wrapping with
+        | InTheClear
+        | Kept _ -> ()
+        | Ahead ->
+            // Every proxy trusted, which is not a thing to do lightly and is the only
+            // honest answer here: a tunnel hands a table a connection from an address that
+            // changes without warning, and there is nothing in this program that could know
+            // the right one. What it is trusted *for* is one thing - saying that the player
+            // at the far end is speaking https - and the whole of what that settles is
+            // whether a cookie is marked secure.
+            let forwarded =
+                ForwardedHeadersOptions(
+                    ForwardedHeaders =
+                        (ForwardedHeaders.XForwardedFor
+                         ||| ForwardedHeaders.XForwardedProto
+                         ||| ForwardedHeaders.XForwardedHost)
+                )
+
+            forwarded.KnownIPNetworks.Clear()
+            forwarded.KnownProxies.Clear()
+            app.UseForwardedHeaders forwarded |> ignore
+
+        match reach.Doorway with
+        | Ajar -> ()
+        | Locked _ ->
+            // One place for the whole table rather than one per address, because the ways in
+            // are not all pages: a console at a terminal arrives at the hub, which is not
+            // routed through anything below and would otherwise be a door left open beside a
+            // locked one.
+            app.Use(
+                Func<HttpContext, RequestDelegate, Task>(fun ctx next ->
+                    if Reach.admits reach (Browser.presented ctx) then
+                        Browser.remember reach ctx
+                        next.Invoke ctx
+                    else
+                        Browser.turned standing ctx)
+            )
+            |> ignore
 
     /// The four addresses a browser needs, mapped over whatever table is behind them.
     ///
@@ -171,7 +284,7 @@ module Server =
     /// The seating settles who is waited for and who is not. A seat the machine plays is
     /// played here, by this process, and is never an empty chair; the rest are sat down at
     /// from a console or a browser, whether that console is in this room or two rooms away.
-    let host port model sitters keep =
+    let host reach model sitters keep =
         let builder = WebApplication.CreateBuilder()
 
         let rivals =
@@ -183,12 +296,13 @@ module Server =
         // The console is a board, not a log. Anything the framework wants to say would
         // land in the middle of it.
         builder.Logging.ClearProviders() |> ignore
-        builder.Services.AddSignalR() |> ignore
+        builder.Services.AddSignalR(waiting) |> ignore
         builder.Services.AddSingleton<Held> held |> ignore
         builder.Services.AddSingleton<Browser.Pages> pages |> ignore
-        builder.WebHost.UseUrls($"http://0.0.0.0:{port}") |> ignore
+        listening builder reach
 
         let app = builder.Build()
+        guarded app Palette.standard reach
         app.MapHub<TableHub>(Protocol.Path) |> ignore
 
         // What a page needs of the table, which is what a console needs of it: a way to
@@ -216,6 +330,16 @@ module Server =
         Seating.roster sitters |> List.iter (printfn "%s")
         printfn ""
 
+        // The word first, because everything under it carries it and somebody reading this
+        // out to a room needs to have seen it before they get to the address.
+        match Reach.word reach with
+        | Some code ->
+            printfn "  The word at this table's door:  %s" code
+            printfn ""
+        | None ->
+            printfn "  No word at the door: whoever can reach the address below may sit down."
+            printfn ""
+
         // The machine's seats are already filled, so what is read out to the room is the
         // chairs that are not - and some of those are very often the host's own.
         if mine > 0 then
@@ -224,11 +348,7 @@ module Server =
             else
                 printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
 
-            printfn ""
-            printfn "    dotnet run -- join localhost:%d" port
-            printfn ""
-            printfn "  or by opening http://localhost:%d in a browser." port
-            printfn ""
+            takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
 
         if theirs > 0 then
             if theirs = 1 then
@@ -236,16 +356,28 @@ module Server =
             else
                 printfn "  %d are somebody else's, from their own machines. Each of them runs:" theirs
 
+            takeSeatAt reach (Reach.told reach |> Option.defaultValue "<address>")
+            |> List.iter (printfn "%s")
+
+            printfn "  Both sit down at this one table, which is at:"
             printfn ""
-            printfn "    dotnet run -- join <address>"
+
+            addresses reach
+            |> List.iter (fun (address, who) -> printfn "    %-44s (%s)" address who)
+
             printfn ""
-            printfn "  or opens <address> in a browser. Both sit down at this one table."
-            printfn ""
-            printfn "  This table is at:"
-            printfn ""
-            reachableAt port |> List.iter (printfn "%s")
-            printfn "  localhost:%d          (for anyone on this machine)" port
-            printfn ""
+
+            // Said where it is true rather than everywhere, and said in terms of what it
+            // costs: a game read by whoever is between two houses is a game whose bags are
+            // no longer private, which is the one thing the rules are built around.
+            match reach.Wrapping, Reach.told reach with
+            | InTheClear, Some _ ->
+                printfn "  This table speaks http, so anything between it and a player can read the"
+                printfn "  boards going past - which at this game means their stones. Over anything"
+                printfn "  further than a network you trust, put it behind a tunnel or a proxy that"
+                printfn "  holds a certificate and say --behind, or hold one here with --cert."
+                printfn ""
+            | (InTheClear | Kept _ | Ahead), _ -> ()
 
         if mine + theirs = 1 then
             printfn "  The game begins once that seat is taken. Ctrl+C closes the table."
@@ -263,16 +395,17 @@ module Server =
     /// out. There are no seats: it is the one hot seat a keyboard has, and the screen
     /// belongs to whoever is to play, so it starts the moment it is opened and every move
     /// is yours to make. Which is also why there is no hub here - there is nobody to reach.
-    let serve port standing solo fresh keep =
+    let serve reach standing solo fresh keep =
         let builder = WebApplication.CreateBuilder()
 
         let aside = Aside(solo, fresh, keep)
         let pages = Browser.Pages()
 
         builder.Logging.ClearProviders() |> ignore
-        builder.WebHost.UseUrls($"http://0.0.0.0:{port}") |> ignore
+        listening builder reach
 
         let app = builder.Build()
+        guarded app standing reach
 
         let sitting: Browser.Sitting =
             { Watching = fun console view -> aside.Change(Solo.watching console { Notes = true; View = view })
@@ -289,14 +422,24 @@ module Server =
         printfn ""
         printfn "  Open:"
         printfn ""
-        printfn "    http://localhost:%d" port
+        printfn "    %s" (Reach.opened reach (Reach.at reach "localhost"))
         printfn ""
         printfn "  One seat, and it changes hands with the turn - the same as playing at"
         printfn "  this keyboard. Ctrl+C puts it down."
         printfn ""
-        printfn "  Others on this network can watch and play too, at:"
+
+        match Reach.word reach with
+        | Some code ->
+            printfn "  The word at the door is in that address, and again here: %s" code
+            printfn ""
+        | None -> ()
+
+        printfn "  Others can watch and play too, at:"
         printfn ""
-        reachableAt port |> List.iter (printfn "%s")
+
+        addresses reach
+        |> List.iter (fun (address, who) -> printfn "    %-44s (%s)" (Reach.opened reach address) who)
+
         printfn ""
 
         app.Run()

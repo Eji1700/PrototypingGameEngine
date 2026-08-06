@@ -141,6 +141,96 @@ module Shell =
 
         member this.Palette() = painted this.Colours
 
+    /// The word this process puts on its door, made up once however often it is asked for.
+    ///
+    /// Once, and lazily, for two reasons that pull the same way. A command's settings are
+    /// checked and then run, so a word made up on demand would be checked as one word and
+    /// used as another; and a process opens one table, so there is one word, and it is not
+    /// invented at all by the commands that open nothing.
+    let private ourWord = lazy (Reach.minted ())
+
+    /// How far a table can be reached, as the commands that open a port take it.
+    ///
+    /// The two commands that listen take the same six, because a game read in a browser and
+    /// a table people join are the same problem the moment either is further away than a
+    /// room: they are one port, one door and one certificate whichever it is.
+    [<AbstractClass>]
+    type PortSettings() =
+        inherit ColourSettings()
+
+        [<CommandOption("-p|--port <PORT>")>]
+        [<Description("listen on this port rather than the usual one")>]
+        member val Port = Reach.DefaultPort with get, set
+
+        [<CommandOption("--code <WORD>")>]
+        [<Description("the word players say at the door, rather than one made up here")>]
+        member val Code: string = null with get, set
+
+        [<CommandOption("--open")>]
+        [<Description("no word at the door: whoever can reach the address may sit down")>]
+        member val Open = false with get, set
+
+        [<CommandOption("--cert <FILE>")>]
+        [<Description("hold this certificate and speak https; a .pfx file")>]
+        member val Cert: string = null with get, set
+
+        [<CommandOption("--cert-password <PASSWORD>")>]
+        [<Description("the password that certificate is locked with")>]
+        member val CertPassword: string = null with get, set
+
+        [<CommandOption("--behind")>]
+        [<Description("https is ended by a tunnel or proxy in front of this, which forwards to it")>]
+        member val Behind = false with get, set
+
+        [<CommandOption("--at <ADDRESS>")>]
+        [<Description("the address to tell players, when it is not this machine's own name")>]
+        member val At: string = null with get, set
+
+        /// Everything that can be said two ways at once is refused here rather than settled
+        /// quietly, because each of these pairs is somebody meaning one of two quite
+        /// different things and there is no way to tell which.
+        member this.Reach() =
+            let doorway =
+                match Option.ofObj this.Code, this.Open with
+                | Some _, true -> Error "Say one of --code and --open. A door cannot be both."
+                | Some code, false when code.Trim() = "" -> Error "A word at the door has to be a word. Say --open for none."
+                | Some code, false -> Ok(Locked code)
+                | None, true -> Ok Ajar
+                // A table nobody said anything about is a table with a word on it. It is
+                // opened on every address this machine answers to, and out past a network
+                // the first stranger through the door takes somebody's seat.
+                | None, false -> Ok(Locked ourWord.Value)
+
+            let wrapping =
+                match Option.ofObj this.Cert, this.Behind with
+                | Some _, true -> Error "Say one of --cert and --behind. https is ended in one place or the other."
+                | Some certificate, false when not (IO.File.Exists certificate) ->
+                    Error $"There is no certificate at '{certificate}'."
+                | Some certificate, false -> Ok(Kept(certificate, Option.ofObj this.CertPassword))
+                | None, true when this.CertPassword <> null ->
+                    Error "A certificate password says nothing about a certificate held somewhere else."
+                | None, true -> Ok Ahead
+                | None, false when this.CertPassword <> null -> Error "There is no certificate for that password to unlock."
+                | None, false -> Ok InTheClear
+
+            if this.Port < 1 || this.Port > 65535 then
+                Error $"{this.Port} is not a port. They run from 1 to 65535."
+            else
+                doorway
+                |> Result.bind (fun doorway ->
+                    wrapping
+                    |> Result.map (fun wrapping ->
+                        { Port = this.Port
+                          Doorway = doorway
+                          Wrapping = wrapping
+                          Address = Option.ofObj this.At }))
+
+        override this.Validate() =
+            match this.Palette(), this.Reach() with
+            | Error problem, _
+            | _, Error problem -> ValidationResult.Error problem
+            | Ok _, Ok _ -> ValidationResult.Success()
+
     /// And how the board is laid out, for the commands that end at a terminal. How it is
     /// drawn says nothing about what to deal, so it is a setting rather than an argument
     /// and can be given in any order.
@@ -234,7 +324,7 @@ module Shell =
     /// `--view`: there is one way of drawing a board a browser can read, and it is not a
     /// choice anybody would be making.
     type ServeSettings() =
-        inherit ColourSettings()
+        inherit PortSettings()
 
         [<CommandArgument(0, "[players]")>]
         [<Description("how many are playing")>]
@@ -251,9 +341,9 @@ module Shell =
         member this.Facing() = seating this.Players this.Rivals
 
         override this.Validate() =
-            match this.Palette() with
-            | Error problem -> ValidationResult.Error problem
-            | Ok _ ->
+            match base.Validate() with
+            | ok when not ok.Successful -> ok
+            | _ ->
                 match Parse.tryPlayerCount (string this.Players) with
                 | Error problem -> ValidationResult.Error problem
                 | Ok _ ->
@@ -265,23 +355,49 @@ module Shell =
         inherit Command<ServeSettings>()
 
         override _.Execute(_, settings) =
-            match settings.Palette(), settings.Facing() with
+            match settings.Palette(), settings.Facing(), settings.Reach() with
+            | Error problem, _, _
+            | _, Error problem, _
+            | _, _, Error problem ->
+                eprintfn "%s" problem
+                1
+            | Ok palette, Ok rivals, Ok reach ->
+                opening.Act (View.html palette) (Launch.Serve(settings.Players, Option.ofNullable settings.Seed, rivals, reach))
+
+    /// A table for people at their own machines. It deals like `play` and listens like
+    /// `serve`, and it draws no board here at all - what this terminal shows is who is
+    /// expected and how to reach the table, which is not a thing there are two ways of
+    /// laying out.
+    type HostSettings() =
+        inherit PortSettings()
+
+        [<CommandArgument(0, "[players]")>]
+        [<Description("how many are playing")>]
+        member val Players = Table.MinPlayers with get, set
+
+        [<CommandOption("-s|--seed <SEED>")>]
+        [<Description("deal from this seed rather than from the clock, for the same game again")>]
+        member val Seed = Nullable<uint64>() with get, set
+
+        override this.Validate() =
+            match base.Validate() with
+            | ok when not ok.Successful -> ok
+            | _ ->
+                match Parse.tryPlayerCount (string this.Players) with
+                | Ok _ -> ValidationResult.Success()
+                | Error problem -> ValidationResult.Error problem
+
+    type HostCommand(opening: Opening) =
+        inherit Command<HostSettings>()
+
+        override _.Execute(_, settings) =
+            match settings.Palette(), settings.Reach() with
             | Error problem, _
             | _, Error problem ->
                 eprintfn "%s" problem
                 1
-            | Ok palette, Ok rivals ->
-                opening.Act (View.html palette) (Launch.Serve(settings.Players, Option.ofNullable settings.Seed, rivals))
-
-    type HostCommand(opening: Opening) =
-        inherit Command<DealSettings>()
-
-        override _.Execute(_, settings) =
-            match settings.Reading() with
-            | Error problem ->
-                eprintfn "%s" problem
-                1
-            | Ok view -> opening.Act view (Launch.Host(settings.Players, Option.ofNullable settings.Seed))
+            | Ok palette, Ok reach ->
+                opening.Act (View.plain palette) (Launch.Host(settings.Players, Option.ofNullable settings.Seed, reach))
 
     type JoinSettings() =
         inherit ReadingSettings()
@@ -294,6 +410,10 @@ module Shell =
         [<Description("come back to the seat this token claimed, after dropping off")>]
         member val Token: string = null with get, set
 
+        [<CommandOption("--code <WORD>")>]
+        [<Description("the word at that table's door, if it has one")>]
+        member val Code: string = null with get, set
+
     type JoinCommand(opening: Opening) =
         inherit Command<JoinSettings>()
 
@@ -302,7 +422,7 @@ module Shell =
             | Error problem ->
                 eprintfn "%s" problem
                 1
-            | Ok view -> opening.Act view (Launch.Join(settings.Address, Option.ofObj settings.Token))
+            | Ok view -> opening.Act view (Launch.Join(settings.Address, Option.ofObj settings.Token, Option.ofObj settings.Code))
 
     type ReplaySettings() =
         inherit ReadingSettings()
@@ -349,6 +469,8 @@ module Shell =
             .AddCommand<HostCommand>("host")
             .WithDescription("Open a table and wait for the other players to arrive.")
             .WithExample("host", "3")
+            .WithExample("host", "3", "--open")
+            .WithExample("host", "3", "--behind", "--at", "stones.example.org")
         |> ignore
 
         config
@@ -356,6 +478,7 @@ module Shell =
             .WithDescription("Sit down at a table someone else is hosting.")
             .WithExample("join", "greg-pc", "--view", "rich")
             .WithExample("join", "greg-pc", "--token", "a1b2c3")
+            .WithExample("join", "https://stones.example.org", "--code", "kbd4-9mtx-7rfp")
         |> ignore
 
         config

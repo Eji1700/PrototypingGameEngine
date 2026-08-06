@@ -107,7 +107,7 @@ let private replayFrom path =
 /// Deal a game and serve it to a browser on this machine. Nothing comes back: like a
 /// hosted table it runs until the process is stopped, because a page has no way of saying
 /// the game is over and done with.
-let private serveFor palette sitters seed =
+let private serveFor palette sitters seed reach =
     match dealt (List.length sitters) seed with
     | Error problem ->
         eprintfn "%s" problem
@@ -128,15 +128,17 @@ let private serveFor palette sitters seed =
             |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model))
 
         errand doing
-        Server.serve Protocol.DefaultPort palette solo stampNow keep
+        Server.serve reach palette solo stampNow keep
 
 /// Open a table for players at their own machines. Nothing comes back: the table waits
 /// until whoever opened it stops the process, because no one player may close it on all
 /// the others.
 ///
 /// The seating goes in whole rather than as a count, because a table may have the machine
-/// at some of its seats - those are played here and are never waited for.
-let private hostFor sitters seed =
+/// at some of its seats - those are played here and are never waited for. The reach goes in
+/// whole for the same reason: how far the table can be reached and what it takes to sit down
+/// at it are settled together or they contradict each other.
+let private hostFor sitters seed reach =
     match dealt (List.length sitters) seed with
     | Error problem ->
         eprintfn "%s" problem
@@ -144,7 +146,7 @@ let private hostFor sitters seed =
     | Ok model ->
         let stamp = stampNow ()
 
-        Server.host Protocol.DefaultPort model sitters (fun model ->
+        Server.host reach model sitters (fun model ->
             if not (Journal.isEmpty model.Journal) then
                 Transcript.save stamp model.Journal |> ignore)
 
@@ -240,9 +242,14 @@ let private starting (view: View) choice =
         |> Result.map (fun model -> Play(model, view, sitters))
     // In whatever colours the player settled on here, which is the same promise the
     // command line's --colour keeps.
-    | Menu.Serve(sitters, seed) -> Ok(Done(serveFor view.Palette sitters (clocked seed)))
-    | Menu.Host(sitters, seed) -> Ok(Done(hostFor sitters (clocked seed)))
-    | Menu.Join(address, token) -> Ok(Done(Client.join address token view))
+    //
+    // And behind a word at the door that this makes up on the spot, because a menu has
+    // nowhere sensible to ask for one and a table opened without one is opened to whoever
+    // can reach the address. The command line is where that is argued with: `--open` for a
+    // room where everybody was invited, `--code` for a word somebody has already agreed on.
+    | Menu.Serve(sitters, seed) -> Ok(Done(serveFor view.Palette sitters (clocked seed) (Reach.fresh ())))
+    | Menu.Host(sitters, seed) -> Ok(Done(hostFor sitters (clocked seed) (Reach.fresh ())))
+    | Menu.Join(address, code) -> Ok(Done(Client.join address None code view))
     | Menu.Replay path -> replayFrom path |> Result.map (fun model -> Play(model, view, []))
     // The rest are screens rather than games, and are answered where they are asked.
     // The rest are screens rather than games. The front door answers every one of them
@@ -355,9 +362,9 @@ let private opening (view: View) launch =
     // one here. There is one kind of table below this line, and it is the seating.
     match launch with
     | Launch.Deal(players, seed, rivals) -> orElse (Seating.after players rivals) (dealt players (clocked seed))
-    | Launch.Serve(players, seed, rivals) -> serveFor view.Palette (Seating.after players rivals) (clocked seed)
-    | Launch.Host(players, seed) -> hostFor (Seating.hosting players) (clocked seed)
-    | Launch.Join(address, token) -> Client.join address token view
+    | Launch.Serve(players, seed, rivals, reach) -> serveFor view.Palette (Seating.after players rivals) (clocked seed) reach
+    | Launch.Host(players, seed, reach) -> hostFor (Seating.hosting players) (clocked seed) reach
+    | Launch.Join(address, token, code) -> Client.join address token code view
     | Launch.Replay path -> orElse [] (replayFrom path)
 
 [<EntryPoint>]

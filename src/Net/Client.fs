@@ -1,7 +1,9 @@
 namespace TCModel.Net
 
 open System
+open System.Threading
 open System.Threading.Tasks
+open Microsoft.AspNetCore.Http.Connections.Client
 open Microsoft.AspNetCore.SignalR.Client
 open TCModel.Console
 
@@ -13,21 +15,18 @@ open TCModel.Console
 /// is nothing here to show.
 module Client =
 
-    /// An address as a player would say it - "greg-pc", "192.168.1.9:5000", a whole URL -
-    /// filled out into the one the table is actually listening on.
-    let private endpoint (given: string) =
-        let text = if given.Contains "://" then given else "http://" + given
-
-        match Uri.TryCreate(text, UriKind.Absolute) with
-        | true, uri ->
-            let builder = UriBuilder(uri)
-
-            if uri.IsDefaultPort then builder.Port <- Protocol.DefaultPort
-
-            if builder.Path = "/" then builder.Path <- Protocol.Path
-
-            Ok(builder.Uri.ToString())
-        | _ -> Error $"'{given}' is not an address I can reach."
+    /// How long a console keeps trying to get back to a table it has lost.
+    ///
+    /// The usual answer is a handful of goes and then give up, which is right for a page
+    /// somebody can reload and wrong for a seat. The seat is *kept*: nobody else may take
+    /// it, the game will not go on without it, and the table is content to wait all evening.
+    /// So this waits too, backing off to half a minute and then staying there for as long as
+    /// the player leaves the window open - there is nothing else it could sensibly do, and
+    /// nothing whatever is lost by doing it.
+    type private Patient() =
+        interface IRetryPolicy with
+            member _.NextRetryDelay(context: RetryContext) =
+                Nullable(TimeSpan.FromSeconds(min 30.0 (2.0 ** float (min context.PreviousRetryCount 5))))
 
     /// Print what arrived, then the prompt again, so a board that lands while the player
     /// is reading does not leave them staring at a bare line.
@@ -54,15 +53,37 @@ module Client =
 
     let private wait (task: Task) = task.GetAwaiter().GetResult()
 
-    let join given resuming (chosen: View) =
-        match endpoint given with
+    let join given resuming code (chosen: View) =
+        match Reach.endpoint Protocol.Path given with
         | Error problem ->
             eprintfn "%s" problem
             1
         | Ok url ->
 
+        // The word at the door goes in a header rather than in the address, because it is
+        // sent on every request this makes and an address is a thing that gets written down:
+        // in a log, in a shell's history, in whatever a proxy keeps. A browser has no way of
+        // setting one and so is handed a cookie instead; a console has no cookie jar worth
+        // the name and so does this.
         let connection =
-            HubConnectionBuilder().WithUrl(url).WithAutomaticReconnect().Build()
+            HubConnectionBuilder()
+                .WithUrl(
+                    url,
+                    fun (options: HttpConnectionOptions) ->
+                        match code with
+                        | Some code -> options.Headers[Reach.Header] <- code
+                        | None -> ()
+                )
+                .WithAutomaticReconnect(Patient())
+                .Build()
+
+        // The same waiting the table keeps, said from this end. A console that has heard
+        // nothing for twenty seconds is not a console whose table has gone - out past a
+        // local network that is an ordinary minute - and the two ends have to agree about
+        // that or one of them will keep hanging up on a game the other thinks is fine.
+        connection.ServerTimeout <- TimeSpan.FromSeconds 60.0
+        connection.HandshakeTimeout <- TimeSpan.FromSeconds 30.0
+        connection.KeepAliveInterval <- TimeSpan.FromSeconds 15.0
 
         // Read from inside the handlers below, which is why it is a cell rather than a
         // plain mutable. It is what the table gives back, kept so a console that drops can
@@ -84,8 +105,10 @@ module Client =
                 printfn "You are Player %d. If you drop, this brings you back to the same seat:" seat
                 printfn ""
                 // Written from the same declaration the command line is read by, so what
-                // a player is told to type is something the program is certain to accept.
-                printfn "  dotnet run -- %s" (Launch.write (Launch.Join(given, Some mine)))
+                // a player is told to type is something the program is certain to accept -
+                // including the word at the door, which they would otherwise have to
+                // remember they had been given.
+                printfn "  dotnet run -- %s" (Launch.write (Launch.Join(given, Some mine, code)))
         )
         |> ignore
 
@@ -106,15 +129,49 @@ module Client =
         // same wire; this is only the part of that a player two rooms away can hear.
         connection.On(Protocol.Call.Nudged, Action ring) |> ignore
 
+        // What a player is told when the wire goes, which is a thing that happens between
+        // houses and hardly ever within one. Worth saying out loud both times: a board that
+        // has stopped changing looks exactly like a game where nobody has moved, and a
+        // player who does not know which they are looking at will sit there politely.
+        connection.add_Reconnecting (fun _ ->
+            printfn ""
+            printfn "The table stopped answering. Your seat is kept - still trying to reach it."
+            show ""
+            Task.CompletedTask)
+
         // Coming back after a drop has to say who this console was, or the table would
         // hand it an empty seat and the player would lose their stones.
-        connection.add_Reconnected (fun _ -> sitDown ())
+        connection.add_Reconnected (fun _ ->
+            printfn ""
+            printfn "Back at the table."
+            sitDown ())
 
-        try
-            wait (connection.StartAsync())
-        with problem ->
-            eprintfn "There is no table at %s - %s" url problem.Message
-            exit 1
+        /// Sit down, and keep trying for a little while first.
+        ///
+        /// A table further off than a room is not always up before the player who was told
+        /// about it, and a first attempt that lands in the half-second before the far end
+        /// starts listening is not worth an error message. What *is* worth one is a door
+        /// that answers and refuses, which is a different thing entirely and says so.
+        let rec arriving attempts =
+            try
+                wait (connection.StartAsync())
+                true
+            with problem ->
+                let refused = problem.Message.Contains "401" || problem.Message.Contains "403"
+
+                if refused then
+                    eprintfn "That table would not let me in - %s" problem.Message
+                    eprintfn "It has a word at its door. Say it with --code <word>."
+                    false
+                elif attempts <= 1 then
+                    eprintfn "There is no table at %s - %s" url problem.Message
+                    false
+                else
+                    eprintfn "No answer from %s yet - trying again." url
+                    Thread.Sleep 2000
+                    arriving (attempts - 1)
+
+        if not (arriving 3) then exit 1
 
         wait (sitDown ())
 
@@ -122,7 +179,18 @@ module Client =
             match System.Console.ReadLine() with
             | null -> ()
             | line ->
-                wait (connection.InvokeAsync(Protocol.Call.Say, box line))
+                // A line typed while the wire is down is a line that goes nowhere, and the
+                // thing not to do about it is fall over: the seat is still this player's,
+                // the game has not moved, and saying it again in a moment will work. This is
+                // the one place a console can be left holding something the table never
+                // heard, so it is the one place that has to say so.
+                try
+                    wait (connection.InvokeAsync(Protocol.Call.Say, box line))
+                with _ ->
+                    printfn ""
+                    printfn "That did not reach the table. Say it again in a moment."
+                    show ""
+
                 loop ()
 
         loop ()

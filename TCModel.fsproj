@@ -50,6 +50,10 @@
     <!-- Who is going to be at each seat, which is the one thing every way of opening a game
          has to settle. Above the menu and the command line, because both of them ask it. -->
     <Compile Include="src/Console/Seating.fs" />
+    <!-- And the other thing every way of opening a table settles: how far it can be reached
+         and what it takes to sit down at one. Before the page and the command line, because
+         both of them say it - a browser is handed the word at the door in an address. -->
+    <Compile Include="src/Console/Reach.fs" />
     <Compile Include="src/Console/Palette.fs" />
     <Compile Include="src/Console/Tint.fs" />
     <Compile Include="src/Console/Rich.fs" />

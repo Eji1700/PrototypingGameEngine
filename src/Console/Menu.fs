@@ -27,8 +27,13 @@ module Menu =
         /// what every row on the seat list comes to, and what makes walking a seat along a
         /// way of typing rather than a thing the screen has to remember.
         | Sitting of seating: Sitter list
-        /// Sit down at somebody else's table.
-        | Join of address: string * token: string option
+        /// Sit down at somebody else's table, saying the word at its door if it has one.
+        ///
+        /// No token here, unlike the command line: coming back to a seat you already hold is
+        /// a line the program writes for you when you lose it, and what it writes is a
+        /// command line. What the menu is for is the other thing - a table you were told
+        /// about, an address and a word.
+        | Join of address: string * code: string option
         | Replay of path: string
         /// Show the rules and the commands at length.
         | Rules
@@ -160,8 +165,8 @@ module Menu =
               "one, 'serve you medium' to read it in a browser, 'seats you you' to lay it out"
               "first. The short ways still hold: '3' for a game of three, '3 42' for that same"
               $"game again, 'serve 3', 'host 3', 'vs <skill>...' for {Rival.names},"
-              $"'join <address>', 'replay <file>', 'view <{View.namesFor AtATerminal}>', 'colours',"
-              "'rules', 'quit'." ]
+              $"'join <address> [word]', 'replay <file>', 'view <{View.namesFor AtATerminal}>',"
+              "'colours', 'rules', 'quit'." ]
           Backs = None }
 
     // --- a typed line ----------------------------------------------------------------------
@@ -259,8 +264,9 @@ module Menu =
             | ("colours" | "colors" | "options"), [] -> Ok Options
             | ("colours" | "colors" | "options"), _ -> Error "Say 'colours' on its own; the screen it opens says the rest."
             | "join", [ address ] -> Ok(Join(address, None))
-            | "join", [ address; token ] -> Ok(Join(address, Some token))
-            | "join", _ -> Error "Say 'join <address>', naming the machine that is hosting."
+            | "join", [ address; code ] -> Ok(Join(address, Some code))
+            | "join", _ ->
+                Error "Say 'join <address>', naming the machine that is hosting, and the word at its door if it has one."
             | "players", [ players ] -> Parse.tryPlayerCount players |> Result.map (fun n -> Deal(Seating.here n, None))
             | "players", [ players; seed ] ->
                 counted players seed

@@ -21,7 +21,11 @@ param(
     # Serve the game with the machine in the second seat, and check the two things about
     # that which only a browser can show: that the page is told whose seat it is, and that
     # the machine's answer arrives down the stream without the page asking for it.
-    [string]$Rival = ""
+    [string]$Rival = "",
+    # The word at the served table's door. Said here rather than left to the program to make
+    # one up, because everything below has to present it - a browser in the address, a
+    # console in a header - and there is no way to read one off a hidden window.
+    [string]$Code = "smoke-runs-here"
 )
 
 $ErrorActionPreference = "Stop"
@@ -269,6 +273,15 @@ $script = @'
   window.knocks = 0;
   const knock = window.nudged;
   window.nudged = () => { window.knocks++; knock(); };
+
+  // The same for the other thing that arrives down the stream and is not a piece of the
+  // page: the table saying nothing, on a timer, so that whatever is between the two of them
+  // does not decide a quiet game is a dead connection. A page can draw every board perfectly
+  // and never hear one of these, and over a long wire that page goes silent within the
+  // minute - so it is counted here, and counted after the fact below.
+  window.beats = 0;
+  const beat = window.alive;
+  window.alive = () => { window.beats++; beat(); };
   return JSON.stringify(out);
 })()
 '@
@@ -295,6 +308,9 @@ function Join-AsConsole($address) {
     $handler.CookieContainer = New-Object Net.CookieContainer
     $client = New-Object Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromMinutes(5)
+    # This console is not a browser and has no address bar to be handed a word in, so it says
+    # it the way a terminal does - on every request it makes.
+    $client.DefaultRequestHeaders.Add("X-Table-Code", $Code)
 
     # The page first, purely to be given a cookie: that cookie is the whole of who this
     # console is, and the stream below has to arrive carrying it or the table would take the
@@ -333,8 +349,14 @@ $counted = @'
   const stop = Date.now() + 10000;
   while (Date.now() < stop && !window.knocks) await wait(25);
 
+  // And the table's own heartbeat, which is on a timer rather than on anything that happened
+  // here - so this waits out one whole interval of it before deciding there is none.
+  const quiet = Date.now() + 20000;
+  while (Date.now() < quiet && !window.beats) await wait(100);
+
   return JSON.stringify({
     knocks: window.knocks,
+    beats: window.beats,
     title: document.title,
     heading: (document.querySelector('#screen h1') || {}).textContent || '',
     log: [...document.querySelectorAll('#screen .said')].map(l => l.textContent).slice(-2)
@@ -363,7 +385,10 @@ try {
 
     Start-Sleep -Milliseconds 500
 
-    $served = @("run", "--project", $root, "--", "serve", "2", "--seed", "42")
+    # Opened with a word at the door, which is what a table gets when nobody says otherwise -
+    # so what is driven below is the way this is actually served rather than a way round it.
+    # Given rather than made up here, because this script has to be able to say it.
+    $served = @("run", "--project", $root, "--", "serve", "2", "--seed", "42", "--code", $Code)
     if ($Rival) { $served += @("--rival", $Rival) }
 
     $game = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
@@ -385,6 +410,22 @@ try {
         catch { $false }
     } | Out-Null
 
+    # The door, before anything is driven through it. A browser that turns up without the
+    # word is not shown a board, and is shown something a person can act on rather than a
+    # number - and there is no way to check that by reading markup, because the whole question
+    # is which of two pages the table decided to send.
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    $stranger = New-Object Net.Http.HttpClient
+
+    try {
+        $shut = $stranger.GetAsync("http://localhost:$Port/").GetAwaiter().GetResult()
+        $shutSaid = $shut.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+
+        Report "a browser with no word at the door is not seated" ([int]$shut.StatusCode -eq 401) "the table answered $([int]$shut.StatusCode)"
+        Report "and is shown the door rather than a number" ($shutSaid -match 'word at the door') "it was sent $($shutSaid.Length) characters"
+    }
+    finally { $stranger.Dispose() }
+
     # `--disable-sync` and the rest are not tidiness: each of them is a page this browser
     # would otherwise open of its own accord, sitting in the target list beside the one the
     # game is in.
@@ -400,7 +441,10 @@ try {
     # when there is a machine at the table to be told about.
     $asking = $script.Replace("ROSTER", $(if ($Rival) { "true" } else { "false" }))
 
-    $run = Invoke-InPage "http://localhost:$Port/" $asking
+    # The word goes in the address, which is how somebody sent a table's address arrives with
+    # it. Everything the page fetches afterwards - its client, its stream, every line typed -
+    # goes on the cookie the table hands back here, and would 403 if that had not happened.
+    $run = Invoke-InPage "http://localhost:$Port/?code=$Code" $asking
     $r = $run.value
     ""
 
@@ -451,6 +495,7 @@ try {
 
         Report "which knocks on the page that did not say it" ($b.knocks -ge 1) "knocks=$($b.knocks), and the page's board reads '$($b.heading)'"
         Report "and the page heard the move itself as well" ($b.heading -and $b.log -match 'reserve') "the log's last lines were '$($b.log -join ' | ')'"
+        Report "the table keeps saying something while nothing happens" ($b.beats -ge 1) "the stream was silent for a whole interval"
     }
     finally {
         $second.Body.Dispose()
