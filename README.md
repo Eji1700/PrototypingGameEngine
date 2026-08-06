@@ -735,6 +735,26 @@ Somebody who turns up at the front door without it gets a page with one box on i
 than a number — they are a player who was sent an address, and `403` is not an instruction
 anybody can act on.
 
+**And a stranger who keeps guessing is slowed down.** Fifty-nine bits is past guessing in
+any case, but "past guessing" is a weaker sentence than a bucket, and the bucket is five
+lines: `System.Threading.RateLimiting`, which is already in the shared framework. Ten wrong
+answers, then one back every five seconds — a person who mistypes a word twice, or a browser
+that fetches three things before it has been handed a cookie, never notices.
+
+Two buckets, because one of them can be got round. The first is per caller, and past a
+tunnel that is the address the tunnel *says* it came from — which anybody who can reach the
+machine directly is free to make up, and by making up a new one each try would have a fresh
+bucket every time. So the second counts the door itself, however many addresses the tries
+arrive from.
+
+**Only wrong answers are counted, which is what makes counting them safe.** A player who has
+the word never touches either bucket however fast they play, so nothing here can come between
+somebody and a game they were invited to. What it costs when a bucket is spent is that
+somebody arriving with the *wrong* word is told to wait rather than shown the box to type it
+into. Somebody arriving with the right one is let in regardless — [smoke.ps1](tools/smoke.ps1)
+gets that wrong fourteen times in a row and then gets it right from the very same address, to
+say so.
+
 **Everything crosses in the clear over http**, which at this game means the boards going
 past are somebody's stones. Two ways out, and the second is the one most people hosting one
 of these actually have:
@@ -789,8 +809,10 @@ whatever was presented and answers yes or no. [cli.fsx](tests/cli.fsx) writes ev
 these options out and reads it back through the real command surface, which is how
 `--cert-password` was found to be spelt two ways by the two libraries. And
 [smoke.ps1](tools/smoke.ps1) drives a real browser at a real locked table: turned away
-without the word, seated with it, and still hearing the table's heartbeat a whole interval
-later.
+without the word, slowed down for guessing at it, seated with it, and still hearing the
+table's heartbeat a whole interval later. The buckets are the one part of this that is not a
+value — a limit is a thing about time, not about a table — so a socket is the only place it
+can honestly be asked about.
 
 ### Two kinds of table
 
@@ -1623,7 +1645,7 @@ to work, so the build says so out loud.
 | [Falco.Markup](https://github.com/FalcoFramework/Falco.Markup) | the `html` view's elements |
 | [Falco.Datastar](https://github.com/FalcoFramework/Falco.Datastar) | the client's attributes, its stream frames and its signals, so none of those spellings are this repo's to remember |
 | [FsCheck](https://fscheck.github.io/FsCheck/) | the generated games in `properties.fsx` (a test-time reference) |
-| ASP.NET Core + SignalR | the host, its hub, and the streams held open to browsers |
+| ASP.NET Core + SignalR | the host, its hub, the streams held open to browsers, and the buckets that slow down guessing at the door |
 | `assets/datastar.js` | [Datastar](https://data-star.dev) 1.0.2, committed and embedded rather than fetched |
 
 `Spectre.Console.Cli` is pinned to `0.51.1` to match `Spectre.Console`; taking its

@@ -272,6 +272,17 @@ module Browser =
             ctx.Response.ContentType <- "text/plain; charset=utf-8"
             ctx.Response.WriteAsync "This table has a word at the door, and that is not it."
 
+    /// And what somebody who has got it wrong rather a lot is shown.
+    ///
+    /// Plain words at every address including the front door, because getting here takes ten
+    /// wrong answers inside a minute and nobody's fingers do that. What the far end is
+    /// actually being told is in the header: come back later, and here is how much later.
+    let tooOften (ctx: HttpContext) =
+        ctx.Response.StatusCode <- 429
+        ctx.Response.Headers.RetryAfter <- StringValues "60"
+        ctx.Response.ContentType <- "text/plain; charset=utf-8"
+        ctx.Response.WriteAsync "Too many wrong answers at this door. Try again in a minute."
+
     // --- what is served ------------------------------------------------------------------------
 
     /// Datastar's own client, carried inside this program rather than fetched from

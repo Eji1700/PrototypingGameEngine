@@ -3,6 +3,7 @@ namespace TCModel.Net
 open System
 open System.Net
 open System.Net.Sockets
+open System.Threading.RateLimiting
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Hosting
@@ -216,6 +217,22 @@ module Server =
         | InTheClear
         | Ahead -> builder.WebHost.UseUrls $"http://0.0.0.0:{reach.Port}" |> ignore
 
+    /// How fast anybody may get the word wrong.
+    ///
+    /// A bucket that holds this many tries and drips one back every so often, which is the
+    /// shape the thing being guarded actually has: a person who mistypes a word twice, or a
+    /// browser that fetches two or three things before it has been handed a cookie, is not
+    /// somebody to slow down, and the eleventh wrong answer in five seconds is nobody's
+    /// fingers.
+    let private bucket many (dripping: TimeSpan) =
+        TokenBucketRateLimiterOptions(
+            TokenLimit = many,
+            TokensPerPeriod = 1,
+            ReplenishmentPeriod = dripping,
+            QueueLimit = 0,
+            AutoReplenishment = true
+        )
+
     /// And what stands in front of the whole of it: what somebody in front of this said
     /// about the player, and the word at the door.
     let private guarded (app: WebApplication) standing reach =
@@ -244,6 +261,30 @@ module Server =
         match reach.Doorway with
         | Ajar -> ()
         | Locked _ ->
+
+            // Only wrong answers are counted, which is what makes counting them safe. A
+            // player who has the word never touches either of these, however fast they play,
+            // so nothing here can come between somebody and a game they were invited to.
+            //
+            // Two, because one of them can be got round. The first is per caller, and past a
+            // tunnel that is the address the tunnel says it came from - which anybody who can
+            // reach this machine directly is free to make up, and by making up a new one each
+            // time would have a fresh bucket every try. So the second counts the door itself,
+            // however many addresses the tries arrive from. What that costs when it is spent
+            // is that somebody arriving with the *wrong* word is told to wait rather than
+            // shown the box to type it into; somebody arriving with the right one is let in
+            // regardless, which is the half that matters.
+            let caller =
+                PartitionedRateLimiter.Create<HttpContext, string>(fun ctx ->
+                    let whoever =
+                        match ctx.Connection.RemoteIpAddress with
+                        | null -> "somewhere"
+                        | address -> string address
+
+                    RateLimitPartition.GetTokenBucketLimiter(whoever, (fun _ -> bucket 10 (TimeSpan.FromSeconds 5.0))))
+
+            let door = new TokenBucketRateLimiter(bucket 60 (TimeSpan.FromSeconds 1.0))
+
             // One place for the whole table rather than one per address, because the ways in
             // are not all pages: a console at a terminal arrives at the hub, which is not
             // routed through anything below and would otherwise be a door left open beside a
@@ -254,7 +295,17 @@ module Server =
                         Browser.remember reach ctx
                         next.Invoke ctx
                     else
-                        Browser.turned standing ctx)
+
+                    // Both asked whatever the first says, so that a caller with an empty
+                    // bucket still spends the door's: the two together are what a stranger
+                    // is held to, and taking the second only when the first allowed it would
+                    // let somebody with a new address every time past the pair of them.
+                    let waiting =
+                        use mine = caller.AttemptAcquire ctx
+                        use all = door.AttemptAcquire()
+                        not (mine.IsAcquired && all.IsAcquired)
+
+                    if waiting then Browser.tooOften ctx else Browser.turned standing ctx)
             )
             |> ignore
 

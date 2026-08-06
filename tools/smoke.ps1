@@ -423,6 +423,20 @@ try {
 
         Report "a browser with no word at the door is not seated" ([int]$shut.StatusCode -eq 401) "the table answered $([int]$shut.StatusCode)"
         Report "and is shown the door rather than a number" ($shutSaid -match 'word at the door') "it was sent $($shutSaid.Length) characters"
+
+        # And somebody who keeps guessing is slowed down. Ten wrong answers in a row is a
+        # burst nobody's fingers produce, so what is checked is that the ones after it are
+        # refused differently - and, the half that actually matters, that the word still gets
+        # in from the very same address straight afterwards.
+        $tries = 1..14 | ForEach-Object {
+            [int]($stranger.GetAsync("http://localhost:$Port/?code=guess-$_").GetAwaiter().GetResult()).StatusCode
+        }
+
+        Report "a stranger who keeps guessing is slowed down" ($tries -contains 429) "the door answered $($tries -join ',')"
+
+        $after = $stranger.GetAsync("http://localhost:$Port/?code=$Code").GetAwaiter().GetResult()
+
+        Report "and the word still gets in from that same address" ([int]$after.StatusCode -eq 200) "the table answered $([int]$after.StatusCode)"
     }
     finally { $stranger.Dispose() }
 
