@@ -273,7 +273,7 @@ module Html =
             Elem.div
                 [ Attr.class' (if yours then "player yours" else "player") ]
                 [ Elem.span [ Attr.class' "marker" ] [ Text.raw (if playerId = active then "-&gt;" else " ") ]
-                  Elem.span [ Attr.class' "who" ] [ Text.enc (Words.player playerId + (if yours then " (you)" else "")) ]
+                  Elem.span [ Attr.class' "who" ] [ Text.enc (Words.seated yours playerId) ]
                   Elem.span [ Attr.class' "bag" ] (sighted bag) ]
 
         let run =
@@ -287,13 +287,13 @@ module Html =
         let line label what =
             Elem.div [ Attr.class' "supply" ] (quiet label :: what)
 
-        [ line "on the board" (counted (Position.total seen.Position))
+        [ line Render.Supply.onTheBoard (counted (Position.total seen.Position))
           line
-              "in reserve"
+              Render.Supply.inReserve
               (match seen.Reserve with
                | Open pile -> counted pile
                | Closed n -> [ quiet $"?x{n}" ])
-          line "out of sight" (counted seen.Unseen) ]
+          line Render.Supply.outOfSight (counted seen.Unseen) ]
         @ (if notes && not over then [ note Render.Notes.supply ] else [])
 
     /// How the land stands is the game's own reckoning, not this view's. A third renderer
@@ -322,8 +322,8 @@ module Html =
 
         (StoneColor.all
          |> List.map (fun color -> bar (Words.color color) $"var(--{shade color})" (Map.find color standing.Ruled)))
-        @ [ bar "tied" "var(--edge)" standing.Tied
-            bar "unclaimed" "var(--hidden)" standing.Unclaimed ]
+        @ [ bar Words.tied "var(--edge)" standing.Tied
+            bar Words.unclaimed "var(--hidden)" standing.Unclaimed ]
         @ (if notes then [ note Render.Notes.landRuled ] else [])
 
     let private lines (text: string) = Elem.pre [] [ Text.enc text ]
@@ -374,14 +374,14 @@ module Html =
 
         let result =
             if over then
-                [ block "Result" [ lines (String.concat Environment.NewLine (Render.result game)) ] ]
+                [ block Render.Blocks.result [ lines (String.concat Environment.NewLine (Render.result game)) ] ]
             else
                 []
 
         let commands =
             if notes then
                 [ block
-                      "Commands"
+                      Render.Blocks.commands
                       [ lines (String.concat Environment.NewLine (Render.commands @ [ ""; "  " + Render.shorthand ])) ] ]
             else
                 []
@@ -389,7 +389,7 @@ module Html =
         screen (
             [ Elem.h1 [] [ Text.enc (Render.heading beholder model) ]
               block
-                  "The map"
+                  Render.Blocks.map
                   ([ mapOf game ]
                    @ noted (
                        String.concat
@@ -400,38 +400,30 @@ module Html =
                              // typed on by clicking it.
                              "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is." ]
                    ))
-              block "Standing apart" ([ apart game ] @ noted Render.Notes.apart)
+              block Render.Blocks.apart ([ apart game ] @ noted Render.Notes.apart)
+              // The one block no other view has: the moves that need nothing said beyond
+              // the word itself, which a terminal simply types.
               block "This turn" [ Elem.div [ Attr.class' "acts wide" ] toHand ]
-              block "Players" (players seen active.Id model)
-              block "Supply" (supply notes over seen)
-              block "Land ruled" (landRuled notes game) ]
+              block Render.Blocks.players (players seen active.Id model)
+              block Render.Blocks.supply (supply notes over seen)
+              block Render.Blocks.landRuled (landRuled notes game) ]
             @ result
             @ commands
-            @ [ block "Log" (log told model) ]
+            @ [ block Render.Blocks.log (log told model) ]
         )
 
     /// A table still filling up. There is no game to draw yet, so this is the one screen
     /// drawn from a list of who has arrived rather than from a position.
     let waiting (seats: Waiting list) =
         let standing (seat: Waiting) =
-            let holding =
-                if seat.Expected then "still to arrive"
-                elif seat.Away then "here, but their console has dropped"
-                else "here"
-
             Elem.div
                 [ Attr.class' (if seat.Yours then "player yours" else "player") ]
-                [ Elem.span [ Attr.class' "who" ] [ Text.enc (Words.player seat.Player + (if seat.Yours then " (you)" else "")) ]
-                  quiet holding ]
-
-        let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
+                [ Elem.span [ Attr.class' "who" ] [ Text.enc (Words.seated seat.Yours seat.Player) ]
+                  quiet (Render.Filling.standing seat) ]
 
         screen
-            [ Elem.h1 [] [ Text.raw "Waiting for the table to fill" ]
-              block
-                  "The table"
-                  ((seats |> List.map standing)
-                   @ [ quiet $"{expected} more to come. The game begins once every seat is taken." ]) ]
+            [ Elem.h1 [] [ Text.enc Render.Filling.title ]
+              block "The table" ((seats |> List.map standing) @ [ quiet (Render.Filling.stillToCome seats) ]) ]
 
     // --- the rest of what a player reads -----------------------------------------------
     //
@@ -446,7 +438,7 @@ module Html =
         let told = Render.wording beholder model
 
         match Journal.entries model.Journal with
-        | [] -> aside [ Elem.h2 [] [ Text.raw "The record" ]; quiet Render.nothingYet ]
+        | [] -> aside [ Elem.h2 [] [ Text.enc Render.Blocks.record ]; quiet Render.nothingYet ]
         | entries ->
             let row (entry: Entry) =
                 Elem.div
@@ -456,17 +448,17 @@ module Html =
                       Elem.span [ Attr.class' "outcome" ] (entry.Told |> List.map (fun notice -> quiet (told notice))) ]
 
             aside (
-                [ Elem.h2 [] [ Text.raw "The record" ] ]
+                [ Elem.h2 [] [ Text.enc Render.Blocks.record ] ]
                 @ (entries |> List.map row)
                 @ [ quiet (Render.recordStanding model) ]
             )
 
     let ruling regionId model =
         aside
-            [ Elem.h2 [] [ Text.enc $"Region {Words.number regionId}" ]
+            [ Elem.h2 [] [ Text.enc (Render.Blocks.region regionId) ]
               lines (Render.explainRule regionId model) ]
 
-    let rules = aside [ Elem.h2 [] [ Text.raw "How the game goes" ]; lines Render.help ]
+    let rules = aside [ Elem.h2 [] [ Text.enc Render.Blocks.rules ]; lines Render.help ]
 
     // --- the page the fragments land in --------------------------------------------------
 

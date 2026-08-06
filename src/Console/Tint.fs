@@ -62,7 +62,9 @@ module Tint =
           @"(?<block>^[A-Z][A-Z ]*[A-Z](?=\r?$))"
           @"(?<you>\(you\))"
           @"(?<active>->)"
-          @"(?<dead>\bdead\b)"
+          // Ground nobody may enter, and ground nobody holds: both are the absence of
+          // anything to see, which is what the hidden colour is for.
+          @"(?<dead>\b(?:dead|unclaimed)\b)"
           // Colours named in prose: "Red rules the region", "2 Green".
           @"(?<named>\b(?:Red|Blue|Green)\b)"
           // A tally, as "Rx4".

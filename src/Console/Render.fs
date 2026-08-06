@@ -250,6 +250,49 @@ module Render =
         let supply =
             "Every bag but your own is closed, and so is the reserve, so those are counted rather than read. But every stone is somewhere: whatever is neither on the map nor in your bag is out of sight, and its colours are exact. Where it is, is what you cannot know."
 
+    /// What the blocks of a screen are called.
+    ///
+    /// Which blocks there are and what they are named is one decision; how each view draws
+    /// a heading is three. `plain` shouts them, `rich` writes them into the top wall of a
+    /// panel and `html` gives them a heading element, and all three take the name from
+    /// here - so a block renamed is renamed everywhere, and one added cannot be added to
+    /// two screens out of three.
+    module Blocks =
+        let map = "The map"
+        let apart = "Standing apart"
+        let players = "Players"
+        let supply = "Supply"
+        let landRuled = "Land ruled"
+        let result = "Result"
+        let commands = "Commands"
+        let log = "Log"
+        let record = "The record"
+        let rules = "How the game goes"
+        let region regionId = $"Region {Words.number regionId}"
+
+    /// The three lines of the supply block, which every view lists in this order.
+    module Supply =
+        let onTheBoard = "on the board"
+        let inReserve = "in reserve"
+        let outOfSight = "out of sight"
+
+    /// A table that has not filled up yet, as the people waiting are told it.
+    ///
+    /// There is no game to draw here - it is the one screen built from a list of who has
+    /// arrived rather than from a position - and all three views build it. What it says is
+    /// therefore here, and only how it is laid out is theirs.
+    module Filling =
+        let title = "Waiting for the table to fill"
+
+        let standing (seat: Waiting) =
+            if seat.Expected then "still to arrive"
+            elif seat.Away then "here, but their console has dropped"
+            else "here"
+
+        let stillToCome (seats: Waiting list) =
+            let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
+            $"{expected} more to come. The game begins once every seat is taken."
+
     /// A paragraph as lines of at most `room` characters, for a view that has to fit one.
     /// Words are never broken.
     let wrap room (text: string) =
@@ -280,7 +323,7 @@ module Render =
     /// always the one reading, so the reader's own seat is named as well.
     let private playerLine active beholder (playerId, bag) =
         let marker = if playerId = active then "->" else "  "
-        let name = Words.player playerId + (if playerId = beholder then " (you)" else "")
+        let name = Words.seated (playerId = beholder) playerId
         sprintf "  %s %-15s bag: %s" marker name (Words.sight bag)
 
     let private section (sb: StringBuilder) (title: string) lines =
@@ -427,16 +470,21 @@ module Render =
         sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine()
         |> ignore
 
-        section sb "THE MAP" (mapLines game @ noted Notes.map)
+        /// This view shouts a block's name, which the other two do not - so the name comes
+        /// from `Blocks` and only the shouting is decided here.
+        let block sb name lines =
+            section sb ((name: string).ToUpperInvariant()) lines
 
-        section sb "STANDING APART" (apartLines game Board.apartRegions @ noted Notes.apart)
+        block sb Blocks.map (mapLines game @ noted Notes.map)
+
+        block sb Blocks.apart (apartLines game Board.apartRegions @ noted Notes.apart)
 
         let run =
             match Model.session model with
             | InPlay play -> [ "  " + negotiationRun play game ]
             | Finished _ -> []
 
-        section sb "PLAYERS" ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
+        block sb Blocks.players ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
 
         // How the land stands is the game's own reckoning, not this view's - dead ground
         // is unclaimed and always will be, and which regions count at all is a question
@@ -448,54 +496,45 @@ module Render =
             |> List.map (fun color -> $"{Words.color color} {Map.find color standing.Ruled}")
             |> String.concat "   "
 
-        section
+        block
             sb
-            "LAND RULED"
-            ([ $"  {ruled}   tied {standing.Tied}   unclaimed {standing.Unclaimed}" ]
+            Blocks.landRuled
+            ([ $"  {ruled}   {Words.tied} {standing.Tied}   {Words.unclaimed} {standing.Unclaimed}" ]
              @ noted Notes.landRuled)
 
-        section
+        let supplied label what = sprintf "  %-13s %s" (label + ":") what
+
+        block
             sb
-            "SUPPLY"
-            ([ $"  on the board: {Words.tally (Position.total seen.Position)}"
-               $"  in reserve:   {Words.sight seen.Reserve}"
-               $"  out of sight: {Words.tally seen.Unseen}" ]
+            Blocks.supply
+            ([ supplied Supply.onTheBoard (Words.tally (Position.total seen.Position))
+               supplied Supply.inReserve (Words.sight seen.Reserve)
+               supplied Supply.outOfSight (Words.tally seen.Unseen) ]
              @ notedWhileHidden Notes.supply)
 
         match Model.session model with
         | InPlay _ -> ()
-        | Finished _ -> section sb "RESULT" (result game)
+        | Finished _ -> block sb Blocks.result (result game)
 
         // The commands go with the notes: a player who has turned them off has turned
         // this off too, and `help` still says all of it.
-        if notes then section sb "COMMANDS" (commands @ [ ""; "  " + shorthand ])
+        if notes then block sb Blocks.commands (commands @ [ ""; "  " + shorthand ])
 
-        section sb "LOG" (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
+        block sb Blocks.log (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 
         sb.ToString()
 
     /// A table still filling up. There is no game to draw yet, so this is the one screen
     /// drawn from a list of who has arrived rather than from a position.
     let waiting (seats: Waiting list) =
-        let standing seat =
-            let who = Words.player seat.Player + (if seat.Yours then " (you)" else "")
-
-            let holding =
-                if seat.Expected then "still to arrive"
-                elif seat.Away then "here, but their console has dropped"
-                else "here"
-
-            sprintf "    %-15s %s" who holding
-
-        let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
+        let standing (seat: Waiting) =
+            sprintf "    %-15s %s" (Words.seated seat.Yours seat.Player) (Filling.standing seat)
 
         String.concat
             Environment.NewLine
-            ([ ""; "=== Waiting for the table to fill ==="; "" ]
+            ([ ""; $"=== {Filling.title} ==="; "" ]
              @ (seats |> List.map standing)
-             @ [ ""
-                 $"  {expected} more to come. The game begins once every seat is taken."
-                 "" ])
+             @ [ ""; "  " + Filling.stillToCome seats; "" ])
 
     let help =
         String.concat

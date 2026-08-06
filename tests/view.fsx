@@ -150,6 +150,76 @@ for view in views do
 
         report $"and with the notes off says nothing of {what}" false (hidden |> mentions note)
 
+// --- the blocks a board is built of ----------------------------------------------------------
+//
+// Which blocks there are is one decision and three layouts. `plain` shouts a name, `rich`
+// writes it into the top wall of a panel and `html` gives it a heading, so this asks only that
+// every view has every block - the way a block gets added to two screens out of three is that
+// nothing ever asked.
+
+let private blocks =
+    [ Render.Blocks.map
+      Render.Blocks.apart
+      Render.Blocks.players
+      Render.Blocks.supply
+      Render.Blocks.landRuled
+      Render.Blocks.commands
+      Render.Blocks.log ]
+
+for view in views do
+    let board = (seen (view.Board true seats[0] dealt)).ToLowerInvariant()
+
+    for block in blocks do
+        report $"the {view.Name} view has a block for {block}" true (board |> mentions (block.ToLowerInvariant()))
+
+// --- the table still filling up ---------------------------------------------------------
+//
+// The one screen with no game behind it, built by all three from the same short list of who
+// has arrived. Exactly the trap the notes fell into, so each view is held to saying where
+// every seat stands, how many are still to come, and which seat is the reader's own.
+
+let private arriving =
+    let three =
+        Update.start 3 42UL
+        |> Result.toOption
+        |> Option.get
+        |> Model.game
+        |> Game.players
+
+    [ { Player = three[0].Id
+        Yours = true
+        Expected = false
+        Away = false }
+      { Player = three[1].Id
+        Yours = false
+        Expected = false
+        Away = true }
+      { Player = three[2].Id
+        Yours = false
+        Expected = true
+        Away = false } ]
+
+for view in views do
+    let screen = unwrapped (view.Waiting arriving)
+
+    report $"the {view.Name} view says what it is waiting for" true (screen |> mentions Render.Filling.title)
+
+    for seat in arriving do
+        report
+            $"and the {view.Name} view says where {Words.player seat.Player} stands, in the words every view uses"
+            true
+            (screen |> mentions (Render.Filling.standing seat))
+
+    report
+        $"and the {view.Name} view says how many are still to come"
+        true
+        (screen |> mentions (Render.Filling.stillToCome arriving))
+
+    report
+        $"and the {view.Name} view marks the seat belonging to whoever is reading"
+        true
+        (screen |> mentions (Words.seated true arriving.Head.Player))
+
 // --- prose ---------------------------------------------------------------------------------
 
 let private plain = View.plain Palette.standard

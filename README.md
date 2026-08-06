@@ -544,13 +544,26 @@ compiler saying so.
   ruled, tied, still going spare - is `Game.landStanding`, not a sum each renderer
   works out for itself, because a second view counting it again could count it
   differently.
-- **What the notes say comes from `Render.Notes`.** The writing that explains the
-  board - how to read the map, what the Flag and the Axe are for, why the land is
-  counted the way it is, what "out of sight" means - is one paragraph each, shown by
-  all three. Each view decides only how wide to draw it, and the two that have to fit
-  a width share `Render.wrap`. Written out per view, they drifted: the same border was
-  a "side" in one and a "wall" in another, one view called the dead region wild, and
-  two of the four notes were shown by one view and quietly missing from the others.
+- **What a screen *says* comes from `Render` and `Words`**, and what is left for a view
+  is where to put it. The notes that explain the board are `Render.Notes`, one paragraph
+  each; what the blocks are called is `Render.Blocks`; the table still filling up is
+  `Render.Filling`; the supply's three labels are `Render.Supply`; marking the reader's
+  own seat is `Words.seated`; saying who rules a region in words is `Words.rule`. Each
+  view decides only how it is drawn - `plain` shouts a block name and wraps a note to
+  the width of its map, `rich` writes the name into a panel's top wall, `html` hands the
+  paragraph to a browser and lets it wrap.
+
+  This is the seam that goes wrong quietly, and it had: the same border was a "side" in
+  one view and a "wall" in another, one view called the dead region wild, `rich` had two
+  sentences for an empty record and used the wrong one on the board, and of the four
+  notes two were shown by one view and silently missing from the others. Nothing failed.
+  Every board still drew.
+
+  So [view.fsx](tests/view.fsx) sweeps `View.all` and holds every view to the same
+  words: each note shown and each one gone when the notes are off, every block present,
+  and the waiting screen saying where each seat stands, how many are still to come and
+  which seat is the reader's own. That sweep is what found `rich` drawing the Flag and
+  the Axe without ever naming the block they are in.
 
 **The map is drawn three times, and all three say the same thing.** `plain` draws
 the honeycomb by counting characters into columns; `rich` gives every region a panel
@@ -1217,7 +1230,7 @@ dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a ta
 dotnet fsi tests/solo.fsx       # the game at one keyboard: what a line does, and what it
                                 #   asks written down
 dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
-                                #   that every view explains the board in the same words, and
+                                #   that every view says the same things in the same words, and
                                 #   that changing the colours changes nothing else
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
                                 #   and has no control on it the game would not take

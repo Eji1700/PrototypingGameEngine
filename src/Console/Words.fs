@@ -28,6 +28,21 @@ module Words =
 
     let player playerId = $"Player {PlayerId.value playerId}"
 
+    /// A player as one screen names them, with the reader's own seat marked.
+    ///
+    /// Every view does this and the game is unreadable without it: over a network the seat
+    /// to play is very often not the seat reading, so "Player 3" alone leaves somebody
+    /// hunting for which one they are. Said here because it is the same mark on all of
+    /// them - the board, and the table still filling up.
+    let seated yours playerId =
+        player playerId + (if yours then " (you)" else "")
+
+    /// Ground nobody holds, and ground nobody holds outright. Both are read as a chart's
+    /// label and as the end of a sentence, so they are words rather than either.
+    let unclaimed = "unclaimed"
+
+    let tied = "tied"
+
     /// A count of one colour, said the way a person would: "a Red stone", "3 Red stones".
     /// Every sentence below that counts stones goes through here, because "1 stone(s)" is
     /// a placeholder somebody forgot to finish, and it is read mid-game.
@@ -68,11 +83,17 @@ module Words =
         | Open pile -> tally pile
         | Closed n -> $"closed ({n})"
 
+    /// Who rules a region, said outright.
+    ///
+    /// `Render.standingIn` writes the short form - ">R", "=BG" - because a region drawn on
+    /// a map has room for two characters and no more. This is the same thing for the views
+    /// that give a region a box with room to say it in words, which so far is the Flag and
+    /// the Axe standing on their own.
     let rule =
         function
         | RuledBy c -> color c
-        | Contested tied -> "tied " + (tied |> List.map (glyph >> string) |> String.concat "")
-        | Unclaimed -> "-"
+        | Contested level -> colors level + " level"
+        | Unclaimed -> unclaimed
 
     let ending =
         function
