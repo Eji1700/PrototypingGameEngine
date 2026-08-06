@@ -112,6 +112,44 @@ for view in views do
         false
         (seen (view.Board true other drawn) |> mentions $"drew a {drewColor} stone")
 
+// --- the notes -----------------------------------------------------------------------------
+//
+// The writing that explains the board is `Render.Notes`, and every view shows all of it. Each
+// wraps it to whatever width it has, which is the only part that is a view's own business.
+//
+// Written out per view they drifted, which is what this is here to stop: one view said two
+// regions share a "side" and another a "wall", one called the dead region wild, and two of the
+// four notes were shown by one view and quietly missing from the others. A note nobody is
+// shown reads exactly like a note nobody needed.
+
+/// A note as it reaches a reader, with everything that is only how it was drawn taken back
+/// off: colour and markup, the walls of whatever box it was written inside - a note in a
+/// Spectre panel has one down each side of every line - and the wrapping, run back together.
+/// A page's entities are read back too, the map note having an apostrophe and an angle
+/// bracket in it and a page writing both the long way round.
+let private unwrapped text =
+    let walls = Regex.Replace(seen text, "[─-╿]", "")
+    let flat = Regex.Replace(walls, @"\s+", " ")
+
+    flat.Replace("&#39;", "'").Replace("&gt;", ">").Replace("&lt;", "<")
+
+let private notes =
+    [ "the map", Render.Notes.map
+      "what stands apart from it", Render.Notes.apart
+      "how the land is counted", Render.Notes.landRuled
+      "what is out of sight", Render.Notes.supply ]
+
+for view in views do
+    let shown = unwrapped (view.Board true seats[0] dealt)
+    let hidden = unwrapped (view.Board false seats[0] dealt)
+
+    for what, note in notes do
+        let note = Regex.Replace(note, @"\s+", " ")
+
+        report $"the {view.Name} view explains {what} in the words every view uses" true (shown |> mentions note)
+
+        report $"and with the notes off says nothing of {what}" false (hidden |> mentions note)
+
 // --- prose ---------------------------------------------------------------------------------
 
 let private plain = View.plain Palette.standard

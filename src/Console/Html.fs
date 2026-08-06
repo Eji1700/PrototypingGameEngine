@@ -278,9 +278,7 @@ module Html =
 
         let run =
             match Model.session model with
-            | InPlay play ->
-                let seats = Game.playerCount (Model.game model)
-                [ quiet $"negotiations in a row: {play.Negotiations} of {seats} - the game ends on the last" ]
+            | InPlay play -> [ quiet (Render.negotiationRun play (Model.game model)) ]
             | Finished _ -> []
 
         (seen.Bags |> List.map row) @ run
@@ -296,11 +294,7 @@ module Html =
                | Open pile -> counted pile
                | Closed n -> [ quiet $"?x{n}" ])
           line "out of sight" (counted seen.Unseen) ]
-        @ (if notes && not over then
-               [ note
-                     "Every bag but your own is closed, and so is the reserve. But every stone is somewhere: what is neither on the map nor in your bag must be out of sight, and that much is exact." ]
-           else
-               [])
+        @ (if notes && not over then [ note Render.Notes.supply ] else [])
 
     /// How the land stands is the game's own reckoning, not this view's. A third renderer
     /// counting it again for itself is a third chance to count it differently.
@@ -330,11 +324,7 @@ module Html =
          |> List.map (fun color -> bar (Words.color color) $"var(--{shade color})" (Map.find color standing.Ruled)))
         @ [ bar "tied" "var(--edge)" standing.Tied
             bar "unclaimed" "var(--hidden)" standing.Unclaimed ]
-        @ (if notes then
-               [ note
-                     "The Flag and the Axe are manoeuvres rather than land, and the dead region is nobody's to take, so none of the three are counted here." ]
-           else
-               [])
+        @ (if notes then [ note Render.Notes.landRuled ] else [])
 
     let private lines (text: string) = Elem.pre [] [ Text.enc text ]
 
@@ -367,6 +357,10 @@ module Html =
 
         let told = Render.wording beholder model
 
+        /// A note, if the reader still wants them. A page wraps its own paragraphs, so
+        /// unlike the two terminal views this hands the whole thing over as it stands.
+        let noted text = if notes then [ note text ] else []
+
         // What may be done without saying anything more than the word itself. The rest of
         // the moves take arguments, and take them at the prompt.
         let toHand =
@@ -397,12 +391,16 @@ module Html =
               block
                   "The map"
                   ([ mapOf game ]
-                   @ (if notes then
-                          [ note
-                                "Two regions border each other where they share a wall, and nowhere else - each one touches the two beside it and two on the row above and below. A region is bordered in the colour of whoever rules it; '>' says the same, and '=' marks who is level in it. A home carries its own colour. The letters under a region recruit into it, and '?' says why it is ruled as it is." ]
-                      else
-                          []))
-              block "Standing apart" [ apart game ]
+                   @ noted (
+                       String.concat
+                           " "
+                           [ Render.Notes.map
+                             Render.Notes.bordered
+                             // The one thing here no other view has: a region on this board can be
+                             // typed on by clicking it.
+                             "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is." ]
+                   ))
+              block "Standing apart" ([ apart game ] @ noted Render.Notes.apart)
               block "This turn" [ Elem.div [ Attr.class' "acts wide" ] toHand ]
               block "Players" (players seen active.Id model)
               block "Supply" (supply notes over seen)

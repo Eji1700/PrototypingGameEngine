@@ -55,6 +55,11 @@ module Rich =
     /// panels standing side by side have room for a bag laid out stone by stone.
     let private width = max (mapAcross + 4) 104
 
+    /// How wide the chart of what is out of sight is drawn, and so how much room the two
+    /// panels beside one another have. The note under it is wrapped to the same, because a
+    /// paragraph broken narrower than the thing it explains reads as a column of scraps.
+    let private breakdownAcross = 40
+
     let private esc (text: string) = Markup.Escape text
 
     let private markup (text: string) = Markup text :> IRenderable
@@ -82,9 +87,12 @@ module Rich =
         panel :> IRenderable
 
     /// Writing that is there to be read once: shown while the notes are on, and gone the
-    /// moment they are turned off.
-    let private note palette (text: string) =
-        markup (Tint.wrap (Tint.hidden palette) (esc text))
+    /// moment they are turned off. What it says is `Render.Notes`, the same words the other
+    /// two views show; the only thing decided here is how wide it is drawn.
+    let private noted palette room (text: string) =
+        markup ""
+        :: (Render.wrap room text
+            |> List.map (fun line -> markup (Tint.wrap (Tint.hidden palette) (esc line))))
 
     // --- stones -------------------------------------------------------------------------
 
@@ -226,9 +234,8 @@ module Rich =
         let run =
             match Model.session model with
             | InPlay play ->
-                let seats = Game.playerCount (Model.game model)
-
-                [ markup (Tint.wrap (Tint.hidden palette) (esc $"negotiations in a row: {play.Negotiations} of {seats}")) ]
+                let said = Render.negotiationRun play (Model.game model)
+                [ markup (Tint.wrap (Tint.hidden palette) (esc said)) ]
             | Finished _ -> []
 
         rows ([ table :> IRenderable ] @ run)
@@ -260,7 +267,7 @@ module Rich =
         // out there, and though nobody can say where, the colours are known exactly. That
         // is worth a picture rather than three numbers.
         let breakdown = BreakdownChart()
-        breakdown.Width <- 40
+        breakdown.Width <- breakdownAcross
 
         for color, n in Pile.toCounts seen.Unseen do
             breakdown.AddItem(Words.color color, float n, Tint.color palette color)
@@ -322,26 +329,16 @@ module Rich =
             grid.AddRow(left, right) |> ignore
             grid :> IRenderable
 
-        let note = note palette
+        /// A note across the whole screen, and one inside a panel standing beside another.
+        let noted room text =
+            if notes then noted palette room text else []
 
-        let mapNotes =
-            if notes then
-                [ markup ""
-                  note "Two regions border each other where they share a wall, and nowhere else -"
-                  note "each one touches the two beside it and two on the row above and below. A"
-                  note "region is bordered in the colour of whoever rules it; '>' says the same,"
-                  note "and '=' marks who is level in it. A home carries its own colour." ]
-            else
-                []
+        let wideNote = noted (width - 6)
+        let besideNote = noted breakdownAcross
 
-        let hiddenNote =
-            if notes && not (Model.isOver model) then
-                [ markup ""
-                  note "Every bag but your own is closed, and so is the reserve. But every stone"
-                  note "is somewhere: what is neither on the map nor in your bag must be out of"
-                  note "sight, and that much is exact." ]
-            else
-                []
+        let mapNote = wideNote (Render.Notes.map + " " + Render.Notes.bordered)
+
+        let hiddenNote = if Model.isOver model then [] else besideNote Render.Notes.supply
 
         let result =
             if Model.isOver model then [ wide "Result" (plainly palette (Render.result game)) ] else []
@@ -354,12 +351,12 @@ module Rich =
 
         rows (
             [ rule :> IRenderable
-              wide "The map" (rows ([ mapOf palette game ] @ mapNotes))
-              apart palette game
+              wide "The map" (rows ([ mapOf palette game ] @ mapNote))
+              rows (apart palette game :: wideNote Render.Notes.apart)
               beside
                   (panel "Players" (players palette seen active.Id model))
                   (panel "Supply" (rows ([ supply palette seen ] @ hiddenNote)))
-              wide "Land ruled" (landRuled palette game) ]
+              wide "Land ruled" (rows (landRuled palette game :: wideNote Render.Notes.landRuled)) ]
             @ result
             @ commands
             @ [ wide "Log" (log palette told model) ]

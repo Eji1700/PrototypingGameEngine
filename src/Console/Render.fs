@@ -210,9 +210,56 @@ module Render =
         let made = Timeline.movesMade model.Timeline
         let back = Timeline.movesTakenBack model.Timeline
 
-        match back with
-        | 0 -> $"{made} move(s) stand between the deal and here."
-        | _ -> $"{made} move(s) stand between the deal and here, with {back} taken back and waiting to be made again."
+        match made, back with
+        | 0, 0 -> "The game stands where it was dealt."
+        | _, 0 -> $"The game stands {Words.moves made} from the deal."
+        | _ ->
+            $"The game stands {Words.moves made} from the deal, with {Words.moves back} taken back and waiting to be made again."
+
+    /// How close the game is to ending. Not a note - it is part of the position, and stays
+    /// on screen with the notes turned off.
+    let negotiationRun play game =
+        let seats = Game.playerCount game
+        $"negotiations in a row: {play.Negotiations} of {seats} - the game ends at {seats}"
+
+    // --- the notes ------------------------------------------------------------------
+    //
+    // Writing that explains the board rather than states it, which `notes off` takes away.
+    // It is written here rather than in each view because three renderers each phrasing the
+    // same explanation is three explanations, and these three had already drifted: the map
+    // was read as sharing a "side" in one view and a "wall" in another, one view called the
+    // dead region wild, and two of the four notes were shown by one view and not the others.
+    // What a note says is one decision, like what a region says; how wide it is drawn is
+    // each view's own business.
+    module Notes =
+
+        /// How to read the map. What each view adds to this is how *it* draws the map,
+        /// which is the one part that really is its own.
+        let map =
+            "Two regions border each other where they share a side, and nowhere else: two that meet only at a point do not. A home has its own colour after its name, '>' marks the colour ruling a region and '=' the colours level in it, and the dead region says so where its stones would be."
+
+        /// For the views that draw a region as a box of its own.
+        let bordered = "A region is drawn in the colour of whoever rules it."
+
+        let apart =
+            "The Flag and the Axe hold the stones that battles and marches are paid for with. They border nothing, so nothing can be marched into them, and neither is land - what they settle is ties."
+
+        let landRuled =
+            "Only land is counted here: not the Flag or the Axe, which stand outside the map, and not the dead region, which nobody may ever hold."
+
+        let supply =
+            "Every bag but your own is closed, and so is the reserve, so those are counted rather than read. But every stone is somewhere: whatever is neither on the map nor in your bag is out of sight, and its colours are exact. Where it is, is what you cannot know."
+
+    /// A paragraph as lines of at most `room` characters, for a view that has to fit one.
+    /// Words are never broken.
+    let wrap room (text: string) =
+        let put (lines, line) word =
+            if line = "" then lines, word
+            elif String.length line + 1 + String.length word <= room then lines, line + " " + word
+            else lines @ [ line ], word
+
+        let lines, last = text.Split ' ' |> Array.fold put ([], "")
+        lines @ [ last ]
 
     /// A record with nothing in it yet.
     let nothingYet = "Nothing has happened yet."
@@ -368,36 +415,25 @@ module Render =
 
         let told = wording beholder model
 
-        /// Lines that are there to be read once, and only while they are still wanted.
-        let noted lines = if notes then lines else []
+        /// A note, laid out for this view: a blank line, then the paragraph broken to the
+        /// width of the map it sits under and indented to match everything else in a block.
+        let noted note =
+            if notes then "" :: (wrap (mapWidth - 6) note |> List.map (fun line -> "  " + line)) else []
 
-        /// Notes about what is being held back, which are only true while it still is.
-        let notedWhileHidden lines =
-            if Model.isOver model then [] else noted lines
+        /// A note that is only true while something is still being held back.
+        let notedWhileHidden note =
+            if Model.isOver model then [] else noted note
 
         sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine()
         |> ignore
 
-        section
-            sb
-            "THE MAP"
-            (mapLines game
-             @ noted
-                 [ ""
-                   "  Two regions border each other where they share a side, and nowhere else -"
-                   "  regions that meet only at a point do not. A home carries its colour, '>'"
-                   "  marks who rules a region and '=' who is level in it, and the rest are wild." ])
+        section sb "THE MAP" (mapLines game @ noted Notes.map)
 
-        section
-            sb
-            "STANDING APART"
-            (apartLines game Board.apartRegions
-             @ noted [ ""; "  Bought with stones, but no part of the map and no part of the land." ])
+        section sb "STANDING APART" (apartLines game Board.apartRegions @ noted Notes.apart)
 
         let run =
             match Model.session model with
-            | InPlay play ->
-                [ $"  negotiations in a row: {play.Negotiations} of {Game.playerCount game} - the game ends on the last" ]
+            | InPlay play -> [ "  " + negotiationRun play game ]
             | Finished _ -> []
 
         section sb "PLAYERS" ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
@@ -416,9 +452,7 @@ module Render =
             sb
             "LAND RULED"
             ([ $"  {ruled}   tied {standing.Tied}   unclaimed {standing.Unclaimed}" ]
-             @ noted
-                 [ "  (the Flag and the Axe are manoeuvres rather than land, and the dead region"
-                   "  is nobody's to take, so none of the three are counted here)" ])
+             @ noted Notes.landRuled)
 
         section
             sb
@@ -426,10 +460,7 @@ module Render =
             ([ $"  on the board: {Words.tally (Position.total seen.Position)}"
                $"  in reserve:   {Words.sight seen.Reserve}"
                $"  out of sight: {Words.tally seen.Unseen}" ]
-             @ notedWhileHidden
-                 [ "  (every bag but your own is closed, and so is the reserve, so those are"
-                   "  counted rather than read. But every stone is somewhere: what is neither"
-                   "  on the map nor in your bag must be out of sight, and that much is exact)" ])
+             @ notedWhileHidden Notes.supply)
 
         match Model.session model with
         | InPlay _ -> ()

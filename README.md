@@ -1,6 +1,12 @@
 # TCModel
 
-A stone-placement game built as a Model-View-Update loop in F#. The core is pure:
+Two to five players draw bags of coloured stones and place them into fourteen
+regions. Nobody commands a faction - the stones are red, blue and green whoever
+holds them - so the game is settled twice over: the faction ruling the most land
+carries the board, and the player left holding most of that colour carries the
+faction. A bag played out to nothing wins nothing.
+
+It is a stone-placement game built as a Model-View-Update loop in F#. The core is pure:
 `Setup.deal` deals a game from a seed and `Update.update` folds a `Msg` into the
 next `Model`. Nothing below the console layer knows a screen exists, and every
 screen a player reads goes through a `View` - so how the game looks is swappable,
@@ -12,121 +18,68 @@ at a seat is held to what a player is held to: it asks the rules what they will
 take rather than keeping its own opinion, it reads the map and its own bag and
 nothing else, and it picks a `Move` - the very thing a typed line turns into.
 
-## Layout
+**Playing** — [Running](#running) · [Rules as implemented](#rules-as-implemented) ·
+[The map](#the-map) · [The four actions](#the-four-actions) · [Ruling](#ruling) ·
+[Winning](#winning) · [Ending the game](#ending-the-game)
 
-Five layers, each depending only on the ones above it.
+**At the table** — [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
+[Who knows what](#who-knows-what) ·
+[How the board is shown](#how-the-board-is-shown) ·
+[Playing from different machines](#playing-from-different-machines) ·
+[Playing against the program](#playing-against-the-program)
 
-**`src/Common`** — generic, and knows nothing about the game.
+**The code** — [How it is put together](#how-it-is-put-together) ·
+[Tests](#tests) · [Tooling](#tooling)
 
-| File | Role |
+## Running
+
+```powershell
+dotnet run                     # the start menu, which asks how many are playing
+dotnet run -- play 3           # 3 players, random seed - straight to the board
+dotnet run -- play 3 --seed 42 # the same game again, from a seed
+dotnet run -- play 2 --view rich --colour blue=teal
+
+dotnet run -- play 2 --rival medium              # the seat after yours, played by the program
+dotnet run -- play 4 --rival easy --rival hard   # once per seat you are giving away
+
+dotnet run -- serve 3          # the same game, played in a browser on this machine
+dotnet run -- serve 2 --rival hard
+
+dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
+
+dotnet run -- host 3                        # open a table at their own machines
+dotnet run -- join greg-pc                  # sit down at one someone else opened
+dotnet run -- join greg-pc --token <token>  # come back to the seat you were in
+                                            # or open greg-pc:5000 in a browser
+
+dotnet run -- --help           # every command; --help works on each of them too
+```
+
+Once a game is dealt, everything else is typed at the prompt:
+
+| command | action |
 | --- | --- |
-| [Result.fs](src/Common/Result.fs) | The `result` computation expression used to chain an action's checks |
-| [Cascade.fs](src/Common/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning |
-| [Random.fs](src/Common/Random.fs) | An immutable SplitMix64 generator, passed along as a value |
+| `recruit <colour> <region>` (`r`) | Recruit |
+| `battle <colour> <region> [colours...]` (`b`) | Battle; name no colours to drive out all you may |
+| `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
+| `negotiate` (`n`), then `return <colour>` | Negotiate |
+| `undo` (`u`), `redo` | walk the game back and forward a move at a time |
+| `history` (`log`) | the whole record so far, as it will be saved |
+| `save` | write the record out now |
+| `rule <region>` | not an action; shows who rules a region and why |
+| `notes [on\|off]` | show or hide the writing that explains the board, and the short list of commands that sits above the log |
+| `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
 
-**`src/Domain`** — the language and the rules. No English a player would read.
+Colours are `r`/`red`, `b`/`blue`, `g`/`green`; regions are numbered as shown on
+the board. So `battle green 2 blue` places a green stone in the Axe and drives one
+blue stone out of Saltmarsh, and `march blue 8 5 2` places a blue stone in the Flag
+and moves two blue stones from the Crossroads into Emberfall.
 
-| File | Role |
-| --- | --- |
-| [Stones.fs](src/Domain/Stones.fs) | `StoneColor` and `Pile`, a multiset of stones |
-| [Board.fs](src/Domain/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
-| [Players.fs](src/Domain/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
-| [Position.fs](src/Domain/Position.fs) | Which stones stand where |
-| [Ruling.fs](src/Domain/Ruling.fs) | Who rules a region, and how the land stands - both read off a position alone |
-| [Game.fs](src/Domain/Game.fs) | The game in progress, and what can be asked of it |
-| [Knowledge.fs](src/Domain/Knowledge.fs) | What one player can see of a game, and what they cannot |
-| [Events.fs](src/Domain/Events.fs) | What happened, and why an action was refused |
-| [Actions.fs](src/Domain/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
-| [Outcome.fs](src/Domain/Outcome.fs) | Which faction carries the board, and which player carries the faction |
-| [Setup.fs](src/Domain/Setup.fs) | Dealing a fresh game |
-
-**`src/App`** — the MVU loop and the game's memory of itself: whose turn
-it is, when it ends, when the game does, and everything that has happened so far.
-
-| File | Role |
-| --- | --- |
-| [Messages.fs](src/App/Messages.fs) | `Move` and `Msg` |
-| [Session.fs](src/App/Session.fs) | `Session`, `Play`, `Over`, and `Notice` |
-| [Rival.fs](src/App/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
-| [Timeline.fs](src/App/Timeline.fs) | Every state the game has stood in, with a finger on the present |
-| [Journal.fs](src/App/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
-| [Model.fs](src/App/Model.fs) | The timeline, the journal, and the last few lines on screen |
-| [Update.fs](src/App/Update.fs) | `Msg -> Model -> Model` |
-
-**`src/Console`** — the only part that talks to a person.
-
-| File | Role |
-| --- | --- |
-| [Waiting.fs](src/Console/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
-| [Showing.fs](src/Console/Showing.fs) | What a table shows one console, and which console it is for |
-| [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
-| [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
-| [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
-| [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
-| [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
-| [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
-| [Html.fs](src/Console/Html.fs) | The `html` view: every screen as a fragment of a page, and the page they land in |
-| [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
-| [Solo.fs](src/Console/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
-| [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
-| [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
-| [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
-| [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
-| [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
-
-**`src/Net`** — the same game with the players at different keyboards. Only the
-last three files here touch a socket.
-
-| File | Role |
-| --- | --- |
-| [Protocol.fs](src/Net/Protocol.fs) | Where the table listens, and what each end calls the other |
-| [Browser.fs](src/Net/Browser.fs) | A page as a console: the streams held open to them, and what is served. Knows of no table in particular |
-| [Lobby.fs](src/Net/Lobby.fs) | Seats, tokens, and the three rules a table adds to the game |
-| [Server.fs](src/Net/Server.fs) | The host, and the local game served to a browser: a table behind a lock, with pages and sockets over it |
-| [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
-
-And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
-read/update/render loop, and the choice between playing here and playing over a wire.
-It sits outside all five because it needs all five - F# compiles in order and a file
-sees only what came before it, so the door has to be the last thing built.
-
-## Keeping invalid states out
-
-The types are shaped so that a good deal of what could go wrong cannot be written
-down in the first place.
-
-- **`RegionId` has a private constructor** and only `Board.tryId` mints one, from a
-  number someone typed. So a `RegionId` always names a region that exists, looking
-  one up is total, and "no such region" is a parsing concern that never reaches the
-  rules.
-- **`Position` holds an entry for every region**, so asking what stands somewhere
-  always answers rather than returning an option.
-- **`Table` keeps the active player as a seat, not an id**, and can only be built
-  with 2 to 5 players. There is always exactly one active player, and they are
-  always at the table.
-- **`Pile` never holds a zero or negative count** — a colour that is absent is
-  simply not in the map.
-- **`Session` is `InPlay` or `Finished`**, and only `InPlay` carries a phase and a
-  turn. Nothing has to ask whether the game it holds is still running.
-- **`Phase` is `AwaitingAction` or `AwaitingReturn`**, so a turn cannot be both open
-  to any action and waiting on a stone to go back.
-- **Events and rejections are data**, not sentences. The domain says
-  `NothingToDriveOut(region, colour)` and [Words.fs](src/Console/Words.fs) decides
-  how that reads, so wording can change without touching a rule.
-- **`Msg` separates a `Move` from walking the history.** Only a move can be
-  attempted against a position, so `attempt` never has to answer what `Undo` does
-  to a phase, and undo never has to answer what it does to a bag.
-- **The model holds no current game.** The present position is whatever the
-  timeline's finger is on, so a stored "current game" cannot drift out of step with
-  the history behind it.
-- **`Timeline` has a private constructor**, so its two lists can only be moved
-  between in step: a state can be walked away from and back to, never dropped.
-- **A `Sight` is `Open` of a pile or `Closed` of a count**, so a bag someone
-  cannot see into carries no colours to leak by accident. What a player is shown
-  is built by `Knowledge`, not filtered out of a `Game` at the point of writing.
-
-What is not enforced by types: that the 63 stones are conserved. Actions only ever
-move stones between piles, and `tests/actions.fsx` checks the total after each one.
+Every random decision comes from the seed, so a seed plus a list of messages
+reproduces a game exactly. That is why the generator in [Random.fs](src/Common/Random.fs)
+is a value handed back with each result rather than `System.Random`: a generator that
+advanced by mutation would make `update` impure and stop the model being a value, and
+`restart` draws its next seed from the generator already in play.
 
 ## Rules as implemented
 
@@ -140,7 +93,8 @@ move stones between piles, and `tests/actions.fsx` checks the total after each o
 - 2 to 5 players. Each draws a bag of eight stones at random; a player commands no
   faction, so a bag holds stones of any colour. Undealt stones sit in the reserve
   (25 with two players, 1 with five).
-- On a turn a player takes one of the four actions below. There is no passing.
+- On a turn a player takes one of [the four actions](#the-four-actions). There is no
+  passing.
 
 Points the rules did not settle, decided here and easy to change:
 
@@ -150,6 +104,86 @@ Points the rules did not settle, decided here and easy to change:
 - **Region count** — the Flag and the Axe are additions to the original twelve, so
   the board holds fourteen regions: 3 home + 8 wild + 1 dead makes the twelve, plus
   the two specials.
+
+## The map
+
+Borders are declared once in `Board.declaredBorders` and symmetrised, so a border
+only has to be named from one end. The resulting graph has 23 edges, is connected
+across all twelve mainland regions, and leaves the Flag and the Axe bordering
+nothing.
+
+| region | borders |
+| --- | --- |
+| 1 Nightfen (Green home) | 2, 4 |
+| 2 Saltmarsh | 1, 3, 4 |
+| 3 Greymarket | 2, 4, 5, 6 |
+| 4 Thornwood | 1, 2, 3, 6, 7 |
+| 5 Emberfall (Red home) | 3, 6, 8 |
+| 6 The Hollow Waste (dead) | 3, 4, 5, 7, 8, 9 |
+| 7 Stonecradle | 4, 6, 9, 10 |
+| 8 The Crossroads | 5, 6, 9, 11 |
+| 9 Windgap | 6, 7, 8, 10, 11, 12 |
+| 10 Tidewatch (Blue home) | 7, 9, 12 |
+| 11 Ironford | 8, 9, 12 |
+| 12 Dunmoor | 9, 10, 11 |
+| 13 The Flag, 14 The Axe | none |
+
+Regions are numbered across the map rather than by kind, so that neighbours read as
+neighbours: no border joins regions more than three apart, and all but three of the
+numbers border the one after them. The mainland takes 1 to 12, with the dead region
+at its centre; the Flag and the Axe, which are no part of the map, come last.
+
+### Drawn as a map
+
+That border graph is a patch of a triangular lattice, so it can be drawn as the map
+it is rather than listed. `Board.layout` says where each region lies — rows north to
+south, each row half a region across from the one above — and the board is drawn as a
+honeycomb:
+
+```
+                      _/________/ \________\_/________/ \________\_
+                      | [ 2] Saltmarsh      | [ 1] Nightfen (G)   |
+                      | B B              >B | G G              >G |
+           _/________/ \________\_/________/ \________\_/________/
+           | [ 3] Greymarket     | [ 4] Thornwood      |
+           | R R              >R | B G             =BG |
+_/________/ \________\_/________/ \________\_/________/ \________\_
+| [ 5] Emberfall (R)  | [ 6] Hollow Waste   | [ 7] Stonecradle    |
+| R R              >R | dead                | R B             =RB |
+ \________\_/________/ \________\_/________/ \________\_/________/ \________\_
+           | [ 8] The Crossroads | [ 9] Windgap        | [10] Tidewatch (B)  |
+           | R G             =RG | B G             =BG | B B              >B |
+            \________\_/________/ \________\_/________/ \________\_/________/
+                      | [11] Ironford       | [12] Dunmoor        |
+                      | B B              >B | B G             =BG |
+                       \________\_/________/ \________\_/________/
+```
+
+Every region is a hex two half-columns wide, upright either side and coming to a
+point above and below, and each row is laid half a region across from the one above.
+So a region has six neighbours — two beside it and two along each of its sloping
+sides — which is exactly the most any region on this map has. **A shared side is a
+border, and regions that meet only at a point share none.** No border is drawn as a
+line into open ground, and none can be drawn wrong: the picture is the border table,
+laid out.
+
+`Board.problems` checks that it is, before a game is ever dealt. Alongside the
+older checks — ids on the board, no self-borders, isolated regions bordering
+nothing, every other region reachable — it now walks the layout and the borders
+against each other: every mainland region laid out exactly once, the Flag and the
+Axe laid out nowhere, no border without a shared side, and no shared side without a
+border. A layout that drifts from the table stops the game rather than drawing a
+map that lies. [actions.fsx](tests/actions.fsx) checks the same list is empty.
+
+The Flag and the Axe are drawn below the map in the same hand, standing clear of it
+and of each other — sharing no side with anything, they border nothing.
+
+No two homes border each other, and every home is three steps from every other,
+whether or not the dead region is passable.
+
+Rules that use adjacency can be written against `Board.areAdjacent`,
+`Board.neighbours` and `Board.reachableFrom` (which takes a set of blocked regions,
+ready for the dead region to obstruct movement).
 
 ## The four actions
 
@@ -393,150 +427,6 @@ property of the view, not of what is stored. `Render` reads the journal through
 `save` mid-game does put a full account on disk, where the file is out of the
 game's hands anyway.
 
-## Playing against the program
-
-A seat can be played by the program. `--rival <skill>` gives away the seat after
-yours, once per seat, and the first seat is always yours:
-
-```powershell
-dotnet run -- play 2 --rival medium
-dotnet run -- play 4 --rival easy --rival hard --rival hard
-dotnet run -- serve 2 --rival hard      # the same, in a browser
-```
-
-There are three: `easy`, `medium` and `hard`. Nothing on the board says which seats
-are the machine's - its stones look like anybody's, and they are - so the table says
-so once, to whoever sits down to watch, in the words their own view speaks.
-
-### It plays no better than it is allowed to
-
-A machine at a table is the one thing here that can be wrong quietly. Every other
-part of the program either draws something a person looks at or refuses something a
-person typed; a machine that has picked a move nobody would has picked a legal move,
-drawn a perfectly good board, and said nothing at all. So it is fenced in three ways,
-and each of them is a thing the compiler or a check can hold it to.
-
-**It keeps no second copy of the rules.** To find out whether a move is allowed, it
-asks [Actions.fs](src/Domain/Actions.fs) - the same functions `Update` asks - and
-takes the answer. A machine that worked legality out for itself would be a second
-opinion about the rules, free to drift from the ones being played, and the way that
-shows up at a table is a machine asking for something, being told no, and asking
-again with the turn never passing. Over two whole machine-played games,
-[rival.fsx](tests/rival.fsx) insists not one thing it asked for was refused.
-
-**It reads the map and one bag.** The function that weighs a position takes a
-`Position` and a `Pile`, which is the whole of what somebody at that seat can see.
-There is nothing in the arguments to cheat with. Working out how the land stands from
-a position alone is what [Ruling.fs](src/Domain/Ruling.fs) does, so this is the game's
-own reckoning rather than a copy of it. And the same thing is said again from outside:
-the stones in the bags it cannot see are poured together and dealt back out between
-those players, and it has to pick the same move it picked before. Between them, not
-into them - what it is entitled to work out, that every stone is *somewhere*, is
-untouched, and the only thing that changed is the one thing it was never shown.
-
-**It can only make moves a person could type.** It picks a `Move`, which is what
-`Parse.line` produces from a typed line, so its moves land in the record in the same
-words yours do and a game against a machine replays like any other. Every move made
-over two whole games is written out with `Words.command`, fed back to `Parse.line`,
-and has to come back the same move.
-
-Its generator travels with it the way the game's own travels inside the game, so the
-same deal against the same machines plays the same game twice.
-
-### Three sets of numbers, not three machines
-
-There is one machine. What `easy`, `medium` and `hard` name is a set of weights and
-two knobs, all at the foot of [Rival.fs](src/App/Rival.fs):
-
-| | `easy` | `medium` | `hard` |
-| --- | --- | --- | --- |
-| land ruled by the faction it is backing | 10 | 10 | 10 |
-| standing inside a region, short of ruling it | 1 | 1 | 1 |
-| the Axe, and the Flag | — | — | 4, 3 |
-| its own faction's stones still in the bag | 12 | 12 | 12 |
-| the other two's, which count against it | −1 | −1 | −1 |
-| how often it plays anything legal instead | always | 15% | never |
-| how many of its own moves it checks a reply to | — | — | 5 |
-
-`easy` throws its judgement away every turn, so its column is there for the shape of the
-thing rather than because it is ever read.
-
-The last line is the only one that involves looking past its own turn, and it runs into the
-same wall as everything else: it cannot see the next player's bag, so it does not guess at
-one. It assumes the worst instead - that the seat about to act holds every stone that is
-neither on the map nor in its own bag, which is exactly what `Knowledge.Unseen` says is out
-there somewhere. Pessimistic, and honest. It never plays better for knowing something it was
-not told, only more carefully.
-
-The weights are the game's own winning conditions with a number against each, so
-there is no strategy written down anywhere: there is a statement of what winning is,
-which the rules already say, and how much a machine cares about each part of it.
-Adding a fourth way of playing is a fourth entry in the list; changing how `hard`
-plays is changing a number. Nothing else in the program knows what any of these
-words mean.
-
-Two of those lines are worth explaining, because they are what the numbers had to be
-tuned to get right.
-
-**Standing inside a region** is the slope up to the step. Ruling a region is a step,
-and most moves do not take one - so weighed on land alone nearly every move is worth
-exactly what every other one is, and the machine picks between them by drawing lots.
-Tuned without it, `hard` beat `easy` about as often as a coin would.
-
-**Its own stones still in the bag**, set high against land, is what stops it emptying
-its bag onto the map. This game is settled in two cascades: which faction carried the
-board, and then which *player* carried the faction - and that second one is decided by
-who is left holding most of the winning colour. A bag played out to nothing wins
-nothing, and a game where every bag is empty is drawn outright. Weighted low, two
-machines play every stone they have and draw every time.
-
-That has a corollary that the checks had to be taught: **a machine that never plays a
-stone at all beats a random one handsomely**, because the rules reward being left
-holding things. It also makes a dreadful opponent. So `hard` is held to beating that
-as well, and not by imitating it - [rival.fsx](tests/rival.fsx) plays it against a
-weights-set built to sit still, and separately insists that a machine facing somebody
-who plays plays back rather than negotiating the game away.
-
-The ordering the checks hold, over twelve deals played twice each with the seats
-swapped so that going first is not what is being measured:
-
-```
-hard vs easy     net +10   won 16  lost  6  drawn  2
-medium vs easy   net  +3   won 11  lost  8  drawn  5
-hard vs medium   net  +7   won 13  lost  6  drawn  5
-hard vs hoarder  net +10   won 16  lost  6  drawn  2
-```
-
-Fixed seeds, so there is nothing flaky in that: a run that came out differently would
-mean the machine had changed and not the dice.
-
-What it does not do is model the clock. The game ends when everybody negotiates in a
-row, and knowing whether you want that to happen yet is a real part of playing well
-that none of these three understand. Two machines of the same skill will often close a
-game out at once for that reason; against somebody playing stones, they play back.
-
-### At the table
-
-`Solo` gains one rule and one only: after a person has spoken, the machines answer for
-as long as the seat to act is one of theirs. What stops them is a move that left the
-game exactly as it found it - nothing they pick should ever be refused, but a machine
-that had somehow found one the rules would not take would otherwise be asked for it
-again, and again.
-
-The same rule read backwards is what `undo` does. Taking a move back takes the
-machine's answer back with it, and stops where a person has to decide something;
-anything else and one `undo` would hand the turn straight back and nothing would ever
-be undone.
-
-Everything else follows from a machine's move being an ordinary move. It goes through
-`Update.update`, lands in the record against its own seat, is drawn to everybody
-watching, and reaches a browser down the same stream a person's does. There is no
-second table and no second protocol.
-
-Hosted tables ([Lobby.fs](src/Net/Lobby.fs)) have no machines at them. That is a
-different table with seats, tokens and people at their own keyboards, and filling one
-of those seats with a machine is a separate piece of work rather than the same one.
-
 ## How the board is shown
 
 A **view** ([View.fs](src/Console/View.fs)) is every screen a player ever reads.
@@ -642,7 +532,7 @@ Adding to the game means adding an endpoint here and answering it in every view.
 That is the trade: a wide seam, but one that cannot be half-implemented without the
 compiler saying so.
 
-**What a view may not do is decide anything.** Two rules keep that honest:
+**What a view may not do is decide anything.** Three rules keep that honest:
 
 - **What a player may know comes from `Knowledge`**, never from a renderer, and what
   a notice says comes from `Render.wording`. A second renderer is a second chance to
@@ -654,20 +544,26 @@ compiler saying so.
   ruled, tied, still going spare - is `Game.landStanding`, not a sum each renderer
   works out for itself, because a second view counting it again could count it
   differently.
+- **What the notes say comes from `Render.Notes`.** The writing that explains the
+  board - how to read the map, what the Flag and the Axe are for, why the land is
+  counted the way it is, what "out of sight" means - is one paragraph each, shown by
+  all three. Each view decides only how wide to draw it, and the two that have to fit
+  a width share `Render.wrap`. Written out per view, they drifted: the same border was
+  a "side" in one and a "wall" in another, one view called the dead region wild, and
+  two of the four notes were shown by one view and quietly missing from the others.
 
 **The map is drawn three times, and all three say the same thing.** `plain` draws
 the honeycomb by counting characters into columns; `rich` gives every region a panel
 of its own, bordered in the colour of whoever rules it; `html` gives it a box, bordered
 the same way.
 
-What matters is that none of them loses adjacency. `Board.layout` lies on a triangular
-lattice - a region is two half-columns wide and each row stands half a region across
-from the one above - so a region touches exactly six others: the two beside it and
-two on each of the rows above and below. Those six are its borders, and the map is
-the only part of the screen that says where a player may march. A honeycomb shows it
-with cut corners; brickwork shows it with the half-region offset. Either is faithful.
-A tidy grid with the offset dropped would not be, which is why `rich` and `html` both
-keep it - in `html` it is a `margin-left` of so many half-regions and nothing else.
+What matters is that none of them loses adjacency. The lattice itself is described
+under [The map](#the-map); what each view has to keep is the half-region offset,
+because that is what makes a region touch six others rather than four, and the map is
+the only part of the screen that says where a player may march. A honeycomb shows the
+offset with cut corners, brickwork shows it with the offset alone, and either is
+faithful. A tidy grid with the offset dropped is not, which is why `rich` and `html`
+both keep it - in `html` it is a `margin-left` of so many half-regions and nothing else.
 
 ```
                           ╭─ [ 2] Saltmarsh ───────╮╭─ [ 1] Nightfen (G) ────╮
@@ -966,115 +862,277 @@ dropping every one of these. So [smoke.ps1](tools/smoke.ps1) sits a second
 console at the served game — a cookie and a held-open stream, no browser involved — says one
 line there, and asks the page whether it was knocked on.
 
-## The map
+## Playing against the program
 
-Borders are declared once in `Board.declaredBorders` and symmetrised, so a border
-only has to be named from one end. The resulting graph has 23 edges, is connected
-across all twelve mainland regions, and leaves the Flag and the Axe bordering
-nothing.
-
-| region | borders |
-| --- | --- |
-| 1 Nightfen (Green home) | 2, 4 |
-| 2 Saltmarsh | 1, 3, 4 |
-| 3 Greymarket | 2, 4, 5, 6 |
-| 4 Thornwood | 1, 2, 3, 6, 7 |
-| 5 Emberfall (Red home) | 3, 6, 8 |
-| 6 The Hollow Waste (dead) | 3, 4, 5, 7, 8, 9 |
-| 7 Stonecradle | 4, 6, 9, 10 |
-| 8 The Crossroads | 5, 6, 9, 11 |
-| 9 Windgap | 6, 7, 8, 10, 11, 12 |
-| 10 Tidewatch (Blue home) | 7, 9, 12 |
-| 11 Ironford | 8, 9, 12 |
-| 12 Dunmoor | 9, 10, 11 |
-| 13 The Flag, 14 The Axe | none |
-
-Regions are numbered across the map rather than by kind, so that neighbours read as
-neighbours: no border joins regions more than three apart, and all but three of the
-numbers border the one after them. The mainland takes 1 to 12, with the dead region
-at its centre; the Flag and the Axe, which are no part of the map, come last.
-
-### Drawn as a map
-
-That border graph is a patch of a triangular lattice, so it can be drawn as the map
-it is rather than listed. `Board.layout` says where each region lies — rows north to
-south, each row half a region across from the one above — and the board is drawn as a
-honeycomb:
-
-```
-                      _/________/ \________\_/________/ \________\_
-                      | [ 2] Saltmarsh      | [ 1] Nightfen (G)   |
-                      | B B              >B | G G              >G |
-           _/________/ \________\_/________/ \________\_/________/
-           | [ 3] Greymarket     | [ 4] Thornwood      |
-           | R R              >R | B G             =BG |
-_/________/ \________\_/________/ \________\_/________/ \________\_
-| [ 5] Emberfall (R)  | [ 6] Hollow Waste   | [ 7] Stonecradle    |
-| R R              >R | dead                | R B             =RB |
- \________\_/________/ \________\_/________/ \________\_/________/ \________\_
-           | [ 8] The Crossroads | [ 9] Windgap        | [10] Tidewatch (B)  |
-           | R G             =RG | B G             =BG | B B              >B |
-            \________\_/________/ \________\_/________/ \________\_/________/
-                      | [11] Ironford       | [12] Dunmoor        |
-                      | B B              >B | B G             =BG |
-                       \________\_/________/ \________\_/________/
-```
-
-Every region is a hex two half-columns wide, upright either side and coming to a
-point above and below, and each row is laid half a region across from the one above.
-So a region has six neighbours — two beside it and two along each of its sloping
-sides — which is exactly the most any region on this map has. **A shared side is a
-border, and regions that meet only at a point share none.** No border is drawn as a
-line into open ground, and none can be drawn wrong: the picture is the border table,
-laid out.
-
-`Board.problems` checks that it is, before a game is ever dealt. Alongside the
-older checks — ids on the board, no self-borders, isolated regions bordering
-nothing, every other region reachable — it now walks the layout and the borders
-against each other: every mainland region laid out exactly once, the Flag and the
-Axe laid out nowhere, no border without a shared side, and no shared side without a
-border. A layout that drifts from the table stops the game rather than drawing a
-map that lies. [actions.fsx](tests/actions.fsx) checks the same list is empty.
-
-The Flag and the Axe are drawn below the map in the same hand, standing clear of it
-and of each other — sharing no side with anything, they border nothing.
-
-No two homes border each other, and every home is three steps from every other,
-whether or not the dead region is passable.
-
-Rules that use adjacency can be written against `Board.areAdjacent`,
-`Board.neighbours` and `Board.reachableFrom` (which takes a set of blocked regions,
-ready for the dead region to obstruct movement).
-
-## Running
+A seat can be played by the program. `--rival <skill>` gives away the seat after
+yours, once per seat, and the first seat is always yours:
 
 ```powershell
-dotnet run                     # the start menu, which asks how many are playing
-dotnet run -- play 3           # 3 players, random seed - straight to the board
-dotnet run -- play 3 --seed 42 # the same game again, from a seed
-dotnet run -- play 2 --view rich --colour blue=teal
-
-dotnet run -- play 2 --rival medium              # the seat after yours, played by the program
-dotnet run -- play 4 --rival easy --rival hard   # once per seat you are giving away
-
-dotnet run -- serve 3          # the same game, played in a browser on this machine
-dotnet run -- serve 2 --rival hard
-
-dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
-
-dotnet run -- host 3                        # open a table at their own machines
-dotnet run -- join greg-pc                  # sit down at one someone else opened
-dotnet run -- join greg-pc --token <token>  # come back to the seat you were in
-                                            # or open greg-pc:5000 in a browser
-
-dotnet run -- --help           # every command; --help works on each of them too
+dotnet run -- play 2 --rival medium
+dotnet run -- play 4 --rival easy --rival hard --rival hard
+dotnet run -- serve 2 --rival hard      # the same, in a browser
 ```
+
+There are three: `easy`, `medium` and `hard`. Nothing on the board says which seats
+are the machine's - its stones look like anybody's, and they are - so the table says
+so once, to whoever sits down to watch, in the words their own view speaks.
+
+### It plays no better than it is allowed to
+
+A machine at a table is the one thing here that can be wrong quietly. Every other
+part of the program either draws something a person looks at or refuses something a
+person typed; a machine that has picked a move nobody would has picked a legal move,
+drawn a perfectly good board, and said nothing at all. So it is fenced in three ways,
+and each of them is a thing the compiler or a check can hold it to.
+
+**It keeps no second copy of the rules.** To find out whether a move is allowed, it
+asks [Actions.fs](src/Domain/Actions.fs) - the same functions `Update` asks - and
+takes the answer. A machine that worked legality out for itself would be a second
+opinion about the rules, free to drift from the ones being played, and the way that
+shows up at a table is a machine asking for something, being told no, and asking
+again with the turn never passing. Over two whole machine-played games,
+[rival.fsx](tests/rival.fsx) insists not one thing it asked for was refused.
+
+**It reads the map and one bag.** The function that weighs a position takes a
+`Position` and a `Pile`, which is the whole of what somebody at that seat can see.
+There is nothing in the arguments to cheat with. Working out how the land stands from
+a position alone is what [Ruling.fs](src/Domain/Ruling.fs) does, so this is the game's
+own reckoning rather than a copy of it. And the same thing is said again from outside:
+the stones in the bags it cannot see are poured together and dealt back out between
+those players, and it has to pick the same move it picked before. Between them, not
+into them - what it is entitled to work out, that every stone is *somewhere*, is
+untouched, and the only thing that changed is the one thing it was never shown.
+
+**It can only make moves a person could type.** It picks a `Move`, which is what
+`Parse.line` produces from a typed line, so its moves land in the record in the same
+words yours do and a game against a machine replays like any other. Every move made
+over two whole games is written out with `Words.command`, fed back to `Parse.line`,
+and has to come back the same move.
+
+Its generator travels with it the way the game's own travels inside the game, so the
+same deal against the same machines plays the same game twice.
+
+### Three sets of numbers, not three machines
+
+There is one machine. What `easy`, `medium` and `hard` name is a set of weights and
+two knobs, all at the foot of [Rival.fs](src/App/Rival.fs):
+
+| | `easy` | `medium` | `hard` |
+| --- | --- | --- | --- |
+| land ruled by the faction it is backing | 10 | 10 | 10 |
+| standing inside a region, short of ruling it | 1 | 1 | 1 |
+| the Axe, and the Flag | — | — | 4, 3 |
+| its own faction's stones still in the bag | 12 | 12 | 12 |
+| the other two's, which count against it | −1 | −1 | −1 |
+| how often it plays anything legal instead | always | 15% | never |
+| how many of its own moves it checks a reply to | — | — | 5 |
+
+`easy` throws its judgement away every turn, so its column is there for the shape of the
+thing rather than because it is ever read.
+
+The last line is the only one that involves looking past its own turn, and it runs into the
+same wall as everything else: it cannot see the next player's bag, so it does not guess at
+one. It assumes the worst instead - that the seat about to act holds every stone that is
+neither on the map nor in its own bag, which is exactly what `Knowledge.Unseen` says is out
+there somewhere. Pessimistic, and honest. It never plays better for knowing something it was
+not told, only more carefully.
+
+The weights are the game's own winning conditions with a number against each, so
+there is no strategy written down anywhere: there is a statement of what winning is,
+which the rules already say, and how much a machine cares about each part of it.
+Adding a fourth way of playing is a fourth entry in the list; changing how `hard`
+plays is changing a number. Nothing else in the program knows what any of these
+words mean.
+
+Two of those lines are worth explaining, because they are what the numbers had to be
+tuned to get right.
+
+**Standing inside a region** is the slope up to the step. Ruling a region is a step,
+and most moves do not take one - so weighed on land alone nearly every move is worth
+exactly what every other one is, and the machine picks between them by drawing lots.
+Tuned without it, `hard` beat `easy` about as often as a coin would.
+
+**Its own stones still in the bag**, set high against land, is what stops it emptying
+its bag onto the map. This game is settled in two cascades: which faction carried the
+board, and then which *player* carried the faction - and that second one is decided by
+who is left holding most of the winning colour. A bag played out to nothing wins
+nothing, and a game where every bag is empty is drawn outright. Weighted low, two
+machines play every stone they have and draw every time.
+
+That has a corollary that the checks had to be taught: **a machine that never plays a
+stone at all beats a random one handsomely**, because the rules reward being left
+holding things. It also makes a dreadful opponent. So `hard` is held to beating that
+as well, and not by imitating it - [rival.fsx](tests/rival.fsx) plays it against a
+weights-set built to sit still, and separately insists that a machine facing somebody
+who plays plays back rather than negotiating the game away.
+
+The ordering the checks hold, over twelve deals played twice each with the seats
+swapped so that going first is not what is being measured:
+
+```
+hard vs easy     net +10   won 16  lost  6  drawn  2
+medium vs easy   net  +3   won 11  lost  8  drawn  5
+hard vs medium   net  +7   won 13  lost  6  drawn  5
+hard vs hoarder  net +10   won 16  lost  6  drawn  2
+```
+
+Fixed seeds, so there is nothing flaky in that: a run that came out differently would
+mean the machine had changed and not the dice.
+
+What it does not do is model the clock. The game ends when everybody negotiates in a
+row, and knowing whether you want that to happen yet is a real part of playing well
+that none of these three understand. Two machines of the same skill will often close a
+game out at once for that reason; against somebody playing stones, they play back.
+
+### At the table
+
+`Solo` gains one rule and one only: after a person has spoken, the machines answer for
+as long as the seat to act is one of theirs. What stops them is a move that left the
+game exactly as it found it - nothing they pick should ever be refused, but a machine
+that had somehow found one the rules would not take would otherwise be asked for it
+again, and again.
+
+The same rule read backwards is what `undo` does. Taking a move back takes the
+machine's answer back with it, and stops where a person has to decide something;
+anything else and one `undo` would hand the turn straight back and nothing would ever
+be undone.
+
+Everything else follows from a machine's move being an ordinary move. It goes through
+`Update.update`, lands in the record against its own seat, is drawn to everybody
+watching, and reaches a browser down the same stream a person's does. There is no
+second table and no second protocol.
+
+Hosted tables ([Lobby.fs](src/Net/Lobby.fs)) have no machines at them. That is a
+different table with seats, tokens and people at their own keyboards, and filling one
+of those seats with a machine is a separate piece of work rather than the same one.
+
+## How it is put together
+
+Everything above is what the game does. What follows is how it is arranged so that it
+keeps doing it: where each piece lives, what the types refuse to let anyone write, and
+the one place a command line is read and written by the same declaration.
+
+### Layout
+
+Five layers, each depending only on the ones above it.
+
+**`src/Common`** — generic, and knows nothing about the game.
+
+| File | Role |
+| --- | --- |
+| [Result.fs](src/Common/Result.fs) | The `result` computation expression used to chain an action's checks |
+| [Cascade.fs](src/Common/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning |
+| [Random.fs](src/Common/Random.fs) | An immutable SplitMix64 generator, passed along as a value |
+
+**`src/Domain`** — the language and the rules. No English a player would read.
+
+| File | Role |
+| --- | --- |
+| [Stones.fs](src/Domain/Stones.fs) | `StoneColor` and `Pile`, a multiset of stones |
+| [Board.fs](src/Domain/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
+| [Players.fs](src/Domain/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
+| [Position.fs](src/Domain/Position.fs) | Which stones stand where |
+| [Ruling.fs](src/Domain/Ruling.fs) | Who rules a region, and how the land stands - both read off a position alone |
+| [Game.fs](src/Domain/Game.fs) | The game in progress, and what can be asked of it |
+| [Knowledge.fs](src/Domain/Knowledge.fs) | What one player can see of a game, and what they cannot |
+| [Events.fs](src/Domain/Events.fs) | What happened, and why an action was refused |
+| [Actions.fs](src/Domain/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
+| [Outcome.fs](src/Domain/Outcome.fs) | Which faction carries the board, and which player carries the faction |
+| [Setup.fs](src/Domain/Setup.fs) | Dealing a fresh game |
+
+**`src/App`** — the MVU loop and the game's memory of itself: whose turn
+it is, when it ends, when the game does, and everything that has happened so far.
+
+| File | Role |
+| --- | --- |
+| [Messages.fs](src/App/Messages.fs) | `Move` and `Msg` |
+| [Session.fs](src/App/Session.fs) | `Session`, `Play`, `Over`, and `Notice` |
+| [Rival.fs](src/App/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
+| [Timeline.fs](src/App/Timeline.fs) | Every state the game has stood in, with a finger on the present |
+| [Journal.fs](src/App/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
+| [Model.fs](src/App/Model.fs) | The timeline, the journal, and the last few lines on screen |
+| [Update.fs](src/App/Update.fs) | `Msg -> Model -> Model` |
+
+**`src/Console`** — the only part that talks to a person.
+
+| File | Role |
+| --- | --- |
+| [Waiting.fs](src/Console/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
+| [Showing.fs](src/Console/Showing.fs) | What a table shows one console, and which console it is for |
+| [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
+| [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
+| [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
+| [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
+| [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
+| [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
+| [Html.fs](src/Console/Html.fs) | The `html` view: every screen as a fragment of a page, and the page they land in |
+| [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
+| [Solo.fs](src/Console/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
+| [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
+| [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
+| [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
+| [Menu.fs](src/Console/Menu.fs) | The start menu: how many are playing, and what to deal |
+| [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
+
+**`src/Net`** — the same game with the players at different keyboards. Only the
+last three files here touch a socket.
+
+| File | Role |
+| --- | --- |
+| [Protocol.fs](src/Net/Protocol.fs) | Where the table listens, and what each end calls the other |
+| [Browser.fs](src/Net/Browser.fs) | A page as a console: the streams held open to them, and what is served. Knows of no table in particular |
+| [Lobby.fs](src/Net/Lobby.fs) | Seats, tokens, and the three rules a table adds to the game |
+| [Server.fs](src/Net/Server.fs) | The host, and the local game served to a browser: a table behind a lock, with pages and sockets over it |
+| [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
+
+And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
+read/update/render loop, and the choice between playing here and playing over a wire.
+It sits outside all five because it needs all five - F# compiles in order and a file
+sees only what came before it, so the door has to be the last thing built.
+
+### Keeping invalid states out
+
+The types are shaped so that a good deal of what could go wrong cannot be written
+down in the first place.
+
+- **`RegionId` has a private constructor** and only `Board.tryId` mints one, from a
+  number someone typed. So a `RegionId` always names a region that exists, looking
+  one up is total, and "no such region" is a parsing concern that never reaches the
+  rules.
+- **`Position` holds an entry for every region**, so asking what stands somewhere
+  always answers rather than returning an option.
+- **`Table` keeps the active player as a seat, not an id**, and can only be built
+  with 2 to 5 players. There is always exactly one active player, and they are
+  always at the table.
+- **`Pile` never holds a zero or negative count** — a colour that is absent is
+  simply not in the map.
+- **`Session` is `InPlay` or `Finished`**, and only `InPlay` carries a phase and a
+  turn. Nothing has to ask whether the game it holds is still running.
+- **`Phase` is `AwaitingAction` or `AwaitingReturn`**, so a turn cannot be both open
+  to any action and waiting on a stone to go back.
+- **Events and rejections are data**, not sentences. The domain says
+  `NothingToDriveOut(region, colour)` and [Words.fs](src/Console/Words.fs) decides
+  how that reads, so wording can change without touching a rule.
+- **`Msg` separates a `Move` from walking the history.** Only a move can be
+  attempted against a position, so `attempt` never has to answer what `Undo` does
+  to a phase, and undo never has to answer what it does to a bag.
+- **The model holds no current game.** The present position is whatever the
+  timeline's finger is on, so a stored "current game" cannot drift out of step with
+  the history behind it.
+- **`Timeline` has a private constructor**, so its two lists can only be moved
+  between in step: a state can be walked away from and back to, never dropped.
+- **A `Sight` is `Open` of a pile or `Closed` of a count**, so a bag someone
+  cannot see into carries no colours to leak by accident. What a player is shown
+  is built by `Knowledge`, not filtered out of a `Game` at the point of writing.
+
+What is not enforced by types: that the 63 stones are conserved. Actions only ever
+move stones between piles, and `tests/actions.fsx` checks the total after each one.
 
 ### Two halves of a command line
 
-The arguments go through [Spectre.Console.Cli](https://spectreconsole.net/cli/), which
-owns the command surface: the five commands, the options that go with each, `--help`,
-and the checking. A count the table would refuse, a view nobody has, a colour nobody
+The arguments a game is opened with go through
+[Spectre.Console.Cli](https://spectreconsole.net/cli/), which owns the command surface:
+the five commands, the options that go with each, `--help`, and the checking. A count the table would refuse, a view nobody has, a colour nobody
 has - each is answered at the door, in the same words the game would have used, before
 anything is dealt:
 
@@ -1135,34 +1193,10 @@ word in front of it. The seatings on offer are read off `Table.MinPlayers` and
 `Table.MaxPlayers` rather than written out, so the menu cannot come to offer a
 number the table would refuse. `vs` does not ask how many are playing, because
 saying who you are playing has already said it: one seat for you and one for each
-machine named, so `vs easy hard` is a table of three. Like the rest of the console layer `Menu` is pure -
-it says what the menu reads like and what a typed line means, and `Program` does
-the reading and the writing. Once a game is dealt, `players <n>` and `restart` do
-the same job from the prompt.
-
-| command | action |
-| --- | --- |
-| `recruit <colour> <region>` (`r`) | Recruit |
-| `battle <colour> <region> [colours...]` (`b`) | Battle; name no colours to drive out all you may |
-| `march <colour> <from> <to> [count]` (`m`) | March; count defaults to 1 |
-| `negotiate` (`n`), then `return <colour>` | Negotiate |
-| `undo` (`u`), `redo` | walk the game back and forward a move at a time |
-| `history` (`log`) | the whole record so far, as it will be saved |
-| `save` | write the record out now |
-| `rule <region>` | not an action; shows who rules a region and why |
-| `notes [on\|off]` | show or hide the writing that explains the board, and the short list of commands that sits above the log |
-| `restart [seed]`, `players <n> [seed]`, `help`, `quit` | — |
-
-Colours are `r`/`red`, `b`/`blue`, `g`/`green`; regions are numbered as shown on
-the board. So `battle green 2 blue` places a green stone in the Axe and drives one
-blue stone out of Saltmarsh, and `march blue 8 5 2` places a blue stone in the Flag
-and moves two blue stones from the Crossroads into Emberfall.
-
-Every random decision comes from the seed, so a seed plus a list of messages
-reproduces a game exactly. That is why the generator in [Random.fs](src/Common/Random.fs)
-is a value handed back with each result rather than `System.Random`: a generator that
-advanced by mutation would make `update` impure and stop the model being a value, and
-`restart` draws its next seed from the generator already in play.
+machine named, so `vs easy hard` is a table of three. Like the rest of the console
+layer `Menu` is pure - it says what the menu reads like and what a typed line means,
+and `Program` does the reading and the writing. Once a game is dealt, `players <n>`
+and `restart` do the same job from the prompt.
 
 ## Tests
 
@@ -1183,7 +1217,8 @@ dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a ta
 dotnet fsi tests/solo.fsx       # the game at one keyboard: what a line does, and what it
                                 #   asks written down
 dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
-                                #   and that changing the colours changes nothing else
+                                #   that every view explains the board in the same words, and
+                                #   that changing the colours changes nothing else
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
                                 #   and has no control on it the game would not take
 dotnet fsi tests/cli.fsx        # the command surface, and that both halves of it agree

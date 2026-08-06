@@ -28,6 +28,16 @@ module Words =
 
     let player playerId = $"Player {PlayerId.value playerId}"
 
+    /// A count of one colour, said the way a person would: "a Red stone", "3 Red stones".
+    /// Every sentence below that counts stones goes through here, because "1 stone(s)" is
+    /// a placeholder somebody forgot to finish, and it is read mid-game.
+    let stonesOf n c =
+        if n = 1 then $"a {color c} stone" else $"{n} {color c} stones"
+
+    /// The same for moves, for the one sentence that counts them.
+    let moves n =
+        if n = 1 then "1 move" else $"{n} moves"
+
     /// Reads as "2 Red and 1 Green"; empty piles read as "nothing".
     let pile stones =
         match Pile.toCounts stones with
@@ -75,8 +85,7 @@ module Words =
         | Recruited(p, c, into) -> $"{player p} recruits a {color c} stone into {region into}."
         | Battled(p, c, target, driven) ->
             $"{player p} battles {region target} with a {color c} stone, driving {pile driven} back to the reserve."
-        | Marched(p, c, from, into, count) ->
-            $"{player p} marches {count} {color c} stone(s) from {region from} into {region into}."
+        | Marched(p, c, from, into, count) -> $"{player p} marches {stonesOf count c} from {region from} into {region into}."
         | Drew(p, c) -> $"{player p} draws a {color c} stone from the reserve, and must now hand one back."
         | HandedBack(p, c) -> $"{player p} hands a {color c} stone back to the reserve."
         | TurnSkipped p -> $"{player p} has no stones left, so the turn is skipped and counts as a negotiation."
@@ -87,22 +96,21 @@ module Words =
         | NotInBag(p, c) -> $"{player p} has no {color c} stone in the bag."
         | DeadGround r -> $"{region r} is dead ground - no stone may enter."
         | StandsApart r -> $"{region r} stands apart from the map and cannot be chosen."
-        | NothingToBattleWith(r, c) -> $"{region r} holds no {color c} stone, so there is nothing there to battle with."
+        | NothingToBattleWith(r, c) -> $"A {color c} battle needs a {color c} stone already in {region r}, and there is none."
         | NothingToDriveOut(r, c) -> $"{region r} holds nothing but {color c} stones, so there is nothing to drive out."
         | BattleMustDriveOutSomething -> "A battle must drive out at least one stone."
-        | CannotDriveOutOwnColour c -> $"The Axe drives out stones of other colours, not {color c} ones."
+        | CannotDriveOutOwnColour c -> $"A battle drives out the other colours, so {color c} cannot be named."
         | MoreDrivenThanAllowed(r, c, allowed) ->
-            $"{region r} holds {allowed} {color c} stone(s), so no more than that many may be driven out."
+            $"{region r} holds only {stonesOf allowed c}, so no more than that may be driven out."
         | MustChooseCasualties(r, available, allowed) ->
             $"{region r} holds {pile available}, and {allowed} of them may be driven out - name which."
         | NotStandingThere(r, c) -> $"{region r} has no {color c} stone to drive out."
         | NothingToMarch(r, c) -> $"{region r} holds no {color c} stone, so there is nothing there to march."
-        | NotEnoughToMarch(r, c, held, wanted) ->
-            $"{region r} holds {held} {color c} stone(s), which is not enough to march {wanted}."
+        | NotEnoughToMarch(r, c, held, wanted) -> $"{region r} holds {stonesOf held c}, which is not enough to march {wanted}."
         | MarchNeedsAStone -> "A march moves at least one stone."
         | NotAdjacent(from, into) -> $"{region from} does not border {region into}."
         | ReserveEmpty -> "The reserve is empty - there is nothing to negotiate for."
-        | EmptyHandedCannotNegotiate p -> $"{player p} holds nothing, and only a player with a stone in the bag may negotiate."
+        | EmptyHandedCannotNegotiate p -> $"{player p}'s bag is empty, and only a player with a stone to trade may negotiate."
         | MustSettleFirst drawn ->
             $"Settle the negotiation first: a stone must go back to the reserve, and the {color drawn} stone just drawn may be it."
         | NothingToSettle -> "There is no negotiation to settle."
@@ -140,7 +148,7 @@ module Words =
         | MadeAgain msg -> $"Made again: {command msg}."
         | NothingToTakeBack -> "There is nothing left to take back - this is the deal itself."
         | NothingToMakeAgain -> "There is nothing to make again."
-        | GameIsOver -> "The game is over. Take a move back to see it again, or restart."
+        | GameIsOver -> "The game is over, so there is nothing left to play. Take a move back to look at it again, or restart."
         | Misunderstood text -> text
 
     // --- what a notice says to the player reading it ------------------------------
