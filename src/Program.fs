@@ -107,8 +107,8 @@ let private replayFrom path =
 /// Deal a game and serve it to a browser on this machine. Nothing comes back: like a
 /// hosted table it runs until the process is stopped, because a page has no way of saying
 /// the game is over and done with.
-let private serveFor palette skills players seed =
-    match dealt players seed with
+let private serveFor palette sitters seed =
+    match dealt (List.length sitters) seed with
     | Error problem ->
         eprintfn "%s" problem
         1
@@ -125,7 +125,7 @@ let private serveFor palette skills players seed =
         // to the first seat a person has to fill by the time it does.
         let solo, doing =
             Solo.opened (stampNow ()) model
-            |> Solo.against (Rival.seating (Model.seed model) skills (Model.game model))
+            |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model))
 
         errand doing
         Server.serve Protocol.DefaultPort palette solo stampNow keep
@@ -133,15 +133,18 @@ let private serveFor palette skills players seed =
 /// Open a table for players at their own machines. Nothing comes back: the table waits
 /// until whoever opened it stops the process, because no one player may close it on all
 /// the others.
-let private hostFor players seed =
-    match dealt players seed with
+///
+/// The seating goes in whole rather than as a count, because a table may have the machine
+/// at some of its seats - those are played here and are never waited for.
+let private hostFor sitters seed =
+    match dealt (List.length sitters) seed with
     | Error problem ->
         eprintfn "%s" problem
         1
     | Ok model ->
         let stamp = stampNow ()
 
-        Server.host Protocol.DefaultPort model (fun model ->
+        Server.host Protocol.DefaultPort model sitters (fun model ->
             if not (Journal.isEmpty model.Journal) then
                 Transcript.save stamp model.Journal |> ignore)
 
@@ -149,7 +152,7 @@ let private hostFor players seed =
 /// runs to its own end and only has an exit code to give back.
 [<NoComparison; NoEquality>]
 type private Opening =
-    | Play of Model * View * Skill list
+    | Play of Model * View * Sitter list
     | Done of code: int
 
 /// Whether there is somebody at the keyboard to steer with. A line piped in cannot press an
@@ -222,9 +225,61 @@ let rec private colouring (view: View) at said =
         | Ok(Options.Changed palette) -> colouring (View.recoloured palette view) at ""
         | Error problem -> colouring view at problem
 
-/// The start menu, which runs until it has settled on one of those. Everything it offers
-/// either opens a game or comes back round to here, so there is no way out of it but the
-/// two, and no way to be at the prompt with nothing to play.
+/// What the menu settled on, once it is a game rather than another screen.
+///
+/// Shared by the front door and the seat list, because a seating dealt from one is dealt
+/// exactly as it is from the other - and because a way of opening a game added to only one
+/// of the two would be a way of opening a game a player could not find.
+let private starting (view: View) choice =
+    let clocked seed =
+        seed |> Option.defaultValue (clockSeed ())
+
+    match choice with
+    | Menu.Deal(sitters, seed) ->
+        dealt (List.length sitters) (clocked seed)
+        |> Result.map (fun model -> Play(model, view, sitters))
+    // In whatever colours the player settled on here, which is the same promise the
+    // command line's --colour keeps.
+    | Menu.Serve(sitters, seed) -> Ok(Done(serveFor view.Palette sitters (clocked seed)))
+    | Menu.Host(sitters, seed) -> Ok(Done(hostFor sitters (clocked seed)))
+    | Menu.Join(address, token) -> Ok(Done(Client.join address token view))
+    | Menu.Replay path -> replayFrom path |> Result.map (fun model -> Play(model, view, []))
+    // The rest are screens rather than games, and are answered where they are asked.
+    // The rest are screens rather than games. The front door answers every one of them
+    // itself, so what is left here is somebody at the seat list asking for one of them from
+    // there - which is a fair thing to type and wants an answer rather than a shrug.
+    | Menu.Sitting _
+    | Menu.Rules
+    | Menu.Looking _
+    | Menu.Options
+    | Menu.Leave
+    | Menu.Backing
+    | Menu.Waiting -> Error "That is settled at the menu. Say 'back' to go there, or name the seats."
+
+/// The seat list, which runs until it has a game to open or is backed out of.
+///
+/// Walking a seat along answers with the whole seating, so this simply builds the screen
+/// again from what came back - there is nothing to remember between presses, and the seat
+/// under the cursor changes under it as it is walked.
+let rec private sitting (view: View) sitters at said =
+    match asking view said (Menu.seats sitters) at with
+    | None, _ -> Some(Done 0)
+    | Some line, at ->
+        match Menu.choose view.Palette line with
+        | Ok(Menu.Sitting changed) -> sitting view changed at ""
+        | Ok Menu.Waiting -> sitting view sitters at ""
+        | Ok Menu.Backing -> None
+        // Going is going, from wherever it is said.
+        | Ok Menu.Leave -> Some(Done 0)
+        | Ok chosen ->
+            match starting view chosen with
+            | Ok opening -> Some opening
+            | Error problem -> sitting view sitters at problem
+        | Error problem -> sitting view sitters at problem
+
+/// The start menu, which runs until it has settled on a game. Everything it offers either
+/// opens one or comes back round to here, so there is no way out of it but the two, and no
+/// way to be at the prompt with nothing to play.
 let rec private welcome (view: View) at said =
     // The menu is shown in the view it is offering, so 'view rich' shows what rich looks
     // like before a whole game is committed to it.
@@ -238,7 +293,9 @@ let rec private welcome (view: View) at said =
     let retry problem = welcome view at problem
 
     match Menu.choose view.Palette line with
-    | Ok Menu.Waiting -> welcome view at ""
+    // There is nothing behind the front door, so backing out of it is asking again.
+    | Ok Menu.Waiting
+    | Ok Menu.Backing -> welcome view at ""
     | Ok Menu.Leave -> Done 0
     | Ok Menu.Rules ->
         printfn "%s" view.Rules
@@ -246,31 +303,25 @@ let rec private welcome (view: View) at said =
         welcome view at ""
     | Ok(Menu.Looking chosen) -> welcome chosen at ""
     | Ok Menu.Options -> welcome (colouring view 0 "") at ""
-    | Ok(Menu.Deal(players, seed, rivals)) ->
-        match dealt players (seed |> Option.defaultValue (clockSeed ())) with
-        | Ok model -> Play(model, view, rivals)
-        | Error problem -> retry problem
-    | Ok(Menu.Serve(players, seed, rivals)) ->
-        // In whatever colours the player settled on here, which is the same promise
-        // the command line's --colour keeps.
-        Done(serveFor view.Palette rivals players (seed |> Option.defaultValue (clockSeed ())))
-    | Ok(Menu.Host(players, seed)) -> Done(hostFor players (seed |> Option.defaultValue (clockSeed ())))
-    | Ok(Menu.Join(address, token)) -> Done(Client.join address token view)
-    | Ok(Menu.Replay path) ->
-        match replayFrom path with
-        | Ok model -> Play(model, view, [])
+    | Ok(Menu.Sitting sitters) ->
+        match sitting view sitters 0 "" with
+        | Some opening -> opening
+        | None -> welcome view at ""
+    | Ok chosen ->
+        match starting view chosen with
+        | Ok opening -> opening
         | Error problem -> retry problem
     | Error problem -> retry problem
 
 /// Sit down at a game and play it here. The board the player is looking at when they
 /// arrive is drawn by the same code that draws every one after it, because sitting down is
 /// simply the first thing that happens at the table.
-let private play view skills model =
+let private play view sitters model =
     // The machines take their seats before anybody sits down to watch, so that a table where
     // the first move is theirs has already had it made by the time the first board is drawn.
     let seated, doing =
         Solo.opened (stampNow ()) model
-        |> Solo.against (Rival.seating (Model.seed model) skills (Model.game model))
+        |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model))
 
     errand doing
 
@@ -287,19 +338,25 @@ let private play view skills model =
 /// that knows what opening a game actually involves, and adding a way in means adding a
 /// case rather than another road through `main`.
 let private opening (view: View) launch =
-    let orElse skills outcome =
+    let orElse sitters outcome =
         match outcome with
         | Ok model ->
             printfn "%s" view.Rules
-            play view skills model
+            play view sitters model
         | Error problem ->
             eprintfn "%s" problem
             1
 
+    let clocked seed =
+        seed |> Option.defaultValue (clockSeed ())
+
+    // The command line names the machines rather than the seats - `--rival hard` is the seat
+    // after yours - so what it asks for is a seating said shorter, and it is spelt out into
+    // one here. There is one kind of table below this line, and it is the seating.
     match launch with
-    | Launch.Deal(players, seed, rivals) -> orElse rivals (dealt players (seed |> Option.defaultValue (clockSeed ())))
-    | Launch.Serve(players, seed, rivals) -> serveFor view.Palette rivals players (seed |> Option.defaultValue (clockSeed ()))
-    | Launch.Host(players, seed) -> hostFor players (seed |> Option.defaultValue (clockSeed ()))
+    | Launch.Deal(players, seed, rivals) -> orElse (Seating.after players rivals) (dealt players (clocked seed))
+    | Launch.Serve(players, seed, rivals) -> serveFor view.Palette (Seating.after players rivals) (clocked seed)
+    | Launch.Host(players, seed) -> hostFor (Seating.hosting players) (clocked seed)
     | Launch.Join(address, token) -> Client.join address token view
     | Launch.Replay path -> orElse [] (replayFrom path)
 
@@ -319,6 +376,6 @@ let main argv =
     match argv with
     | [||] ->
         match welcome (View.plain Palette.standard) 0 "" with
-        | Play(model, view, rivals) -> play view rivals model
+        | Play(model, view, sitters) -> play view sitters model
         | Done code -> code
     | _ -> Shell.run opening argv

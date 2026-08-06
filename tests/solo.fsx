@@ -23,11 +23,11 @@
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
 #load "../src/App/Session.fs"
-#load "../src/App/Rival.fs"
 #load "../src/App/Timeline.fs"
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
 #load "../src/App/Update.fs"
+#load "../src/App/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Showing.fs"
 #load "../src/Console/Words.fs"
@@ -40,7 +40,6 @@
 #load "../src/Console/View.fs"
 #load "../src/Console/Solo.fs"
 
-open TCModel.Common
 open TCModel.Domain
 open TCModel.App
 open TCModel.Console
@@ -310,12 +309,12 @@ report
 // worth holding it to is the two places that has an edge: what happens when nobody at the
 // table is a person, and what `undo` means when half the moves were not yours.
 
-let private facing skills solo =
-    Solo.against (Rival.seating 42UL skills (Model.game (Solo.model solo))) solo
+let private facing sitting solo =
+    Solo.against (Rival.seating 42UL sitting (Model.game (Solo.model solo))) solo
 
 let private opposed =
     Solo.opened "first" dealt
-    |> facing [ Rival.medium ]
+    |> facing [ None; Some Rival.medium ]
     |> fst
     |> Solo.watching "keyboard" reading
     |> fst
@@ -370,17 +369,12 @@ report
 
 // A table where every seat is the machine's has no seat to stop at, so it plays itself out
 // the moment the machines sit down - and asks for the record, there being no later moment to
-// ask at. `Rival.seating` will not build one of these, on purpose; this one is built by hand.
+// ask at. Asked for like any other seating: a seat is the machine's if the list says it is,
+// and there is nothing about the first seat that keeps a person in it.
 
 let private noPeople =
     Solo.opened "first" dealt
-    |> Solo.against (
-        Game.players (Model.game dealt)
-        |> List.mapi (fun seat player ->
-            player.Id,
-            { Skill = Rival.easy
-              Rng = Rng.ofSeed (uint64 seat) })
-    )
+    |> facing (Game.players (Model.game dealt) |> List.map (fun _ -> Some Rival.easy))
 
 report "a table of nothing but machines plays itself out as it sits down" true (Model.isOver (Solo.model (fst noPeople)))
 
@@ -405,7 +399,7 @@ report
     "sitting down at a table with a machine at it says which seat that is"
     [ "Played by the machine: Player 2 (medium)." ]
     (Solo.opened "first" dealt
-     |> facing [ Rival.medium ]
+     |> facing [ None; Some Rival.medium ]
      |> fst
      |> Solo.watching "keyboard" reading
      |> snd

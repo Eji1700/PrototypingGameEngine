@@ -10,9 +10,13 @@ open TCModel.Console
 /// A seat is empty until somebody takes it. Once taken it keeps its token for good, so a
 /// console that drops off can come back to the same stones rather than the seat being
 /// handed to a stranger - and a seat waiting for its player back is not an empty one.
+///
+/// A seat the program plays was never empty and cannot be sat at. It is what lets a person
+/// open a table for themselves, a friend two rooms away, and one machine between them.
 type Occupant =
     | Empty
     | Taken of token: string * console: string option
+    | Played
 
 /// One place at a networked table: the player it plays, who is in it, and how that person
 /// is reading the board.
@@ -38,6 +42,7 @@ type Seat =
 type Lobby =
     private
         { Model: Model
+          Rivals: (PlayerId * Rival) list
           Seats: Seat list }
 
 module Lobby =
@@ -45,17 +50,31 @@ module Lobby =
     /// A table for a game that has been dealt, with nobody at it yet. A seat nobody has
     /// taken has no view of its own, so it holds the plain one until somebody arrives and
     /// says how they would rather read.
-    let opened model =
+    ///
+    /// The machines are handed in already seated, the same way the one-keyboard table takes
+    /// them: which player a machine plays and what its generator started from are facts about
+    /// the game that was dealt, and this table is only where they sit.
+    let opened model rivals =
         { Model = model
+          Rivals = rivals
           Seats =
             Game.players (Model.game model)
             |> List.map (fun player ->
                 { Player = player.Id
-                  Occupant = Empty
+                  Occupant = (if rivals |> List.exists (fst >> (=) player.Id) then Played else Empty)
                   Notes = true
                   View = View.plain Palette.standard }) }
 
     let model lobby = lobby.Model
+
+    /// Let the machines take their turns, which they do at this table for the same reason
+    /// and by the same loop as at any other: the game has reached a seat that is theirs.
+    let private answering lobby =
+        let model, rivals = Rival.answering lobby.Rivals lobby.Model
+
+        { lobby with
+            Model = model
+            Rivals = rivals }
 
     let private game lobby = Model.game lobby.Model
 
@@ -69,6 +88,7 @@ module Lobby =
             match seat.Occupant with
             | Taken(_, Some console) -> Some(console, seat)
             | Taken(_, None)
+            | Played
             | Empty -> None)
 
     let private seatAt console lobby =
@@ -101,6 +121,7 @@ module Lobby =
                 match other.Occupant with
                 | Taken(_, None) -> true
                 | Taken(_, Some _)
+                | Played
                 | Empty -> false
               Yours = other.Player = seat.Player })
         |> seat.View.Waiting
@@ -163,6 +184,7 @@ module Lobby =
             |> List.tryFind (fun seat ->
                 match seat.Occupant with
                 | Taken(mine, _) -> mine = token
+                | Played
                 | Empty -> false)
 
         let sit seat token lobby =
@@ -180,9 +202,21 @@ module Lobby =
                         Occupant = Taken(token, Some console)
                         View = view }
 
+            // The machines wait for the table to fill like everybody else, and then play up
+            // to the first seat a person has to answer at. A machine that moved while people
+            // were still arriving would be playing a game nobody had joined yet.
+            let lobby = if begins && everyoneHere lobby then answering lobby else lobby
+
             lobby,
             just console (Seated(PlayerId.value seat.Player, token))
             @ drawAll lobby
+            @ (lobby.Rivals
+               |> List.map (fun (playerId, rival) -> playerId, rival.Skill.Name)
+               |> Words.roster
+               |> Option.map (fun said ->
+                   { To = console
+                     Say = Told(view.Says said) })
+               |> Option.toList)
             @ (if begins then nudging (Some console) lobby else [])
 
         match resuming with
@@ -209,6 +243,7 @@ module Lobby =
                     |> withSeat
                         { seat with
                             Occupant = Taken(token, None) }
+                | Played
                 | Empty -> lobby
 
             lobby, drawAll lobby
@@ -285,8 +320,12 @@ module Lobby =
             if seat.Player <> active.Id then
                 told $"It is {Words.player active.Id}'s turn."
             else
+                // And whoever the machine is between this player and their next turn answers
+                // before anybody is drawn, so one screen arrives holding the whole of what
+                // happened rather than a board that is about to change again.
                 let lobby =
-                    { lobby with
-                        Model = Update.update msg lobby.Model }
+                    answering
+                        { lobby with
+                            Model = Update.update msg lobby.Model }
 
                 lobby, drawAll lobby @ nudging (Some console) lobby

@@ -15,6 +15,7 @@
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
 #load "../src/App/Update.fs"
+#load "../src/App/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Showing.fs"
 #load "../src/Console/Words.fs"
@@ -35,7 +36,8 @@ open Harness
 
 let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
 
-let private opened () = Lobby.opened dealt
+/// A table of nothing but people, which is what this file is mostly about.
+let private opened () = Lobby.opened dealt []
 
 /// One console at the table, in the next empty seat.
 let private sits console token lobby =
@@ -245,5 +247,49 @@ report
     (heard "one" refusedViewPosts |> mentions "is not a way of showing the game")
 
 report "and the game does not move for it" 0 (movesMade refusedView)
+
+// --- a seat the machine plays ---------------------------------------------------------------
+//
+// A table opened over a network may have the program at some of its seats: somebody here,
+// a friend two rooms away, and a machine between them. That seat was never empty, so nobody
+// waits for it and nobody can sit down in it - and the machine plays it through the very loop
+// the one-keyboard table uses, so a move it makes is a move like anybody else's.
+
+/// Seat 1 is the machine's, which leaves one seat for one person - so a single arrival fills
+/// a table of two, and the machine has already played by the time they are shown a board.
+let private machineFirst () =
+    Lobby.opened dealt (Rival.seating 42UL [ Some Rival.easy; None ] (Model.game dealt))
+
+let alone, alonePosts = machineFirst () |> sits "one" "tok-one"
+
+report
+    "a machine's seat is not waited for, so one person fills a table of two"
+    true
+    (heard "one" alonePosts |> mentions "=== Turn")
+
+report "and the seat handed out is the one the machine is not in" true (heard "one" alonePosts |> mentions "seated at 2")
+
+report "the machine plays as the table fills, rather than after somebody has read a board" true (movesMade alone > 0)
+
+report "so the board that arrives is already waiting on the person" true (heard "one" alonePosts |> mentions "Player 2 to play")
+
+report
+    "and whoever sits down is told which seat the machine has, the same as at one keyboard"
+    true
+    (heard "one" alonePosts |> mentions "Played by the machine: Player 1 (easy).")
+
+let _, latecomerTurned = alone |> sits "two" "tok-two"
+
+report
+    "a seat the machine holds cannot be sat down in"
+    true
+    (heard "two" latecomerTurned |> mentions "Every seat at this table is taken.")
+
+let answered, _ = alone |> Lobby.said "one" "recruit r 3"
+
+report
+    "and a move by the person is answered before the board comes back, as it is at one keyboard"
+    true
+    (movesMade answered >= movesMade alone + 2)
 
 finish ()

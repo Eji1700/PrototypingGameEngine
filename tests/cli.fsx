@@ -22,16 +22,17 @@
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
 #load "../src/App/Session.fs"
-#load "../src/App/Rival.fs"
 #load "../src/App/Timeline.fs"
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
 #load "../src/App/Update.fs"
+#load "../src/App/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
 #load "../src/Console/Parse.fs"
 #load "../src/Console/Keys.fs"
+#load "../src/Console/Seating.fs"
 #load "../src/Console/Palette.fs"
 #load "../src/Console/Tint.fs"
 #load "../src/Console/Rich.fs"
@@ -238,22 +239,25 @@ let private chosen line = Menu.choose Palette.standard line
 
 /// A choice as something that can be compared. `Menu.Choice` carries a view, and a view is
 /// a bundle of functions, so the choices cannot be held up against each other whole.
+///
+/// A seating comes back as the words it would be typed in, which is the shape it is easiest
+/// to be wrong about and the shape a person actually says: 'you hard' either is a seat for
+/// each of you or it is not.
 let private dealing choice =
     match choice with
-    | Ok(Menu.Deal(players, seed, rivals)) -> Ok("deal", players, seed, rivals |> List.map (fun skill -> skill.Name))
-    | Ok(Menu.Serve(players, seed, rivals)) -> Ok("serve", players, seed, rivals |> List.map (fun skill -> skill.Name))
+    | Ok(Menu.Deal(sitters, seed)) -> Ok("deal", Seating.line sitters, seed)
+    | Ok(Menu.Serve(sitters, seed)) -> Ok("serve", Seating.line sitters, seed)
+    | Ok(Menu.Host(sitters, seed)) -> Ok("host", Seating.line sitters, seed)
+    | Ok(Menu.Sitting sitters) -> Ok("seats", Seating.line sitters, None)
     | Ok _ -> Error "that is not a game to deal"
     | Error problem -> Error problem
 
 report
     "'vs' deals a seat for you and one for each machine named"
-    (Ok("deal", 3, None, [ "easy"; "hard" ]))
+    (Ok("deal", "you easy hard", None))
     (dealing (chosen "vs easy hard"))
 
-report
-    "and the browser's table is asked for the same way"
-    (Ok("serve", 2, None, [ "medium" ]))
-    (dealing (chosen "serve vs medium"))
+report "and the browser's table is asked for the same way" (Ok("serve", "you medium", None)) (dealing (chosen "serve vs medium"))
 
 report
     "'vs' with nobody named says what to name"
@@ -276,9 +280,53 @@ report
      | Error problem -> problem.Contains "not a way for the machine to play"
      | Ok _ -> false)
 
-// And the seatings the menu offers on its own line still mean what they meant.
+// --- and the seatings, said long and said short --------------------------------------------
+//
+// A seating is one sitter to a seat, and how many are playing is how long it is - so the count
+// and the seats cannot disagree, which is the one sum the old menu could get wrong. Everything
+// shorter than that is built out of a whole seating rather than beside one, so a shorthand
+// cannot come to mean something the long way round does not.
 
-report "a bare number is still a table of people" (Ok("deal", 4, None, [])) (dealing (chosen "4"))
+report "a bare number is still a table of people" (Ok("deal", "you you you you", None)) (dealing (chosen "4"))
+
+report "and it still takes a seed after it" (Ok("deal", "you you", Some 42UL)) (dealing (chosen "2 42"))
+
+report "a seat may be named outright, one word each" (Ok("deal", "you hard you", None)) (dealing (chosen "play you hard you"))
+
+report "and the machine may have the first of them" (Ok("deal", "medium you", None)) (dealing (chosen "play medium you"))
+
+report
+    "anybody joining makes it a table to open rather than a game to deal"
+    (Ok("host", "you hard joins", None))
+    (dealing (chosen "play you hard joins"))
+
+report "which is all 'host' ever meant, said shorter" (Ok("host", "joins joins joins", None)) (dealing (chosen "host 3"))
+
+report "and 'vs' is the long way round too" (dealing (chosen "play you medium")) (dealing (chosen "vs medium"))
+
+report
+    "a seating the table would refuse is refused where it is named"
+    true
+    (match chosen "play you" with
+     | Error problem -> problem.Contains "table of 1"
+     | Ok _ -> false)
+
+report
+    "and a word nobody has is refused there too, saying what there is"
+    true
+    (match chosen "play you sneaky you" with
+     | Error problem -> problem.Contains "is not somebody to seat"
+     | Ok _ -> false)
+
+// A page on this machine is one hot seat, the same as this keyboard is. There is nobody for a
+// seat at it to be at the far end of, so a seating with anybody joining is not one it can take.
+
+report
+    "a browser's game cannot have anybody joining it"
+    true
+    (match chosen "serve you joins" with
+     | Error problem -> problem.Contains "one hot seat"
+     | Ok _ -> false)
 
 report
     "and the menu says the machine is on offer"
@@ -341,6 +389,35 @@ report
     []
     (unread (Options.choose Palette.standard) (Options.screen Palette.standard))
 
+// The seat list is not reached by opening a row - it is reached by a line, and comes back as
+// one - so it has to be walked over separately. Every seating there is, at every size the
+// table takes, because a row there is built from what is already in the seat beside it.
+
+let private everySeating =
+    let rec grown seats =
+        if seats = 0 then
+            [ [] ]
+        else
+            grown (seats - 1)
+            |> List.collect (fun rest -> Seating.all |> List.map (fun sitter -> sitter :: rest))
+
+    [ Table.MinPlayers .. Table.MaxPlayers ] |> List.collect grown
+
+report
+    "and every row on every seat list there could be stands for a line the menu can read"
+    []
+    (everySeating |> List.collect (fun sitters -> unread chosen (Menu.seats sitters)))
+
+report
+    "the way back out of the seat list is a line too, and it goes back rather than dealing"
+    true
+    (match (Menu.seats (Seating.here 2)).Backs with
+     | Some line ->
+         match chosen line with
+         | Ok Menu.Backing -> true
+         | _ -> false
+     | None -> false)
+
 report
     "the way back out of a screen is a line too"
     true
@@ -380,14 +457,20 @@ let private walking screen keys =
 
 let private walked keys = walking front keys
 
-report "the number of a row picks it outright" (Some "colours") (walked [ letter '8' ])
+report "the number of a row picks it outright" (Some "colours") (walked [ letter '5' ])
 
-report "and a number on the list it opens is the answer to what that list asked" (Some "3") (walked [ letter '1'; letter '3' ])
+report
+    "and a number on the list it opens is the answer to what that list asked"
+    (Some "seats you you you")
+    (walked [ letter '1'; letter '3' ])
 
-report "which is the same line typing it would have sent" (Ok("deal", 3, None, [])) (dealing (chosen "3"))
+report
+    "which is the same line typing it would have sent"
+    (Ok("seats", "you you you", None))
+    (dealing (chosen "seats you you you"))
 
 let private taking down =
-    walked (List.replicate 8 down @ [ key ConsoleKey.Enter ])
+    walked (List.replicate 5 down @ [ key ConsoleKey.Enter ])
 
 report "the arrows walk down the list" (Some "rules") (taking (key ConsoleKey.DownArrow))
 
@@ -399,7 +482,7 @@ report
     "a row that needs more writes the part it knows and waits for the rest"
     (Some "join elsewhere")
     (walked (
-        [ letter '5' ]
+        [ letter '2' ]
         @ ([ 'e'; 'l'; 's'; 'e'; 'w'; 'h'; 'e'; 'r'; 'e' ] |> List.map letter)
         @ [ key ConsoleKey.Enter ]
     ))
@@ -420,12 +503,74 @@ report
 report
     "backing out of a list opened by mistake comes back to the one it was opened from"
     (Some "quit")
-    (walked [ letter '1'; key ConsoleKey.Escape; letter '0' ])
+    (walked [ letter '1'; key ConsoleKey.Escape; letter '7' ])
 
 report
     "and backing out of the front door does nothing, there being nothing behind it"
     (Some "quit")
-    (walked [ key ConsoleKey.Escape; letter '0' ])
+    (walked [ key ConsoleKey.Escape; letter '7' ])
+
+// --- and the seats, which are the same idea again -----------------------------------------
+//
+// A seat's row stands for the whole seating with that one seat changed, so walking a seat
+// along is a way of typing and there is nothing to remember between presses. Which means the
+// list can be walked here exactly as a person walks it: press, read the line, build the
+// screen again from what it said.
+
+/// One press at the seat list, and the seating it came back holding.
+let private pressed press sitters =
+    match walking (Menu.seats sitters) [ press ] with
+    | Some line ->
+        match chosen line with
+        | Ok(Menu.Sitting changed) -> changed
+        | _ -> sitters
+    | None -> sitters
+
+let private walkingSeat times press =
+    List.replicate times press
+    |> List.fold (fun sitters press -> pressed press sitters) (Seating.here 3)
+
+report "right walks a seat on to the machine" "easy you you" (Seating.line (walkingSeat 1 (key ConsoleKey.RightArrow)))
+
+report
+    "and on again, through the machines and out the far side"
+    "joins you you"
+    (Seating.line (walkingSeat 4 (key ConsoleKey.RightArrow)))
+
+report
+    "walking a seat right round comes back where it started"
+    "you you you"
+    (Seating.line (walkingSeat (List.length Seating.all) (key ConsoleKey.RightArrow)))
+
+report "and left from the first is the last" "joins you you" (Seating.line (walkingSeat 1 (key ConsoleKey.LeftArrow)))
+
+report
+    "the seat's own number walks it too, the same as the arrow"
+    (Seating.line (walkingSeat 1 (key ConsoleKey.RightArrow)))
+    (Seating.line (pressed (letter '1') (Seating.here 3)))
+
+// And the rows underneath the seats, which are what a seating is finally *for*. Which of them
+// is offered is the seating's own answer: a table anybody is joining is opened and waited at,
+// and is not a thing a browser on this machine could hold.
+
+let private under sitters =
+    (Menu.seats sitters).Rows
+    |> List.skip (List.length sitters)
+    |> List.map (fun row -> row.Says)
+
+report "a seating nobody is joining is dealt here, or read in a browser" [ "Deal"; "In a browser" ] (under (Seating.here 2))
+
+report "and one somebody is joining is a table to open, and nothing else" [ "Open the table" ] (under (Seating.hosting 2))
+
+report
+    "picking the last row deals exactly the seating on the screen"
+    (Ok("host", "you hard joins", None))
+    (dealing (
+        chosen (
+            walking (Menu.seats [ Here; Machine Rival.hard; Elsewhere ]) [ letter '4' ]
+            |> Option.defaultValue ""
+        )
+    ))
 
 // Left and right on the colour screen walk one slot through the nineteen. Nothing is
 // remembered between presses - the line says the whole of the change - so walking the list

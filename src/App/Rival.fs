@@ -400,16 +400,77 @@ module Rival =
 
     /// Which seats the machines take, and what each of them draws its choices out of.
     ///
-    /// The first seat is left to whoever is at the keyboard and the machines take the rest,
-    /// in order, for as many as were asked for. A generator each, drawn from the seed the
-    /// game was dealt from, so a game against machines replays exactly like any other.
-    let seating (seed: uint64) skills game =
+    /// One entry per seat, in the order the game deals them, and `None` where the seat is
+    /// somebody's. Said seat by seat rather than as a run of machines after the first,
+    /// because which seats are the program's is a thing to be chosen and not a thing to be
+    /// counted: a table of three may be a person between two machines.
+    ///
+    /// A generator each, drawn from the seed the game was dealt from and from where the seat
+    /// sits, so a game against machines replays exactly like any other - and moving a machine
+    /// along one seat gives it the generator that seat has always had.
+    let seating (seed: uint64) sitting game =
         Game.players game
         |> List.indexed
         |> List.choose (fun (seat, player) ->
-            skills
-            |> List.tryItem (seat - 1)
+            sitting
+            |> List.tryItem seat
+            |> Option.flatten
             |> Option.map (fun skill ->
                 player.Id,
                 { Skill = skill
                   Rng = Rng.ofSeed (seed + uint64 seat) }))
+
+    // --- taking their turns -----------------------------------------------------------------
+    //
+    // Which is the same thing anybody else does with a turn, and goes through `Update.update`
+    // to prove it. What follows is only about *when*: a machine plays as soon as the game
+    // reaches its seat, and the run of them between one person's move and their next is
+    // played out before the prompt comes back.
+    //
+    // Here rather than at either table, because both tables want it and there is one answer.
+    // A machine at one keyboard and a machine at a seat nobody drove to are the same machine.
+
+    /// The machine at the seat to act, if that seat is one of theirs and there is still a
+    /// game to play.
+    let private toAct rivals model =
+        match Model.session model with
+        | Finished _ -> None
+        | InPlay play ->
+            rivals
+            |> List.tryFind (fst >> (=) (Game.active play.Game).Id)
+            |> Option.map (fun (_, rival) -> play, rival)
+
+    /// Whether the game is standing at a seat the program plays. Asked by a table walking a
+    /// game backwards: a move taken back has to take the machines' answers to it back with
+    /// it, or one `undo` would simply be answered again before the board was looked at.
+    let holds rivals model = toAct rivals model |> Option.isSome
+
+    let private withRival playerId rival rivals =
+        rivals
+        |> List.map (fun (other, was) -> if other = playerId then other, rival else other, was)
+
+    /// Let the machines take their turns, and give back the game they left and themselves as
+    /// they now stand - each having moved its own generator on.
+    ///
+    /// They play one after another for as long as the seat to act is one of theirs, so a line
+    /// typed by a person is answered by everybody between them and their next turn - which is
+    /// what sitting down opposite a machine looks like.
+    ///
+    /// A move that left the game exactly as it found it stops them, and that is the whole of
+    /// what stops them. Nothing a machine picks should be refused - it asks the rules what
+    /// they will take before it chooses - but one that had somehow found a move the rules
+    /// would not have would otherwise be asked for it again, and again, with the turn never
+    /// passing and nothing on the screen to say why.
+    let rec answering rivals model =
+        match toAct rivals model with
+        | None -> model, rivals
+        | Some(play, rival) ->
+            let seat = (Game.active play.Game).Id
+
+            match plays play rival with
+            | None -> model, rivals
+            | Some(move, rival) ->
+                let next = Update.update (Make move) model
+                let rivals = withRival seat rival rivals
+
+                if Model.session next = Model.session model then next, rivals else answering rivals next

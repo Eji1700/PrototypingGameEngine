@@ -25,11 +25,11 @@
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
 #load "../src/App/Session.fs"
-#load "../src/App/Rival.fs"
 #load "../src/App/Timeline.fs"
 #load "../src/App/Journal.fs"
 #load "../src/App/Model.fs"
 #load "../src/App/Update.fs"
+#load "../src/App/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Showing.fs"
 #load "../src/Console/Words.fs"
@@ -53,14 +53,10 @@ open Harness
 // Every seat taken by a machine, which is a table `Solo.against` will play out to its end
 // in one call, there being no seat in it for a person to be asked anything at.
 
-/// Machines at every seat, a generator each. `Rival.seating` leaves the first seat to
-/// whoever is at the keyboard, which is right at a table and no good here.
+/// Machines at every seat, a generator each. Asked for the way any other table is: a
+/// seating is one entry to a seat, and every one of these is the machine's.
 let private machinesAt (skills: Skill list) seed model =
-    Game.players (Model.game model)
-    |> List.mapi (fun seat player ->
-        player.Id,
-        { Skill = skills[seat]
-          Rng = Rng.ofSeed (seed + uint64 seat) })
+    Rival.seating seed (skills |> List.map Some) (Model.game model)
 
 let private playedOut skills seed =
     match Update.start (List.length skills) seed with
@@ -355,23 +351,39 @@ report
     true
     (Rival.all |> List.forall (fun skill -> Rival.byName skill.Name = Ok skill))
 
-// Seating: the first seat is whoever is at the keyboard, and the machines take the rest in
-// the order they were named.
+// Seating: one entry to a seat, in the order the game deals them, and nothing at the seats
+// that are somebody's. Said seat by seat rather than as a run of machines after the first,
+// because which seats are the program's is a thing to be chosen: a table of three may be a
+// person between two machines, and that is a table the old shape could not describe.
 
 let private dealt = Update.start 3 42UL |> Result.toOption |> Option.get
 
+let private seated sitting =
+    Rival.seating 42UL sitting (Model.game dealt)
+    |> List.map (fun (playerId, rival) -> PlayerId.value playerId, rival.Skill.Name)
+
 report
-    "the machines take the seats after the first, in the order they were asked for"
+    "the machine takes the seats it was given, and no others"
     [ 2, "easy"; 3, "hard" ]
-    (Rival.seating 42UL [ Rival.easy; Rival.hard ] (Model.game dealt)
-     |> List.map (fun (playerId, rival) -> PlayerId.value playerId, rival.Skill.Name))
+    (seated [ None; Some Rival.easy; Some Rival.hard ])
+
+report "including the first, which is nobody's by convention and not by rule" [ (1, "hard") ] (seated [ Some Rival.hard ])
+
+report "so a person may sit between two machines" [ 1, "easy"; 3, "medium" ] (seated [ Some Rival.easy; None; Some Rival.medium ])
+
+report "and none at all is a table of nothing but people" [] (seated [])
+
+// A machine's generator comes from the seed and from where the seat sits, so moving one
+// along a seat hands it the generator that seat has always had - which is what keeps a game
+// against machines replaying exactly like any other.
+
+let private generators sitting =
+    Rival.seating 42UL sitting (Model.game dealt)
+    |> List.map (fun (_, rival) -> rival.Rng)
 
 report
-    "fewer machines than seats leaves the rest to people"
-    [ 2 ]
-    (Rival.seating 42UL [ Rival.easy ] (Model.game dealt)
-     |> List.map (fst >> PlayerId.value))
-
-report "and none at all is a table of nothing but people" [] (Rival.seating 42UL [] (Model.game dealt))
+    "a machine's generator follows the seat rather than the machine"
+    (generators [ None; Some Rival.easy ])
+    (generators [ Some Rival.hard; Some Rival.easy ] |> List.skip 1)
 
 finish ()

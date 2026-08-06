@@ -29,13 +29,14 @@
   <ItemGroup Label="App - the MVU loop, and the game's memory of itself">
     <Compile Include="src/App/Messages.fs" />
     <Compile Include="src/App/Session.fs" />
-    <!-- A seat played by the program. It needs a game and the moves there are, and nothing
-         of records or of walking one back, so it is compiled before either exists. -->
-    <Compile Include="src/App/Rival.fs" />
     <Compile Include="src/App/Timeline.fs" />
     <Compile Include="src/App/Journal.fs" />
     <Compile Include="src/App/Model.fs" />
     <Compile Include="src/App/Update.fs" />
+    <!-- A seat played by the program, and after `Update` because taking a turn is making a
+         move like anybody else's. Every table that seats a machine - one keyboard, or a
+         network - lets them play through the one loop at the foot of this file. -->
+    <Compile Include="src/App/Rival.fs" />
   </ItemGroup>
 
   <ItemGroup Label="Console - the only part that talks to a person">
@@ -46,6 +47,9 @@
     <Compile Include="src/Console/Parse.fs" />
     <!-- Beside `Parse`, and for the same reason: one reads a line, the other a key. -->
     <Compile Include="src/Console/Keys.fs" />
+    <!-- Who is going to be at each seat, which is the one thing every way of opening a game
+         has to settle. Above the menu and the command line, because both of them ask it. -->
+    <Compile Include="src/Console/Seating.fs" />
     <Compile Include="src/Console/Palette.fs" />
     <Compile Include="src/Console/Tint.fs" />
     <Compile Include="src/Console/Rich.fs" />

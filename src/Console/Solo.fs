@@ -80,48 +80,14 @@ module Solo =
 
     // --- the seats nobody is sitting in ------------------------------------------------
 
-    /// The machine at the seat to act, if that seat is one of theirs and there is still a
-    /// game to play.
-    let private toAct solo =
-        match Model.session solo.Model with
-        | Finished _ -> None
-        | InPlay play ->
-            solo.Rivals
-            |> List.tryFind (fst >> (=) (Game.active play.Game).Id)
-            |> Option.map (fun (_, rival) -> play, rival)
+    /// Let the machines take their turns, which `Rival` does for every table there is. All
+    /// this end has to do is hand them the game and take back the one they left.
+    let private answering solo =
+        let model, rivals = Rival.answering solo.Rivals solo.Model
 
-    let private withRival playerId rival solo =
         { solo with
-            Rivals =
-                solo.Rivals
-                |> List.map (fun (other, was) -> if other = playerId then other, rival else other, was) }
-
-    /// Let the machines take their turns.
-    ///
-    /// They play one after another for as long as the seat to act is one of theirs, so a
-    /// line typed by a person is answered by everybody between them and their next turn -
-    /// which is what sitting down opposite a machine looks like.
-    ///
-    /// A move that left the game exactly as it found it stops them, and that is the whole of
-    /// what stops them. Nothing a machine picks should be refused - it asks the rules what
-    /// they will take before it chooses - but a machine that had somehow found a move the
-    /// rules would not have would otherwise be asked for it again, and again, with the turn
-    /// never passing and nothing on the screen to say why.
-    let rec private answering solo =
-        match toAct solo with
-        | None -> solo
-        | Some(play, rival) ->
-            let seat = (Game.active play.Game).Id
-
-            match Rival.plays play rival with
-            | None -> solo
-            | Some(move, rival) ->
-                let next =
-                    { solo with
-                        Model = Update.update (Make move) solo.Model }
-                    |> withRival seat rival
-
-                if Model.session next.Model = Model.session solo.Model then next else answering next
+            Model = model
+            Rivals = rivals }
 
     /// The same rule read backwards, for walking the game about.
     ///
@@ -130,9 +96,9 @@ module Solo =
     /// all: one `undo` and the machine would simply play it for you again before you had
     /// looked at the board.
     let rec private walking msg solo =
-        match toAct solo with
-        | None -> solo
-        | Some _ ->
+        if not (Rival.holds solo.Rivals solo.Model) then
+            solo
+        else
             let next =
                 { solo with
                     Model = Update.update msg solo.Model }
@@ -229,24 +195,14 @@ module Solo =
 
     // --- coming and going ---------------------------------------------------------------
 
-    /// Who at this table is the machine, said to somebody as they sit down to watch.
-    ///
-    /// Nothing on the board says so and nothing should: a machine's stones look like
-    /// anybody's, and they are. But a game where you cannot tell who you are playing has a
-    /// secret in it that is no part of the game, so it is said once, plainly, to whoever
-    /// arrives - in the words their own view speaks, like everything else said after the
-    /// fact.
+    /// Who at this table is the machine, said to somebody as they sit down to watch - in the
+    /// words their own view speaks, like everything else said after the fact.
     let private roster (reading: Reading) solo =
-        match solo.Rivals with
-        | [] -> []
-        | rivals ->
-            rivals
-            |> List.map (fun (playerId, rival) -> $"{Words.player playerId} ({rival.Skill.Name})")
-            |> String.concat ", "
-            |> sprintf "Played by the machine: %s."
-            |> reading.View.Says
-            |> Told
-            |> List.singleton
+        solo.Rivals
+        |> List.map (fun (playerId, rival) -> playerId, rival.Skill.Name)
+        |> Words.roster
+        |> Option.map (reading.View.Says >> Told)
+        |> Option.toList
 
     /// Somebody starts watching, reading it the way they say. A console already watching is
     /// not seated again; it simply says how it would rather read, which is what a browser

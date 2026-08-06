@@ -167,10 +167,17 @@ module Server =
     /// Open a table and wait at it. Blocks until the host stops the process, which is
     /// how a table is closed: there is no move for closing one, because no player at it
     /// has the standing to close it on everybody else.
-    let host port model keep =
+    ///
+    /// The seating settles who is waited for and who is not. A seat the machine plays is
+    /// played here, by this process, and is never an empty chair; the rest are sat down at
+    /// from a console or a browser, whether that console is in this room or two rooms away.
+    let host port model sitters keep =
         let builder = WebApplication.CreateBuilder()
 
-        let held = Held(Lobby.opened model, keep)
+        let rivals =
+            Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model)
+
+        let held = Held(Lobby.opened model rivals, keep)
         let pages = Browser.Pages()
 
         // The console is a board, not a log. Anything the framework wants to say would
@@ -201,22 +208,50 @@ module Server =
         serving app Palette.standard sitting pages
 
         let seats = Game.playerCount (Model.game model)
+        let mine, theirs = Seating.awaited sitters
 
         printfn ""
         printfn "=== A table for %d, waiting to be joined ===" seats
         printfn ""
-        printfn "  Each player either runs:"
+        Seating.roster sitters |> List.iter (printfn "%s")
         printfn ""
-        printfn "    dotnet run -- join <address>"
-        printfn ""
-        printfn "  or opens <address> in a browser. Both sit down at this one table."
-        printfn ""
-        printfn "  This table is at:"
-        printfn ""
-        reachableAt port |> List.iter (printfn "%s")
-        printfn "  localhost:%d          (for anyone on this machine)" port
-        printfn ""
-        printfn "  The game begins once all %d seats are taken. Ctrl+C closes the table." seats
+
+        // The machine's seats are already filled, so what is read out to the room is the
+        // chairs that are not - and some of those are very often the host's own.
+        if mine > 0 then
+            if mine = 1 then
+                printfn "  One of these seats is yours, at this machine. Take it by running:"
+            else
+                printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
+
+            printfn ""
+            printfn "    dotnet run -- join localhost:%d" port
+            printfn ""
+            printfn "  or by opening http://localhost:%d in a browser." port
+            printfn ""
+
+        if theirs > 0 then
+            if theirs = 1 then
+                printfn "  One is somebody else's, from their own machine. They run:"
+            else
+                printfn "  %d are somebody else's, from their own machines. Each of them runs:" theirs
+
+            printfn ""
+            printfn "    dotnet run -- join <address>"
+            printfn ""
+            printfn "  or opens <address> in a browser. Both sit down at this one table."
+            printfn ""
+            printfn "  This table is at:"
+            printfn ""
+            reachableAt port |> List.iter (printfn "%s")
+            printfn "  localhost:%d          (for anyone on this machine)" port
+            printfn ""
+
+        if mine + theirs = 1 then
+            printfn "  The game begins once that seat is taken. Ctrl+C closes the table."
+        else
+            printfn "  The game begins once all %d open seats are taken. Ctrl+C closes the table." (mine + theirs)
+
         printfn ""
 
         app.Run()

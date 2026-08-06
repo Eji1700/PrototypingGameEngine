@@ -34,7 +34,8 @@ nothing else, and it picks a `Move` - the very thing a typed line turns into.
 ## Running
 
 ```powershell
-dotnet run                     # the start menu: arrows or wasd to move, a number to pick
+dotnet run                     # the start menu: how many are playing, then who is in each seat
+                               #   (arrows or wasd to move, a number to pick)
 dotnet run -- play 3           # 3 players, random seed - straight to the board
 dotnet run -- play 3 --seed 42 # the same game again, from a seed
 dotnet run -- play 2 --view rich --colour blue=teal
@@ -624,11 +625,15 @@ dotnet run -- host 3          # opens a table for three and waits
 dotnet run -- join greg-pc    # each of the others, from their own machine
 ```
 
+At the menu it is a seating with anybody joining in it — `play you hard joins` opens a
+table for three, plays the middle seat here, and waits for the other two consoles.
+
 The host prints the addresses it can be reached at. A player says a machine name,
 an address, or a whole URL; the port and the path are filled in
-([Client.fs](src/Net/Client.fs)). Nobody plays until every seat is taken - a game
-dealt for three hands out three bags whether or not three people have arrived, so
-starting early would mean somebody playing a bag that is not theirs.
+([Client.fs](src/Net/Client.fs)). Nobody plays until every seat a person has is taken - a
+game dealt for three hands out three bags whether or not three people have arrived, so
+starting early would mean somebody playing a bag that is not theirs. A seat the program
+plays was never empty and is not waited for.
 
 **The server is the only thing that holds a game.** A client holds no model and
 knows no rules: it sends the line that was typed and prints what comes back, which
@@ -689,6 +694,7 @@ next table and a list of things to show, each addressed to somebody.
 | | [Solo.fs](src/Console/Solo.fs) | [Lobby.fs](src/Net/Lobby.fs) |
 | --- | --- | --- |
 | who is at it | one pair of hands, however many are watching | one seat each |
+| seats the program plays | any of them | any of them, and they are not waited for |
 | whose board is drawn | whoever is to play — it turns over with the turn | whoever is reading it |
 | out of turn | there is nobody else | refused |
 | `undo` / `redo` | allowed | refused — walking a negotiation back reads a bag |
@@ -888,8 +894,18 @@ line there, and asks the page whether it was knocked on.
 
 ## Playing against the program
 
-A seat can be played by the program. `--rival <skill>` gives away the seat after
-yours, once per seat, and the first seat is always yours:
+Any seat can be played by the program. At the menu that is the seat list above — walk a
+seat along to `easy`, `medium` or `hard`, or say the whole table at once:
+
+```
+play you hard          # you and one machine
+play medium you        # and the machine may have the first seat
+play easy you hard     # a person between two of them
+play you hard joins    # you, a machine, and a friend at their own machine
+```
+
+The command line names the machines rather than the seats, which is a seating said shorter
+— `--rival` gives away the seat after yours, once per seat:
 
 ```powershell
 dotnet run -- play 2 --rival medium
@@ -1010,10 +1026,10 @@ game out at once for that reason; against somebody playing stones, they play bac
 
 ### At the table
 
-`Solo` gains one rule and one only: after a person has spoken, the machines answer for
-as long as the seat to act is one of theirs. What stops them is a move that left the
-game exactly as it found it - nothing they pick should ever be refused, but a machine
-that had somehow found one the rules would not take would otherwise be asked for it
+There is one rule, and it lives in `Rival.answering`: after a person has spoken, the
+machines answer for as long as the seat to act is one of theirs. What stops them is a move
+that left the game exactly as it found it - nothing they pick should ever be refused, but a
+machine that had somehow found one the rules would not take would otherwise be asked for it
 again, and again.
 
 The same rule read backwards is what `undo` does. Taking a move back takes the
@@ -1026,9 +1042,12 @@ Everything else follows from a machine's move being an ordinary move. It goes th
 watching, and reaches a browser down the same stream a person's does. There is no
 second table and no second protocol.
 
-Hosted tables ([Lobby.fs](src/Net/Lobby.fs)) have no machines at them. That is a
-different table with seats, tokens and people at their own keyboards, and filling one
-of those seats with a machine is a separate piece of work rather than the same one.
+Which is why a hosted table ([Lobby.fs](src/Net/Lobby.fs)) can have machines at it too,
+without a second answer to when they play: it calls the same loop. What it adds is the one
+thing a table with seats has to say for itself — such a seat holds the occupant `Played`,
+which was never empty, so nobody waits for it and nobody can sit down in it. The machines
+play as the last person arrives rather than before, because a game dealt for four is not
+begun until four are sitting at it.
 
 ## How it is put together
 
@@ -1071,11 +1090,11 @@ it is, when it ends, when the game does, and everything that has happened so far
 | --- | --- |
 | [Messages.fs](src/App/Messages.fs) | `Move` and `Msg` |
 | [Session.fs](src/App/Session.fs) | `Session`, `Play`, `Over`, and `Notice` |
-| [Rival.fs](src/App/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
 | [Timeline.fs](src/App/Timeline.fs) | Every state the game has stood in, with a finger on the present |
 | [Journal.fs](src/App/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
 | [Model.fs](src/App/Model.fs) | The timeline, the journal, and the last few lines on screen |
 | [Update.fs](src/App/Update.fs) | `Msg -> Model -> Model` |
+| [Rival.fs](src/App/Rival.fs) | A seat played by the program: how a position is weighed, how well, which seats are theirs, and when they play |
 
 **`src/Console`** — the only part that talks to a person.
 
@@ -1087,6 +1106,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
 | [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
 | [Keys.fs](src/Console/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
+| [Seating.fs](src/Console/Seating.fs) | Who is in each seat before a game is dealt, and everything that falls out of it |
 | [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
 | [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
@@ -1096,7 +1116,7 @@ it is, when it ends, when the game does, and everything that has happened so far
 | [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
 | [Launch.fs](src/Console/Launch.fs) | What a command line asks the program to open, as a value that can be written back out as a line |
 | [Shell.fs](src/Console/Shell.fs) | The command surface: the commands, their options, and what is refused at the door |
-| [Menu.fs](src/Console/Menu.fs) | The start menu: what there is to open, and what a typed line asks for |
+| [Menu.fs](src/Console/Menu.fs) | The start menu and the seat list: what there is to open, and what a typed line asks for |
 | [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
 
 **`src/Net`** — the same game with the players at different keyboards. Only the
@@ -1191,23 +1211,80 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Console/Menu.fs))
 
   Stones on a map, and a seat each.
 
-  -> 1  Play here            everyone round this keyboard
-     2  Against the program  the machine plays easy, medium, hard
-     3  In a browser         the same game, read as a page on this machine
-     4  Host a table         the others sit down from their own machines
-     5  Join a table         sit down at one somebody else is hosting
-     6  Replay a record      a saved game, played through again
-     7  How it is drawn      now plain - plain text, and nothing this terminal has to understand
-     8  Colours              which colour is drawn for what
-     9  Rules                the rules and the commands, at length
-     0  Quit
+  -> 1  New game         how many are playing, and who each of them is
+     2  Join a table     sit down at one somebody else is hosting
+     3  Replay a record  a saved game, played through again
+     4  How it is drawn  now plain - plain text, and nothing this terminal has to understand
+     5  Colours          which colour is drawn for what
+     6  Rules            the rules and the commands, at length
+     7  Quit
 
   Move with the arrows or w and s. Enter takes the one marked ->, and so does its number.
 
-  Or type it: '3' for a game of three, '3 42' for that same game again, 'serve 3',
-  'vs <skill>...' for easy, medium, hard, 'host 3', 'join <address>', 'replay <file>',
-  'view <plain, rich>', 'colours', 'rules', 'quit'.
+  Or type it: a seat each, from you, easy, medium, hard, joins - 'play you hard joins' to deal
+  one, 'serve you medium' to read it in a browser, 'seats you you' to lay it out
+  first. The short ways still hold: '3' for a game of three, '3 42' for that same
+  game again, 'serve 3', 'host 3', 'vs <skill>...' for easy, medium, hard,
+  'join <address>', 'replay <file>', 'view <plain, rich>', 'colours',
+  'rules', 'quit'.
 ```
+
+### One question, asked once: who is in each seat
+
+There used to be three ways in — play here, against the program, host a table — and each
+asked how many were playing in its own words. That is three doors onto one question, and
+between them they could not describe a table with a machine in the *middle* of it, or one
+where a friend joins two people already at this keyboard. So there is one door now. It asks
+how many first, because the list of seats is exactly as long as the answer:
+
+```
+=== Who is playing ===
+
+  Each seat is somebody here, the machine, or somebody at their own machine.
+
+  -> 1  Seat 1        you     somebody at this keyboard
+     2  Seat 2        hard    counts the tie-breakers too, and what you could do about it
+     3  Deal          and play it here at this keyboard
+     4  In a browser  the same game, read as a page on this machine
+
+  Left and right walk the one marked -> through you, easy, medium, hard, joins.
+  Enter takes the next one along, and so does the seat's own number.
+```
+
+A **seating** ([Seating.fs](src/Console/Seating.fs)) is one `Sitter` to a seat, in the order
+the game deals them: `Here`, `Machine of Skill`, or `Elsewhere`. That is the whole value,
+and how many are playing is how long it is — so the count and the seats cannot disagree,
+which is the one sum the old menu could get wrong and did: a game dealt for two against
+three machines had an empty chair at it.
+
+**Where a game is played is the seating's own answer rather than another question.** Nobody
+joining is a game to deal here; anybody joining is a table to open and wait at. So `Deal`
+becomes `Open the table` on a seating with a `joins` in it, and `In a browser` stops being
+offered — a page on this machine is one hot seat, and there is nobody for a seat at it to be
+at the far end of.
+
+Everything shorter is built out of a whole seating rather than beside one, so a shorthand
+cannot come to mean something the long way round does not:
+
+| said short | the seating it is |
+| --- | --- |
+| `3` | `you you you` |
+| `vs easy hard` | `you easy hard` |
+| `host 3` | `joins joins joins` |
+| `serve 2` | `you you`, read as a page |
+| `--rival easy` on the command line | `you easy`, at whatever size was asked for |
+
+`Rival.seating` takes one entry per seat too, so nothing between the menu and the table
+still believes the first seat belongs to a person. A machine may have seat 1, and the run of
+them between one person's move and their next is played by `Rival.answering` — one loop,
+used by the keyboard's table and the networked one alike, so a machine at a seat nobody
+drove to is the same machine.
+
+A networked table can therefore have a machine in it. `Lobby` gives such a seat the
+occupant `Played`: it was never empty, so nobody waits for it and nobody can sit down in
+it, and the machines play as the table fills rather than after somebody has read a board.
+The host's screen reads the seating back — which seats are the machine's, which are for
+somebody at this machine, and which are for somebody at theirs.
 
 ### Picking, and typing, are the same thing
 
@@ -1217,15 +1294,19 @@ is that **a row is not a second way of meaning something — it stands for a lin
 one hands that line to `Menu.choose`, which is the very function a person typing the words
 would have reached. There is one grammar, and the keys are a way into it.
 
-So the rows that need a number open a list of the seatings, and picking `3` there sends
-the line `3`; the row that joins a table writes `join ` into the prompt and waits, because
-no list holds every address; and `Backs`, the line that escape stands for, is a line too.
-The seatings are still read off `Table.MinPlayers` and `Table.MaxPlayers`, and each is
+So `New game` opens a list of the counts, and picking `3` there sends the line
+`seats you you you`; the row that joins a table writes `join ` into the prompt and waits,
+because no list holds every address; and `Backs`, the line that escape stands for, is a
+line too. The counts are read off `Table.MinPlayers` and `Table.MaxPlayers`, and each is
 picked by *its own* digit rather than by its place on the list, so the key that says three
-is the three. `vs` does not ask how many are playing, because saying who you are playing
-has already said it: one seat for you and one for each machine named, so `vs easy hard` is
-a table of three. Once a game is dealt, `players <n>` and `restart` do the same job from
-the prompt.
+is the three.
+
+A seat's row is the same idea one turn further on: it stands for **the whole seating with
+that one seat walked along**, so left and right need nothing remembered between presses —
+the line says the whole of the change, the screen is built again from what came back, and
+the seat under the cursor changes under it as it is walked. The colour screen has kept that
+bargain since it was written; the seats keep it for the same reason. Once a game is dealt,
+`players <n>` and `restart` do the same job from the prompt.
 
 The one place the two readings of a key meet is the steering letters. With nothing typed
 they steer; with a line underway every letter belongs to it, or an address with an `a` in
@@ -1262,7 +1343,8 @@ dotnet fsi tests/outcome.fsx    # both winning cascades
 dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone conservation
 dotnet fsi tests/history.fsx    # undo, redo, and a record that survives the round trip
 dotnet fsi tests/knowledge.fsx  # what a player sees, and that what they cannot still adds up
-dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, and what a table refuses
+dotnet fsi tests/lobby.fsx      # seats, tokens, whose turn it is, what a table refuses, and
+                                #   the seats at one that the program plays
 dotnet fsi tests/solo.fsx       # the game at one keyboard: what a line does, and what it
                                 #   asks written down
 dotnet fsi tests/view.fsx       # that no view shows a player anything they should not see,
@@ -1271,7 +1353,8 @@ dotnet fsi tests/view.fsx       # that no view shows a player anything they shou
 dotnet fsi tests/html.fsx       # that the page is well-formed, lands where it is aimed,
                                 #   and has no control on it the game would not take
 dotnet fsi tests/cli.fsx        # the command surface, that both halves of it agree, and that
-                                #   every row of every menu stands for a line the menu can read
+                                #   every row of every menu - including every seat list there
+                                #   could be - stands for a line the menu can read
 dotnet fsi tests/properties.fsx # the invariants, over games FsCheck thinks up itself
 dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays legally, that it
                                 #   plays fairly, and that the skills mean something
