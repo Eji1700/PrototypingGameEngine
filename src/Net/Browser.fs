@@ -351,9 +351,26 @@ module Browser =
     /// perfectly, in a browser two rooms from whoever is hosting. Without this, the way
     /// that gets noticed is somebody mentioning that a button seems dead.
     ///
+    /// How many of these a table will print before it stops listening to them.
+    ///
+    /// Nothing on the page sends more than a handful - the script that reports these gives up
+    /// after eight, having swallowed its own trouble - but what is at the far end of this is
+    /// not necessarily the page. Anybody sitting at the table can post here as fast as they
+    /// like, and what that buys them is the host's board scrolling away in the middle of a
+    /// game. The door keeps strangers out; this is what keeps a guest from wearing out their
+    /// welcome, and fifty is far more than a real fault has ever needed.
+    [<Literal>]
+    let private Enough = 50
+
+    let private complained = ref 0
+
     /// Held to a line, because it is a browser talking and a browser can say anything.
     let amiss (ctx: HttpContext) =
         task {
+            if Interlocked.Increment &complained.contents > Enough then
+                ctx.Response.StatusCode <- 204
+            else
+
             use reader = new StreamReader(ctx.Request.Body)
 
             // As much as is going to be printed and not a character more. What is at the far

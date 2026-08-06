@@ -138,7 +138,7 @@ let private serveFor palette sitters seed reach =
 /// at some of its seats - those are played here and are never waited for. The reach goes in
 /// whole for the same reason: how far the table can be reached and what it takes to sit down
 /// at it are settled together or they contradict each other.
-let private hostFor sitters seed reach =
+let private hostFor view sitters seed reach =
     match dealt (List.length sitters) seed with
     | Error problem ->
         eprintfn "%s" problem
@@ -146,9 +146,25 @@ let private hostFor sitters seed reach =
     | Ok model ->
         let stamp = stampNow ()
 
-        Server.host reach model sitters (fun model ->
+        // A seat of the host's own is taken from here, by a console sitting down at this very
+        // table over the same wire everybody else arrives on. Nothing about the table is
+        // special-cased for it: it joins, it is handed a seat and a token, it is drawn a board
+        // per turn, and if the process it is inside had been on another machine the table
+        // could not tell the difference. Which is the point - a seat played by a shortcut
+        // would be a second way of sitting down, and there is no room here for two.
+        let mine, _ = Seating.awaited sitters
+
+        let playing =
+            if mine = 0 then
+                None
+            else
+                Some(fun () -> Client.join (Reach.at reach "localhost") None (Reach.word reach) view |> ignore)
+
+        let keep model =
             if not (Journal.isEmpty model.Journal) then
-                Transcript.save stamp model.Journal |> ignore)
+                Transcript.save stamp model.Journal |> ignore
+
+        Server.host reach model sitters keep playing
 
 /// What the menu settled on: a game to play at this keyboard, or a way of playing that
 /// runs to its own end and only has an exit code to give back.
@@ -243,19 +259,20 @@ let private starting (view: View) choice =
     // In whatever colours the player settled on here, which is the same promise the
     // command line's --colour keeps.
     //
-    // And behind a word at the door that this makes up on the spot, because a menu has
-    // nowhere sensible to ask for one and a table opened without one is opened to whoever
-    // can reach the address. The command line is where that is argued with: `--open` for a
-    // room where everybody was invited, `--code` for a word somebody has already agreed on.
-    | Menu.Serve(sitters, seed) -> Ok(Done(serveFor view.Palette sitters (clocked seed) (Reach.fresh ())))
-    | Menu.Host(sitters, seed) -> Ok(Done(hostFor sitters (clocked seed) (Reach.fresh ())))
+    // A line that said nothing about how far the table reaches is answered the way the
+    // command line answers the same silence: a word at the door, made up here. Everything the
+    // seat list and the screen behind it send says the whole of it, so this is only reached
+    // by somebody typing the short way round.
+    | Menu.Serve(sitters, seed, reach) ->
+        Ok(Done(serveFor view.Palette sitters (clocked seed) (reach |> Option.defaultWith Reach.fresh)))
+    | Menu.Host(sitters, seed, reach) -> Ok(Done(hostFor view sitters (clocked seed) (reach |> Option.defaultWith Reach.fresh)))
     | Menu.Join(address, code) -> Ok(Done(Client.join address None code view))
     | Menu.Replay path -> replayFrom path |> Result.map (fun model -> Play(model, view, []))
-    // The rest are screens rather than games, and are answered where they are asked.
     // The rest are screens rather than games. The front door answers every one of them
     // itself, so what is left here is somebody at the seat list asking for one of them from
     // there - which is a fair thing to type and wants an answer rather than a shrug.
     | Menu.Sitting _
+    | Menu.Reaching _
     | Menu.Rules
     | Menu.Looking _
     | Menu.Options
@@ -263,26 +280,41 @@ let private starting (view: View) choice =
     | Menu.Backing
     | Menu.Waiting -> Error "That is settled at the menu. Say 'back' to go there, or name the seats."
 
-/// The seat list, which runs until it has a game to open or is backed out of.
+/// The two screens a game is settled on, which run until there is one to open or are backed
+/// out of: who is in each seat, and how far the table those seats are at will reach.
 ///
-/// Walking a seat along answers with the whole seating, so this simply builds the screen
-/// again from what came back - there is nothing to remember between presses, and the seat
-/// under the cursor changes under it as it is walked.
-let rec private sitting (view: View) sitters at said =
-    match asking view said (Menu.seats sitters) at with
+/// One loop each and one word between them, because every line either of them sends says the
+/// whole of both - a seating and a reach - so neither has anything to remember and either can
+/// hand the other everything it needs. The word is the one thing here that had to be made up
+/// rather than read, so it is made up once, out here, and passed along: a screen that invented
+/// one as it drew would show a different word every time it was drawn.
+let rec private sitting (view: View) word sitters reach at said =
+    match asking view said (Menu.seats sitters reach) at with
     | None, _ -> Some(Done 0)
-    | Some line, at ->
-        match Menu.choose view.Palette line with
-        | Ok(Menu.Sitting changed) -> sitting view changed at ""
-        | Ok Menu.Waiting -> sitting view sitters at ""
-        | Ok Menu.Backing -> None
-        // Going is going, from wherever it is said.
-        | Ok Menu.Leave -> Some(Done 0)
-        | Ok chosen ->
-            match starting view chosen with
-            | Ok opening -> Some opening
-            | Error problem -> sitting view sitters at problem
-        | Error problem -> sitting view sitters at problem
+    | Some line, at -> answering view word sitters reach at line sitting
+
+and private reaching (view: View) word sitters reach at said =
+    match asking view said (Menu.reaches word sitters reach) at with
+    | None, _ -> Some(Done 0)
+    | Some line, at -> answering view word sitters reach at line reaching
+
+/// What either of them does with a line, which is the same thing: the seats and the reach
+/// come back out of it, and where they are shown next is the line's own answer.
+and private answering view word sitters reach at line asked =
+    let again sitters reach said = asked view word sitters reach at said
+
+    match Menu.choose view.Palette line with
+    | Ok(Menu.Sitting(sitters, asked)) -> sitting view word sitters (asked |> Option.defaultValue reach) at ""
+    | Ok(Menu.Reaching(sitters, reach)) -> reaching view word sitters reach at ""
+    | Ok Menu.Waiting -> again sitters reach ""
+    | Ok Menu.Backing -> None
+    // Going is going, from wherever it is said.
+    | Ok Menu.Leave -> Some(Done 0)
+    | Ok chosen ->
+        match starting view chosen with
+        | Ok opening -> Some opening
+        | Error problem -> again sitters reach problem
+    | Error problem -> again sitters reach problem
 
 /// The start menu, which runs until it has settled on a game. Everything it offers either
 /// opens one or comes back round to here, so there is no way out of it but the two, and no
@@ -310,8 +342,14 @@ let rec private welcome (view: View) at said =
         welcome view at ""
     | Ok(Menu.Looking chosen) -> welcome chosen at ""
     | Ok Menu.Options -> welcome (colouring view 0 "") at ""
-    | Ok(Menu.Sitting sitters) ->
-        match sitting view sitters 0 "" with
+    | Ok(Menu.Sitting(sitters, asked)) ->
+        // One word for this way through the menu, made up here because a screen cannot make
+        // one up: it is what the door starts out holding, and what walking the door shut
+        // again puts back, so that a player who opens it to look and changes their mind is
+        // not handed a different table than the one they were reading a moment ago.
+        let word = Reach.minted ()
+
+        match sitting view word sitters (asked |> Option.defaultValue (Reach.locked word)) 0 "" with
         | Some opening -> opening
         | None -> welcome view at ""
     | Ok chosen ->
@@ -340,10 +378,9 @@ let private play view sitters model =
 
 /// Act on what a command line asked for.
 ///
-/// Everything that reads a command line - `Shell` at the door, `Launch` reading a line the
-/// program wrote itself - stops at a `Launch` and hands it here. So there is one place
-/// that knows what opening a game actually involves, and adding a way in means adding a
-/// case rather than another road through `main`.
+/// Reading a command line stops at a `Launch`, and this is what one is handed to. So there
+/// is one place that knows what opening a game actually involves, and adding a way in means
+/// adding a case rather than another road through `main`.
 let private opening (view: View) launch =
     let orElse sitters outcome =
         match outcome with
@@ -363,7 +400,7 @@ let private opening (view: View) launch =
     match launch with
     | Launch.Deal(players, seed, rivals) -> orElse (Seating.after players rivals) (dealt players (clocked seed))
     | Launch.Serve(players, seed, rivals, reach) -> serveFor view.Palette (Seating.after players rivals) (clocked seed) reach
-    | Launch.Host(players, seed, reach) -> hostFor (Seating.hosting players) (clocked seed) reach
+    | Launch.Host(players, seed, reach) -> hostFor view (Seating.hosting players) (clocked seed) reach
     | Launch.Join(address, token, code) -> Client.join address token code view
     | Launch.Replay path -> orElse [] (replayFrom path)
 
@@ -385,4 +422,4 @@ let main argv =
         match welcome (View.plain Palette.standard) 0 "" with
         | Play(model, view, sitters) -> play view sitters model
         | Done code -> code
-    | _ -> Shell.run opening argv
+    | _ -> Launch.run opening argv

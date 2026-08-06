@@ -148,10 +148,11 @@ module Reach =
           Doorway = Ajar
           Address = None }
 
-    /// The same, with a word at the door nobody has heard yet.
-    let fresh () =
-        { ajar with
-            Doorway = Locked(minted ()) }
+    /// The same, with a word at its door that somebody has already made up.
+    let locked word = { ajar with Doorway = Locked word }
+
+    /// And with one nobody has heard yet.
+    let fresh () = locked (minted ())
 
     /// What a player's browser will say it is speaking. `Ahead` is https as far as anybody
     /// at the far end is concerned, which is the only end that matters for writing an
@@ -190,6 +191,101 @@ module Reach =
         match word reach with
         | Some code -> $"{where}/?{Asked}={Uri.EscapeDataString code}"
         | None -> where
+
+    /// An address worth giving anybody.
+    ///
+    /// The one thing said here that this machine cannot check by trying it: what is out
+    /// front, what is in somebody's DNS, what a router forwards. So what is checked is the
+    /// only thing that can be - that it is an address at all - because everything downstream
+    /// of it is a link somebody is going to be asked to open and a line somebody is going to
+    /// be asked to type, and 'http://my table' is neither.
+    let address (given: string) =
+        let said = given.Trim()
+
+        let spoken = if said.Contains "://" then said else "https://" + said
+
+        match Uri.TryCreate(spoken, UriKind.Absolute) with
+        | true, uri when uri.Host <> "" && not (uri.Host.Contains " ") -> Ok said
+        | _ -> Error $"'{given}' is not an address to send anybody to. Say a name, or a whole URL."
+
+    // --- a reach as words, and the words back -------------------------------------------
+    //
+    // Said the way a seating is said: one line carrying the whole of it, so that a screen
+    // offering a change can offer it as *the line it would be after* and has nothing to
+    // remember between presses.
+    //
+    // Every token says which part of it it is, so their order is nobody's to get wrong and
+    // the last one wins. That second half is what lets a row that wants typing write the
+    // line exactly as it stands, put the name of the one thing being changed on the end, and
+    // wait for the rest - no part of the line has to be taken out to put another one in.
+    //
+    // A certificate's password is deliberately not among them. It would be on the screen,
+    // and a menu is not where anybody should be typing one; `--cert-password` is.
+
+    let line reach =
+        [ yield $"port:{reach.Port}"
+
+          match reach.Doorway with
+          | Ajar -> yield "open"
+          | Locked word -> yield $"word:{word}"
+
+          match reach.Wrapping with
+          | InTheClear -> yield "clear"
+          | Ahead -> yield "behind"
+          | Kept(certificate, _) -> yield $"cert:{certificate}"
+
+          match reach.Address with
+          | Some address -> yield $"at:{address}"
+          | None -> () ]
+        |> String.concat " "
+
+    /// The same in a few words, for a row that stands for the screen about it rather than
+    /// for the thing itself.
+    let reading reach =
+        let door =
+            match reach.Doorway with
+            | Ajar -> "open to anybody"
+            | Locked _ -> "a word at the door"
+
+        let carried =
+            match reach.Wrapping with
+            | InTheClear -> "in the clear"
+            | Ahead -> "https ended in front"
+            | Kept _ -> "https"
+
+        let where =
+            match reach.Address with
+            | Some address -> $", told as {address}"
+            | None -> ""
+
+        $"{door}, {carried}, port {reach.Port}{where}"
+
+    /// What a reach can be told, for a screen to read out and for saying what is wrong with
+    /// a line that says something else.
+    let says =
+        "port:<n>, open or word:<word>, clear or behind or cert:<file>, and at:<address>"
+
+    let read (words: string list) =
+        let folded reach (said: string) =
+            reach
+            |> Result.bind (fun reach ->
+                match said, said.Split(':', 2) with
+                | "open", _ -> Ok { reach with Doorway = Ajar }
+                | "clear", _ -> Ok { reach with Wrapping = InTheClear }
+                | "behind", _ -> Ok { reach with Wrapping = Ahead }
+                | _, [| "port"; given |] ->
+                    match Int32.TryParse given with
+                    | true, port when port >= 1 && port <= 65535 -> Ok { reach with Port = port }
+                    | _ -> Error $"'{given}' is not a port. They run from 1 to 65535."
+                | _, [| "word"; given |] when given.Trim() <> "" -> Ok { reach with Doorway = Locked given }
+                | _, [| "cert"; given |] when given.Trim() <> "" ->
+                    Ok
+                        { reach with
+                            Wrapping = Kept(given, None) }
+                | _, [| "at"; given |] -> address given |> Result.map (fun given -> { reach with Address = Some given })
+                | _ -> Error $"'{said}' is not something to say about how far a table reaches. There is {says}.")
+
+        words |> List.fold folded (Ok ajar)
 
     /// An address as a player would say it - "greg-pc", "192.168.1.9:5000", a whole URL -
     /// filled out into the one a console has to reach.

@@ -11,6 +11,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open TCModel.Domain
 open TCModel.App
@@ -335,7 +336,15 @@ module Server =
     /// The seating settles who is waited for and who is not. A seat the machine plays is
     /// played here, by this process, and is never an empty chair; the rest are sat down at
     /// from a console or a browser, whether that console is in this room or two rooms away.
-    let host reach model sitters keep =
+    ///
+    /// `playing` is what to do once the table is listening and before it is waited on, which
+    /// at a table with a seat of the host's own is a console sitting down at it from this very
+    /// machine. It comes in as a function because nothing here could do it: a client is
+    /// compiled after this file, and rightly - the table has no business knowing there is
+    /// such a thing. What it means for the shape of this is that the waiting comes apart in
+    /// two: the table is started, somebody plays at it, and when they get up it goes on
+    /// standing, because their leaving their seat is not the same as closing the room.
+    let host reach model sitters keep playing =
         let builder = WebApplication.CreateBuilder()
 
         let rivals =
@@ -392,14 +401,26 @@ module Server =
             printfn ""
 
         // The machine's seats are already filled, so what is read out to the room is the
-        // chairs that are not - and some of those are very often the host's own.
-        if mine > 0 then
-            if mine = 1 then
-                printfn "  One of these seats is yours, at this machine. Take it by running:"
-            else
-                printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
+        // chairs that are not - and some of those are very often the host's own. One of those
+        // is taken from here as soon as the table is up, so what is left to say about it is
+        // only how to take the *rest*, and at most tables there are none.
+        let claimed = if Option.isSome playing then 1 else 0
 
-            takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+        if mine > 0 then
+            match claimed, mine with
+            | 1, 1 ->
+                printfn "  One of these seats is yours, and this console is about to take it."
+                printfn ""
+            | 1, mine ->
+                printfn "  %d of these seats are yours. This console takes one; the others are taken" mine
+                printfn "  from another terminal on this machine, by running:"
+                takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+            | _, 1 ->
+                printfn "  One of these seats is yours, at this machine. Take it by running:"
+                takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+            | _, mine ->
+                printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
+                takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
 
         if theirs > 0 then
             if theirs = 1 then
@@ -430,15 +451,26 @@ module Server =
                 printfn ""
             | (InTheClear | Kept _ | Ahead), _ -> ()
 
-        if mine + theirs = 1 then
-            printfn "  The game begins once that seat is taken. Ctrl+C closes the table."
-        else
-            printfn "  The game begins once all %d open seats are taken. Ctrl+C closes the table." (mine + theirs)
+        match mine + theirs - claimed with
+        | 1 -> printfn "  The game begins once that seat is taken. Ctrl+C closes the table."
+        | waited -> printfn "  The game begins once all %d open seats are taken. Ctrl+C closes the table." waited
 
         printfn ""
 
-        app.Run()
-        0
+        match playing with
+        | None ->
+            app.Run()
+            0
+        | Some playing ->
+            // Started rather than run, so that there is a table for the console below to sit
+            // down at - `Start` comes back when the port is answering and not before. And
+            // waited on afterwards rather than stopped, because a player leaving their seat
+            // is not the same as closing the room: whoever else is here is still playing, and
+            // the table stands until Ctrl+C as it always did.
+            app.Start()
+            playing ()
+            app.WaitForShutdown()
+            0
 
     /// Play a game here, in a browser, with nobody else involved.
     ///

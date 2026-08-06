@@ -215,19 +215,32 @@ $script = @'
   // The one wait left that is a length of time rather than a condition: the client has to
   // notice the box before the button is pressed, and there is nothing on the page that says
   // it has. It is short, and unlike the rest a slow machine only makes it safer.
-  box().value = 'negotiate';
-  box().dispatchEvent(new Event('input', { bubbles: true }));
-  await wait(200);
+  const sent = async line => {
+    box().value = line;
+    box().dispatchEvent(new Event('input', { bubbles: true }));
+    await wait(200);
+  };
+
+  // A line sent leaves by one road and is answered down two: the board comes back on the
+  // stream, and the emptied box comes back on the reply to the post itself. They are not
+  // the same response and do not arrive in a fixed order - so a board is not proof that
+  // the box has been dealt with, and typing the next line before it has been is how a
+  // typed line goes missing. Both are waited for, each on its own terms.
+  const settled = async was => {
+    const heading = await changes(was);
+    await until(() => box().value === '');
+    return heading;
+  };
+
+  await sent('negotiate');
   document.querySelector('.prompt button').click();
-  out.afterSend = await changes(out.drew);
+  out.afterSend = await settled(out.drew);
   out.boxAfterSend = box().value;
 
   // The same, sent with the Enter key instead.
-  box().value = 'undo';
-  box().dispatchEvent(new Event('input', { bubbles: true }));
-  await wait(200);
+  await sent('undo');
   box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  out.afterEnter = await changes(out.afterSend);
+  out.afterEnter = await settled(out.afterSend);
 
   // A control that arrived with the board rather than with the page, and carries its own
   // line in its address rather than in a signal.

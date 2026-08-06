@@ -18,15 +18,19 @@ module Menu =
         /// Deal this seating and play it at this keyboard. A seed left unsaid is taken from
         /// the clock, so the game is a new one every time.
         | Deal of seating: Sitter list * seed: uint64 option
-        /// The same game, read as a page in a browser on this machine.
-        | Serve of seating: Sitter list * seed: uint64 option
+        /// The same game, read as a page in a browser.
+        | Serve of seating: Sitter list * seed: uint64 option * reach: Reach option
         /// Open it as a table and wait for its seats to be taken. Which of the three this
         /// is, is the seating's own answer rather than a separate question - see `dealing`.
-        | Host of seating: Sitter list * seed: uint64 option
+        | Host of seating: Sitter list * seed: uint64 option * reach: Reach option
         /// Not a game yet: show these seats, so that one of them can be changed. This is
         /// what every row on the seat list comes to, and what makes walking a seat along a
         /// way of typing rather than a thing the screen has to remember.
-        | Sitting of seating: Sitter list
+        | Sitting of seating: Sitter list * reach: Reach option
+        /// Nor this: show how far that table will reach, so that one part of it can be
+        /// changed. The seating comes with it because a screen here is still a screen about
+        /// the game being opened, and backing out of it has to land back at the seats.
+        | Reaching of seating: Sitter list * reach: Reach
         /// Sit down at somebody else's table, saying the word at its door if it has one.
         ///
         /// No token here, unlike the command line: coming back to a seat you already hold is
@@ -75,16 +79,23 @@ module Menu =
               "becomes the machine's, or somebody else's." ]
           Backs = None }
 
+    /// A line that says the whole of what is being opened: who is in each seat, and how far
+    /// the table will reach. Two values, one line, because every row on both screens below
+    /// stands for the whole thing after its own change - there is nothing either screen has
+    /// to remember, and no way for the two halves to drift apart between them.
+    let private saying said sitters reach =
+        $"{said} {Seating.line sitters} via {Reach.line reach}"
+
     /// The seats themselves: what each one is, and what changes it.
     ///
     /// A seat's row stands for the whole seating with that one seat walked along, so nothing
     /// is remembered between presses - the line says the whole of the change, and the screen
     /// that comes back is built from the answer rather than from a memory of it. The same
     /// bargain the colour screen keeps, and for the same reason.
-    let seats sitters : Keys.Screen =
+    let seats sitters reach : Keys.Screen =
         let walking at step =
             let sitter = List.item at sitters
-            $"seats {Seating.line (Seating.seated at (Seating.walked step sitter) sitters)}"
+            saying "seats" (Seating.seated at (Seating.walked step sitter) sitters) reach
 
         let seat at sitter =
             Keys.sends
@@ -95,25 +106,26 @@ module Menu =
             |> Keys.turning (walking at)
 
         let hosted = Seating.hosted sitters
-        let line = Seating.line sitters
         let taken = List.length sitters
+        let opening said = saying said sitters reach
 
         { Title = "Who is playing"
           Prose = [ "Each seat is somebody here, the machine, or somebody at their own machine." ]
           Rows =
             (sitters |> List.mapi seat)
             @ [ if hosted then
-                    Keys.sends (Keys.nth taken) "Open the table" "and wait for the seats to be taken" $"play {line}"
+                    Keys.sends (Keys.nth taken) "Open the table" "and wait for the seats to be taken" (opening "play")
                 else
-                    Keys.sends (Keys.nth taken) "Deal" "and play it here at this keyboard" $"play {line}" ]
+                    Keys.sends (Keys.nth taken) "Deal" "and play it here at this keyboard" (opening "play") ]
             @ (if hosted then
                    []
                else
-                   [ Keys.sends
-                         (Keys.nth (taken + 1))
-                         "In a browser"
-                         "the same game, read as a page on this machine"
-                         $"serve {line}" ])
+                   [ Keys.sends (Keys.nth (taken + 1)) "In a browser" "the same game, read as a page" (opening "serve") ])
+            @ [ Keys.sends
+                    (Keys.nth (taken + (if hosted then 1 else 2)))
+                    "How it is reached"
+                    (Reach.reading reach)
+                    (opening "reaches") ]
           Note =
             [ $"Left and right walk the one marked -> through {Seating.names}."
               "Enter takes the next one along, and so does the seat's own number."
@@ -124,6 +136,75 @@ module Menu =
               $"Or type it: 'seats {Seating.line (Seating.after 3 [ Rival.hard ])}' sets them all at once,"
               $"and 'play {Seating.line (Seating.after 3 [ Rival.hard ])}' deals that outright." ]
           Backs = Some "back" }
+
+    /// How far the table will reach: what it takes to sit down at it, and what carries what
+    /// it says.
+    ///
+    /// Two of these are worth walking and two are worth typing, which is the whole layout.
+    /// A row that wants typing writes the line exactly as it stands and puts the name of the
+    /// one part being changed on the end of it - the last word about a part is the one that
+    /// counts, so nothing has to be taken out of a line to put something else in.
+    ///
+    /// The word comes in from outside rather than being made up here, for the reason nothing
+    /// in this file makes anything up: a screen is a function of what it is showing, and a
+    /// word made up on the way past would be a different word every time the screen was
+    /// drawn. Whoever opened the menu made one, and this is where it is offered.
+    let reaches word sitters (reach: Reach) : Keys.Screen =
+        let after change = saying "reaches" sitters change
+
+        let door =
+            let other =
+                match reach.Doorway with
+                | Ajar -> Locked word
+                | Locked _ -> Ajar
+
+            Keys.sends
+                (Keys.nth 0)
+                "The door"
+                (match reach.Doorway with
+                 | Locked said -> $"a word: {said}"
+                 | Ajar -> "open - whoever can reach the address may sit down")
+                (after { reach with Doorway = other })
+            |> Keys.turning (fun _ -> after { reach with Doorway = other })
+
+        let carried =
+            let other =
+                match reach.Wrapping with
+                | InTheClear -> Ahead
+                | Kept _
+                | Ahead -> InTheClear
+
+            Keys.sends
+                (Keys.nth 1)
+                "Carried"
+                (match reach.Wrapping with
+                 | InTheClear -> "in the clear - right on a network you trust, and nowhere else"
+                 | Ahead -> "https, ended by a tunnel or proxy in front of this"
+                 | Kept(certificate, _) -> $"https, with the certificate at {certificate}")
+                (after { reach with Wrapping = other })
+            |> Keys.turning (fun _ -> after { reach with Wrapping = other })
+
+        { Title = "How far it reaches"
+          Prose = [ "What it takes to sit down at this table, and what carries what it says." ]
+          Rows =
+            [ door
+              carried
+              Keys.types (Keys.nth 2) "The port" (string reach.Port) $"{after reach} port:"
+              Keys.types
+                  (Keys.nth 3)
+                  "Tell players"
+                  (reach.Address |> Option.defaultValue "this machine's own addresses")
+                  $"{after reach} at:" ]
+          Note =
+            [ "Left and right change the one marked ->, and so does its own number. The two that"
+              "want words write the line as far as they can and wait for the rest."
+              ""
+              "A word at the door is what keeps a stranger out of somebody's seat, and a table"
+              "reachable from further than a room wants one. Over anything further than that,"
+              "put it behind a tunnel or a proxy holding a certificate and say so here."
+              ""
+              $"Or type it: 'reaches {Seating.line sitters} via {Reach.line reach}'." ]
+          Backs = Some(saying "seats" sitters reach) }
 
     /// The menu is shown in the view it is offering, so a player choosing one can see what
     /// they are choosing before they commit a game to it.
@@ -181,6 +262,19 @@ module Menu =
         let digits (word: string) =
             word <> "" && word |> Seq.forall Char.IsDigit
 
+        /// A line with a table on one side of 'via' and how far it reaches on the other.
+        ///
+        /// Said nothing about, the reach is nobody's here: a word at a door has to be made up
+        /// and nothing in this file makes anything up. So it comes back as nothing at all,
+        /// and whoever is holding the screen answers for it - which is the same answer the
+        /// command line gives to the same silence.
+        let apart words =
+            match words |> List.tryFindIndex (fun word -> word = "via") with
+            | None -> Ok(words, None)
+            | Some at ->
+                Reach.read (List.skip (at + 1) words)
+                |> Result.map (fun reach -> List.truncate at words, Some reach)
+
         /// A seating said either way: as a number, which is that many people here, or as a
         /// word to a seat. Both end at a whole seating, so the short way cannot come to mean
         /// something the long way round does not.
@@ -189,19 +283,24 @@ module Menu =
             | [ only ] when digits only -> Parse.tryPlayerCount only |> Result.map Seating.here
             | _ -> Seating.read words
 
+        /// The two halves of one of those lines, each read by the thing that knows how.
+        let opening words =
+            apart words
+            |> Result.bind (fun (seated, reach) -> table seated |> Result.map (fun sitters -> sitters, reach))
+
         /// Where a seating is played, which is the seating's own answer and not a separate
         /// question: anybody joining makes it a table to open and wait at, and nobody joining
         /// makes it a game to deal here.
-        let dealing seed sitters =
-            if Seating.hosted sitters then Host(sitters, seed) else Deal(sitters, seed)
+        let dealing seed (sitters, reach) =
+            if Seating.hosted sitters then Host(sitters, seed, reach) else Deal(sitters, seed)
 
-        /// A page on this machine is one hot seat, the same as this keyboard is, so there is
-        /// nobody for a seat at it to be at the far end of.
-        let served seed sitters =
+        /// A page is one hot seat, the same as this keyboard is, so there is nobody for a
+        /// seat at it to be at the far end of.
+        let served seed (sitters, reach) =
             if Seating.hosted sitters then
-                Error "A game in a browser here is one hot seat; there is nobody to join it. Open a table instead."
+                Error "A game in a browser is one hot seat; there is nobody to join it. Open a table instead."
             else
-                Ok(Serve(sitters, seed))
+                Ok(Serve(sitters, seed, reach))
 
         /// The machines named after `vs`. How many are playing is not asked for and is not
         /// something to get wrong: it is one seat for whoever is reading this and one for
@@ -239,26 +338,32 @@ module Menu =
             | ("rules" | "help" | "?"), [] -> Ok Rules
             | "replay", [ path ] -> Ok(Replay path)
             | "replay", _ -> Error "Say 'replay <file>', naming one saved record."
-            | "seats", words -> table words |> Result.map Sitting
+            | "seats", words -> opening words |> Result.map Sitting
+            | "reaches", words ->
+                opening words
+                |> Result.bind (fun (sitters, reach) ->
+                    match reach with
+                    | Some reach -> Ok(Reaching(sitters, reach))
+                    | None -> Error $"Say how far it reaches after 'via': {Reach.says}.")
             | "play", [ players; seed ] when digits players ->
                 counted players seed
-                |> Result.map (fun (players, seed) -> dealing (Some seed) (Seating.here players))
-            | "play", words -> table words |> Result.map (dealing None)
+                |> Result.map (fun (players, seed) -> dealing (Some seed) (Seating.here players, None))
+            | "play", words -> opening words |> Result.map (dealing None)
             | "host", [ players ] ->
                 Parse.tryPlayerCount players
-                |> Result.map (fun n -> Host(Seating.hosting n, None))
+                |> Result.map (fun n -> Host(Seating.hosting n, None, None))
             | "host", [ players; seed ] ->
                 counted players seed
-                |> Result.map (fun (players, seed) -> Host(Seating.hosting players, Some seed))
+                |> Result.map (fun (players, seed) -> Host(Seating.hosting players, Some seed, None))
             | "host", _ -> Error $"Say 'host <players>', for {Table.MinPlayers} to {Table.MaxPlayers} of you."
             // Before the seatings below, which would read 'vs' as a number of players and
             // say so rather than saying what is actually wrong.
             | "vs", names -> facing names |> Result.map (fun sitters -> Deal(sitters, None))
-            | "serve", "vs" :: names -> facing names |> Result.bind (served None)
+            | "serve", "vs" :: names -> facing names |> Result.bind (fun sitters -> served None (sitters, None))
             | "serve", [ players; seed ] when digits players ->
                 counted players seed
-                |> Result.bind (fun (players, seed) -> served (Some seed) (Seating.here players))
-            | "serve", words -> table words |> Result.bind (served None)
+                |> Result.bind (fun (players, seed) -> served (Some seed) (Seating.here players, None))
+            | "serve", words -> opening words |> Result.bind (served None)
             | "view", [ name ] -> View.byName AtATerminal palette name |> Result.map Looking
             | "view", _ -> Error $"Say 'view <name>', for one of {View.namesFor AtATerminal}."
             | ("colours" | "colors" | "options"), [] -> Ok Options

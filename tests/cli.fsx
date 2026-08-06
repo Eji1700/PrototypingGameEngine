@@ -1,14 +1,16 @@
-// The command line: the two halves of it, and that they agree.
+// The command line, both ways round.
 //
-// `Shell` reads the arguments the process was started with, and `Launch` writes a command
-// line the program will later be handed back - the line a dropped player is told to type
-// to get back to their seat. Two libraries, each doing what it is good at, and one danger
-// between them: an option renamed on one side and not the other would leave the program
-// printing instructions it will not accept.
+// `Launch` reads the arguments the process was started with, and writes a command line the
+// program will later be handed back - the line a dropped player is told to type to get back
+// to their seat. Those two used to be different libraries, and the danger between them was an
+// option renamed on one side and not the other, which would leave the program printing
+// instructions it would not accept. It happened: `--cert-password` on one side was
+// `--certpassword` on the other, and the round trip below is what said so.
 //
-// So the last check here is the one that matters. It takes the line `Launch` writes, feeds
-// it to the real command surface - the same `Shell.describe` the program runs, not a copy
-// of it - and insists the far end comes out holding what the near end sent.
+// They are one declaration now, so that particular way of being wrong is gone by
+// construction. What the round trip is still worth is everything else: a line the program
+// writes has to come back holding the very launch it was written from, whatever the surface
+// grows next.
 //
 //   dotnet fsi tests/cli.fsx
 
@@ -17,7 +19,6 @@
 #r "nuget: Falco.Datastar, 1.3.0"
 #r "nuget: Falco.Markup, 1.4.0"
 #r "nuget: Spectre.Console, 0.51.1"
-#r "nuget: Spectre.Console.Cli, 0.51.1"
 
 #load "Harness.fsx"
 #load "../src/App/Messages.fs"
@@ -41,7 +42,6 @@
 #load "../src/Console/View.fs"
 #load "../src/Console/Options.fs"
 #load "../src/Console/Launch.fs"
-#load "../src/Console/Shell.fs"
 #load "../src/Console/Menu.fs"
 
 open System
@@ -162,21 +162,28 @@ report
     (Launch.read [ "dotnet"; "run"; "--"; "join"; "greg-pc"; "--token"; "a1b2c3" ])
 
 report
-    "a line that says nothing to open is refused"
+    "a line that says nothing to open is refused, saying what there is to open"
+    true
+    (match Launch.read [] with
+     | Error problem -> problem.Contains "does not say what to open" && problem.Contains "replay"
+     | Ok _ -> false)
+
+report
+    "and one that is all options and no command is refused where the first of them is"
     true
     (match Launch.read [ "--seed"; "42" ] with
-     | Error problem -> problem.Contains "does not say what to open"
+     | Error problem -> problem.Contains "seed"
      | Ok _ -> false)
 
 // --- and what the program writes, the command line accepts --------------------------------------
 
-/// Run the real command surface over a set of arguments, and give back what it made of
-/// them. The commands are `Shell.describe`'s own, so this is the program's front door and
-/// not a model of it.
+/// Run the real front door over a set of arguments, and give back what it made of them.
+/// `Launch.run` is what `main` calls, so this is the program's door and not a model of it -
+/// including the exit code, which is what a script reads.
 ///
 /// What it says while refusing something is caught rather than printed. Half these checks
-/// hand it arguments it ought to refuse, and a run of Spectre's error panels between the
-/// lines of a test report is no help to anybody reading one.
+/// hand it arguments it ought to refuse, and a run of usage text between the lines of a test
+/// report is no help to anybody reading one.
 let private through (words: string list) =
     let mutable opened = None
     let said = new IO.StringWriter()
@@ -187,11 +194,11 @@ let private through (words: string list) =
             Console.SetOut said
             Console.SetError said
 
-            Shell.run
+            Launch.run
                 (fun _ launch ->
                     opened <- Some launch
                     0)
-                (Array.ofList words)
+                words
         finally
             Console.SetOut out
             Console.SetError err
@@ -224,6 +231,21 @@ report "so is a colour for something nobody draws" true (turnedAway [ "play"; "2
 report "so is a colour said the wrong way round" true (turnedAway [ "play"; "2"; "--colour"; "teal" ])
 
 report "and a command nobody has" true (turnedAway [ "frobnicate" ])
+
+// An option nobody has, which is the same kind of mistake and was not always treated as one.
+// A line read past rather than refused is quiet in the one place this program cannot afford
+// quiet: '--cod sesame' opened a table with a word made up here rather than the word that was
+// meant, and said nothing about it.
+
+report "an option nobody has is turned away too" true (turnedAway [ "play"; "2"; "--vew"; "rich" ])
+
+report "including one that is nearly the word at a door" true (turnedAway [ "host"; "3"; "--cod"; "sesame" ])
+
+// And an address nobody could open. It is the one thing said at the door that this machine
+// cannot check by trying it - what is out front is somebody else's business - so what is
+// checked is that it is an address at all, because a link is going to be built out of it.
+
+report "an address that is not one is refused before a table is opened" true (turnedAway [ "host"; "3"; "--at"; "my table" ])
 
 // The machine is asked for by name, and only for seats that exist. The first is yours, so a
 // game for two has one to give away and a second one asked for is somebody meaning
@@ -370,10 +392,21 @@ let private chosen line = Menu.choose Palette.standard line
 let private dealing choice =
     match choice with
     | Ok(Menu.Deal(sitters, seed)) -> Ok("deal", Seating.line sitters, seed)
-    | Ok(Menu.Serve(sitters, seed)) -> Ok("serve", Seating.line sitters, seed)
-    | Ok(Menu.Host(sitters, seed)) -> Ok("host", Seating.line sitters, seed)
-    | Ok(Menu.Sitting sitters) -> Ok("seats", Seating.line sitters, None)
+    | Ok(Menu.Serve(sitters, seed, _)) -> Ok("serve", Seating.line sitters, seed)
+    | Ok(Menu.Host(sitters, seed, _)) -> Ok("host", Seating.line sitters, seed)
+    | Ok(Menu.Sitting(sitters, _)) -> Ok("seats", Seating.line sitters, None)
     | Ok _ -> Error "that is not a game to deal"
+    | Error problem -> Error problem
+
+/// And how far the table it opens will reach, which every one of those lines can say too -
+/// said back as the words it would be typed in, for the same reason.
+let private reaching choice =
+    match choice with
+    | Ok(Menu.Serve(_, _, reach))
+    | Ok(Menu.Host(_, _, reach))
+    | Ok(Menu.Sitting(_, reach)) -> Ok(reach |> Option.map Reach.line)
+    | Ok(Menu.Reaching(_, reach)) -> Ok(Some(Reach.line reach))
+    | Ok _ -> Error "that is not a table to open"
     | Error problem -> Error problem
 
 report
@@ -505,12 +538,15 @@ let rec private everyScreen (screen: Keys.Screen) =
             | _ -> []))
 
 /// Every line one row can come to: the one it stands for, and the two its left and right
-/// make. A row that only writes the start of a line is finished off with something standing
-/// in for the file or the address, because what is being checked is the grammar around it.
+/// make. A row that only writes the start of a line is finished off here, because what is
+/// being checked is the grammar around the part somebody types rather than the part itself.
+///
+/// A number stands in for it, being the one thing that is a fair example of all four things
+/// a row here waits for: a file, an address, a port, and a word at a door.
 let private linesOf (row: Keys.Row) =
     (match row.Pick with
      | Keys.Sends line -> [ line ]
-     | Keys.Types text -> [ text + "something" ]
+     | Keys.Types text -> [ text + "5000" ]
      | Keys.Opens _ -> [])
     @ (match row.Turns with
        | Some turn -> [ turn -1; turn 1 ]
@@ -545,20 +581,61 @@ let private everySeating =
 
     [ Table.MinPlayers .. Table.MaxPlayers ] |> List.collect grown
 
+/// Every seat list carries how far its table reaches, so there is a second list to walk over
+/// it: the reaches a screen can hold. Not every reach there is - a port is a number and an
+/// address is a name - but every *shape* of one, which is what the rows are built out of.
+let private everyReach =
+    [ Reach.ajar
+      Reach.locked "kbd4-9mtx-7rfp"
+      { Reach.locked "kbd4-9mtx-7rfp" with
+          Port = 8443
+          Wrapping = Ahead
+          Address = Some "stones.example.org" }
+      { Reach.ajar with
+          Wrapping = Kept("stones.pfx", None) } ]
+
 report
     "and every row on every seat list there could be stands for a line the menu can read"
     []
-    (everySeating |> List.collect (fun sitters -> unread chosen (Menu.seats sitters)))
+    (everySeating
+     |> List.collect (fun sitters ->
+         everyReach
+         |> List.collect (fun reach -> unread chosen (Menu.seats sitters reach))))
+
+report
+    "and so does every row on the screen behind it, whatever it is holding"
+    []
+    (everySeating
+     |> List.truncate 40
+     |> List.collect (fun sitters ->
+         everyReach
+         |> List.collect (fun reach -> unread chosen (Menu.reaches "kbd4-9mtx-7rfp" sitters reach))))
 
 report
     "the way back out of the seat list is a line too, and it goes back rather than dealing"
     true
-    (match (Menu.seats (Seating.here 2)).Backs with
+    (match (Menu.seats (Seating.here 2) Reach.ajar).Backs with
      | Some line ->
          match chosen line with
          | Ok Menu.Backing -> true
          | _ -> false
      | None -> false)
+
+report
+    "and the way back out of the one behind it lands at the seats, holding what was settled"
+    (Ok(Some "port:8443 open behind at:stones.example.org"))
+    (match
+        (Menu.reaches
+            "kbd4-9mtx-7rfp"
+            (Seating.hosting 2)
+            { Reach.ajar with
+                Port = 8443
+                Wrapping = Ahead
+                Address = Some "stones.example.org" })
+            .Backs
+     with
+     | Some line -> reaching (chosen line)
+     | None -> Error "there was no way back")
 
 report
     "the way back out of a screen is a line too"
@@ -661,10 +738,10 @@ report
 
 /// One press at the seat list, and the seating it came back holding.
 let private pressed press sitters =
-    match walking (Menu.seats sitters) [ press ] with
+    match walking (Menu.seats sitters Reach.ajar) [ press ] with
     | Some line ->
         match chosen line with
-        | Ok(Menu.Sitting changed) -> changed
+        | Ok(Menu.Sitting(changed, _)) -> changed
         | _ -> sitters
     | None -> sitters
 
@@ -696,23 +773,103 @@ report
 // and is not a thing a browser on this machine could hold.
 
 let private under sitters =
-    (Menu.seats sitters).Rows
+    (Menu.seats sitters Reach.ajar).Rows
     |> List.skip (List.length sitters)
     |> List.map (fun row -> row.Says)
 
-report "a seating nobody is joining is dealt here, or read in a browser" [ "Deal"; "In a browser" ] (under (Seating.here 2))
-
-report "and one somebody is joining is a table to open, and nothing else" [ "Open the table" ] (under (Seating.hosting 2))
+report
+    "a seating nobody is joining is dealt here, or read in a browser"
+    [ "Deal"; "In a browser"; "How it is reached" ]
+    (under (Seating.here 2))
 
 report
-    "picking the last row deals exactly the seating on the screen"
+    "and one somebody is joining is a table to open, and nothing else"
+    [ "Open the table"; "How it is reached" ]
+    (under (Seating.hosting 2))
+
+report
+    "picking the row that opens it opens exactly the seating on the screen"
     (Ok("host", "you hard joins", None))
     (dealing (
         chosen (
-            walking (Menu.seats [ Here; Machine Rival.hard; Elsewhere ]) [ letter '4' ]
+            walking (Menu.seats [ Here; Machine Rival.hard; Elsewhere ] Reach.ajar) [ letter '4' ]
             |> Option.defaultValue ""
         )
     ))
+
+// And what it opens is exactly the reach on the screen too, which is the half of this that
+// the seat list could not say at all before: a table opened from a menu now says where it
+// listens, what it is carried in, and what it takes to sit down at it.
+
+report
+    "and exactly the reach it was holding"
+    (Ok(Some "port:5000 word:kbd4-9mtx-7rfp behind"))
+    (reaching (
+        chosen (
+            walking
+                (Menu.seats
+                    (Seating.hosting 2)
+                    { Reach.locked "kbd4-9mtx-7rfp" with
+                        Wrapping = Ahead })
+                [ letter '3' ]
+            |> Option.defaultValue ""
+        )
+    ))
+
+// The screen behind it, walked the way a person walks it: press, read the line, build the
+// screen again from what it said. Nothing is remembered between presses there either.
+
+let private settling presses reach =
+    match walking (Menu.reaches "kbd4-9mtx-7rfp" (Seating.hosting 2) reach) presses with
+    | Some line ->
+        match chosen line with
+        | Ok(Menu.Reaching(_, changed)) -> changed
+        | _ -> reach
+    | None -> reach
+
+report
+    "the door walks open, and back to the word it was holding"
+    [ "port:5000 open clear"; "port:5000 word:kbd4-9mtx-7rfp clear" ]
+    [ Reach.line (settling [ letter '1' ] (Reach.locked "kbd4-9mtx-7rfp"))
+      Reach.line (settling [ letter '1' ] (settling [ letter '1' ] (Reach.locked "kbd4-9mtx-7rfp"))) ]
+
+report
+    "and what carries it walks from the clear to behind whatever holds the certificate"
+    "port:5000 word:kbd4-9mtx-7rfp behind"
+    (Reach.line (settling [ key ConsoleKey.DownArrow; key ConsoleKey.RightArrow ] (Reach.locked "kbd4-9mtx-7rfp")))
+
+// The two that want words write the line as far as they can and wait for the rest, which is
+// how the port and the address are said. What the row writes has to be a line the reader
+// takes once the rest arrives - and the part being changed goes last, because the last word
+// about a part is the one that counts.
+
+let private typed row rest reach =
+    match
+        walking
+            (Menu.reaches "kbd4-9mtx-7rfp" (Seating.hosting 2) reach)
+            ([ row ] @ (rest |> Seq.map letter |> List.ofSeq) @ [ key ConsoleKey.Enter ])
+    with
+    | Some line ->
+        match chosen line with
+        | Ok(Menu.Reaching(_, changed)) -> Reach.line changed
+        | Ok _ -> "that was not the screen it came back to"
+        | Error problem -> problem
+    | None -> "nothing came back"
+
+report
+    "the port is typed, and lands on the end of the line it was already holding"
+    "port:8443 word:kbd4-9mtx-7rfp clear"
+    (typed (letter '3') "8443" (Reach.locked "kbd4-9mtx-7rfp"))
+
+report
+    "and so is the address players are told"
+    "port:5000 word:kbd4-9mtx-7rfp clear at:stones.example.org"
+    (typed (letter '4') "stones.example.org" (Reach.locked "kbd4-9mtx-7rfp"))
+
+report
+    "and a port nobody has is refused there, in the words it was typed in"
+    true
+    ((typed (letter '3') "70000" (Reach.locked "kbd4-9mtx-7rfp")).Contains "is not a port")
 
 // Left and right on the colour screen walk one slot through the nineteen. Nothing is
 // remembered between presses - the line says the whole of the change - so walking the list

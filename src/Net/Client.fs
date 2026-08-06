@@ -171,7 +171,13 @@ module Client =
                     Thread.Sleep 2000
                     arriving (attempts - 1)
 
-        if not (arriving 3) then exit 1
+        // Given up on rather than exited from, because this is no longer always a process of
+        // its own: a table that seats its host runs one of these inside itself, and a console
+        // that could not find its way to a seat is no reason to close the table on everybody
+        // who did.
+        if not (arriving 3) then
+            1
+        else
 
         wait (sitDown ())
 

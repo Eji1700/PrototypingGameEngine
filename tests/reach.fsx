@@ -134,6 +134,24 @@ report
 
 report "and a table with no word is just the address" "http://localhost:5000" (Reach.opened Reach.ajar "http://localhost:5000")
 
+// --- and one worth giving anybody --------------------------------------------------------------
+
+report "a name is an address" (Ok "stones.example.org") (Reach.address "stones.example.org")
+
+report
+    "and so is a whole URL, kept as it was said"
+    (Ok "https://stones.example.org:8443")
+    (Reach.address "https://stones.example.org:8443")
+
+report
+    "but a handful of words is not, and is refused where it was typed"
+    true
+    (match Reach.address "my table" with
+     | Error problem -> problem.Contains "is not an address to send anybody to"
+     | Ok _ -> false)
+
+report "nor is nothing at all" true (Result.isError (Reach.address "   "))
+
 // --- an address as somebody says it -----------------------------------------------------------
 
 let private reached = Reach.endpoint "/table"
