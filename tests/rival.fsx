@@ -268,17 +268,28 @@ let private wonBy skills seed =
     | Won(_, winner) -> Some(List.findIndex ((=) winner) seats)
     | Drawn _ -> None
 
+/// Played across cores rather than one after another. A game is a fold from a seed and
+/// nothing else, so which core plays it cannot change how it comes out - and the results are
+/// gathered back by seed rather than by whoever finished first, so the run is the same run.
+/// This is the slowest thing in `tests/` by a distance, and it was idling fifteen of sixteen
+/// cores to get there.
 let private duel one other =
-    [ for seed in 1UL .. 12UL do
-          match wonBy [ one; other ] seed with
-          | Some 0 -> yield 1
-          | Some _ -> yield -1
-          | None -> yield 0
+    [| 1UL .. 12UL |]
+    |> Array.Parallel.map (fun seed ->
+        let asFirst =
+            match wonBy [ one; other ] seed with
+            | Some 0 -> 1
+            | Some _ -> -1
+            | None -> 0
 
-          match wonBy [ other; one ] seed with
-          | Some 0 -> yield -1
-          | Some _ -> yield 1
-          | None -> yield 0 ]
+        let asSecond =
+            match wonBy [ other; one ] seed with
+            | Some 0 -> -1
+            | Some _ -> 1
+            | None -> 0
+
+        [ asFirst; asSecond ])
+    |> List.concat
 
 /// A machine that would sooner not play at all, which the rules of this game reward a good
 /// deal more than they look as though they would: the player left holding most of the

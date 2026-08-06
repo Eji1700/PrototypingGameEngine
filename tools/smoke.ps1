@@ -28,6 +28,12 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
+# Where a page opens its stream and where it says what was typed. `Html` writes these into
+# the markup and `Browser` serves them; they are spelled out here because the second console
+# below asks for them directly rather than by being a page.
+$Stream = "/stream"
+$Say = "/say"
+
 function Report($name, $ok, $detail) {
     if ($ok) { "ok   $name" }
     else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
@@ -51,24 +57,56 @@ function Find-Browser {
 # Every command goes out before anything is read back: abandoning a pending receive faults
 # the socket, so this never times a read out until the very end.
 
-#
-# `onPage` names which of the browser's pages to talk to, once there is more than one and no
-# obvious one. It is a target id rather than an address, because a page is asked for by what
-# it is and not by what it is currently showing - and the second page below is opened blank
-# and navigated afterwards, so its address is not settled at the moment it has to be picked.
-#
 # An empty `url` means do not navigate: a page being asked what became of it must not be
 # reloaded first, or the stream it was holding - and everything that arrived down it - goes
 # with the old page.
 #
-# The id used is handed back, so a page spoken to once can be found again.
+# Nothing here waits a fixed length of time. Every wait is for the thing actually being
+# waited on - the browser answering at all, the navigation landing - because a fixed wait is
+# wrong twice over: too long on the machine it was written on, and too short on a slower one,
+# where it fails as though the page were broken.
 
-function Invoke-InPage($url, $script, $settleSeconds, $onPage) {
-    $targets = Invoke-RestMethod -Uri "http://localhost:$DebugPort/json" -TimeoutSec 10
-    $pages = $targets | Where-Object { $_.type -eq "page" }
-    if ($onPage) { $pages = $pages | Where-Object { $_.id -eq $onPage } }
-    $page = $pages | Select-Object -First 1
-    if (-not $page) { throw "the browser has no page open$(if ($onPage) { " with id $onPage" })" }
+function Get-Pages {
+    try {
+        # Named before it is handed on, and that is not a style choice. Windows PowerShell
+        # gives a JSON array back as one thing rather than as its items, and one thing put
+        # through a filter is one thing: `$_.type -eq "page"` asked of the whole list reads
+        # every type at once, compares the lot, and passes the entire list as a match. The
+        # symptom is a filter that appears to select everything, which is a hard thing to
+        # see when what you are looking at is a list of browser tabs.
+        $answered = Invoke-RestMethod -Uri "http://localhost:$DebugPort/json" -TimeoutSec 10
+        @($answered)
+    }
+    catch { @() }
+}
+
+function Wait-For($what, $seconds, $test) {
+    $until = (Get-Date).AddSeconds($seconds)
+
+    while ((Get-Date) -lt $until) {
+        $answer = & $test
+        if ($answer) { return $answer }
+        Start-Sleep -Milliseconds 100
+    }
+
+    throw "waited $seconds seconds for $what and it never came"
+}
+
+function Invoke-InPage($url, $script) {
+    $page = Wait-For "the browser to open a page" 30 {
+        # A browser has pages of its own open that have nothing to do with anybody - Edge
+        # starts with a sync dialog - and which of them comes first in the list is not
+        # settled. Taking whichever came first was working by luck, and the way it would
+        # have failed is a page that cannot be sent anywhere near the game reporting that
+        # as the game being broken.
+        $open = @(
+            Get-Pages |
+                Where-Object { $_.type -eq "page" } |
+                Where-Object { $_.url -eq "about:blank" -or $_.url -notmatch '^(edge|chrome|devtools|chrome-extension|about)://' }
+        )
+
+        if ($open.Count -gt 0) { $open[0] } else { $null }
+    }
 
     $ws = New-Object System.Net.WebSockets.ClientWebSocket
     $ct = [System.Threading.CancellationToken]::None
@@ -86,9 +124,18 @@ function Invoke-InPage($url, $script, $settleSeconds, $onPage) {
         Send-Cmd 2 "Page.enable" @{}
         # Never a cached page: a stale one would be checking the last run's work.
         Send-Cmd 3 "Network.setCacheDisabled" @{ cacheDisabled = $true }
-        if ($url) { Send-Cmd 4 "Page.navigate" @{ url = $url } }
+        if ($url) {
+            Send-Cmd 4 "Page.navigate" @{ url = $url }
 
-        Start-Sleep -Seconds $settleSeconds
+            # Until the navigation has landed there is an old document still in the page, and
+            # a script run into that one is checking the last thing this browser was showing.
+            # The address a target reports changes when the new document commits, so that is
+            # what is waited on rather than a guess at how long it takes.
+            Wait-For "the page to arrive at $url" 30 {
+                Get-Pages | Where-Object { $_.id -eq $page.id -and $_.url -eq $url }
+            } | Out-Null
+        }
+
         Send-Cmd 100 "Runtime.evaluate" @{ expression = $script; awaitPromise = $true; returnByValue = $true }
 
         $buf = New-Object byte[] 1048576
@@ -114,9 +161,9 @@ function Invoke-InPage($url, $script, $settleSeconds, $onPage) {
                     $threw += "while using the page: " + $parsed.result.exceptionDetails.exception.description
                 }
                 if ($parsed.result.result.value) {
-                    return @{ value = ($parsed.result.result.value | ConvertFrom-Json); threw = $threw; page = $page.id }
+                    return @{ value = ($parsed.result.result.value | ConvertFrom-Json); threw = $threw}
                 }
-                return @{ value = $null; threw = $threw; page = $page.id }
+                return @{ value = $null; threw = $threw}
             }
         }
     }
@@ -133,24 +180,42 @@ $script = @'
 
   // Wait for the board rather than guess how long it takes. Until the stream has answered
   // there is nothing on the page to press, and a fixed pause is a race either way.
-  for (let i = 0; i < 100 && !heading().startsWith('Turn'); i++) await wait(100);
+  //
+  // The same goes for every press after it: what is being waited for is the board coming
+  // back changed, and that takes as long as it takes. A fixed pause long enough to be safe
+  // on a loaded machine is a pause wasted on every run that did not need it, and a run that
+  // did need it fails looking exactly like a page with a dead button on it.
+  const until = async (settled, ms) => {
+    const stop = Date.now() + (ms || 10000);
+    while (Date.now() < stop && !settled()) await wait(25);
+    return settled();
+  };
+  const shows = () => heading().startsWith('Turn');
+  const changes = async was => { await until(() => heading() !== was); return heading(); };
+
+  await until(shows);
 
   const out = { drew: heading(), regions: document.querySelectorAll('.region').length };
 
   // Whatever landed beside the board on the way in, before anything has been clicked. At a
-  // table with a machine at it, this is the table saying which seat that is.
+  // table with a machine at it, this is the table saying which seat that is - and it is a
+  // second thing said rather than part of the board, so it arrives in its own frame a moment
+  // later. Waited for where it is expected, and not waited for where it would never come.
+  if (ROSTER) await until(() => (document.querySelector('#told') || {}).textContent);
   out.onArrival = (document.querySelector('#told') || {}).textContent || '';
 
   if (!box()) return JSON.stringify(out);
 
   // Typed into the box, sent with the button. The line goes as a signal, so this is the
   // path that needs the input bound to one.
+  // The one wait left that is a length of time rather than a condition: the client has to
+  // notice the box before the button is pressed, and there is nothing on the page that says
+  // it has. It is short, and unlike the rest a slow machine only makes it safer.
   box().value = 'negotiate';
   box().dispatchEvent(new Event('input', { bubbles: true }));
   await wait(200);
   document.querySelector('.prompt button').click();
-  await wait(1500);
-  out.afterSend = heading();
+  out.afterSend = await changes(out.drew);
   out.boxAfterSend = box().value;
 
   // The same, sent with the Enter key instead.
@@ -158,16 +223,14 @@ $script = @'
   box().dispatchEvent(new Event('input', { bubbles: true }));
   await wait(200);
   box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-  await wait(1500);
-  out.afterEnter = heading();
+  out.afterEnter = await changes(out.afterSend);
 
   // A control that arrived with the board rather than with the page, and carries its own
   // line in its address rather than in a signal.
   const region = document.querySelector('.region .acts button');
   out.regionTypes = region.getAttribute('title');
   region.click();
-  await wait(1500);
-  out.afterRegion = heading();
+  out.afterRegion = await changes(out.afterEnter);
   const said = [...document.querySelectorAll('#screen .said')].map(line => line.textContent);
   out.said = said.length;
   // Recruiting ends a turn, so at a table with a machine at it the seat after this one has
@@ -181,9 +244,11 @@ $script = @'
   // one that would arrive in pieces if that were got wrong.
   const why = [...document.querySelectorAll('.region .acts button')]
     .find(b => (b.getAttribute('title') || '').startsWith('rule '));
+  // This one is not waited for by the heading: it lands beside the board and leaves the
+  // board exactly where it was, so what says it has arrived is the aside filling up.
   out.whyTypes = why ? why.getAttribute('title') : '';
   if (why) why.click();
-  await wait(1500);
+  await until(() => document.querySelector('#told pre'));
   const aside = document.querySelector('#told pre');
   out.working = aside ? aside.textContent : '';
 
@@ -208,32 +273,74 @@ $script = @'
 })()
 '@
 
-# The second console: it waits for its own board and makes one move, which is all it is here
-# for. Everything about that move being right is somebody else's check; what matters here is
-# that it moved the game, because a move that was refused would leave the page above with
-# nothing to be knocked about and the failure would read as the wrong thing entirely.
+# --- a second console, which is not a browser ---------------------------------------------
+#
+# Somebody else has to move for the page above to be told anything, and that somebody does
+# not have to be a browser. A console at this table is whatever holds a stream open and posts
+# a line, and thirty lines of HTTP is all of that - so this is a cookie jar, a stream, and one
+# typed line.
+#
+# It was a second browser tab first, leaning on `localhost` and `127.0.0.1` being two cookie
+# jars. That worked, but it made the check depend on how two tabs of one browser get along -
+# which is a question about browsers rather than about the game, and the wrong thing to have
+# a failing check point at. One page in the room, and a console that is only a cookie and a
+# stream, asks the question that is actually being asked.
 
-$elsewhere = @'
-(async () => {
-  const wait = ms => new Promise(r => setTimeout(r, ms));
-  const heading = () => (document.querySelector('#screen h1') || {}).textContent || '';
+function Join-AsConsole($address) {
+    # Present without asking in PowerShell 7 and not in Windows PowerShell, which is the one
+    # difference between the two that this script actually touches.
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
 
-  for (let i = 0; i < 100 && !heading().startsWith('Turn'); i++) await wait(100);
+    $handler = New-Object Net.Http.HttpClientHandler
+    $handler.CookieContainer = New-Object Net.CookieContainer
+    $client = New-Object Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromMinutes(5)
 
-  const out = { drew: heading() };
-  const region = document.querySelector('.region .acts button');
-  out.types = region.getAttribute('title');
-  region.click();
-  await wait(2000);
-  out.after = heading();
-  return JSON.stringify(out);
-})()
-'@
+    # The page first, purely to be given a cookie: that cookie is the whole of who this
+    # console is, and the stream below has to arrive carrying it or the table would take the
+    # two requests for two different callers.
+    $client.GetStringAsync("$address/").GetAwaiter().GetResult() | Out-Null
+
+    # Held open rather than read to the end, because that is what sitting at a table is. The
+    # table seats a page when its stream opens and lets it go when the stream ends, so this
+    # is a console for exactly as long as this response is not disposed.
+    $asking = New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]::Get, "$address$Stream")
+    $held = $client.SendAsync($asking, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+    $held.EnsureSuccessStatusCode() | Out-Null
+
+    # And read as far as the first thing the table says, which is the board it draws for
+    # somebody sitting down. Until that has arrived this console is not seated yet, and a
+    # line sent before then would be answered with a shrug.
+    $body = $held.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+    $buffer = New-Object byte[] 4096
+    $read = $body.ReadAsync($buffer, 0, $buffer.Length)
+
+    if (-not $read.Wait(30000)) { throw "the table never drew a board for the second console" }
+
+    @{ Client = $client; Held = $held; Body = $body }
+}
 
 # What the first page made of all that, asked without reloading it - a reload would open a
 # fresh stream and lose the one the knock arrived down.
 
-$counted = "JSON.stringify({ knocks: window.knocks, title: document.title })"
+$counted = @'
+(async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  // The move that causes this was made in another page, and the knock travels from the table
+  // to this one on its own - so it arrives shortly after the other page saw its own board,
+  // not at the same moment. Waited for rather than read the once, or this checks whether the
+  // knock had arrived yet rather than whether it arrives.
+  const stop = Date.now() + 10000;
+  while (Date.now() < stop && !window.knocks) await wait(25);
+
+  return JSON.stringify({
+    knocks: window.knocks,
+    title: document.title,
+    heading: (document.querySelector('#screen h1') || {}).textContent || '',
+    log: [...document.querySelectorAll('#screen .said')].map(l => l.textContent).slice(-2)
+  });
+})()
+'@
 
 # --- run it -------------------------------------------------------------------------------------
 
@@ -267,28 +374,33 @@ try {
     #
     # A socket rather than a request, because `Invoke-WebRequest` goes by way of whatever
     # proxy this machine is set up with and does not necessarily reach its own localhost.
-    $up = $false
-    foreach ($i in 1..60) {
+    Wait-For "the game to come up on port $Port" 60 {
         try {
             $probe = New-Object Net.Sockets.TcpClient
             $probe.Connect("localhost", $Port)
-            $up = $probe.Connected
+            $answered = $probe.Connected
             $probe.Close()
+            $answered
         }
-        catch {}
+        catch { $false }
+    } | Out-Null
 
-        if ($up) { break }
-        Start-Sleep -Milliseconds 500
-    }
-    if (-not $up) { throw "the game never came up on port $Port" }
-
+    # `--disable-sync` and the rest are not tidiness: each of them is a page this browser
+    # would otherwise open of its own accord, sitting in the target list beside the one the
+    # game is in.
     $browser = Start-Process -PassThru -WindowStyle Hidden -FilePath $exe -ArgumentList @(
         "--headless=new", "--disable-gpu", "--no-first-run",
+        "--disable-sync", "--no-default-browser-check", "--disable-extensions",
         "--user-data-dir=$profile", "--remote-debugging-port=$DebugPort", "about:blank"
     )
-    Start-Sleep -Seconds 5
 
-    $run = Invoke-InPage "http://localhost:$Port/" $script 6
+    # `Invoke-InPage` waits for the browser to have a page of its own to talk to, so there is
+    # nothing to wait for here.
+    # Whether the page should expect to be told anything as it sits down, which it only is
+    # when there is a machine at the table to be told about.
+    $asking = $script.Replace("ROSTER", $(if ($Rival) { "true" } else { "false" }))
+
+    $run = Invoke-InPage "http://localhost:$Port/" $asking
     $r = $run.value
     ""
 
@@ -316,29 +428,34 @@ try {
 
     # --- the turn arriving from somebody else ----------------------------------------------
     #
-    # Two consoles at the one served game. A cookie belongs to a host name rather than to a
-    # port, so `127.0.0.1` and `localhost` reach the same table as two different callers -
-    # which is what makes this checkable in one browser.
+    # This is the delivery, and nothing that reads markup or folds a value can be asked about
+    # it. Everything the stream has carried until now has been a piece of the page, landing
+    # where the element of its id already was. A knock is not a piece of anything: it goes as
+    # a script for the client to run and take off the page again, and a page can take every
+    # board perfectly while quietly dropping every one of these.
     #
-    # And what it checks is the delivery, which nothing else can. Everything the stream has
-    # carried until now has been a piece of the page, landing where the element of its id
-    # already was. A knock is not a piece of anything: it goes as a script for the client to
-    # run and take off the page again, and a page can take every board perfectly while
-    # quietly dropping every one of these.
+    # So a second console sits down - not a browser, just a cookie and a held-open stream -
+    # and says one line. The page above should hear about it without being asked.
 
-    # Opened blank and navigated by the call below rather than opened at the address wanted:
-    # the endpoint that opens a page here takes the address and ignores it.
-    $opened = Invoke-RestMethod -Method Put -Uri "http://localhost:$DebugPort/json/new" -TimeoutSec 10
+    $second = Join-AsConsole "http://localhost:$Port"
 
-    $o = (Invoke-InPage "http://127.0.0.1:$Port/" $elsewhere 6 $opened.id).value
+    try {
+        # A negotiation, because it is the one move that is legal at any point in an opening
+        # and needs nothing said about where. It is not this script's business whether it was
+        # a good move - only that it was somebody else's.
+        $said = $second.Client.PostAsync("http://localhost:$Port$Say`?line=negotiate", $null).GetAwaiter().GetResult()
 
-    if (-not $o) { Report "the second console answered at all" $false "no result came back" }
-    else {
-        Report "a second console sits down at the same served game" ($o.drew -like "Turn *") $o.drew
-        Report "and a move made there moves the game on" ($o.after -ne $o.drew) "$($o.types): $($o.drew) -> $($o.after)"
+        Report "a second console at the same game can say a line" ($said.IsSuccessStatusCode) "the table answered $([int]$said.StatusCode)"
 
-        $b = (Invoke-InPage $null $counted 0 $run.page).value
-        Report "which knocks on the page that did not make it" ($b.knocks -ge 1) "the other page was knocked on $($b.knocks) time(s)"
+        $b = (Invoke-InPage $null $counted).value
+
+        Report "which knocks on the page that did not say it" ($b.knocks -ge 1) "knocks=$($b.knocks), and the page's board reads '$($b.heading)'"
+        Report "and the page heard the move itself as well" ($b.heading -and $b.log -match 'reserve') "the log's last lines were '$($b.log -join ' | ')'"
+    }
+    finally {
+        $second.Body.Dispose()
+        $second.Held.Dispose()
+        $second.Client.Dispose()
     }
 
     ""

@@ -962,9 +962,9 @@ What holds it: the rule is a fold, so [lobby.fsx](tests/lobby.fsx) and
 *delivery* to a browser is the part no value can be asked about, because a nudge is the one
 thing down that stream that is not a piece of the page: it arrives as a script for the
 client to run and throw away, and a page can take every board perfectly while quietly
-dropping every one of these. So [smoke.ps1](tools/smoke.ps1) sits two consoles at one
-served game - `localhost` and `127.0.0.1`, which are two cookies and therefore two callers
-- moves in one, and asks the other whether it was knocked on.
+dropping every one of these. So [smoke.ps1](tools/smoke.ps1) sits a second
+console at the served game — a cookie and a held-open stream, no browser involved — says one
+line there, and asks the page whether it was knocked on.
 
 ## The map
 
@@ -1167,6 +1167,13 @@ advanced by mutation would make `update` impure and stop the model being a value
 ## Tests
 
 ```powershell
+pwsh tools/tests.ps1            # all of them, together
+pwsh tools/tests.ps1 -Only solo,lobby
+```
+
+Or one at a time, which is what the runner does for you:
+
+```powershell
 dotnet fsi tests/ruling.fsx     # the ruling cascade, including elimination
 dotnet fsi tests/outcome.fsx    # both winning cascades
 dotnet fsi tests/actions.fsx    # what each action does and refuses, and stone conservation
@@ -1184,6 +1191,21 @@ dotnet fsi tests/properties.fsx # the invariants, over games FsCheck thinks up i
 dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays legally, that it
                                 #   plays fairly, and that the skills mean something
 ```
+
+**Together, because nearly all of it is compiling.** Each script is its own `dotnet fsi`,
+and each of those recompiles the same sources from scratch: `lobby.fsx` takes five seconds,
+and two tenths of one of them are spent on its checks. Twelve of those in a row is fifty
+seconds of one core while the rest of the machine watches. They share nothing — separate
+processes folding values from fixed seeds — so there is no order between them to get wrong,
+and running them at once cannot change what any of them decides. Started together they take
+twelve seconds, and the runner caps how many at once by the number of cores, so a two-core
+build machine still gets half its time back rather than thrashing.
+
+The obvious next step is not taken: the scripts could `#r` the built `TCModel.dll` instead
+of `#load`ing the sources, which would cut each one from five seconds to under two. It is
+declined because it changes what is being tested. `#load` cannot go stale, needs no build,
+and tests the source in the working tree; a reference tests whatever was last compiled, and
+a forgotten build turns a red run green. Twelve seconds is not worth that.
 
 And one that is not a script, because it needs a browser:
 
@@ -1203,12 +1225,19 @@ its place: the working behind a ruling is written text rather than elements, and
 is what separates one instruction from the next on the way to the browser, so it is the
 screen that would arrive in pieces if the stream's framing were wrong.
 
-It then opens a **second** console at the same served game and moves there. Two consoles in
-one browser takes two cookies, and a cookie belongs to a host name rather than to a port -
-so `localhost` and `127.0.0.1` reach the one table as two different callers. That is what
-makes the last check possible: everything the stream has carried until then has been a
-piece of the page, landing where the element of its id already was, and a nudge is not a
-piece of anything. See [When the turn comes round](#when-the-turn-comes-round).
+It then sits a **second console** at the same served game and says one line there — not a
+second browser, just a cookie and a held-open stream, because a console at this table is
+whatever holds one and posts a line. That is what makes the last check possible: everything
+the stream has carried until then has been a piece of the page, landing where the element of
+its id already was, and a nudge is not a piece of anything. See [When the turn comes
+round](#when-the-turn-comes-round).
+
+**Nothing in it waits a fixed length of time.** Every wait is for the thing being waited on
+— the board arriving, a heading changing, the knock landing — which is both quicker and the
+only version that is honest: a pause long enough to be safe on a loaded machine is wasted on
+every run that did not need it, and a run that did need it fails looking exactly like a page
+with a dead button on it. It went from thirty-three seconds to eight, and the second of those
+is the point.
 
 `-Rival` serves the same game with the program in the second seat, and checks the two things
 about that which only a browser can show: that the page is told whose seat it is, and that

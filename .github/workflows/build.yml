@@ -31,33 +31,16 @@ jobs:
       - name: Check formatting
         run: dotnet fantomas --check src tests
 
-      # Every script is loaded straight from source and exits non-zero on the first
-      # failing check, so the shell's own `set -e` is enough to fail the job. They are
-      # named one by one rather than globbed so that a script added without being
-      # listed here shows up as a missing line in a review.
-      - name: Domain and app
-        run: |
-          dotnet fsi tests/ruling.fsx
-          dotnet fsi tests/outcome.fsx
-          dotnet fsi tests/actions.fsx
-          dotnet fsi tests/history.fsx
-          dotnet fsi tests/knowledge.fsx
-
-      - name: Console and net
-        run: |
-          dotnet fsi tests/lobby.fsx
-          dotnet fsi tests/solo.fsx
-          dotnet fsi tests/view.fsx
-          dotnet fsi tests/html.fsx
-          dotnet fsi tests/cli.fsx
-
-      # Slower than the rest, and the only ones that play or generate whole games of
-      # their own, so they run last and on their own.
-      - name: Properties
-        run: dotnet fsi tests/properties.fsx
-
-      - name: The machine at a seat
-        run: dotnet fsi tests/rival.fsx
+      # Every script is loaded straight from source and exits non-zero on the first failing
+      # check; the runner starts them together, prints each one's whole output in the order
+      # they are listed, and fails the job if any of them did.
+      #
+      # Together rather than one after another because nearly all of the time is `dotnet fsi`
+      # compiling the same sources again for each script - twelve times over, on one core.
+      # The list of which scripts there are lives in the runner and is still written out one
+      # by one, so a script added without being listed shows up as a missing line in a review.
+      - name: Checks
+        run: pwsh tools/tests.ps1
 
       # A record is meant to replay for good. The committed one is the oldest thing in
       # the repository that still has to work, so the build says so out loud.
