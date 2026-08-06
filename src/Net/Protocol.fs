@@ -36,5 +36,8 @@ module Protocol =
         [<Literal>]
         let TurnedAway = "TurnedAway"
 
+        [<Literal>]
+        let Nudged = "Nudged"
+
 // What actually crosses - `ToPlayer` and `Post` - is in the Console layer, because a table
 // at one keyboard says the same things and has no wire to say them over.

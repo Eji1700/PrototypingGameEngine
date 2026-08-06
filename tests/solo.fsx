@@ -112,6 +112,34 @@ report
     1
     (say "notes off" watched |> fun (_, posts, _) -> screens posts |> List.length)
 
+// --- being told the turn has come round ------------------------------------------------
+//
+// Which at this table can only ever mean somebody else's browser, because the screen here
+// belongs to whoever is to play: a watcher who did not type the line has had the turn
+// handed to them without asking. At the ordinary table - one person, one keyboard - there
+// is nobody to tell, and the check that matters is that nothing rings.
+
+let private nudged console posts =
+    posts |> List.exists (fun post -> post.To = console && post.Say = Nudged)
+
+report
+    "a move nudges the other console watching the hot seat"
+    true
+    (nudged "other" (say "recruit r 1" watched |> fun (_, posts, _) -> posts))
+
+report "and not the one that made it" false (nudged "keyboard" (say "recruit r 1" watched |> fun (_, posts, _) -> posts))
+
+report
+    "at one keyboard nothing is nudged at all, there being nobody to interrupt but yourself"
+    []
+    (say "recruit r 1" sitting
+     |> fun (_, posts, _) -> posts |> List.filter (fun post -> post.Say = Nudged))
+
+report
+    "a line that only changes how you read nudges nobody"
+    false
+    (nudged "other" (say "notes off" watched |> fun (_, posts, _) -> posts))
+
 // --- the screen changes hands with the turn ---------------------------------------------------
 //
 // One keyboard, so the board belongs to whoever is to play. Over a network it belongs to

@@ -51,10 +51,24 @@ function Find-Browser {
 # Every command goes out before anything is read back: abandoning a pending receive faults
 # the socket, so this never times a read out until the very end.
 
-function Invoke-InPage($url, $script, $settleSeconds) {
+#
+# `onPage` names which of the browser's pages to talk to, once there is more than one and no
+# obvious one. It is a target id rather than an address, because a page is asked for by what
+# it is and not by what it is currently showing - and the second page below is opened blank
+# and navigated afterwards, so its address is not settled at the moment it has to be picked.
+#
+# An empty `url` means do not navigate: a page being asked what became of it must not be
+# reloaded first, or the stream it was holding - and everything that arrived down it - goes
+# with the old page.
+#
+# The id used is handed back, so a page spoken to once can be found again.
+
+function Invoke-InPage($url, $script, $settleSeconds, $onPage) {
     $targets = Invoke-RestMethod -Uri "http://localhost:$DebugPort/json" -TimeoutSec 10
-    $page = $targets | Where-Object { $_.type -eq "page" } | Select-Object -First 1
-    if (-not $page) { throw "the browser has no page open" }
+    $pages = $targets | Where-Object { $_.type -eq "page" }
+    if ($onPage) { $pages = $pages | Where-Object { $_.id -eq $onPage } }
+    $page = $pages | Select-Object -First 1
+    if (-not $page) { throw "the browser has no page open$(if ($onPage) { " with id $onPage" })" }
 
     $ws = New-Object System.Net.WebSockets.ClientWebSocket
     $ct = [System.Threading.CancellationToken]::None
@@ -72,7 +86,7 @@ function Invoke-InPage($url, $script, $settleSeconds) {
         Send-Cmd 2 "Page.enable" @{}
         # Never a cached page: a stale one would be checking the last run's work.
         Send-Cmd 3 "Network.setCacheDisabled" @{ cacheDisabled = $true }
-        Send-Cmd 4 "Page.navigate" @{ url = $url }
+        if ($url) { Send-Cmd 4 "Page.navigate" @{ url = $url } }
 
         Start-Sleep -Seconds $settleSeconds
         Send-Cmd 100 "Runtime.evaluate" @{ expression = $script; awaitPromise = $true; returnByValue = $true }
@@ -100,9 +114,9 @@ function Invoke-InPage($url, $script, $settleSeconds) {
                     $threw += "while using the page: " + $parsed.result.exceptionDetails.exception.description
                 }
                 if ($parsed.result.result.value) {
-                    return @{ value = ($parsed.result.result.value | ConvertFrom-Json); threw = $threw }
+                    return @{ value = ($parsed.result.result.value | ConvertFrom-Json); threw = $threw; page = $page.id }
                 }
-                return @{ value = $null; threw = $threw }
+                return @{ value = $null; threw = $threw; page = $page.id }
             }
         }
     }
@@ -172,9 +186,54 @@ $script = @'
   await wait(1500);
   const aside = document.querySelector('#told pre');
   out.working = aside ? aside.textContent : '';
+
+  // Being told the turn has come round. What the table sends down the stream for that is a
+  // line of this page's own script, and this is that line, run here by hand - with the page
+  // told nobody is looking at it, which is the only state it does anything in and not one a
+  // browser being driven is ever really in.
+  out.calm = document.title;
+  const focused = document.hasFocus;
+  document.hasFocus = () => false;
+  nudged();
+  out.marked = document.title;
+  document.hasFocus = focused;
+  dispatchEvent(new Event('focus'));
+  out.settled = document.title;
+
+  // And left ready to count a real one, arriving from the second console below.
+  window.knocks = 0;
+  const knock = window.nudged;
+  window.nudged = () => { window.knocks++; knock(); };
   return JSON.stringify(out);
 })()
 '@
+
+# The second console: it waits for its own board and makes one move, which is all it is here
+# for. Everything about that move being right is somebody else's check; what matters here is
+# that it moved the game, because a move that was refused would leave the page above with
+# nothing to be knocked about and the failure would read as the wrong thing entirely.
+
+$elsewhere = @'
+(async () => {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const heading = () => (document.querySelector('#screen h1') || {}).textContent || '';
+
+  for (let i = 0; i < 100 && !heading().startsWith('Turn'); i++) await wait(100);
+
+  const out = { drew: heading() };
+  const region = document.querySelector('.region .acts button');
+  out.types = region.getAttribute('title');
+  region.click();
+  await wait(2000);
+  out.after = heading();
+  return JSON.stringify(out);
+})()
+'@
+
+# What the first page made of all that, asked without reloading it - a reload would open a
+# fresh stream and lose the one the knock arrived down.
+
+$counted = "JSON.stringify({ knocks: window.knocks, title: document.title })"
 
 # --- run it -------------------------------------------------------------------------------------
 
@@ -247,9 +306,39 @@ try {
     Report "asking why a region is ruled as it is lands beside the board" ($r.working -match 'holds') $r.working
     Report "and arrives with its lines still separate" ($r.working -match "`n") "no newline survived"
 
+    Report "the page marks itself when the turn comes round and nobody is looking" ($r.marked -ne $r.calm -and $r.marked -match 'turn') "the title stayed '$($r.marked)'"
+    Report "and puts its title back when somebody looks again" ($r.settled -eq $r.calm) "left saying '$($r.settled)'"
+
     if ($Rival) {
         Report "the page is told which seat the machine is playing" ($r.onArrival -match "machine: Player 2 \($Rival\)") $r.onArrival
         Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was Player 2's"
+    }
+
+    # --- the turn arriving from somebody else ----------------------------------------------
+    #
+    # Two consoles at the one served game. A cookie belongs to a host name rather than to a
+    # port, so `127.0.0.1` and `localhost` reach the same table as two different callers -
+    # which is what makes this checkable in one browser.
+    #
+    # And what it checks is the delivery, which nothing else can. Everything the stream has
+    # carried until now has been a piece of the page, landing where the element of its id
+    # already was. A knock is not a piece of anything: it goes as a script for the client to
+    # run and take off the page again, and a page can take every board perfectly while
+    # quietly dropping every one of these.
+
+    # Opened blank and navigated by the call below rather than opened at the address wanted:
+    # the endpoint that opens a page here takes the address and ignores it.
+    $opened = Invoke-RestMethod -Method Put -Uri "http://localhost:$DebugPort/json/new" -TimeoutSec 10
+
+    $o = (Invoke-InPage "http://127.0.0.1:$Port/" $elsewhere 6 $opened.id).value
+
+    if (-not $o) { Report "the second console answered at all" $false "no result came back" }
+    else {
+        Report "a second console sits down at the same served game" ($o.drew -like "Turn *") $o.drew
+        Report "and a move made there moves the game on" ($o.after -ne $o.drew) "$($o.types): $($o.drew) -> $($o.after)"
+
+        $b = (Invoke-InPage $null $counted 0 $run.page).value
+        Report "which knocks on the page that did not make it" ($b.knocks -ge 1) "the other page was knocked on $($b.knocks) time(s)"
     }
 
     ""
@@ -259,6 +348,14 @@ finally {
     foreach ($p in @($browser, $game)) {
         if ($p -and -not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch {} }
     }
+
+    # A browser is a family of processes and stopping the one that was launched does not
+    # take the rest with it. Left behind, they keep a page open that goes on asking this
+    # port for a stream - and the next thing served here, game or not, finds a stranger
+    # already sitting at it. So they go the same way they are cleared at the start.
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -like "*--remote-debugging-port=$DebugPort*" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     # `dotnet run` leaves the game itself behind when it goes.
     Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue

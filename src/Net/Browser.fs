@@ -39,6 +39,21 @@ module Browser =
 
     // --- who is reading ------------------------------------------------------------------
 
+    /// What goes down a page's stream.
+    ///
+    /// Two kinds, because not everything a table says to a browser is part of the page. A
+    /// board is: it is one element with an id, and it lands where the element of that id
+    /// already is. A nudge is not - there is nothing on the page it could replace, because
+    /// being told the turn has come round while you were elsewhere is something the browser
+    /// does rather than something it draws.
+    ///
+    /// So the second kind is a line of the page's own script, which the client runs and
+    /// throws away. What it says is `Html`'s, beside the script that answers it; all that is
+    /// settled here is that a stream carries the two and no third thing.
+    type Frame =
+        | Piece of html: string
+        | Doing of script: string
+
     /// The pages with a stream open, and the seats they have been given.
     ///
     /// This and `Held` are the only things in the program that are not values. A stream is
@@ -51,14 +66,14 @@ module Browser =
     /// `--token` makes a console, kept without anybody having to write a token down.
     type Pages() =
         let gate = obj ()
-        let streams = Dictionary<string, Channel<string>>()
+        let streams = Dictionary<string, Channel<Frame>>()
         let seats = Dictionary<string, string>()
 
         /// Open a stream for a page, closing whatever it had open before. A second tab in
         /// the same browser is the same console, so it takes the stream over rather than
         /// sitting down again beside itself.
         member _.Open console =
-            let channel = Channel.CreateUnbounded<string>()
+            let channel = Channel.CreateUnbounded<Frame>()
 
             lock gate (fun () ->
                 match streams.TryGetValue console with
@@ -71,7 +86,7 @@ module Browser =
 
         /// Let a stream go, unless the console has already opened another - in which case
         /// the newer one is the one that counts and this is the tail of an old request.
-        member _.Close(console, channel: Channel<string>) =
+        member _.Close(console, channel: Channel<Frame>) =
             lock gate (fun () ->
                 match streams.TryGetValue console with
                 | true, current when Object.ReferenceEquals(current, channel) -> streams.Remove console |> ignore
@@ -131,12 +146,13 @@ module Browser =
     let private saying =
         function
         | Screen text
-        | Told text -> Some text
-        | TurnedAway why -> Some(Html.says why)
+        | Told text -> Some(Piece text)
+        | TurnedAway why -> Some(Piece(Html.says why))
+        | Nudged -> Some(Doing Html.Nudge)
         | Seated _ -> None
 
     let send (pages: Pages) (post: Post) =
-        saying post.Say |> Option.iter (fun screen -> pages.Send(post.To, screen))
+        saying post.Say |> Option.iter (fun frame -> pages.Send(post.To, frame))
 
     // --- the console a browser is -----------------------------------------------------------
 
@@ -303,14 +319,18 @@ module Browser =
                     if not more then
                         reading <- false
                     else
-                        let mutable said = ""
+                        let mutable frame = Piece ""
 
-                        while channel.Reader.TryRead &said do
+                        while channel.Reader.TryRead &frame do
                             // Which is where a screen becomes a patch. What that looks like
                             // on the wire - the event's name, how a screen with newlines in
                             // it is carried without arriving in pieces - is the client
-                            // library's to know and no longer written out here.
-                            do! Response.sseStringElements ctx said
+                            // library's to know and no longer written out here. The same
+                            // goes for a knock: what reaches the browser is a script the
+                            // client runs and takes off the page again.
+                            match frame with
+                            | Piece html -> do! Response.sseStringElements ctx html
+                            | Doing script -> do! Response.sseExecuteScript ctx script
 
                         do! ctx.Response.Body.FlushAsync ctx.RequestAborted
             with

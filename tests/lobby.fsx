@@ -57,8 +57,15 @@ let private heard console posts =
         | Told text
         | Screen text
         | TurnedAway text -> text
-        | Seated(seat, token) -> $"seated at {seat} holding {token}")
+        | Seated(seat, token) -> $"seated at {seat} holding {token}"
+        | Nudged -> "(nudged)")
     |> String.concat "\n"
+
+/// Whether one console was told the turn had come round to it. Kept apart from `heard`
+/// because a nudge carries no words at all - it is the one thing a table says that is not
+/// something to read.
+let private nudged console posts =
+    posts |> List.exists (fun post -> post.To = console && post.Say = Nudged)
 
 let private mentions (needle: string) (text: string) = text.Contains needle
 
@@ -125,6 +132,47 @@ report "and the game does not move" 0 (movesMade waited)
 let acted, _ = full () |> Lobby.said "one" "recruit r 3"
 
 report "the player whose turn it is may move" 1 (movesMade acted)
+
+// --- being told the turn has come round --------------------------------------------------
+//
+// The reason this table has it and one keyboard has no use for it: everybody here is at
+// their own machine, waiting on somebody they cannot see, and the sensible thing to do
+// while waiting is something else. So the turn arriving has to be able to reach a player
+// who is not looking at it.
+//
+// Which makes the interesting checks the ones about when it stays quiet. A nudge that went
+// out on every change to everybody would be a bell ringing all game, and a player would
+// learn to ignore it inside two turns - so the whole of its worth is in being rare and
+// meaning exactly one thing.
+
+report "a move nudges the player it has come round to" true (nudged "two" (full () |> Lobby.said "one" "recruit r 3" |> snd))
+
+report "and not the one who made it" false (nudged "one" (full () |> Lobby.said "one" "recruit r 3" |> snd))
+
+report "a move refused for being out of turn nudges nobody" (false, false) (nudged "one" waitedPosts, nudged "two" waitedPosts)
+
+report "and neither does a line that is not a move at all" false (nudged "two" (full () |> Lobby.said "one" "history" |> snd))
+
+// Taking the last seat starts the game, and the player it starts with has been sitting
+// there with nothing to watch - which is the same case a move makes and wants the same
+// answer.
+report "the last player to sit down nudges whoever the game begins with" true (nudged "one" seatedTwoPosts)
+
+report "and not themselves" false (nudged "two" seatedTwoPosts)
+
+report "a table still filling up nudges nobody" false (nudged "one" seatedOnePosts)
+
+report "and a console coming back to a seat it already held starts nothing, so nudges nobody" false (nudged "one" resumed)
+
+/// A two-player game played out the only way it can be in four lines: each player draws
+/// and hands one back, and the game ends once everybody has negotiated in a row.
+let private played =
+    [ "one", "negotiate"; "one", "return r"; "two", "negotiate"; "two", "return r" ]
+    |> List.fold (fun (lobby, _) (who, line) -> Lobby.said who line lobby) (full (), [])
+
+report "those four lines end the game" true (Model.isOver (Lobby.model (fst played)))
+
+report "and a game that is over has come round to nobody" (false, false) (nudged "one" (snd played), nudged "two" (snd played))
 
 // --- what a player may not ask for -----------------------------------------------------
 

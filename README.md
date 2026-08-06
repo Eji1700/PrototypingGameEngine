@@ -774,6 +774,7 @@ next table and a list of things to show, each addressed to somebody.
 | `undo` / `redo` | allowed | refused — walking a negotiation back reads a bag |
 | `restart` | allowed | refused |
 | seats and tokens | none | that is most of what it is |
+| being told it is your turn | only when somebody else is watching too | every turn you did not cause |
 
 `Solo` came out of the prompt's own read/act/print loop, which had been keeping these
 rules since the beginning but kept them wrapped around `Console.ReadLine`. Pulling them
@@ -818,6 +819,7 @@ addresses a `Post` to a console id, and which sort that is, is written into the 
 | what goes across | the line typed, and the screen back | the same |
 | who you are | a token you are shown and can retype | a cookie, kept for you |
 | what draws the board | the table, per seat | the table, per seat |
+| how it says it is your turn | the bell, `\a` | the tab title, and a notification if allowed |
 
 **Essentially no JavaScript, and none of it written here.**
 [Datastar](https://data-star.dev) is one 34 KB file, committed under `assets/` and
@@ -903,6 +905,66 @@ which needs no client at all; each choice is written as the words a console woul
 For terminals, `Palette.ink` gives Spectre's name for a colour rather than a hex triple,
 because sixteen of a terminal's colours belong to whoever owns the terminal and may have
 been re-themed. A browser has no such sixteen, so `Palette.paint` gives the triple, exact.
+
+### When the turn comes round
+
+At a table where everybody is at their own machine, most of the game is spent waiting on
+somebody you cannot see - and the sensible thing to do while waiting is something else.
+So the turn arriving has to be able to reach a player who is not looking at it.
+
+**The rule is one sentence, and it is a rule about being quiet.** A console is told the
+turn has come round when it has come round *and nothing that console did brought it
+round*. Nothing else qualifies. A move you made yourself does not, because you are
+sitting there watching it. A move somebody else made that did not reach you does not. A
+line that only changed how you read the board does not. A game that is over has come
+round to nobody. The one case besides a move is the last player sitting down, which
+starts the game - the player it starts with has been staring at a waiting room.
+
+Half of that is knowable only at the table and half only at the far end, which is what
+decides the shape:
+
+| | knows | so it decides |
+| --- | --- | --- |
+| the table | who moved, and whose turn it now is | whether the turn arrived **unasked** |
+| the console | whether anybody is sitting in front of it | whether that is worth **interrupting** for |
+
+So the table sends `Nudged`, which carries no words at all - it is the one thing a table
+ever says that is not something to read. What becomes of it is the far end's business.
+
+**A terminal rings.** One character, `\a`, which has meant this since before there were
+windows to put a terminal in. Most terminals flash their taskbar entry when they are not
+the window being looked at, some make a sound, and one told to do neither does neither.
+None of that is worth second-guessing from inside the game, and a console cannot see
+whether anybody is watching it anyway - so it rings whenever the table says the turn
+arrived unasked, which is rare by construction.
+
+**A page marks itself, and says so out loud if it has been allowed to.** Two ways,
+because they fail in opposite places: the tab title needs nobody's permission and is no
+use at all to somebody whose browser is behind three other windows, and a notification is
+exactly what reaches that player and no browser will show one unasked. So the page marks
+its title, puts it back the moment somebody looks again, and raises a real notification if
+permission has been given.
+
+The asking is a `notify` button beside the colours, and it is **the only control on the
+page that is not a line of typing**. That is not a lapse, it is the reason: a browser only
+takes this question from a click it has just seen, and a line typed at the prompt has been
+to the table and back before anything on the page could ask. The button takes itself off
+the page in every state where it could do nothing.
+
+**Where it never fires.** At one keyboard (`play`), and in a browser with the game to
+yourself (`serve` with nobody else reading), the only console at the table is the one that
+just typed something - so nothing ever rings, including when the machines answer you. Open
+that same served game in a second browser and it does fire, in both directions, because now
+there is somebody to interrupt.
+
+What holds it: the rule is a fold, so [lobby.fsx](tests/lobby.fsx) and
+[solo.fsx](tests/solo.fsx) check it without a socket - mostly by checking the silences. The
+*delivery* to a browser is the part no value can be asked about, because a nudge is the one
+thing down that stream that is not a piece of the page: it arrives as a script for the
+client to run and throw away, and a page can take every board perfectly while quietly
+dropping every one of these. So [smoke.ps1](tools/smoke.ps1) sits two consoles at one
+served game - `localhost` and `127.0.0.1`, which are two cookies and therefore two callers
+- moves in one, and asks the other whether it was knocked on.
 
 ## The map
 
@@ -1140,6 +1202,13 @@ a region is ruled as it is — checking after each that the game moved. That las
 its place: the working behind a ruling is written text rather than elements, and a newline
 is what separates one instruction from the next on the way to the browser, so it is the
 screen that would arrive in pieces if the stream's framing were wrong.
+
+It then opens a **second** console at the same served game and moves there. Two consoles in
+one browser takes two cookies, and a cookie belongs to a host name rather than to a port -
+so `localhost` and `127.0.0.1` reach the one table as two different callers. That is what
+makes the last check possible: everything the stream has carried until then has been a
+piece of the page, landing where the element of its id already was, and a nudge is not a
+piece of anything. See [When the turn comes round](#when-the-turn-comes-round).
 
 `-Rival` serves the same game with the program in the second seat, and checks the two things
 about that which only a browser can show: that the page is told whose seat it is, and that

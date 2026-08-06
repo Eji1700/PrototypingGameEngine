@@ -194,6 +194,23 @@ module Solo =
     let private drawAll solo =
         solo.Watchers |> List.map (screenFor solo)
 
+    /// Everybody watching but the one who just spoke, told the game has come round to them.
+    ///
+    /// The screen here belongs to whoever is to play, so anybody watching who did not type
+    /// the line has had the turn handed to them while they were looking elsewhere - which is
+    /// the whole of what a nudge means. At the ordinary table, one person at one keyboard,
+    /// this list is empty and nothing rings: you cannot be interrupted by yourself.
+    ///
+    /// A game that is over comes round to nobody.
+    let private nudging console solo =
+        if Model.isOver solo.Model then
+            []
+        else
+            solo.Watchers
+            |> List.map fst
+            |> List.filter ((<>) console)
+            |> List.map (fun other -> { To = other; Say = Nudged })
+
     let private just console said = [ { To = console; Say = said } ]
 
     /// Something to tell one watcher, in the words their own view would put it in.
@@ -275,8 +292,10 @@ module Solo =
             let solo = withReading console reading solo
             solo, [ screenFor solo (console, reading) ], Carrying
 
-        /// The game has moved, so everybody looking at it is drawn again.
-        let moved solo errand = solo, drawAll solo, errand
+        /// The game has moved, so everybody looking at it is drawn again - and everybody
+        /// but the one who moved it is nudged, the board having reached them on its own.
+        let moved solo errand =
+            solo, drawAll solo @ nudging console solo, errand
 
         match Parse.line typed with
         | Error problem -> told problem

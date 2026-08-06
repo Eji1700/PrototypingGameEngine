@@ -40,6 +40,18 @@ module Client =
         System.Console.Write "> "
         System.Console.Out.Flush()
 
+    /// Ask for the player's attention, in the one way a terminal has of asking.
+    ///
+    /// A bell, which is a single character and has meant this since before there were
+    /// windows to put a terminal in. What becomes of it is the terminal's business and the
+    /// player's: most of them flash the window in the taskbar when it is not the one being
+    /// looked at, some make a sound, and one told to do neither does neither. None of that
+    /// is worth second-guessing from here - and a console cannot see whether anybody is
+    /// watching it anyway, so it rings whenever the table says the turn arrived unasked.
+    let private ring () =
+        System.Console.Write '\a'
+        System.Console.Out.Flush()
+
     let private wait (task: Task) = task.GetAwaiter().GetResult()
 
     let join given resuming (chosen: View) =
@@ -89,6 +101,10 @@ module Client =
                 printfn "%s" why
         )
         |> ignore
+
+        // Nothing to print. The board saying it is your turn is already on its way down the
+        // same wire; this is only the part of that a player two rooms away can hear.
+        connection.On(Protocol.Call.Nudged, Action ring) |> ignore
 
         // Coming back after a drop has to say who this console was, or the table would
         // hand it an empty seat and the player would lose their stones.

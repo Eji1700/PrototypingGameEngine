@@ -241,4 +241,25 @@ report
     true
     (Html.page redIsTeal |> mentions "value=\"red=teal\"")
 
+// --- being told the turn has come round ------------------------------------------------
+//
+// The one thing a table says to a browser that is not a piece of the page. It goes down the
+// stream as a line of the page's own script, so both ends of it are in `Html` and both are
+// held here: a name that drifted between the knock and the page would leave the browser
+// running something nobody had written, and the way that shows is a bell that never rings.
+
+/// The knock is a call, so what the page has to define is the name in front of the brackets.
+let private knocked = Html.Nudge.TrimEnd('(', ')')
+
+report "what the stream knocks on is a name the page defines" true (page |> mentions $"window.{knocked}=")
+
+// Every other control on this page is a line of typing. This one cannot be: a browser only
+// takes the question from a click it has just seen, and a typed line has been to the table
+// and back before anything on the page could ask. So it is a button, and the page's own
+// script goes looking for it by name.
+
+report "the page carries the button that asks the browser's permission" true (page |> mentions $"id=\"{Html.Notify}\"")
+
+report "and the page's own script goes looking for it by that name" true (page |> mentions $"getElementById('{Html.Notify}')")
+
 finish ()

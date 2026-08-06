@@ -98,7 +98,8 @@ module Wire =
             | Seated(seat, token) -> console.SendAsync(Protocol.Call.Seated, box seat, box token)
             | Screen text -> console.SendAsync(Protocol.Call.Screen, box text)
             | Told text -> console.SendAsync(Protocol.Call.Told, box text)
-            | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why))
+            | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why)
+            | Nudged -> console.SendAsync Protocol.Call.Nudged)
         |> Task.WhenAll
 
 /// The wire itself: it turns a call into a change and a change back into calls, and

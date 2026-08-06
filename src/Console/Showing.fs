@@ -20,6 +20,15 @@ type ToPlayer =
     | Told of text: string
     /// There is no seat here for you, and this is why.
     | TurnedAway of why: string
+    /// The game has come round to you, and nothing you did brought it round.
+    ///
+    /// It carries no words, because it is not something to read. A player who is looking at
+    /// the board can already see whose turn it is - the board says so at the top of it - and
+    /// this is for the one who is not looking. So the table says only that the turn arrived
+    /// unasked, and what to do about that is settled at the far end: a terminal rings, and a
+    /// page marks itself and says so out loud if it has been allowed to. Only the far end
+    /// can know whether anybody is there, and only the table can know whether they asked.
+    | Nudged
 
 /// One thing to say and the console to say it to.
 type Post = { To: string; Say: ToPlayer }

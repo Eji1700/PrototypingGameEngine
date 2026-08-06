@@ -69,6 +69,25 @@ module Html =
     /// every line it sends.
     let nothingTyped = { Line = "" }
 
+    /// What is sent down a page's stream to say the turn has come round to whoever is
+    /// reading it. Not a piece of the page: there is nothing on the board this could
+    /// replace, because being interrupted is something a browser does rather than something
+    /// it shows.
+    ///
+    /// The whole of the deciding is at the far end, in the page's own script below, which is
+    /// the only thing in the program that can see whether anybody is looking. So this is a
+    /// knock and not an instruction - named here beside the script that answers it, so the
+    /// two cannot drift apart.
+    [<Literal>]
+    let Nudge = "nudged()"
+
+    /// The one control on the page that is not a move and not a colour: the button that
+    /// asks the browser for leave to say so out loud. Named here because the markup writes
+    /// it and the page's own script goes looking for it, and a name that drifted between
+    /// those two would leave a button on the page that did nothing whatsoever.
+    [<Literal>]
+    let Notify = "notify"
+
     /// Where a page says it has gone wrong.
     ///
     /// The person hosting a game cannot see the console of a browser two rooms away, and
@@ -519,7 +538,8 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
 }
 .prompt input:focus { outline: none; border-color: var(--yours); }
 
-.colours { position: fixed; top: .6rem; right: 1rem; z-index: 1; }
+.corner { position: fixed; top: .6rem; right: 1rem; z-index: 1;
+          display: flex; gap: .6rem; align-items: flex-start; }
 .colours summary { color: var(--edge); cursor: pointer; list-style: none; }
 .colours form {
   display: grid; grid-template-columns: auto auto; gap: .4rem .6rem; align-items: center;
@@ -542,6 +562,46 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
     /// console would have typed at the colour screen and sent down the wire, and read at
     /// the other end by the same `Palette.read` a console's are, so there is one spelling
     /// of a palette in the program and not a second one for the web.
+    /// What the page does about being nudged, and the one control that is not a move.
+    ///
+    /// This is the second and last hand-written script on the page, and like the first it
+    /// says nothing about the game. It is here because the decision it makes cannot be made
+    /// anywhere else: the table knows the turn has come round unasked, and only the browser
+    /// knows whether the player is sitting in front of it. So the table knocks and this
+    /// answers, and a player who is looking at the board is left alone - the board says
+    /// whose turn it is at the top of it, and it has just been redrawn.
+    ///
+    /// Two ways of answering, because they fail in opposite places. The title is written on
+    /// the tab and on the taskbar and needs nobody's permission, and it is no use at all to
+    /// somebody whose browser is behind three other windows. A notification is exactly what
+    /// reaches that player, and no browser will show one unasked - so the asking is a button
+    /// the player presses, which is also why it cannot be a typed line like everything else:
+    /// a browser only takes this question from a click it has just seen, and a line typed at
+    /// the prompt has been to the table and back before anything here could ask.
+    ///
+    /// The button is written for the case it is good for and takes itself off the page
+    /// otherwise, which is the only state a browser will let it read.
+    let private answering =
+        String.concat
+            ""
+            [ "const calm=document.title;let marked=false;"
+              "const settle=()=>{if(marked){marked=false;document.title=calm}};"
+              "addEventListener('focus',settle);"
+              "addEventListener('visibilitychange',()=>{if(!document.hidden)settle()});"
+              // Nobody is nudged for a turn they are watching arrive.
+              "window.nudged=()=>{if(document.hasFocus())return;"
+              "marked=true;document.title='Your turn - '+calm;"
+              "if(window.Notification"
+              // Written as a question rather than with an `and`, which is two characters
+              // markup would rather read as the start of something escaped.
+              "?Notification.permission==='granted':false){"
+              "const said=new Notification('Your turn',{body:calm,tag:'stones',renotify:true});"
+              "said.onclick=()=>{window.focus();said.close()}}};"
+              $"const asking=document.getElementById('{Notify}');"
+              "if(window.Notification?Notification.permission==='default':false)"
+              "asking.onclick=()=>Notification.requestPermission().then(()=>asking.remove());"
+              "else asking.remove()" ]
+
     let private colours palette =
         let choosing (slot: Slot) =
             let holding = slot.Of palette
@@ -627,7 +687,14 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                       // as a value rather than as a scrap of JSON, so that what the page
                       // starts holding and what the table reads back are one declaration.
                       [ Ds.signals nothingTyped; Ds.onInit (Ds.get $"{Stream}?colours={asked}") ]
-                      [ colours palette
+                      [ Elem.div
+                            [ Attr.class' "corner" ]
+                            [ Elem.button
+                                  [ Attr.class' "types"
+                                    Attr.id Notify
+                                    attr "title" "say so out loud when the turn comes round and you are looking elsewhere" ]
+                                  [ Text.raw Notify ]
+                              colours palette ]
                         Elem.main [ Attr.id Screen ] [ Elem.h1 [] [ Text.raw "Sitting down..." ] ]
                         Elem.aside [ Attr.id Told ] []
                         Elem.div
@@ -641,5 +708,8 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                                     attr "autofocus" "autofocus"
                                     Attr.autocomplete "off"
                                     attr "placeholder" "type a move - r b 5, b r 8, m g 8 5 2, help" ]
-                              Elem.button [ Attr.class' "types"; Ds.onClick (Ds.post Say) ] [ Text.raw "send" ] ] ] ]
+                              Elem.button [ Attr.class' "types"; Ds.onClick (Ds.post Say) ] [ Text.raw "send" ] ]
+                        // Last, and not in the head with the other one, because it wires
+                        // itself to a control further up the page and has to find it there.
+                        Elem.script [] [ Text.raw answering ] ] ]
         )

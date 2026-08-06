@@ -124,6 +124,25 @@ module Lobby =
     let private drawAll lobby =
         consoles lobby |> List.map (screenFor lobby)
 
+    /// Whoever the game has just come round to, told so - unless they are the one who moved
+    /// it, who is sitting there watching and needs no telling.
+    ///
+    /// This is the table a nudge was worth building for. Everybody here is at their own
+    /// machine, waiting on somebody they cannot see, and the honest thing to do while waiting
+    /// is something else. So the turn arriving has to be able to reach a player who is not
+    /// looking - and it is the table, and only the table, that knows it has arrived.
+    ///
+    /// A game not yet begun has come round to nobody, and neither has one that is over.
+    let private nudging spoke lobby =
+        if Model.isOver lobby.Model || not (everyoneHere lobby) then
+            []
+        else
+            let active = Game.active (game lobby)
+
+            consoles lobby
+            |> List.filter (fun (console, seat) -> seat.Player = active.Id && Some console <> spoke)
+            |> List.map (fun (console, _) -> { To = console; Say = Nudged })
+
     let private just console said = [ { To = console; Say = said } ]
 
     // --- taking a seat ----------------------------------------------------------------
@@ -147,6 +166,13 @@ module Lobby =
                 | Empty -> false)
 
         let sit seat token lobby =
+            // Whether this is the arrival the table has been waiting for. Taking the last
+            // seat starts the game, and the player it starts with is owed a nudge as much as
+            // by any move - they have been waiting on strangers with nothing to watch. A
+            // console coming back to a seat it already held starts nothing, and nudges
+            // nobody: the turn was where it was before, and whoever holds it knows.
+            let begins = not (everyoneHere lobby)
+
             let lobby =
                 lobby
                 |> withSeat
@@ -154,7 +180,10 @@ module Lobby =
                         Occupant = Taken(token, Some console)
                         View = view }
 
-            lobby, just console (Seated(PlayerId.value seat.Player, token)) @ drawAll lobby
+            lobby,
+            just console (Seated(PlayerId.value seat.Player, token))
+            @ drawAll lobby
+            @ (if begins then nudging (Some console) lobby else [])
 
         match resuming with
         | Some token ->
@@ -260,4 +289,4 @@ module Lobby =
                     { lobby with
                         Model = Update.update msg lobby.Model }
 
-                lobby, drawAll lobby
+                lobby, drawAll lobby @ nudging (Some console) lobby

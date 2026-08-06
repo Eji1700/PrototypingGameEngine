@@ -41,11 +41,16 @@ let private errand doing =
 /// Say the parts of what the table said that a terminal has to print for itself. A screen is
 /// not one of them: the loop below draws the board afresh each turn, because a terminal
 /// cannot patch one in place the way a page can.
+///
+/// The bell is answered the same way a joined table answers it, and for the same reason -
+/// but at one keyboard it never rings, because the only console at the table is the one that
+/// just typed something and a table never nudges the player who spoke.
 let private tell posts =
     for post in posts do
         match post.Say with
         | Told text
         | TurnedAway text -> printf "%s" (text + Environment.NewLine)
+        | Nudged -> printf "\a"
         | Screen _
         | Seated _ -> ()
 
