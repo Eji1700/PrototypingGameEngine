@@ -404,19 +404,18 @@ module Launch =
 
         let port = port |> Option.defaultValue Reach.DefaultPort
 
-        if port < 1 || port > 65535 then
-            Error $"{port} is not a port. They run from 1 to 65535."
-        else
-            doorway
-            |> Result.bind (fun doorway ->
-                wrapping
-                |> Result.bind (fun wrapping ->
-                    address
-                    |> Result.map (fun address ->
-                        { Port = port
-                          Doorway = doorway
-                          Wrapping = wrapping
-                          Address = address })))
+        result {
+            do! require (port >= 1 && port <= 65535) $"{port} is not a port. They run from 1 to 65535."
+            let! doorway = doorway
+            let! wrapping = wrapping
+            let! address = address
+
+            return
+                { Port = port
+                  Doorway = doorway
+                  Wrapping = wrapping
+                  Address = address }
+        }
 
     /// What one command line came to. Everything a command can be wrong about is answered
     /// here, in the words the person typed, before anything is opened.
