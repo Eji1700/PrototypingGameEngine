@@ -3,7 +3,7 @@ namespace TCModel.Console
 open System
 open TCModel.Common
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// Turns a line of console input into something the game understands. Region numbers
 /// are checked against the board here, so a `Msg` can only ever name a real region.

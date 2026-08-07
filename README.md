@@ -321,7 +321,7 @@ bag shrinks monotonically, so a game always winds down.
 
 Two things remember the game, and they are deliberately different.
 
-**The timeline** ([Timeline.fs](src/App/Timeline.fs)) is a zipper: the deal, the
+**The timeline** ([Timeline.fs](src/Engine/Timeline.fs)) is a zipper: the deal, the
 moves made since, and the moves taken back. The present is wherever the finger
 points. `undo` and `redo` only move the finger, so no state is ever rebuilt and
 none is ever lost.
@@ -331,7 +331,7 @@ the generator back too. A negotiation taken back and made again **draws the same
 stone**. Undo is going back in time, not rolling again, and there is no way to
 fish for a better draw.
 
-**The journal** ([Journal.fs](src/App/Journal.fs)) is append-only and never
+**The journal** ([Journal.fs](src/Engine/Journal.fs)) is append-only and never
 rewound. Undoing a move adds a line saying so rather than erasing the one before
 it, so the record is the game as it was really played, second thoughts and all.
 It keeps refused moves too: asking is part of what happened, and a refusal can
@@ -1108,7 +1108,7 @@ same deal against the same machines plays the same game twice.
 ### Three sets of numbers, not three machines
 
 There is one machine. What `easy`, `medium` and `hard` name is a set of weights and
-two knobs, all at the foot of [Rival.fs](src/App/Rival.fs):
+two knobs, all at the foot of [Rival.fs](src/Domain/Rival.fs):
 
 | | `easy` | `medium` | `hard` |
 | --- | --- | --- | --- |
@@ -1208,9 +1208,73 @@ Everything above is what the game does. What follows is how it is arranged so th
 keeps doing it: where each piece lives, what the types refuse to let anyone write, and
 the one place a command line is read and written by the same declaration.
 
+### A game-shaped hole
+
+Most of this program is not about stones. A history to walk back through, a record that
+replays, seats at a table, a machine to play one of them, a screen per player, a wire
+between them — none of that is a fact about this game, and all of it took longer to get
+right than the rules did.
+
+So it is compiled *before* the game and knows nothing about it. `src/Engine` mentions no
+type in `src/Domain` and never will: the whole of what it knows is one record.
+
+```fsharp
+type Rules<'Move, 'State, 'Notice> =
+    { Deal:   int -> uint64 -> Result<'State, string>
+      Play:   'Move -> 'State -> 'State option * 'Notice list
+      Active: 'State -> PlayerId
+      Turn:   'State -> int
+      Over:   'State -> bool
+      Seats:  'State -> int
+      Reseed: 'State -> uint64 }
+```
+
+Seven questions. Answer them and you get the timeline, the journal, undo and redo, the
+record on disk, the table at one keyboard, the table over a network with seats and tokens
+and reconnection, three views, a browser, a machine opponent, and a command line — without
+writing any of it.
+
+**`Play` cannot fail, and that is the load-bearing line.** A refusal is something the game
+*says* — `None` for the state, and notices saying why — rather than an error the machinery
+has to handle. That is why `Update.update` is total, and why every table above it is a fold
+that [lobby.fsx](tests/lobby.fsx) can check without a socket. A game that returned
+`Result` here would push a failure case into every screen in the program.
+
+**Things moved both ways to make the seam honest.** Down into the game went everything the
+old middle layer had quietly accumulated about *this* game: the phase a turn is in, the run
+of negotiations that ends it, what a turn even is. A turn that stays open until a stone goes
+back is nobody else's rule, and it now sits in [Turn.fs](src/Domain/Turn.fs) beside the rest
+of them. Up into the engine went `PlayerId` — which seat, said without saying who is in it —
+because the record, the tables, the wire and the screens all speak it and none of that is
+about stones.
+
+**And the game names its own shapes once**, so nothing above carries three type arguments
+about:
+
+```fsharp
+type Msg   = Msg<Move>
+type Told  = Told<Move, Notice>
+type Model = Model<Move, Session, Notice>
+```
+
+[Playing.fs](src/Domain/Playing.fs) is the other half of plugging in: the engine's own
+machinery with these rules already bound into it. Which is why nothing above that file
+mentions the seam at all — the prompt, the three views, both tables and the record all say
+`Playing.update` and `Playing.game`, exactly as they said `Update.update` and `Model.game`
+when there was no engine to be on the other side of.
+
+**What is not done.** `src/Console` is still two things in one drawer: generic screen
+machinery (the keyed screens, seats, reach, the table loops, the colour plumbing) sitting
+beside this game's own words and drawings. And a view is still handed the whole model and
+trusted to ask `Knowledge` what its reader may see — a discipline three renderers keep and
+[view.fsx](tests/view.fsx) patrols, where an engine ought to hand a view only what that seat
+may know and make a leak unwriteable. Both are worth doing. Neither is worth doing on
+speculation: the only honest test of a seam is a second game through it, and there is not
+one yet.
+
 ### Layout
 
-Five layers, each depending only on the ones above it.
+Six layers, each depending only on the ones above it.
 
 **`src/Common`** — generic, and knows nothing about the game.
 
@@ -1219,6 +1283,22 @@ Five layers, each depending only on the ones above it.
 | [Result.fs](src/Common/Result.fs) | The `result` computation expression used to chain an action's checks |
 | [Cascade.fs](src/Common/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning |
 | [Random.fs](src/Common/Random.fs) | An immutable SplitMix64 generator, passed along as a value |
+
+**`src/Engine`** — what every turn-based game wants and none of them should write again.
+It is compiled *before* the game and mentions nothing in it; see [A game-shaped
+hole](#a-game-shaped-hole).
+
+| File | Role |
+| --- | --- |
+| [Seats.fs](src/Engine/Seats.fs) | `PlayerId`: which seat, and nothing about who is in it |
+| [Messages.fs](src/Engine/Messages.fs) | `Msg<'Move>`: the game's own move, and the three the engine answers itself |
+| [Told.fs](src/Engine/Told.fs) | `Told<'Move,'Notice>`: what the game said, and what the engine said |
+| [Rules.fs](src/Engine/Rules.fs) | The seam: the seven questions the machinery asks a game |
+| [Timeline.fs](src/Engine/Timeline.fs) | Every state a game has stood in, with a finger on the present |
+| [Journal.fs](src/Engine/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
+| [Model.fs](src/Engine/Model.fs) | The timeline, the journal, and the last few lines on screen |
+| [Update.fs](src/Engine/Update.fs) | `Rules -> Msg -> Model -> Model`, and nothing in it can fail |
+| [Machines.fs](src/Engine/Machines.fs) | Seats played by something that is not a person, and when they take their turns |
 
 **`src/Domain`** — the language and the rules. No English a player would read.
 
@@ -1235,19 +1315,9 @@ Five layers, each depending only on the ones above it.
 | [Actions.fs](src/Domain/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
 | [Outcome.fs](src/Domain/Outcome.fs) | Which faction carries the board, and which player carries the faction |
 | [Setup.fs](src/Domain/Setup.fs) | Dealing a fresh game |
-
-**`src/App`** — the MVU loop and the game's memory of itself: whose turn
-it is, when it ends, when the game does, and everything that has happened so far.
-
-| File | Role |
-| --- | --- |
-| [Messages.fs](src/App/Messages.fs) | `Move` and `Msg` |
-| [Session.fs](src/App/Session.fs) | `Session`, `Play`, `Over`, and `Notice` |
-| [Timeline.fs](src/App/Timeline.fs) | Every state the game has stood in, with a finger on the present |
-| [Journal.fs](src/App/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
-| [Model.fs](src/App/Model.fs) | The timeline, the journal, and the last few lines on screen |
-| [Update.fs](src/App/Update.fs) | `Msg -> Model -> Model` |
-| [Rival.fs](src/App/Rival.fs) | A seat played by the program: how a position is weighed, how well, which seats are theirs, and when they play |
+| [Turn.fs](src/Domain/Turn.fs) | `Move`, and where a game stands: the phase, the turn, the run of negotiations, and how a turn ends |
+| [Playing.fs](src/Domain/Playing.fs) | This game as the engine takes one, and the engine with it already in |
+| [Rival.fs](src/Domain/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
 
 **`src/Console`** — the only part that talks to a person.
 
@@ -1285,7 +1355,7 @@ last three files here touch a socket.
 
 And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
 read/update/render loop, and the choice between playing here and playing over a wire.
-It sits outside all five because it needs all five - F# compiles in order and a file
+It sits outside all six because it needs all six - F# compiles in order and a file
 sees only what came before it, so the door has to be the last thing built.
 
 ### Keeping invalid states out
@@ -1640,7 +1710,7 @@ It wants Edge or Chrome on the machine, which is why it is not in CI. Run it aft
 anything the browser reads.
 
 Each script exits non-zero on failure. They load the source directly, so they run
-without building the console app. `history.fsx` reaches up through the App layer to
+without building the console app. `history.fsx` reaches up through the engine to
 the transcript reader and writer, which is what lets it check a whole game out to
 text and back again.
 

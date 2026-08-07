@@ -21,13 +21,7 @@
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
-#load "../src/App/Messages.fs"
-#load "../src/App/Session.fs"
-#load "../src/App/Timeline.fs"
-#load "../src/App/Journal.fs"
-#load "../src/App/Model.fs"
-#load "../src/App/Update.fs"
-#load "../src/App/Rival.fs"
+#load "../src/Domain/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
@@ -48,7 +42,7 @@ open System
 open FsCheck
 open FsCheck.FSharp
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 open Harness
 

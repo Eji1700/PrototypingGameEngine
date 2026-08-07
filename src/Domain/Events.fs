@@ -1,5 +1,7 @@
 namespace TCModel.Domain
 
+open TCModel.Engine
+
 /// Why a game finished.
 type Ending =
     /// Every player in a row negotiated, or was skipped for want of stones.

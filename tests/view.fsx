@@ -13,12 +13,6 @@
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
-#load "../src/App/Messages.fs"
-#load "../src/App/Session.fs"
-#load "../src/App/Timeline.fs"
-#load "../src/App/Journal.fs"
-#load "../src/App/Model.fs"
-#load "../src/App/Update.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
@@ -34,13 +28,13 @@
 
 open System.Text.RegularExpressions
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 open Harness
 
-let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
+let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
-let private seats = Game.players (Model.game dealt)
+let private seats = Game.players (Playing.game dealt)
 
 /// What a person would actually see, whatever the view wrote it in: colour taken back off,
 /// and markup with it. The escape itself has to go with the codes; stripping only the codes
@@ -94,10 +88,10 @@ for view in views do
 
 // --- a stone drawn stays with the player who drew it ---------------------------------------
 
-let private drawn = dealt |> Update.update (Make Negotiate)
+let private drawn = dealt |> Playing.update (Make Negotiate)
 
 let private drewColor =
-    match Model.session drawn with
+    match Playing.session drawn with
     | InPlay { Phase = AwaitingReturn color } -> Words.color color
     | _ -> failwith "the negotiation did not leave a stone to hand back"
 
@@ -182,10 +176,10 @@ for view in views do
 
 let private arriving =
     let three =
-        Update.start 3 42UL
+        Playing.start 3 42UL
         |> Result.toOption
         |> Option.get
-        |> Model.game
+        |> Playing.game
         |> Game.players
 
     [ { Player = three[0].Id

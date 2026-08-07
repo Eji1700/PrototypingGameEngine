@@ -1,7 +1,7 @@
 namespace TCModel.Console
 
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// What has to be reading a view for it to be worth anything.
 ///

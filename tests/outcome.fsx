@@ -5,6 +5,7 @@
 
 #load "Harness.fsx"
 
+open TCModel.Engine
 open TCModel.Domain
 open Harness
 

@@ -5,7 +5,7 @@ open System.Text.Json.Serialization
 open Falco.Markup
 open Falco.Datastar
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// The board as a page, for a player reading in a browser rather than at a terminal.
 ///
@@ -294,8 +294,8 @@ module Html =
                   Elem.span [ Attr.class' "bag" ] (sighted bag) ]
 
         let run =
-            match Model.session model with
-            | InPlay play -> [ quiet (Render.negotiationRun play (Model.game model)) ]
+            match Playing.session model with
+            | InPlay play -> [ quiet (Render.negotiationRun play (Playing.game model)) ]
             | Finished _ -> []
 
         (seen.Bags |> List.map row) @ run
@@ -365,9 +365,9 @@ module Html =
     /// comes with it; the controls stay either way, because a player who knows how to read
     /// a board still has to move on it.
     let board notes (beholder: Player) model =
-        let game = Model.game model
+        let game = Playing.game model
         let active = Game.active game
-        let over = Model.isOver model
+        let over = Playing.isOver model
 
         let seen =
             if over then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
@@ -381,7 +381,7 @@ module Html =
         // What may be done without saying anything more than the word itself. The rest of
         // the moves take arguments, and take them at the prompt.
         let toHand =
-            match Model.session model with
+            match Playing.session model with
             | InPlay { Phase = AwaitingReturn _ } ->
                 StoneColor.all
                 |> List.map (fun color ->

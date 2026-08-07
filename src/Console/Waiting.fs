@@ -1,5 +1,7 @@
 namespace TCModel.Console
 
+open TCModel.Engine
+
 open TCModel.Domain
 
 /// A seat at a table that has not filled up yet, as the person waiting sees it.

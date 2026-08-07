@@ -1,7 +1,7 @@
-namespace TCModel.App
+namespace TCModel.Domain
 
 open TCModel.Common
-open TCModel.Domain
+open TCModel.Engine
 
 /// What a machine weighs a position by, and how much each thing counts for.
 ///
@@ -422,55 +422,30 @@ module Rival =
 
     // --- taking their turns -----------------------------------------------------------------
     //
-    // Which is the same thing anybody else does with a turn, and goes through `Update.update`
-    // to prove it. What follows is only about *when*: a machine plays as soon as the game
-    // reaches its seat, and the run of them between one person's move and their next is
-    // played out before the prompt comes back.
+    // Which is the same thing anybody else does with a turn: it goes through the engine's own
+    // `Playing.update`, so a machine's move lands in the record and on the screen exactly as a
+    // person's does. *When* they play is not this game's business at all and is not written
+    // here - `Machines` answers that for any game, and what it wants from this one is a way
+    // of choosing a move.
     //
-    // Here rather than at either table, because both tables want it and there is one answer.
-    // A machine at one keyboard and a machine at a seat nobody drove to are the same machine.
+    // So these two are the same two functions every table already called, bound to this
+    // game's rules and this game's chooser. A table asking a machine to take its turn is
+    // asking the engine, and does not know it.
 
-    /// The machine at the seat to act, if that seat is one of theirs and there is still a
-    /// game to play.
-    let private toAct rivals model =
-        match Model.session model with
+    /// What the engine asks of a chooser: a state and a machine, and a move if there is one.
+    /// A finished game is not asked, but a total answer is cheaper than an argument about it.
+    let private taking session rival =
+        match session with
+        | InPlay play -> plays play rival
         | Finished _ -> None
-        | InPlay play ->
-            rivals
-            |> List.tryFind (fst >> (=) (Game.active play.Game).Id)
-            |> Option.map (fun (_, rival) -> play, rival)
 
     /// Whether the game is standing at a seat the program plays. Asked by a table walking a
     /// game backwards: a move taken back has to take the machines' answers to it back with
     /// it, or one `undo` would simply be answered again before the board was looked at.
-    let holds rivals model = toAct rivals model |> Option.isSome
-
-    let private withRival playerId rival rivals =
-        rivals
-        |> List.map (fun (other, was) -> if other = playerId then other, rival else other, was)
+    let holds rivals model =
+        Machines.holds Playing.rules rivals model
 
     /// Let the machines take their turns, and give back the game they left and themselves as
     /// they now stand - each having moved its own generator on.
-    ///
-    /// They play one after another for as long as the seat to act is one of theirs, so a line
-    /// typed by a person is answered by everybody between them and their next turn - which is
-    /// what sitting down opposite a machine looks like.
-    ///
-    /// A move that left the game exactly as it found it stops them, and that is the whole of
-    /// what stops them. Nothing a machine picks should be refused - it asks the rules what
-    /// they will take before it chooses - but one that had somehow found a move the rules
-    /// would not have would otherwise be asked for it again, and again, with the turn never
-    /// passing and nothing on the screen to say why.
-    let rec answering rivals model =
-        match toAct rivals model with
-        | None -> model, rivals
-        | Some(play, rival) ->
-            let seat = (Game.active play.Game).Id
-
-            match plays play rival with
-            | None -> model, rivals
-            | Some(move, rival) ->
-                let next = Update.update (Make move) model
-                let rivals = withRival seat rival rivals
-
-                if Model.session next = Model.session model then next, rivals else answering rivals next
+    let answering rivals model =
+        Machines.answering Playing.rules taking rivals model

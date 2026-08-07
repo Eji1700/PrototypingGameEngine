@@ -13,12 +13,6 @@
 #r "nuget: FsCheck, 3.3.3"
 
 #load "Harness.fsx"
-#load "../src/App/Messages.fs"
-#load "../src/App/Session.fs"
-#load "../src/App/Timeline.fs"
-#load "../src/App/Journal.fs"
-#load "../src/App/Model.fs"
-#load "../src/App/Update.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Parse.fs"
 #load "../src/Console/Transcript.fs"
@@ -26,7 +20,7 @@
 open FsCheck
 open FsCheck.FSharp
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 open Harness
 
@@ -131,9 +125,9 @@ let private plays =
     Arb.fromGenShrink (generated, shorter)
 
 let private played play =
-    match Update.start play.Players play.Seed with
+    match Playing.start play.Players play.Seed with
     | Error _ -> failwith "the generator dealt a table the game would refuse"
-    | Ok model -> play.Moves |> List.fold (fun model msg -> Update.update msg model) model
+    | Ok model -> play.Moves |> List.fold (fun model msg -> Playing.update msg model) model
 
 // --- running one ------------------------------------------------------------------------
 
@@ -170,7 +164,7 @@ let private about property = Prop.forAll plays property
 holds
     "every colour keeps all 21 of its stones, whatever the game is asked to do"
     (about (fun play ->
-        let game = Model.game (played play)
+        let game = Playing.game (played play)
 
         StoneColor.all
         |> List.forall (fun color -> Pile.count color (Game.allStones game) = 21)))
@@ -184,16 +178,16 @@ holds
     "a move the rules refuse leaves the game exactly where it was"
     (about (fun play ->
         let step (model, sound) msg =
-            let next = Update.update msg model
+            let next = Playing.update msg model
 
             let refused =
                 match next.Log with
-                | Refused _ :: _ -> true
+                | Said(Refused _) :: _ -> true
                 | _ -> false
 
-            next, sound && (not refused || Model.session next = Model.session model)
+            next, sound && (not refused || Playing.session next = Playing.session model)
 
-        match Update.start play.Players play.Seed with
+        match Playing.start play.Players play.Seed with
         | Error _ -> false
         | Ok model -> play.Moves |> List.fold step (model, true) |> snd))
 
@@ -205,7 +199,7 @@ holds
 holds
     "whoever rules a region is holding as many stones there as anyone"
     (about (fun play ->
-        let game = Model.game (played play)
+        let game = Playing.game (played play)
 
         Board.regions
         |> List.forall (fun region ->
@@ -232,7 +226,7 @@ holds
 holds
     "a player sees their own bag, the size of everyone else's, and nothing more"
     (about (fun play ->
-        let game = Model.game (played play)
+        let game = Playing.game (played play)
 
         Game.players game
         |> List.forall (fun beholder ->
@@ -280,12 +274,14 @@ holds
         let replayed =
             Transcript.read written
             |> Result.mapError (fun _ -> ())
-            |> Result.bind (fun read -> Update.replay read.Players read.Seed read.Moves |> Result.mapError (fun _ -> ()))
+            |> Result.bind (fun read ->
+                Playing.replay read.Players read.Seed read.Moves
+                |> Result.mapError (fun _ -> ()))
 
         match replayed with
         | Error() -> false
         | Ok again ->
-            Model.session again = Model.session model
+            Playing.session again = Playing.session model
             && Timeline.states again.Timeline = Timeline.states model.Timeline))
 
 // Only when the undo actually took something back. At the deal there is nothing to take
@@ -298,11 +294,11 @@ holds
     "taking the last move back and making it again leaves the game where it stood"
     (about (fun play ->
         let model = played play
-        let back = model |> Update.update Undo
+        let back = model |> Playing.update Undo
 
         if Timeline.movesMade back.Timeline = Timeline.movesMade model.Timeline then
             true
         else
-            Model.session (Update.update Redo back) = Model.session model))
+            Playing.session (Playing.update Redo back) = Playing.session model))
 
 finish ()

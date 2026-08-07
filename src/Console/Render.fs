@@ -4,7 +4,7 @@ open System
 open System.Text
 open TCModel.Common
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// The V of MVU: a pure projection from the model to console text.
 module Render =
@@ -349,7 +349,7 @@ module Render =
 
     /// Show the working behind who rules a region.
     let explainRule regionId model =
-        let game = Model.game model
+        let game = Playing.game model
         let survivors, trace = Game.weighRule regionId game
 
         let verdict =
@@ -407,9 +407,9 @@ module Render =
     /// place the drawn stone is named outright - and over a network that heading is read
     /// by people who did not draw it.
     let heading (beholder: Player) model =
-        let active = Game.active (Model.game model)
+        let active = Game.active (Playing.game model)
 
-        match Model.session model with
+        match Playing.session model with
         | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
         | InPlay { Phase = AwaitingReturn drawn
                    Turn = turn } ->
@@ -420,7 +420,7 @@ module Render =
         | InPlay { Turn = turn } -> $"Turn {turn} - {Words.player active.Id} to play"
 
     let wording (beholder: Player) model =
-        if Model.isOver model then Words.notice else Words.noticeSeenBy beholder.Id
+        if Playing.isOver model then Words.notice else Words.noticeSeenBy beholder.Id
 
     /// The record of the game so far, as the player reading it may know it. The journal
     /// itself keeps the whole of what happened, and `Transcript.write` saves it that way.
@@ -448,13 +448,13 @@ module Render =
     /// their own from the same game.
     let model notes (beholder: Player) model =
         let sb = StringBuilder()
-        let game = Model.game model
+        let game = Playing.game model
         let active = Game.active game
 
         // Everything below is drawn from what the beholder can see rather than from the
         // game itself - until the game is over, when the table is turned face up.
         let seen =
-            if Model.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
+            if Playing.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
 
         let told = wording beholder model
 
@@ -465,7 +465,7 @@ module Render =
 
         /// A note that is only true while something is still being held back.
         let notedWhileHidden note =
-            if Model.isOver model then [] else noted note
+            if Playing.isOver model then [] else noted note
 
         sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine()
         |> ignore
@@ -480,7 +480,7 @@ module Render =
         block sb Blocks.apart (apartLines game Board.apartRegions @ noted Notes.apart)
 
         let run =
-            match Model.session model with
+            match Playing.session model with
             | InPlay play -> [ "  " + negotiationRun play game ]
             | Finished _ -> []
 
@@ -512,7 +512,7 @@ module Render =
                supplied Supply.outOfSight (Words.tally seen.Unseen) ]
              @ notedWhileHidden Notes.supply)
 
-        match Model.session model with
+        match Playing.session model with
         | InPlay _ -> ()
         | Finished _ -> block sb Blocks.result (result game)
 

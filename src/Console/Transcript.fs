@@ -2,7 +2,8 @@ namespace TCModel.Console
 
 open System
 open System.IO
-open TCModel.App
+open TCModel.Engine
+open TCModel.Domain
 
 /// The record of a game as a file: written so a person can read it, and so the game can
 /// play it again.

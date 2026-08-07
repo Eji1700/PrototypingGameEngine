@@ -1,7 +1,7 @@
 namespace TCModel.Console
 
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// How one person is reading the game: whether the board comes with the writing that
 /// explains it, and in what hand it is drawn.
@@ -51,7 +51,7 @@ type Errand =
 ///
 /// Some of the seats may be played by the program rather than by anybody in the room. That
 /// changes nothing about the game and nothing about the screen: a machine's move goes
-/// through `Update.update` like everybody else's, lands in the record like everybody else's,
+/// through `Playing.update` like everybody else's, lands in the record like everybody else's,
 /// and is drawn to everybody watching like everybody else's. All this table adds is that
 /// after a person has spoken, the machines answer before the prompt comes back.
 [<NoComparison; NoEquality>]
@@ -101,9 +101,9 @@ module Solo =
         else
             let next =
                 { solo with
-                    Model = Update.update msg solo.Model }
+                    Model = Playing.update msg solo.Model }
 
-            if Model.session next.Model = Model.session solo.Model then next else walking msg next
+            if Playing.session next.Model = Playing.session solo.Model then next else walking msg next
 
     /// Seat the machines, and let them play up to the first seat a person has to fill.
     ///
@@ -118,7 +118,7 @@ module Solo =
         let played = answering { solo with Rivals = rivals }
 
         played,
-        (if Model.isOver played.Model && not (Model.isOver solo.Model) then
+        (if Playing.isOver played.Model && not (Playing.isOver solo.Model) then
              Keeping(played.Model, played.Stamp, false)
          else
              Carrying)
@@ -140,7 +140,7 @@ module Solo =
     /// hands with the turn. Over a network each console has a seat of its own and this is
     /// the line that differs.
     let private boardFor solo (reading: Reading) =
-        let beholder = Game.active (Model.game solo.Model)
+        let beholder = Game.active (Playing.game solo.Model)
         reading.View.Board reading.Notes beholder solo.Model
 
     let private screenFor solo (console, reading) =
@@ -169,7 +169,7 @@ module Solo =
     ///
     /// A game that is over comes round to nobody.
     let private nudging console solo =
-        if Model.isOver solo.Model then
+        if Playing.isOver solo.Model then
             []
         else
             solo.Watchers
@@ -237,7 +237,7 @@ module Solo =
         | None -> solo, just console (TurnedAway "You are not watching this game."), Carrying
         | Some reading ->
 
-        let beholder = Game.active (Model.game solo.Model)
+        let beholder = Game.active (Playing.game solo.Model)
 
         let told text =
             solo, just console (Told(reading.View.Says text)), Carrying
@@ -274,7 +274,7 @@ module Solo =
             // A game still in play is resigned first, so the record says how it ended
             // rather than simply stopping.
             let ended =
-                if Model.isOver solo.Model then solo.Model else Update.update (Make Resign) solo.Model
+                if Playing.isOver solo.Model then solo.Model else Playing.update (Make Resign) solo.Model
 
             let solo = { solo with Model = ended }
             solo, drawAll solo, Leaving(ended, solo.Stamp)
@@ -288,7 +288,7 @@ module Solo =
             moved
                 (answering
                     { solo with
-                        Model = Update.update msg solo.Model
+                        Model = Playing.update msg solo.Model
                         Stamp = fresh })
                 (Keeping(closing, solo.Stamp, false))
         | Ok(Parse.Send((Undo | Redo) as msg)) ->
@@ -296,18 +296,18 @@ module Solo =
                 (walking
                     msg
                     { solo with
-                        Model = Update.update msg solo.Model })
+                        Model = Playing.update msg solo.Model })
                 Carrying
         | Ok(Parse.Send msg) ->
             let next =
                 answering
                     { solo with
-                        Model = Update.update msg solo.Model }
+                        Model = Playing.update msg solo.Model }
 
             // A game that has just ended writes itself down without being asked - whoever
             // ended it, which by now may well have been the machine.
             let errand =
-                if Model.isOver next.Model && not (Model.isOver solo.Model) then
+                if Playing.isOver next.Model && not (Playing.isOver solo.Model) then
                     Keeping(next.Model, solo.Stamp, false)
                 else
                     Carrying

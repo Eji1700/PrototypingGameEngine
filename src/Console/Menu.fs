@@ -3,7 +3,7 @@ namespace TCModel.Console
 open System
 open TCModel.Common
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// The front door: what a person can ask for before there is a game to play.
 ///

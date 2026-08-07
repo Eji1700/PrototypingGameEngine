@@ -1,7 +1,7 @@
 namespace TCModel.Console
 
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// Who is going to be at a seat, settled before the game is dealt.
 ///

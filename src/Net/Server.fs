@@ -14,7 +14,7 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 
 /// The one lobby this process is hosting.
@@ -348,7 +348,7 @@ module Server =
         let builder = WebApplication.CreateBuilder()
 
         let rivals =
-            Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model)
+            Rival.seating (Model.seed model) (Seating.machines sitters) (Playing.game model)
 
         let held = Held(Lobby.opened model rivals, keep)
         let pages = Browser.Pages()
@@ -381,7 +381,7 @@ module Server =
         // what it wants when it joins, and so does a page.
         serving app Palette.standard sitting pages
 
-        let seats = Game.playerCount (Model.game model)
+        let seats = Game.playerCount (Playing.game model)
         let mine, theirs = Seating.awaited sitters
 
         printfn ""
@@ -498,7 +498,7 @@ module Server =
 
         serving app standing sitting pages
 
-        let seats = Game.playerCount (Model.game (Solo.model solo))
+        let seats = Game.playerCount (Playing.game (Solo.model solo))
 
         printfn ""
         printfn "=== A game for %d, to play in a browser ===" seats

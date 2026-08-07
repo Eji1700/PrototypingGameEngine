@@ -3,7 +3,7 @@ module TCModel.Program
 open System
 open System.IO
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 open TCModel.Net
 
@@ -62,7 +62,7 @@ let private tell posts =
 /// three, the same way the networked one can.
 let rec private loop solo =
     Solo.board Keyboard solo |> Option.iter (printf "%s")
-    printf "%s" (if Model.isOver (Solo.model solo) then "(over) > " else "> ")
+    printf "%s" (if Playing.isOver (Solo.model solo) then "(over) > " else "> ")
 
     let heard line =
         let next, posts, doing = Solo.said (stampNow ()) Keyboard line solo
@@ -81,13 +81,10 @@ let rec private loop solo =
     | null -> heard "quit"
     | line -> heard line
 
-/// Deal a game. The table is the only thing that can refuse, and it says why, so a
-/// count that came from a person is answered in their words rather than swallowed.
-let private dealt players seed =
-    match Update.start players seed with
-    | Ok model -> Ok model
-    | Error(TooFewPlayers n) -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
-    | Error(TooManyPlayers n) -> Error $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
+/// Deal a game. The rules are the only thing that can refuse, and they say why in words, so
+/// a count that came from a person is answered in their own rather than swallowed - and this
+/// no longer has to know what it is that refuses, which is a fair test of the seam.
+let private dealt players seed = Playing.start players seed
 
 /// Play a saved game again and stop where it left off, from where `undo` walks back
 /// through every state it passed on the way.
@@ -97,7 +94,7 @@ let private replayFrom path =
     else
         Transcript.read (File.ReadAllText path)
         |> Result.bind (fun reading ->
-            Update.replay reading.Players reading.Seed reading.Moves
+            Playing.replay reading.Players reading.Seed reading.Moves
             |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
             |> Result.map (fun model ->
                 printfn "Replayed %d move(s) from %s." (List.length reading.Moves) path
@@ -125,7 +122,7 @@ let private serveFor palette sitters seed reach =
         // to the first seat a person has to fill by the time it does.
         let solo, doing =
             Solo.opened (stampNow ()) model
-            |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model))
+            |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Playing.game model))
 
         errand doing
         Server.serve reach palette solo stampNow keep
@@ -366,7 +363,7 @@ let private play view sitters model =
     // the first move is theirs has already had it made by the time the first board is drawn.
     let seated, doing =
         Solo.opened (stampNow ()) model
-        |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Model.game model))
+        |> Solo.against (Rival.seating (Model.seed model) (Seating.machines sitters) (Playing.game model))
 
     errand doing
 

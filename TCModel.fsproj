@@ -12,6 +12,25 @@
     <Compile Include="src/Common/Random.fs" />
   </ItemGroup>
 
+  <!-- Engine - what every turn-based game wants and none of them should write again: a
+       history to walk, a record that replays, seats, a machine to play one of them. It is
+       compiled *before* the game and mentions nothing in it; `Rules` is the whole seam, and
+       everything here is generic over what a move is, where a game stands, and what it says. -->
+  <ItemGroup Label="Engine - the game-shaped hole, and everything that fits round it">
+    <Compile Include="src/Engine/Seats.fs" />
+    <Compile Include="src/Engine/Messages.fs" />
+    <Compile Include="src/Engine/Told.fs" />
+    <Compile Include="src/Engine/Rules.fs" />
+    <Compile Include="src/Engine/Timeline.fs" />
+    <Compile Include="src/Engine/Journal.fs" />
+    <Compile Include="src/Engine/Model.fs" />
+    <Compile Include="src/Engine/Update.fs" />
+    <!-- A seat played by something that is not a person, and after `Update` because taking a
+         turn is making a move like anybody else's. Every table that seats one - a keyboard,
+         or a network - lets them play through this one loop. -->
+    <Compile Include="src/Engine/Machines.fs" />
+  </ItemGroup>
+
   <ItemGroup Label="Domain - the language and rules of the game">
     <Compile Include="src/Domain/Stones.fs" />
     <Compile Include="src/Domain/Board.fs" />
@@ -24,19 +43,12 @@
     <Compile Include="src/Domain/Actions.fs" />
     <Compile Include="src/Domain/Outcome.fs" />
     <Compile Include="src/Domain/Setup.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="App - the MVU loop, and the game's memory of itself">
-    <Compile Include="src/App/Messages.fs" />
-    <Compile Include="src/App/Session.fs" />
-    <Compile Include="src/App/Timeline.fs" />
-    <Compile Include="src/App/Journal.fs" />
-    <Compile Include="src/App/Model.fs" />
-    <Compile Include="src/App/Update.fs" />
-    <!-- A seat played by the program, and after `Update` because taking a turn is making a
-         move like anybody else's. Every table that seats a machine - one keyboard, or a
-         network - lets them play through the one loop at the foot of this file. -->
-    <Compile Include="src/App/Rival.fs" />
+    <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
+         a turn that stays open until a stone goes back is nobody else's rule. -->
+    <Compile Include="src/Domain/Turn.fs" />
+    <!-- And the seam itself, filled in: this game as the engine takes one. -->
+    <Compile Include="src/Domain/Playing.fs" />
+    <Compile Include="src/Domain/Rival.fs" />
   </ItemGroup>
 
   <ItemGroup Label="Console - the only part that talks to a person">

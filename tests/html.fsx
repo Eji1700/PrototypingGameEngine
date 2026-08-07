@@ -21,12 +21,6 @@
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
-#load "../src/App/Messages.fs"
-#load "../src/App/Session.fs"
-#load "../src/App/Timeline.fs"
-#load "../src/App/Journal.fs"
-#load "../src/App/Model.fs"
-#load "../src/App/Update.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Words.fs"
 #load "../src/Console/Render.fs"
@@ -43,17 +37,17 @@ open System.Net
 open System.Text.RegularExpressions
 open System.Xml
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 open Harness
 
-let private dealt = Update.start 3 42UL |> Result.toOption |> Option.get
+let private dealt = Playing.start 3 42UL |> Result.toOption |> Option.get
 
-let private beholder = Game.active (Model.game dealt)
+let private beholder = Game.active (Playing.game dealt)
 
 /// A game stopped in the middle of a negotiation, so that the controls a table offers only
 /// while a stone is owed are drawn at least once here.
-let private owing = dealt |> Update.update (Make Negotiate)
+let private owing = dealt |> Playing.update (Make Negotiate)
 
 let private page = Html.page Palette.standard
 
@@ -65,7 +59,7 @@ let private view = View.html Palette.standard
 /// thing that knows what kind of screen it is.
 let private screens =
     [ "board", Html.Screen, view.Board true beholder dealt
-      "board, mid-negotiation", Html.Screen, view.Board true (Game.active (Model.game owing)) owing
+      "board, mid-negotiation", Html.Screen, view.Board true (Game.active (Playing.game owing)) owing
       "board with the notes off", Html.Screen, view.Board false beholder dealt
       "waiting",
       Html.Screen,
@@ -214,7 +208,7 @@ report "and every one of them types a line the game's own parser takes" [] refus
 report
     "a table waiting on a stone offers the move that hands one back"
     true
-    (posted (view.Board true (Game.active (Model.game owing)) owing)
+    (posted (view.Board true (Game.active (Playing.game owing)) owing)
      |> List.exists (fun line -> line.StartsWith "return "))
 
 // --- the colours ---------------------------------------------------------------------------

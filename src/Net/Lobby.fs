@@ -2,7 +2,7 @@ namespace TCModel.Net
 
 
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 
 /// Who is at a seat.
@@ -36,7 +36,7 @@ type Seat =
 ///
 /// This is where the difference between one keyboard and several is settled, and it is only
 /// ever three things: who may act, who may see, and what a player may ask for. The rules of
-/// the game itself are untouched - `Update.update` decides a move here exactly as it does
+/// the game itself are untouched - `Playing.update` decides a move here exactly as it does
 /// at a kitchen table.
 [<NoComparison; NoEquality>]
 type Lobby =
@@ -58,7 +58,7 @@ module Lobby =
         { Model = model
           Rivals = rivals
           Seats =
-            Game.players (Model.game model)
+            Game.players (Playing.game model)
             |> List.map (fun player ->
                 { Player = player.Id
                   Occupant = (if rivals |> List.exists (fst >> (=) player.Id) then Played else Empty)
@@ -76,7 +76,7 @@ module Lobby =
             Model = model
             Rivals = rivals }
 
-    let private game lobby = Model.game lobby.Model
+    let private game lobby = Playing.game lobby.Model
 
     let private isEmpty seat = seat.Occupant = Empty
 
@@ -155,7 +155,7 @@ module Lobby =
     ///
     /// A game not yet begun has come round to nobody, and neither has one that is over.
     let private nudging spoke lobby =
-        if Model.isOver lobby.Model || not (everyoneHere lobby) then
+        if Playing.isOver lobby.Model || not (everyoneHere lobby) then
             []
         else
             let active = Game.active (game lobby)
@@ -326,6 +326,6 @@ module Lobby =
                 let lobby =
                     answering
                         { lobby with
-                            Model = Update.update msg lobby.Model }
+                            Model = Playing.update msg lobby.Model }
 
                 lobby, drawAll lobby @ nudging (Some console) lobby

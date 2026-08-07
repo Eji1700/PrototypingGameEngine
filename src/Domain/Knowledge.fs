@@ -1,5 +1,7 @@
 namespace TCModel.Domain
 
+open TCModel.Engine
+
 /// Stones as they look from where someone is sitting: either open, and counted out
 /// colour by colour, or closed, and giving up nothing but how many there are.
 type Sight =

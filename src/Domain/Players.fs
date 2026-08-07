@@ -1,13 +1,12 @@
 namespace TCModel.Domain
 
-/// Identifies a player. Private, so the only ids in circulation are the ones the
-/// table below seated.
-type PlayerId = private PlayerId of int
-
-module PlayerId =
-    let value (PlayerId n) = n
+open TCModel.Engine
 
 /// A player commands no faction of their own: the bag holds stones of any colour.
+///
+/// Which seat they are in is the engine's `PlayerId`, not this game's: the record, the
+/// tables, the seats and the screens all speak it, and none of that is a fact about stones.
+/// This game mints them below, at the one place it seats anybody.
 type Player = { Id: PlayerId; Bag: Pile }
 
 module Player =
@@ -40,7 +39,7 @@ module Table =
         | n when n > MaxPlayers -> Error(TooManyPlayers n)
         | _ ->
             Ok
-                { Seats = bags |> List.mapi (fun index bag -> { Id = PlayerId(index + 1); Bag = bag })
+                { Seats = bags |> List.mapi (fun index bag -> { Id = Seat.at (index + 1); Bag = bag })
                   ActiveSeat = 0 }
 
     let players table = table.Seats
@@ -60,7 +59,7 @@ module Table =
             ActiveSeat = (table.ActiveSeat + 1) % count table }
 
     /// Replace the active player, who is the only one an action can change.
-    let withActive player table =
+    let withActive player (table: Table) =
         { table with
             Seats =
                 table.Seats

@@ -4,7 +4,7 @@ open System
 open Spectre.Console
 open Spectre.Console.Rendering
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// The board built out of Spectre's own widgets: panels, tables and charts, rather than
 /// one long block of text.
@@ -225,9 +225,9 @@ module Rich =
             table.AddRow(markup marker, markup name, markup (sighted palette bag)) |> ignore
 
         let run =
-            match Model.session model with
+            match Playing.session model with
             | InPlay play ->
-                let said = Render.negotiationRun play (Model.game model)
+                let said = Render.negotiationRun play (Playing.game model)
                 [ markup (Tint.wrap (Tint.hidden palette) (esc said)) ]
             | Finished _ -> []
 
@@ -302,11 +302,11 @@ module Rich =
     // --- the whole screen ------------------------------------------------------------------
 
     let board palette notes (beholder: Player) model =
-        let game = Model.game model
+        let game = Playing.game model
         let active = Game.active game
 
         let seen =
-            if Model.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
+            if Playing.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
 
         let told = Render.wording beholder model
 
@@ -331,10 +331,10 @@ module Rich =
 
         let mapNote = wideNote (Render.Notes.map + " " + Render.Notes.bordered)
 
-        let hiddenNote = if Model.isOver model then [] else besideNote Render.Notes.supply
+        let hiddenNote = if Playing.isOver model then [] else besideNote Render.Notes.supply
 
         let result =
-            if Model.isOver model then
+            if Playing.isOver model then
                 [ wide Render.Blocks.result (plainly palette (Render.result game)) ]
             else
                 []

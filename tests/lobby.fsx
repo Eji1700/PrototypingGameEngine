@@ -9,13 +9,7 @@
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
-#load "../src/App/Messages.fs"
-#load "../src/App/Session.fs"
-#load "../src/App/Timeline.fs"
-#load "../src/App/Journal.fs"
-#load "../src/App/Model.fs"
-#load "../src/App/Update.fs"
-#load "../src/App/Rival.fs"
+#load "../src/Domain/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Showing.fs"
 #load "../src/Console/Words.fs"
@@ -30,12 +24,13 @@
 #load "../src/Net/Protocol.fs"
 #load "../src/Net/Lobby.fs"
 
-open TCModel.App
+open TCModel.Engine
+open TCModel.Domain
 open TCModel.Console
 open TCModel.Net
 open Harness
 
-let private dealt = Update.start 2 42UL |> Result.toOption |> Option.get
+let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
 /// A table of nothing but people, which is what this file is mostly about.
 let private opened () = Lobby.opened dealt []
@@ -173,7 +168,7 @@ let private played =
     [ "one", "negotiate"; "one", "return r"; "two", "negotiate"; "two", "return r" ]
     |> List.fold (fun (lobby, _) (who, line) -> Lobby.said who line lobby) (full (), [])
 
-report "those four lines end the game" true (Model.isOver (Lobby.model (fst played)))
+report "those four lines end the game" true (Playing.isOver (Lobby.model (fst played)))
 
 report "and a game that is over has come round to nobody" (false, false) (nudged "one" (snd played), nudged "two" (snd played))
 
@@ -259,7 +254,7 @@ report "and the game does not move for it" 0 (movesMade refusedView)
 /// Seat 1 is the machine's, which leaves one seat for one person - so a single arrival fills
 /// a table of two, and the machine has already played by the time they are shown a board.
 let private machineFirst () =
-    Lobby.opened dealt (Rival.seating 42UL [ Some Rival.easy; None ] (Model.game dealt))
+    Lobby.opened dealt (Rival.seating 42UL [ Some Rival.easy; None ] (Playing.game dealt))
 
 let alone, alonePosts = machineFirst () |> sits "one" "tok-one"
 

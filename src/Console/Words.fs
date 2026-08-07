@@ -1,7 +1,7 @@
 namespace TCModel.Console
 
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// Putting the game into English. The domain reports what happened in its own terms;
 /// everything a player actually reads is written here.
@@ -181,10 +181,13 @@ module Words =
         | Restart(Some players, None) -> $"players {players}"
         | Restart(Some players, Some seed) -> $"players {players} {seed}"
 
+    /// What this game itself said. Everything below the first two lines is the engine
+    /// talking, in words that would suit any game - which is why they are the only ones a
+    /// second game would have to write for itself.
     let notice =
         function
-        | Happened e -> event e
-        | Refused r -> rejection r
+        | Said(Happened e) -> event e
+        | Said(Refused r) -> rejection r
         | TookBack msg -> $"Taken back: {command msg}."
         | MadeAgain msg -> $"Made again: {command msg}."
         | NothingToTakeBack -> "There is nothing left to take back - this is the deal itself."
@@ -217,8 +220,8 @@ module Words =
 
     let noticeSeenBy beholder told =
         match told with
-        | Happened happening -> eventSeenBy beholder happening
-        | Refused refusal -> rejectionSeenBy refusal
+        | Said(Happened happening) -> eventSeenBy beholder happening
+        | Said(Refused refusal) -> rejectionSeenBy refusal
         | _ -> notice told
 
     let rulingMeasure =

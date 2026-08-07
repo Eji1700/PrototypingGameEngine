@@ -1,5 +1,7 @@
 namespace TCModel.Console
 
+open TCModel.Engine
+
 /// What a table shows one console, and which console it is for.
 ///
 /// There are two kinds of table in this program - one keyboard with everybody round it,

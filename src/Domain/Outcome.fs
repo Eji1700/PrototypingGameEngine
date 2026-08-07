@@ -1,5 +1,7 @@
 namespace TCModel.Domain
 
+open TCModel.Engine
+
 open TCModel.Common
 
 /// The measures that decide which faction carried the board.

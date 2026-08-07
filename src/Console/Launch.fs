@@ -4,7 +4,7 @@ open System
 open Argu
 open TCModel.Common
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 
 /// What a command line asks the program to open, as a value.
 ///

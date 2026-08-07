@@ -1,8 +1,23 @@
-// Shared by the test scripts: loads the domain in compile order and keeps score.
+// Shared by the test scripts: loads the engine and the game in compile order, and keeps
+// score.
+//
+// The engine comes first and mentions nothing below it - that is the whole of what makes it
+// one - so this list is also the shape of the thing: everything from `Result.fs` to
+// `Machines.fs` would be there whatever game was being checked, and everything after
+// `Stones.fs` is this one.
 
 #load "../src/Common/Result.fs"
 #load "../src/Common/Cascade.fs"
 #load "../src/Common/Random.fs"
+#load "../src/Engine/Seats.fs"
+#load "../src/Engine/Messages.fs"
+#load "../src/Engine/Told.fs"
+#load "../src/Engine/Rules.fs"
+#load "../src/Engine/Timeline.fs"
+#load "../src/Engine/Journal.fs"
+#load "../src/Engine/Model.fs"
+#load "../src/Engine/Update.fs"
+#load "../src/Engine/Machines.fs"
 #load "../src/Domain/Stones.fs"
 #load "../src/Domain/Board.fs"
 #load "../src/Domain/Players.fs"
@@ -14,7 +29,10 @@
 #load "../src/Domain/Actions.fs"
 #load "../src/Domain/Outcome.fs"
 #load "../src/Domain/Setup.fs"
+#load "../src/Domain/Turn.fs"
+#load "../src/Domain/Playing.fs"
 
+open TCModel.Engine
 open TCModel.Domain
 
 let mutable failures = 0

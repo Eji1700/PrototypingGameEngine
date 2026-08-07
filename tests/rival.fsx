@@ -23,13 +23,7 @@
 #r "nuget: Spectre.Console, 0.51.1"
 
 #load "Harness.fsx"
-#load "../src/App/Messages.fs"
-#load "../src/App/Session.fs"
-#load "../src/App/Timeline.fs"
-#load "../src/App/Journal.fs"
-#load "../src/App/Model.fs"
-#load "../src/App/Update.fs"
-#load "../src/App/Rival.fs"
+#load "../src/Domain/Rival.fs"
 #load "../src/Console/Waiting.fs"
 #load "../src/Console/Showing.fs"
 #load "../src/Console/Words.fs"
@@ -45,7 +39,7 @@
 
 open TCModel.Common
 open TCModel.Domain
-open TCModel.App
+open TCModel.Engine
 open TCModel.Console
 open Harness
 
@@ -57,10 +51,10 @@ open Harness
 /// Machines at every seat, a generator each. Asked for the way any other table is: a
 /// seating is one entry to a seat, and every one of these is the machine's.
 let private machinesAt (skills: Skill list) seed model =
-    Rival.seating seed (skills |> List.map Some) (Model.game model)
+    Rival.seating seed (skills |> List.map Some) (Playing.game model)
 
 let private playedOut skills seed =
-    match Update.start (List.length skills) seed with
+    match Playing.start (List.length skills) seed with
     | Error _ -> failwith "the deal was refused"
     | Ok model ->
         Solo.opened "played-out" model
@@ -76,9 +70,9 @@ let private threeMixed = playedOut [ Rival.easy; Rival.medium; Rival.hard ] 1234
 // the machines have nothing left to say, so a turn that never passed would hang here rather
 // than fail. The count is only there to say the game was played rather than abandoned.
 
-report "a table of machines plays the game out to its end" true (Model.isOver twoHard)
+report "a table of machines plays the game out to its end" true (Playing.isOver twoHard)
 
-report "and again with three of them, of three different skills" true (Model.isOver threeMixed)
+report "and again with three of them, of three different skills" true (Playing.isOver threeMixed)
 
 // A game ends the moment everybody negotiates in a row, so a machine that never played a
 // stone would end one in three lines and look, from the outside, exactly like a machine that
@@ -105,7 +99,7 @@ let private toldIn model =
 let private refusals model =
     toldIn model
     |> List.choose (function
-        | Refused rejection -> Some(Words.rejection rejection)
+        | Said(Refused rejection) -> Some(Words.rejection rejection)
         | _ -> None)
 
 // The machine asks the rules what they will take before it chooses, rather than keeping an
@@ -135,11 +129,11 @@ report
 
 report
     "so a game between machines replays from its record"
-    (Model.session twoHard)
-    (Update.replay (Journal.players twoHard.Journal) (Journal.seed twoHard.Journal) (Journal.moves twoHard.Journal)
+    (Playing.session twoHard)
+    (Playing.replay (Journal.players twoHard.Journal) (Journal.seed twoHard.Journal) (Journal.moves twoHard.Journal)
      |> Result.toOption
      |> Option.get
-     |> Model.session)
+     |> Playing.session)
 
 // --- and that it is a fold ----------------------------------------------------------------
 //
@@ -217,11 +211,11 @@ let private posed seed =
         |> List.fold
             (fun model line ->
                 match Parse.line line with
-                | Ok(Parse.Send msg) -> Update.update msg model
+                | Ok(Parse.Send msg) -> Playing.update msg model
                 | _ -> model)
-            (Update.start 3 seed |> Result.toOption |> Option.get)
+            (Playing.start 3 seed |> Result.toOption |> Option.get)
 
-    match Model.session model with
+    match Playing.session model with
     | InPlay play -> play
     | Finished _ -> failwith "the game ended before the position was posed"
 
@@ -259,9 +253,9 @@ report "which is true of the middle skill as well" (chooses Rival.medium posedGa
 
 let private wonBy skills seed =
     let played = playedOut skills seed
-    let seats = Game.players (Model.game played) |> List.map (fun player -> player.Id)
+    let seats = Game.players (Playing.game played) |> List.map (fun player -> player.Id)
 
-    match Outcome.verdict (Model.game played) with
+    match Outcome.verdict (Playing.game played) with
     | Won(_, winner) -> Some(List.findIndex ((=) winner) seats)
     | Drawn _ -> None
 
@@ -357,10 +351,10 @@ report
 // because which seats are the program's is a thing to be chosen: a table of three may be a
 // person between two machines, and that is a table the old shape could not describe.
 
-let private dealt = Update.start 3 42UL |> Result.toOption |> Option.get
+let private dealt = Playing.start 3 42UL |> Result.toOption |> Option.get
 
 let private seated sitting =
-    Rival.seating 42UL sitting (Model.game dealt)
+    Rival.seating 42UL sitting (Playing.game dealt)
     |> List.map (fun (playerId, rival) -> PlayerId.value playerId, rival.Skill.Name)
 
 report
@@ -379,7 +373,7 @@ report "and none at all is a table of nothing but people" [] (seated [])
 // against machines replaying exactly like any other.
 
 let private generators sitting =
-    Rival.seating 42UL sitting (Model.game dealt)
+    Rival.seating 42UL sitting (Playing.game dealt)
     |> List.map (fun (_, rival) -> rival.Rng)
 
 report
