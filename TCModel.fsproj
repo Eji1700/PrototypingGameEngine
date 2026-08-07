@@ -71,6 +71,10 @@
     <Compile Include="src/Console/Rich.fs" />
     <Compile Include="src/Console/Html.fs" />
     <Compile Include="src/Console/View.fs" />
+    <!-- The other half of `Keys`: the half that touches a terminal. Above `View` because a
+         screen is drawn through the same view that draws the board, and no higher, because
+         nothing about driving one has anything to do with what is being chosen. -->
+    <Compile Include="src/Console/Screens.fs" />
     <Compile Include="src/Console/Solo.fs" />
     <Compile Include="src/Console/Options.fs" />
     <!-- The command line, both ways round: what can be asked for, what a typed line comes

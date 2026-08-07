@@ -170,68 +170,13 @@ type private Opening =
     | Play of Model * View * Sitter list
     | Done of code: int
 
-/// Whether there is somebody at the keyboard to steer with. A line piped in cannot press an
-/// arrow, and a redirected console throws rather than answering for one, so a screen shown
-/// to one of those is shown whole and read a line at a time exactly as it always was.
-let private steering () = not Console.IsInputRedirected
-
-/// Nothing here is worth losing a turn over: a console that will not clear is a console the
-/// menu scrolls in, which is how it read before there was anything to move.
-let private cleared () =
-    try
-        Console.Clear()
-    with _ ->
-        ()
-
-/// Hold the screen until a key, for the one thing the menu prints that is longer than the
-/// menu. It is about to be wiped, and nobody reads the rules in the time it takes to press
-/// something.
-let private held () =
-    if steering () then
-        printf "Press any key."
-        Console.ReadKey true |> ignore
-
-/// Ask a screen for a line.
-///
-/// What comes back is a line in the words a person would have typed, so on the other side of
-/// this is the same reader that has always been there - the arrows are a way of typing
-/// rather than a second way of meaning something. Where the highlight was left comes back
-/// with it: walking a colour along changes the palette, which builds the screen again, and
-/// the cursor has to still be on the slot that is being changed.
-let private asking (view: View) said screen at =
-    let rec steer standing =
-        let showing, index = Keys.facing standing
-        cleared ()
-        printf "%s" (view.Says(Keys.draw (Some index) showing))
-
-        if said <> "" then printfn "%s" (view.Says said)
-
-        printf "> %s" standing.Buffer
-
-        match Keys.answer (Keys.pressed (Keys.typing standing) (Console.ReadKey true)) standing with
-        | Keys.Steering next -> steer next
-        | Keys.Answered line -> Some line, Keys.started standing
-
-    if steering () then
-        steer (Keys.standing screen at)
-    else
-        printf "%s" (view.Says(Keys.draw None screen))
-
-        if said <> "" then printfn "%s" (view.Says said)
-
-        printf "> "
-
-        match Console.ReadLine() with
-        | null -> None, at
-        | line -> Some line, at
-
 /// The colour screen, which runs until the player is done with it and gives back the view
 /// they came in reading - the same one, in whatever colours they settled on.
 ///
 /// It is shown through that view, so the sample colours on it are drawn by the very thing
 /// that will be drawing the board.
 let rec private colouring (view: View) at said =
-    match asking view said (Options.screen view.Palette) at with
+    match Screens.asking view said (Options.screen view.Palette) at with
     | None, _ -> view
     | Some line, at ->
         match Options.choose view.Palette line with
@@ -286,12 +231,12 @@ let private starting (view: View) choice =
 /// rather than read, so it is made up once, out here, and passed along: a screen that invented
 /// one as it drew would show a different word every time it was drawn.
 let rec private sitting (view: View) word sitters reach at said =
-    match asking view said (Menu.seats sitters reach) at with
+    match Screens.asking view said (Menu.seats sitters reach) at with
     | None, _ -> Some(Done 0)
     | Some line, at -> answering view word sitters reach at line sitting
 
 and private reaching (view: View) word sitters reach at said =
-    match asking view said (Menu.reaches word sitters reach) at with
+    match Screens.asking view said (Menu.reaches word sitters reach) at with
     | None, _ -> Some(Done 0)
     | Some line, at -> answering view word sitters reach at line reaching
 
@@ -319,7 +264,7 @@ and private answering view word sitters reach at line asked =
 let rec private welcome (view: View) at said =
     // The menu is shown in the view it is offering, so 'view rich' shows what rich looks
     // like before a whole game is committed to it.
-    match asking view said (Menu.screen view) at with
+    match Screens.asking view said (Menu.screen view) at with
     | None, _ -> Done 0
     | Some line, at ->
 
@@ -335,7 +280,7 @@ let rec private welcome (view: View) at said =
     | Ok Menu.Leave -> Done 0
     | Ok Menu.Rules ->
         printfn "%s" view.Rules
-        held ()
+        Screens.held ()
         welcome view at ""
     | Ok(Menu.Looking chosen) -> welcome chosen at ""
     | Ok Menu.Options -> welcome (colouring view 0 "") at ""
