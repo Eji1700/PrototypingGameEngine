@@ -20,6 +20,7 @@
 
 #load "Harness.fsx"
 
+#load "../src/Table/Parts/Invoked.fs"
 #load "../src/Table/Parts/Showing.fs"
 #load "../src/Table/Parts/Waiting.fs"
 #load "../src/Table/Parts/Palette.fs"

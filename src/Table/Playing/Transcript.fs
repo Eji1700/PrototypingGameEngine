@@ -43,7 +43,7 @@ module Transcript =
           // which game it is in any way a program could read - only in the sentence at the
           // top of it. Which is a fair thing to leave to a person and not a fair thing to
           // leave to whoever pastes this line.
-          $"#   dotnet run -- {game.Name} replay <this file>"
+          $"#   {Invoked.program.Value} {game.Name} replay <this file>"
           ""
           $"{DealWord} {Journal.players journal} {Journal.seed journal}"
           "" ]

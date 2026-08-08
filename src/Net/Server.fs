@@ -206,7 +206,7 @@ module Server =
     /// this program is certain to accept.
     let private takeSeatAt game reach where =
         [ ""
-          $"    dotnet run -- {Launch.written game (Launch.Join(where, None, Reach.word reach))}"
+          $"    {Launch.written game (Launch.Join(where, None, Reach.word reach))}"
           ""
           $"  or open {Reach.opened reach where} in a browser."
           "" ]

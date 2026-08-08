@@ -197,8 +197,16 @@ module Launch =
     /// above can name this game's views or its machines. They say "see the list below", and
     /// this is the list below - the only place in the help that has the game to ask.
     let private examples (game: Playable<_, _, _>) =
-        let shown line said = sprintf "    %-38s %s" line said
-        let name = game.Name
+        // What a whole line looks like, and what a list of names looks like under them. Two
+        // widths because they are two different things: one column holds command lines and
+        // the other holds labels, and padding a label out to fit a command line leaves a
+        // corridor of nothing between it and what it says.
+        let shown line said = sprintf "    %-52s %s" line said
+        let listed label said = sprintf "    %-28s %s" label said
+
+        // Whatever this program is called from where the reader is standing, and then the
+        // game, because everything after that is read by the game.
+        let name = $"{Invoked.program.Value} {game.Name}"
         let few, many = game.Fewest, game.Most
 
         let drawn =
@@ -222,16 +230,16 @@ module Launch =
                  shown $"{name} serve {few}" "the same game, read in a browser"
                  shown $"{name} host {many}" $"a table for {many} at their own machines"
                  shown $"{name} host {many} --open" "...with no word at the door, for a room you trust"
-                 $"    {name} host {many} --behind --at {name}.example.org"
+                 $"    {name} host {many} --behind --at {game.Name}.example.org"
                  $"    {name} join greg-pc --code kbd4-9mtx-7rfp"
                  $"    {name} replay logs/2026-08-02-215823-2p-seed42.log"
                  ""
-                 shown "How the board can be drawn:" (String.concat ", " drawn)
-                 shown "  ...and in a browser:" (Playable.namesFor InABrowser game) ]
+                 listed "How the board can be drawn:" (String.concat ", " drawn)
+                 listed "  ...and in a browser:" (Playable.namesFor InABrowser game) ]
              @ (match game.Skills with
                 | [] -> []
-                | skills -> [ shown "The machine plays:" (skills |> List.map fst |> String.concat ", ") ])
-             @ [ shown
+                | skills -> [ listed "The machine plays:" (skills |> List.map fst |> String.concat ", ") ])
+             @ [ listed
                      "What takes a colour:"
                      (Palette.slots (Playable.standard game)
                       |> List.map (fun slot -> slot.Key)
@@ -249,7 +257,7 @@ module Launch =
             game.Name,
             fun _ ->
                 ArgumentParser.Create<Argument>(
-                    programName = game.Name,
+                    programName = $"{Invoked.program.Value} {game.Name}",
                     errorHandler = ExceptionExiter(),
                     usageStringCharacterWidth = 100,
                     helpTextMessage = examples game
@@ -380,7 +388,8 @@ module Launch =
     /// Said out in full, because `Name` is a field on a good many things that are in scope
     /// here - Argu's own description of an argument among them - and inference would
     /// cheerfully pick one of those.
-    let written (game: Playable<_, _, _>) launch = $"{game.Name} {write launch}"
+    let written (game: Playable<_, _, _>) launch =
+        $"{Invoked.program.Value} {game.Name} {write launch}"
 
     // --- and words as a launch ----------------------------------------------------------
 

@@ -28,6 +28,7 @@
 #load "../src/Engine/Model.fs"
 #load "../src/Engine/Update.fs"
 #load "../src/Engine/Machines.fs"
+#load "../src/Table/Parts/Invoked.fs"
 #load "../src/Table/Parts/Showing.fs"
 #load "../src/Table/Parts/Waiting.fs"
 #load "../src/Table/Parts/Palette.fs"

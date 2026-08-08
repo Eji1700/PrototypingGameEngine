@@ -28,6 +28,8 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
+. (Join-Path $PSScriptRoot "Driving.ps1")
+
 # The one thing about the two games this needs: a line that is a legal opening move, and a
 # word the other console should see in its log once it has been played.
 $moves = @{
@@ -43,70 +45,6 @@ function Report($name, $ok, $detail) {
     else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
 }
 
-function Wait-For($what, $seconds, $test) {
-    $until = (Get-Date).AddSeconds($seconds)
-
-    while ((Get-Date) -lt $until) {
-        if (& $test) { return $true }
-        Start-Sleep -Milliseconds 200
-    }
-
-    throw "waited $seconds seconds for $what and it never came"
-}
-
-# --- a console, driven -------------------------------------------------------------------
-#
-# A real process with its keyboard and its screen held at this end, so a line can be typed
-# when this script decides rather than when a file happens to reach the far end. It was a
-# `.cmd` feeding a pipe first, with `ping` for the pauses; that worked on one operating
-# system and waited out fixed lengths of time on it, which are the two things a check should
-# not do. What replaces it waits on the table saying something, and runs anywhere dotnet does.
-
-function Start-Console($arguments) {
-    $psi = New-Object Diagnostics.ProcessStartInfo
-    $psi.FileName = "dotnet"
-    $psi.Arguments = $arguments
-    $psi.UseShellExecute = $false
-    $psi.RedirectStandardInput = $true
-    $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError = $true
-
-    $console = New-Object Diagnostics.Process
-    $console.StartInfo = $psi
-
-    # Collected as it arrives rather than read at the end, and that is not tidiness: a
-    # console is drawn a whole board every time the table moves, and a pipe nobody is
-    # emptying fills up and stops the process writing into it. What that looks like from
-    # here is a table that went quiet, which is the very thing being checked.
-    $said = [Collections.ArrayList]::Synchronized((New-Object Collections.ArrayList))
-
-    $heard = Register-ObjectEvent -InputObject $console -EventName OutputDataReceived -MessageData $said -Action {
-        if ($null -ne $EventArgs.Data) { [void]$Event.MessageData.Add($EventArgs.Data) }
-    }
-
-    [void]$console.Start()
-    $console.BeginOutputReadLine()
-
-    @{ Process = $console; Said = $said; Heard = $heard }
-}
-
-# What one console has been told so far, as one piece of text.
-function Told($console) { $console.Said -join "`n" }
-
-function Types($console, $line) {
-    $console.Process.StandardInput.WriteLine($line)
-    $console.Process.StandardInput.Flush()
-}
-
-function Close-Console($console) {
-    if ($console.Process -and -not $console.Process.HasExited) {
-        # Nothing more coming, which a console answers by putting the game down and going.
-        try { $console.Process.StandardInput.Close() } catch {}
-        if (-not $console.Process.WaitForExit(10000)) { try { $console.Process.Kill() } catch {} }
-    }
-
-    if ($console.Heard) { Unregister-Event -SourceIdentifier $console.Heard.Name -ErrorAction SilentlyContinue }
-}
 
 # --- run it ---------------------------------------------------------------------------------
 
@@ -116,8 +54,7 @@ $consoles = @()
 try {
     "Opening a table for two and sitting down at it..."
 
-    Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+    Stop-Tables
 
     $served = @("run", "--project", $root, "--")
     if ($Game) { $served += $Game }
@@ -125,16 +62,7 @@ try {
 
     $table = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
 
-    Wait-For "the table to come up on port $Port" 120 {
-        try {
-            $probe = New-Object Net.Sockets.TcpClient
-            $probe.Connect("localhost", $Port)
-            $answered = $probe.Connected
-            $probe.Close()
-            $answered
-        }
-        catch { $false }
-    } | Out-Null
+    Wait-ForPort $Port 120
 
     # The word at the door goes with them, because a table gets one when nobody says
     # otherwise and what is driven here should be the way this is really played.
@@ -142,14 +70,14 @@ try {
     if ($Game) { $joining += " $Game" }
     $joining += " join localhost:$Port --code $Code"
 
-    $one = Start-Console $joining
+    $one = Start-Console "dotnet" $joining
     $consoles += $one
 
     # One first and alone, so that what it is shown while it waits can be checked - and so
     # the seat it is given is the first rather than whichever arrived first.
     Wait-For "the first console to be seated" 60 { (Told $one) -match "You are at seat 1" } | Out-Null
 
-    $two = Start-Console $joining
+    $two = Start-Console "dotnet" $joining
     $consoles += $two
 
     Wait-For "the second console to be seated" 60 { (Told $two) -match "You are at seat 2" } | Out-Null
@@ -193,5 +121,5 @@ finally {
 
     if ($table -and -not $table.HasExited) { try { Stop-Process -Id $table.Id -Force } catch {} }
 
-    Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Stop-Tables
 }

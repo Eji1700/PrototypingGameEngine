@@ -46,7 +46,7 @@ dotnet run -- tictactoe play 2  # or say which, and everything after it is read 
 [Playing against the program](#playing-against-the-program)
 
 **The code** — [How it is put together](#how-it-is-put-together) ·
-[Tests](#tests) · [Tooling](#tooling)
+[Tests](#tests) · [One file](#one-file) · [Tooling](#tooling)
 
 ## Running
 
@@ -1837,6 +1837,8 @@ pwsh tools/wire.ps1                   # a hosted table with two consoles at it, 
 pwsh tools/wire.ps1 -Game tictactoe
 ```
 
+And [publish.ps1](#one-file), which builds the program into one file and then plays it.
+
 `wire.ps1` is in CI; `smoke.ps1` is not, because it wants a Chromium-based browser and the
 runner may not have one. `wire.ps1` wants nothing but dotnet, and it is there because a
 regression got past everything else - see [what a second game found](#what-a-second-game-found).
@@ -1945,6 +1947,60 @@ The suite earned its keep on the first run. It shrank a failure to two moves - `
 is refused at the deal, a `redo` left over from an earlier undo carries the game
 *forward*. That is `redo` keeping its own promise. The property now says which case it
 means rather than quietly covering both.
+
+## One file
+
+```powershell
+pwsh tools/publish.ps1                     # both shapes, for this machine
+pwsh tools/publish.ps1 -Shape portable     # just the small one
+pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
+```
+
+| | size | wants |
+| --- | --- | --- |
+| `portable` | 6.3 MB | the ASP.NET Core 10 runtime installed |
+| `standalone` | 104.7 MB | nothing at all |
+
+Guests need neither. They join in a browser, and the browser is served by whoever is
+hosting — which is what embedding [datastar.js](assets/datastar.js) rather than fetching it
+buys. So `standalone` is for exactly one case, somebody hosting a table on a machine with
+no .NET on it, and a hundred megabytes is a fair price for that and a poor one for anything
+else. `portable` is what goes in a release.
+
+**Never trimmed.** `Launch` builds its command line by reflecting over the argument types,
+SignalR finds a hub's methods by name, and `Page.Signals` is read off a request by a
+serialiser that reflects. A trimmed build is 24 MB, emits **no IL warning whatsoever**, and
+throws on the first line it is given:
+
+```
+The type initializer for '<StartupCode$TCModel>.$Launch' threw an exception.
+```
+
+So [publish.ps1](tools/publish.ps1) does not just build the file, it runs it: `--help`, a
+table served to a browser with the client carried inside the file, and a table hosted over a
+socket with a console sitting down at it. Between them those are every part of this program
+that only works because something was found by reflection.
+
+### What a program calls itself
+
+Everything printed here for somebody to type is an instruction, and an instruction that will
+not run is worse than none. There are two ways this game gets passed around and they are
+called two different things: a clone, run with `dotnet run --`, and one file somebody was
+sent, called by its own name.
+
+```
+    dotnet run -- turncoats join greg-pc --code kbd4-9mtx-7rfp     # from a clone
+    TCModel turncoats join greg-pc --code kbd4-9mtx-7rfp           # from a published file
+```
+
+[Invoked.fs](src/Table/Parts/Invoked.fs) answers that once, and everything that prints a
+line asks it: the usage and the examples, the address a table reads out to the room, the
+line a dropped player is handed for getting back to their seat, the header on a record. What
+it asks is not how this process was started but **where the reader is standing** — `dotnet
+run --` works when there is a project in the current directory to run, and nowhere else.
+
+Until there was a file to hand anybody, every one of those said `dotnet run --` and nobody
+noticed, because everybody testing it had the repository.
 
 ## Tooling
 

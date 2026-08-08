@@ -108,7 +108,7 @@ module Client =
                 // a player is told to type is something the program is certain to accept -
                 // including the word at the door, which they would otherwise have to
                 // remember they had been given.
-                printfn "  dotnet run -- %s" (Launch.written game (Launch.Join(given, Some mine, code)))
+                printfn "  %s" (Launch.written game (Launch.Join(given, Some mine, code)))
         )
         |> ignore
 

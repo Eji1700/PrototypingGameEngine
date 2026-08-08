@@ -44,6 +44,7 @@
        everything a game and a table are described in and does not know there is a seam;
        `Playing` is written against it. -->
   <ItemGroup Label="Table - the parts a game and a table are described in">
+    <Compile Include="src/Table/Parts/Invoked.fs" />
     <Compile Include="src/Table/Parts/Showing.fs" />
     <Compile Include="src/Table/Parts/Waiting.fs" />
     <Compile Include="src/Table/Parts/Palette.fs" />
