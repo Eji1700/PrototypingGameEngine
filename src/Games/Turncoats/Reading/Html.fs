@@ -126,26 +126,68 @@ module Html =
             | Wild
             | Special -> laid (Game.stones region.Id game)
 
-        // Recruiting is the one action that needs nothing but a colour and a region, so it
-        // is the one that fits on a region. A battle or a march needs saying, and gets
-        // said at the prompt.
-        let acts =
+        let short color =
+            (Words.glyph color |> string).ToLowerInvariant()
+
+        // Recruiting needs nothing but a colour and a region, so every region offers all
+        // three whatever is in anybody's bag: asking for a stone you have not got is a fair
+        // thing to try, and the table answers it in words.
+        let recruiting =
             match region.Kind with
             | Dead -> []
             | Home _
             | Wild
             | Special ->
                 StoneColor.all
-                |> List.map (fun color ->
+                |> List.map (fun color -> types $"recruit {short color} {Words.number region.Id}" (string (Words.glyph color)))
+
+        /// What can be done with the stones already standing here: driven out, or marched
+        /// into somewhere this region borders.
+        ///
+        /// Both are whole lines like every other button, which is what took them off the
+        /// prompt and onto the map. A battle needs no casualties named - left unsaid it
+        /// drives out as many as it may - and a march needs no count, one being what it
+        /// means without one. So each of these is a colour and one or two region numbers,
+        /// which is exactly what a region knows about itself.
+        ///
+        /// Filtered by what is actually standing here, where recruiting is not. That is the
+        /// same rule read twice rather than an inconsistency: a recruit of a colour you do
+        /// not hold is a move worth trying and being told about, and a battle or a march of
+        /// a colour that is not in the region is not a move at all - the rules would refuse
+        /// every one of them, every time, and a button refused every time is not a button.
+        let withWhatIsHere =
+            let here = Game.stones region.Id game
+
+            let marching color =
+                Board.neighbours region.Id
+                |> Set.toList
+                |> List.filter (fun other -> (Board.region other).Kind <> Dead)
+                |> List.map (fun other ->
                     types
-                        $"recruit {(Words.glyph color |> string).ToLowerInvariant()} {Words.number region.Id}"
-                        (string (Words.glyph color)))
+                        $"march {short color} {Words.number region.Id} {Words.number other}"
+                        $"{Words.glyph color}→{Words.number other}")
+
+            match region.Kind with
+            | Dead -> []
+            | Home _
+            | Wild
+            | Special ->
+                StoneColor.all
+                |> List.filter (fun color -> Pile.count color here > 0)
+                |> List.collect (fun color ->
+                    types $"battle {short color} {Words.number region.Id}" $"×{Words.glyph color}"
+                    :: marching color)
 
         Elem.div
             [ Attr.class' "region"; attr "style" $"border-color: {border}" ]
-            [ Elem.div [ Attr.class' "title" ] [ Text.enc (Render.regionTitle 24 region) ]
-              Elem.div [ Attr.class' "standing" ] (standing @ rulerBadge ruling)
-              Elem.div [ Attr.class' "acts" ] (acts @ [ types $"rule {Words.number region.Id}" "?" ]) ]
+            ([ Elem.div [ Attr.class' "title" ] [ Text.enc (Render.regionTitle 24 region) ]
+               Elem.div [ Attr.class' "standing" ] (standing @ rulerBadge ruling)
+               Elem.div [ Attr.class' "acts" ] (recruiting @ [ types $"rule {Words.number region.Id}" "?" ]) ]
+             // A second row, and only where there is something to do in it. An empty region
+             // has nothing to drive out and nothing to march, and says so by being quiet.
+             @ (match withWhatIsHere with
+                | [] -> []
+                | acts -> [ Elem.div [ Attr.class' "acts wide" ] acts ]))
 
     let private mapOf game =
         Board.layout
@@ -296,7 +338,8 @@ module Html =
                              Render.Notes.bordered
                              // The one thing here no other view has: a region on this board can be
                              // typed on by clicking it.
-                             "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is." ]
+                             "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is."
+                             "Where a region holds stones there is a second row: '×R' battles with a Red one and drives out all it may, and 'R→8' marches a Red one into 8." ]
                    ))
               block Render.Blocks.apart ([ apart game ] @ noted Render.Notes.apart)
               // The one block no other view has: the moves that need nothing said beyond

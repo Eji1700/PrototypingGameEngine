@@ -207,6 +207,83 @@ report
     (posted (view.Board true (Game.active (Playing.game owing)).Id owing)
      |> List.exists (fun line -> line.StartsWith "return "))
 
+
+// --- what a region offers to do with the stones already standing on it ---------------------
+//
+// Recruiting takes a colour and a region, and every region offers all three whatever anybody
+// is holding. A battle and a march take more than that, and were typed at the prompt until
+// there were buttons for them.
+//
+// They are worth a check of their own because of the one way they can go wrong that the
+// sweep above cannot see. `march r 5 12` is a perfectly well-formed line and the parser
+// takes it happily; it is the *rules* that refuse it, 5 not bordering 12. So a button
+// offering that would be pressed, refused, and pass every check in this file - which is why
+// what is asked here is not "does it parse" but "is it the exact set the board allows".
+
+let private onTheMap =
+    Board.layout |> List.collect (List.map fst) |> List.map Board.region
+
+let private short colour =
+    (Words.glyph colour |> string).ToLowerInvariant()
+
+/// Every battle and march the board should be offering, worked out from the position rather
+/// than from the markup - so the two have to agree without either being written twice.
+let private allowed =
+    [ for region in onTheMap do
+          if region.Kind <> Dead then
+              let here = Game.stones region.Id (Playing.game dealt)
+
+              for colour in StoneColor.all do
+                  if Pile.count colour here > 0 then
+                      yield $"battle {short colour} {Words.number region.Id}"
+
+                      for other in Board.neighbours region.Id do
+                          if (Board.region other).Kind <> Dead then
+                              yield $"march {short colour} {Words.number region.Id} {Words.number other}" ]
+
+let private offered =
+    // One board rather than the whole sweep above, which collects from several positions at
+    // once: what is being compared here is a position and the buttons drawn from it.
+    posted (view.Board true beholder dealt)
+    |> List.filter (fun line -> line.StartsWith "battle " || line.StartsWith "march ")
+
+report "the board does offer battles and marches at all" true (List.length allowed > 20)
+
+report
+    "and exactly the ones the position allows: one per colour standing there, to each region it borders"
+    (List.sort allowed)
+    (List.sort offered)
+
+// Said again from the other end, because it is the half that matters and a set comparison
+// is a poor thing to read a failure off.
+
+report
+    "no march is offered between two regions that do not border each other"
+    []
+    (offered
+     |> List.filter (fun line -> line.StartsWith "march ")
+     |> List.filter (fun line ->
+         match Commands.words line with
+         | [ _; _; from; into ] ->
+             match Board.tryId (int from), Board.tryId (int into) with
+             | Some from, Some into -> not (Board.areAdjacent from into)
+             | _ -> true
+         | _ -> true))
+
+// And a region with nothing on it offers neither, which is what keeps the map readable: a
+// button that could only ever be refused is not a button.
+
+let private bare =
+    onTheMap
+    |> List.filter (fun region -> Pile.isEmpty (Game.stones region.Id (Playing.game dealt)))
+
+report "there is a region with nothing standing on it" true (not (List.isEmpty bare))
+
+report
+    "and it offers nothing to do with what is not there"
+    []
+    (bare
+     |> List.collect (fun region -> offered |> List.filter (fun line -> line.EndsWith $" {Words.number region.Id}")))
 // --- the colours ---------------------------------------------------------------------------
 //
 // A page carries its colours in its own head and every fragment draws in those, which is

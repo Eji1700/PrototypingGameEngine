@@ -992,8 +992,24 @@ send - and the record stays one language all the way out to the browser.
 [html.fsx](tests/html.fsx) pins that down: it pulls every line out of every screen this
 view draws and puts each one through `Parse.line`.
 
-Moves needing more than a colour and a region - a battle, a march - are typed into the
-box at the bottom, which is the prompt by another name.
+**All four actions are on the map.** A region offers a recruit in each colour, and where
+it holds stones a second row offers what can be done with them: `×R` battles with a Red
+one and drives out as many as it may, `R→8` marches a Red one into 8. Both are whole
+lines, which is what let them off the prompt: a battle with no casualties named drives
+out all it can, and a march with no count moves one - so each is a colour and one or two
+region numbers, and a region knows all of that about itself.
+
+That second row is filtered by what is actually standing there and the first is not,
+which is the same rule read twice rather than an inconsistency. Recruiting a colour you
+do not hold is a fair thing to try and the table answers it in words; a battle or a march
+of a colour that is not in the region is not a move at all, and a button refused every
+time it is pressed is not a button.
+
+It also needed a check the parser cannot give. `march r 5 12` is a perfectly well-formed
+line - `Parse.line` takes it happily - and it is the *rules* that refuse it, 5 not
+bordering 12. So a button offering it would pass every check above. `html.fsx` asks a
+different question of these two: not "does it parse" but "is this the exact set the
+position allows", worked out from the board rather than from the markup.
 
 **A screen is a fragment, not a page.** Every screen `Html` draws is one element with
 an id on it, so the same text serves both for building the page the first time and for
