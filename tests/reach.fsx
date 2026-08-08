@@ -13,7 +13,7 @@
 //   dotnet fsi tests/reach.fsx
 
 #load "Harness.fsx"
-#load "../src/Table/Reach.fs"
+#load "../src/Table/Parts/Reach.fs"
 
 open TCModel.Table
 open Harness

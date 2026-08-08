@@ -38,32 +38,43 @@
   <!-- Table - how a game is *read*, which is the second seam. `Playable` is to this layer
        what `Rules` is to the engine: fill it in and the timeline, the record, the seats, the
        tokens, the menu, the command line and every screen already work. Nothing here names
-       a game, a piece, or a board. -->
-  <ItemGroup Label="Table - how a game is read and played">
-    <Compile Include="src/Table/Showing.fs" />
-    <Compile Include="src/Table/Waiting.fs" />
-    <Compile Include="src/Table/Palette.fs" />
-    <Compile Include="src/Table/Tint.fs" />
-    <!-- How far a table can be reached and what it takes to sit down at one. Up here
-         because the door has a page of its own, and the page is next. -->
-    <Compile Include="src/Table/Reach.fs" />
-    <!-- The browser's shell: the stream, the prompt, the colour form and the door. A game
-         brings a stylesheet and a name for the tab; the rest is the same at every game. -->
-    <Compile Include="src/Table/Page.fs" />
+       a game, a piece, or a board.
+
+       Two folders and one file between them, and the file is the point: `Parts` is
+       everything a game and a table are described in and does not know there is a seam;
+       `Playing` is written against it. -->
+  <ItemGroup Label="Table - the parts a game and a table are described in">
+    <Compile Include="src/Table/Parts/Showing.fs" />
+    <Compile Include="src/Table/Parts/Waiting.fs" />
+    <Compile Include="src/Table/Parts/Palette.fs" />
+    <!-- How far a table can be reached and what it takes to sit down at one. Above the page
+         because the door has a page of its own. -->
+    <Compile Include="src/Table/Parts/Reach.fs" />
     <!-- One reads a key, the other a line; both before anything that offers a screen. -->
-    <Compile Include="src/Table/Keys.fs" />
-    <Compile Include="src/Table/Commands.fs" />
-    <Compile Include="src/Table/View.fs" />
-    <!-- The seam itself. Everything below this line is written against it. -->
-    <Compile Include="src/Table/Playable.fs" />
-    <Compile Include="src/Table/Screens.fs" />
+    <Compile Include="src/Table/Parts/Keys.fs" />
+    <Compile Include="src/Table/Parts/Commands.fs" />
+    <Compile Include="src/Table/Parts/View.fs" />
     <!-- Who is going to be at each seat, which every way of opening a game has to settle. -->
-    <Compile Include="src/Table/Seating.fs" />
-    <Compile Include="src/Table/Solo.fs" />
-    <Compile Include="src/Table/Transcript.fs" />
-    <Compile Include="src/Table/Options.fs" />
-    <Compile Include="src/Table/Menu.fs" />
-    <Compile Include="src/Table/Launch.fs" />
+    <Compile Include="src/Table/Parts/Seating.fs" />
+    <!-- And the kit those are drawn with: colour over text, the browser's shell, and a
+         screen driven at a real terminal. -->
+    <Compile Include="src/Table/Parts/Tint.fs" />
+    <Compile Include="src/Table/Parts/Page.fs" />
+    <Compile Include="src/Table/Parts/Screens.fs" />
+    <Compile Include="src/Table/Parts/Options.fs" />
+  </ItemGroup>
+
+  <!-- The seam itself. Everything below this line is written against it, and everything
+       above it could not name it if it tried. -->
+  <ItemGroup Label="Table - the seam">
+    <Compile Include="src/Table/Playable.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Table - playing one, and the two ways in">
+    <Compile Include="src/Table/Playing/Solo.fs" />
+    <Compile Include="src/Table/Playing/Transcript.fs" />
+    <Compile Include="src/Table/Playing/Menu.fs" />
+    <Compile Include="src/Table/Playing/Launch.fs" />
   </ItemGroup>
 
   <ItemGroup Label="Net - the same table, with the players at different keyboards">
@@ -75,52 +86,64 @@
     <Compile Include="src/Net/Client.fs" />
   </ItemGroup>
 
-  <!-- A game is a folder. Everything above this point is machinery; everything in one of
-       these is one game's rules, its words and its drawings, ending in the one value that
-       fills in both seams. -->
-  <ItemGroup Label="TCModel - stones on a map, and a seat each">
-    <Compile Include="src/Games/TCModel/Stones.fs" />
-    <Compile Include="src/Games/TCModel/Board.fs" />
-    <Compile Include="src/Games/TCModel/Players.fs" />
-    <Compile Include="src/Games/TCModel/Position.fs" />
-    <Compile Include="src/Games/TCModel/Ruling.fs" />
-    <Compile Include="src/Games/TCModel/Game.fs" />
-    <Compile Include="src/Games/TCModel/Knowledge.fs" />
-    <Compile Include="src/Games/TCModel/Events.fs" />
-    <Compile Include="src/Games/TCModel/Actions.fs" />
-    <Compile Include="src/Games/TCModel/Outcome.fs" />
-    <Compile Include="src/Games/TCModel/Setup.fs" />
+  <!-- A game is a folder, and inside it the two seams are two folders. `Rules` is how it is
+       played: no English, no screen, and nothing from `src/Table` - which is not a house rule
+       but a fact you can check, because not one file in there opens it. `Reading` is how it
+       is read. `Offer.fs` is the two halves joined, and the only file either layer above ever
+       sees. -->
+  <ItemGroup Label="TCModel - how it is played">
+    <Compile Include="src/Games/TCModel/Rules/Stones.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Board.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Players.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Position.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Ruling.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Game.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Knowledge.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Events.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Actions.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Outcome.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Setup.fs" />
     <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
          a turn that stays open until a stone goes back is nobody else's rule. -->
-    <Compile Include="src/Games/TCModel/Turn.fs" />
-    <Compile Include="src/Games/TCModel/Playing.fs" />
-    <Compile Include="src/Games/TCModel/Rival.fs" />
-    <Compile Include="src/Games/TCModel/Words.fs" />
-    <!-- What this game colours, which came out of `Tint` when there was a second game. -->
-    <Compile Include="src/Games/TCModel/Ink.fs" />
-    <Compile Include="src/Games/TCModel/Parse.fs" />
-    <Compile Include="src/Games/TCModel/Render.fs" />
-    <Compile Include="src/Games/TCModel/Rich.fs" />
-    <Compile Include="src/Games/TCModel/Html.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Turn.fs" />
+    <Compile Include="src/Games/TCModel/Rules/Playing.fs" />
+    <!-- Words are in here rather than beside the drawings because they are the game talking,
+         not a screen: what an event or a refusal *says* is settled once, and the three views
+         lay the same sentence out three ways. -->
+    <Compile Include="src/Games/TCModel/Rules/Words.fs" />
+    <!-- And a seat played by the program, which reads the game the way a player does and
+         draws nothing at all. -->
+    <Compile Include="src/Games/TCModel/Rules/Rival.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="TCModel - how it is read">
+    <Compile Include="src/Games/TCModel/Reading/Ink.fs" />
+    <Compile Include="src/Games/TCModel/Reading/Parse.fs" />
+    <Compile Include="src/Games/TCModel/Reading/Render.fs" />
+    <Compile Include="src/Games/TCModel/Reading/Rich.fs" />
+    <Compile Include="src/Games/TCModel/Reading/Html.fs" />
     <!-- Both seams filled in: this game as the engine takes one, and as a table reads one. -->
     <Compile Include="src/Games/TCModel/Offer.fs" />
   </ItemGroup>
 
   <!-- The second game, and the whole point of the two seams above. Nine squares against a
        map, nothing hidden against a closed bag, no dice against a generator - and the same
-       record filled in, in the same order, at a fraction of the size. -->
-  <ItemGroup Label="Noughts and crosses - nine squares, and nothing hidden">
-    <Compile Include="src/Games/TicTacToe/Marks.fs" />
-    <Compile Include="src/Games/TicTacToe/Board.fs" />
-    <Compile Include="src/Games/TicTacToe/Session.fs" />
-    <Compile Include="src/Games/TicTacToe/Turn.fs" />
-    <Compile Include="src/Games/TicTacToe/Rival.fs" />
-    <Compile Include="src/Games/TicTacToe/Words.fs" />
-    <Compile Include="src/Games/TicTacToe/Ink.fs" />
-    <Compile Include="src/Games/TicTacToe/Parse.fs" />
-    <Compile Include="src/Games/TicTacToe/Render.fs" />
-    <Compile Include="src/Games/TicTacToe/Rich.fs" />
-    <Compile Include="src/Games/TicTacToe/Html.fs" />
+       two folders filled in, in the same order, at a fraction of the size. -->
+  <ItemGroup Label="Noughts and crosses - how it is played">
+    <Compile Include="src/Games/TicTacToe/Rules/Marks.fs" />
+    <Compile Include="src/Games/TicTacToe/Rules/Board.fs" />
+    <Compile Include="src/Games/TicTacToe/Rules/Session.fs" />
+    <Compile Include="src/Games/TicTacToe/Rules/Turn.fs" />
+    <Compile Include="src/Games/TicTacToe/Rules/Words.fs" />
+    <Compile Include="src/Games/TicTacToe/Rules/Rival.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Noughts and crosses - how it is read">
+    <Compile Include="src/Games/TicTacToe/Reading/Ink.fs" />
+    <Compile Include="src/Games/TicTacToe/Reading/Parse.fs" />
+    <Compile Include="src/Games/TicTacToe/Reading/Render.fs" />
+    <Compile Include="src/Games/TicTacToe/Reading/Rich.fs" />
+    <Compile Include="src/Games/TicTacToe/Reading/Html.fs" />
     <Compile Include="src/Games/TicTacToe/Offer.fs" />
   </ItemGroup>
 
