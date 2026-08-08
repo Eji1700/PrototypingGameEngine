@@ -18,30 +18,16 @@
 //
 //   dotnet fsi tests/rival.fsx
 
-#r "nuget: Falco.Datastar, 1.3.0"
-#r "nuget: Falco.Markup, 1.4.0"
-#r "nuget: Spectre.Console, 0.51.1"
-
-#load "Harness.fsx"
-#load "../src/Domain/Rival.fs"
-#load "../src/Console/Waiting.fs"
-#load "../src/Console/Showing.fs"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Render.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Reach.fs"
-#load "../src/Console/Palette.fs"
-#load "../src/Console/Tint.fs"
-#load "../src/Console/Rich.fs"
-#load "../src/Console/Html.fs"
-#load "../src/Console/View.fs"
-#load "../src/Console/Solo.fs"
+#load "Whole.fsx"
 
 open TCModel.Common
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and the command line's argument types carry names this game already uses - `Open`.
+open TCModel.Domain
 open Harness
+open Whole
 
 // --- a whole game, machine against machine ---------------------------------------------
 //
@@ -52,12 +38,16 @@ open Harness
 /// seating is one entry to a seat, and every one of these is the machine's.
 let private machinesAt (skills: Skill list) seed model =
     Rival.seating seed (skills |> List.map Some) (Playing.game model)
+    |> List.map (fun (playerId, rival) ->
+        playerId,
+        { Skill = rival.Skill.Name
+          Plays = Offer.machine rival })
 
 let private playedOut skills seed =
     match Playing.start (List.length skills) seed with
     | Error _ -> failwith "the deal was refused"
     | Ok model ->
-        Solo.opened "played-out" model
+        Solo.opened playing "played-out" model
         |> Solo.against (machinesAt skills seed model)
         |> fst
         |> Solo.model
@@ -113,8 +103,8 @@ report "nothing a machine asked for over two whole games was refused" [] (refusa
 // record, and a record is meant to be readable and re-playable for good.
 
 let private typedBack (msg: Msg) =
-    match Parse.line (Words.command msg) with
-    | Ok(Parse.Send read) -> read = msg
+    match Playable.read playing (Words.command msg) with
+    | Ok(Send read) -> read = msg
     | _ -> false
 
 report
@@ -210,8 +200,8 @@ let private posed seed =
           "march r 5 3 1" ]
         |> List.fold
             (fun model line ->
-                match Parse.line line with
-                | Ok(Parse.Send msg) -> Playing.update msg model
+                match Playable.read playing line with
+                | Ok(Send msg) -> Playing.update msg model
                 | _ -> model)
             (Playing.start 3 seed |> Result.toOption |> Option.get)
 

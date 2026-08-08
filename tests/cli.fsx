@@ -15,36 +15,19 @@
 //   dotnet fsi tests/cli.fsx
 
 #r "nuget: FsCheck, 3.3.3"
-#r "nuget: Argu, 6.2.5"
-#r "nuget: Falco.Datastar, 1.3.0"
-#r "nuget: Falco.Markup, 1.4.0"
-#r "nuget: Spectre.Console, 0.51.1"
 
-#load "Harness.fsx"
-#load "../src/Domain/Rival.fs"
-#load "../src/Console/Waiting.fs"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Render.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Keys.fs"
-#load "../src/Console/Seating.fs"
-#load "../src/Console/Reach.fs"
-#load "../src/Console/Palette.fs"
-#load "../src/Console/Tint.fs"
-#load "../src/Console/Rich.fs"
-#load "../src/Console/Html.fs"
-#load "../src/Console/View.fs"
-#load "../src/Console/Options.fs"
-#load "../src/Console/Launch.fs"
-#load "../src/Console/Menu.fs"
+#load "Whole.fsx"
 
 open System
 open FsCheck
 open FsCheck.FSharp
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and the command line's argument types carry names this game already uses - `Open`.
+open TCModel.Domain
 open Harness
+open Whole
 
 let private config =
     Config.QuickThrowOnFailure.WithMaxTest(200).WithQuietOnSuccess(true)
@@ -124,10 +107,7 @@ let private launches =
         players
         |> Gen.bind (fun players ->
             let seatings =
-                [ []
-                  [ Rival.easy ]
-                  [ Rival.medium; Rival.hard ]
-                  [ Rival.hard; Rival.easy; Rival.medium ] ]
+                [ []; [ "easy" ]; [ "medium"; "hard" ]; [ "hard"; "easy"; "medium" ] ]
                 |> List.filter (fun rivals -> List.length rivals <= players - 1)
 
             Gen.zip seed (Gen.elements seatings)
@@ -148,24 +128,24 @@ let private launches =
 
 holds
     "a launch written out and read back is the same launch"
-    (Prop.forAll launches (fun launch -> Launch.read (Launch.words launch) = Ok launch))
+    (Prop.forAll launches (fun launch -> Launch.read playing (Launch.words launch) = Ok launch))
 
 report
     "a line still carrying the runner in front of it is read all the same"
     (Ok(Launch.Join("greg-pc", Some "a1b2c3", None)))
-    (Launch.read [ "dotnet"; "run"; "--"; "join"; "greg-pc"; "--token"; "a1b2c3" ])
+    (Launch.read playing [ "dotnet"; "run"; "--"; "join"; "greg-pc"; "--token"; "a1b2c3" ])
 
 report
     "a line that says nothing to open is refused, saying what there is to open"
     true
-    (match Launch.read [] with
+    (match Launch.read playing [] with
      | Error problem -> problem.Contains "does not say what to open" && problem.Contains "replay"
      | Ok _ -> false)
 
 report
     "and one that is all options and no command is refused where the first of them is"
     true
-    (match Launch.read [ "--seed"; "42" ] with
+    (match Launch.read playing [ "--seed"; "42" ] with
      | Error problem -> problem.Contains "seed"
      | Ok _ -> false)
 
@@ -189,6 +169,7 @@ let private through (words: string list) =
             Console.SetError said
 
             Launch.run
+                playing
                 (fun _ launch ->
                     opened <- Some launch
                     0)
@@ -274,7 +255,7 @@ report "a game with nobody said to play it is a game between people" (0, Some(La
 
 report
     "and the machines are taken in the order they were named"
-    (0, Some(Launch.Deal(3, None, [ Rival.hard; Rival.easy ])))
+    (0, Some(Launch.Deal(3, None, [ "hard"; "easy" ])))
     (through [ "play"; "3"; "--rival"; "hard"; "--rival"; "easy" ])
 
 // A table that opens a port makes up a word for its door when nobody says otherwise, so the
@@ -294,7 +275,7 @@ let private unlocked words =
 
 report
     "a browser's table takes them the same way"
-    (0, Some(Launch.Serve(2, Some 42UL, [ Rival.medium ], Reach.ajar)))
+    (0, Some(Launch.Serve(2, Some 42UL, [ "medium" ], Reach.ajar)))
     (unlocked [ "serve"; "2"; "--seed"; "42"; "-r"; "medium" ])
 
 // --- how far a table is opened ------------------------------------------------------------
@@ -375,7 +356,7 @@ report
 // already said it - one seat for you and one for each machine named - and a menu that got
 // that sum wrong would deal a table with an empty chair at it.
 
-let private chosen line = Menu.choose Palette.standard line
+let private chosen line = Menu.choose playing standard line
 
 /// A choice as something that can be compared. `Menu.Choice` carries a view, and a view is
 /// a bundle of functions, so the choices cannot be held up against each other whole.
@@ -479,10 +460,7 @@ report
      | Error problem -> problem.Contains "one hot seat"
      | Ok _ -> false)
 
-report
-    "and the menu says the machine is on offer"
-    true
-    ((Keys.draw None (Menu.screen (View.plain Palette.standard))).Contains "vs <skill>...")
+report "and the menu says the machine is on offer" true ((Keys.draw None (Menu.screen playing plain)).Contains "vs <skill>...")
 
 // A table somebody was told about is an address and a word, so that is what the menu takes.
 // Coming back to a seat already held is the other thing, and is a command line - written by
@@ -513,7 +491,7 @@ report
 // on it. A row that came to offer something `Menu.choose` has never heard of would be a dead
 // end a player finds by pressing Enter on it, and nothing else in the program would notice.
 
-let private front = Menu.screen (View.plain Palette.standard)
+let private front = Menu.screen playing plain
 
 let rec private everyRow (screen: Keys.Screen) =
     screen.Rows
@@ -559,7 +537,7 @@ report "every row the menu offers stands for a line the menu itself can read" []
 report
     "and the same on the colour screen, where left and right walk a slot through the colours"
     []
-    (unread (Options.choose Palette.standard) (Options.screen Palette.standard))
+    (unread (Options.choose standard) (Options.screen standard))
 
 // The seat list is not reached by opening a row - it is reached by a line, and comes back as
 // one - so it has to be walked over separately. Every seating there is, at every size the
@@ -571,7 +549,7 @@ let private everySeating =
             [ [] ]
         else
             grown (seats - 1)
-            |> List.collect (fun rest -> Seating.all |> List.map (fun sitter -> sitter :: rest))
+            |> List.collect (fun rest -> Seating.all playing.Skills |> List.map (fun sitter -> sitter :: rest))
 
     [ Table.MinPlayers .. Table.MaxPlayers ] |> List.collect grown
 
@@ -594,7 +572,7 @@ report
     (everySeating
      |> List.collect (fun sitters ->
          everyReach
-         |> List.collect (fun reach -> unread chosen (Menu.seats sitters reach))))
+         |> List.collect (fun reach -> unread chosen (Menu.seats playing sitters reach))))
 
 report
     "and so does every row on the screen behind it, whatever it is holding"
@@ -608,7 +586,7 @@ report
 report
     "the way back out of the seat list is a line too, and it goes back rather than dealing"
     true
-    (match (Menu.seats (Seating.here 2) Reach.ajar).Backs with
+    (match (Menu.seats playing (Seating.here 2) Reach.ajar).Backs with
      | Some line ->
          match chosen line with
          | Ok Menu.Backing -> true
@@ -634,9 +612,9 @@ report
 report
     "the way back out of a screen is a line too"
     true
-    (match (Options.screen Palette.standard).Backs with
+    (match (Options.screen standard).Backs with
      | Some line ->
-         match Options.choose Palette.standard line with
+         match Options.choose standard line with
          | Ok Options.Done -> true
          | _ -> false
      | None -> false)
@@ -732,7 +710,7 @@ report
 
 /// One press at the seat list, and the seating it came back holding.
 let private pressed press sitters =
-    match walking (Menu.seats sitters Reach.ajar) [ press ] with
+    match walking (Menu.seats playing sitters Reach.ajar) [ press ] with
     | Some line ->
         match chosen line with
         | Ok(Menu.Sitting(changed, _)) -> changed
@@ -753,7 +731,7 @@ report
 report
     "walking a seat right round comes back where it started"
     "you you you"
-    (Seating.line (walkingSeat (List.length Seating.all) (key ConsoleKey.RightArrow)))
+    (Seating.line (walkingSeat (List.length (Seating.all playing.Skills)) (key ConsoleKey.RightArrow)))
 
 report "and left from the first is the last" "joins you you" (Seating.line (walkingSeat 1 (key ConsoleKey.LeftArrow)))
 
@@ -767,7 +745,7 @@ report
 // and is not a thing a browser on this machine could hold.
 
 let private under sitters =
-    (Menu.seats sitters Reach.ajar).Rows
+    (Menu.seats playing sitters Reach.ajar).Rows
     |> List.skip (List.length sitters)
     |> List.map (fun row -> row.Says)
 
@@ -786,7 +764,7 @@ report
     (Ok("host", "you hard joins", None))
     (dealing (
         chosen (
-            walking (Menu.seats [ Here; Machine Rival.hard; Elsewhere ] Reach.ajar) [ letter '4' ]
+            walking (Menu.seats playing [ Here; Machine "hard"; Elsewhere ] Reach.ajar) [ letter '4' ]
             |> Option.defaultValue ""
         )
     ))
@@ -802,6 +780,7 @@ report
         chosen (
             walking
                 (Menu.seats
+                    playing
                     (Seating.hosting 2)
                     { Reach.locked "kbd4-9mtx-7rfp" with
                         Wrapping = Ahead })
@@ -869,7 +848,7 @@ report
 // remembered between presses - the line says the whole of the change - so walking the list
 // right round has to come back to the colour it set out from.
 
-let private colours = Options.screen Palette.standard
+let private colours = Options.screen standard
 
 let private walkedRight times palette =
     List.replicate times (key ConsoleKey.RightArrow)
@@ -893,8 +872,8 @@ report
 report
     "walking right round the colours comes back where it started"
     [ "ember"; "crimson" ]
-    [ (walkedRight 1 Palette.standard).Red.Name
-      (walkedRight (List.length Palette.shades) Palette.standard).Red.Name ]
+    [ (Palette.shadeOf "red" (walkedRight 1 standard)).Name
+      (Palette.shadeOf "red" (walkedRight (List.length Palette.shades) standard)).Name ]
 
 // Where the cursor was left comes back with the line, because the screen is built again from
 // the palette every time one changes and the cursor has to still be on the slot being walked.

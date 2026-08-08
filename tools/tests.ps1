@@ -40,6 +40,9 @@ $scripts = @(
     "ruling", "outcome", "actions", "history", "knowledge"
     "lobby", "solo", "view", "html", "reach", "cli"
     "properties", "rival"
+    # The second game, last, because most of what it checks is that everything above it
+    # works for a game it was not written for.
+    "tictactoe"
 )
 
 if ($Only) {

@@ -13,20 +13,47 @@ open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+
+/// What the wire needs of a table, and the whole of it: somebody sits down, somebody says
+/// something, somebody goes, and each of those comes back as a list of things to say.
+///
+/// No type parameters, and that is the point of it existing. The hub below is built by the
+/// framework's own container from a type named in a route, and a *generic* type named there
+/// cannot be tied to the game being played: F# infers the arguments of `MapHub<TableHub<_,_,_>>`
+/// as `obj`, the container is then asked for a `TableHub<obj,obj,obj>` it has never heard of,
+/// and hub activation throws. What that looks like from the far end is a console that
+/// negotiates, connects, and is dropped without a word - which is why this was found by
+/// joining a table rather than by anything that reads code.
+///
+/// So the types stop here, the same way they stop at `Chosen`: by the time the wire is
+/// involved everything being said is a string or a number anyway.
+[<AllowNullLiteral>]
+type Table =
+    /// Take a seat, or come back to one. `resuming` is the token of a seat already held;
+    /// `offered` is the one a new seat would be given, minted outside so the lobby stays a
+    /// value. The view and the colours are the words a console sends, read at this end
+    /// against the game actually being played.
+    abstract Sits: console: string * offered: string * resuming: string option * view: string * palette: string -> Post list
+
+    abstract Said: console: string * line: string -> Post list
+
+    abstract Left: console: string -> Post list
 
 /// The one lobby this process is hosting.
 ///
 /// Every change goes through here under a lock, so the pure fold inside never sees two
 /// players at once and the game can never be half-moved. What comes back out is the list
 /// of things to say, which is the only part that touches the wire.
-type Held(opening: Lobby, keep: Model -> unit) =
+///
+/// Generic in the game for the same reason the lobby is: nothing here reads a board. It is
+/// a lock, a mutable slot and a file being written.
+type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: Model<'Move, 'State, 'Notice> -> unit) =
     let gate = obj ()
     let mutable lobby = opening
 
-    member _.Change(change: Lobby -> Lobby * Post list) =
+    member _.Change(change: Lobby<'Move, 'State, 'Notice> -> Lobby<'Move, 'State, 'Notice> * Post list) =
         lock gate (fun () ->
             let next, posts = change lobby
             lobby <- next
@@ -35,17 +62,38 @@ type Held(opening: Lobby, keep: Model -> unit) =
             keep (Lobby.model next)
             posts)
 
+    interface Table with
+        member this.Sits(console, offered, resuming, view, palette) =
+            let game = Lobby.game lobby
+
+            // A view a table has never heard of is no reason to turn a player away; they can
+            // ask for another once they are sitting down. Colours the table does not know are
+            // passed over the same way, one at a time, by `Palette.read`.
+            let palette = Palette.read game.Slots palette
+
+            let view =
+                Playable.byName AtATerminal palette game view
+                |> Result.defaultValue (Playable.plainest AtATerminal palette game)
+
+            this.Change(Lobby.join console offered resuming view)
+
+        member this.Said(console, line) = this.Change(Lobby.said console line)
+
+        member this.Left console = this.Change(Lobby.left console)
+
 /// The same, for the one hot seat this process is serving to a browser.
 ///
 /// `Solo` says what a typed line does and what it wants written down; this does the writing
 /// and hands back what to show. The record goes out after every change here too, for a
 /// reason a local game did not have before: a page has no way of putting the game down on
 /// its way out, so there is no last moment to save at.
-type Aside(opening: Solo, fresh: unit -> string, keep: Model -> string -> string option) =
+type Aside<'Move, 'State, 'Notice>
+    (opening: Solo<'Move, 'State, 'Notice>, fresh: unit -> string, keep: Model<'Move, 'State, 'Notice> -> string -> string option)
+    =
     let gate = obj ()
     let mutable solo = opening
 
-    member _.Change(change: Solo -> Solo * Post list) =
+    member _.Change(change: Solo<'Move, 'State, 'Notice> -> Solo<'Move, 'State, 'Notice> * Post list) =
         lock gate (fun () ->
             let next, posts = change solo
             solo <- next
@@ -107,7 +155,7 @@ module Wire =
 
 /// The wire itself: it turns a call into a change and a change back into calls, and
 /// knows nothing else about the game.
-type TableHub(held: Held, pages: Browser.Pages) =
+type TableHub(table: Table, pages: Browser.Pages) =
     inherit Hub()
 
     let deliver (clients: IHubCallerClients) posts = Wire.deliver clients pages posts
@@ -115,25 +163,17 @@ type TableHub(held: Held, pages: Browser.Pages) =
     member this.Join(token: string, view: string, palette: string) =
         let resuming = if String.IsNullOrWhiteSpace token then None else Some token
 
-        // A view a table has never heard of is no reason to turn a player away; they can
-        // ask for another once they are sitting down. Colours the table does not know are
-        // passed over the same way, one at a time, by `Palette.read`.
-        let palette = Palette.read palette
-
-        let view =
-            View.byName AtATerminal palette view |> Result.defaultValue (View.plain palette)
-
         // A fresh token is minted out here and handed in, so the lobby stays a value:
         // a table that invented its own tokens could not be folded twice to the same
         // answer, and nothing in this codebase is allowed to be that sort of thing.
-        held.Change(Lobby.join this.Context.ConnectionId (Guid.NewGuid().ToString "N") resuming view)
+        table.Sits(this.Context.ConnectionId, Guid.NewGuid().ToString "N", resuming, view, palette)
         |> deliver this.Clients
 
     member this.Say(line: string) =
-        held.Change(Lobby.said this.Context.ConnectionId line) |> deliver this.Clients
+        table.Said(this.Context.ConnectionId, line) |> deliver this.Clients
 
     override this.OnDisconnectedAsync(_) =
-        held.Change(Lobby.left this.Context.ConnectionId) |> deliver this.Clients
+        table.Left this.Context.ConnectionId |> deliver this.Clients
 
 module Server =
 
@@ -165,9 +205,9 @@ module Server =
     /// What a player is told to type, and what they are told to open. Both written from the
     /// declaration the command line is read by, so what is read out to somebody is something
     /// this program is certain to accept.
-    let private takeSeatAt reach where =
+    let private takeSeatAt game reach where =
         [ ""
-          $"    dotnet run -- {Launch.write (Launch.Join(where, None, Reach.word reach))}"
+          $"    dotnet run -- {Launch.written game (Launch.Join(where, None, Reach.word reach))}"
           ""
           $"  or open {Reach.opened reach where} in a browser."
           "" ]
@@ -236,7 +276,7 @@ module Server =
 
     /// And what stands in front of the whole of it: what somebody in front of this said
     /// about the player, and the word at the door.
-    let private guarded (app: WebApplication) standing reach =
+    let private guarded (app: WebApplication) game standing reach =
         match reach.Wrapping with
         | InTheClear
         | Kept _ -> ()
@@ -306,7 +346,7 @@ module Server =
                         use all = door.AttemptAcquire()
                         not (mine.IsAcquired && all.IsAcquired)
 
-                    if waiting then Browser.tooOften ctx else Browser.turned standing ctx)
+                    if waiting then Browser.tooOften ctx else Browser.turned game standing ctx)
             )
             |> ignore
 
@@ -314,19 +354,20 @@ module Server =
     ///
     /// The same four whether there is a lobby back there or one hot seat, which is the
     /// whole point of `Sitting` being four functions: a page is a page.
-    let private serving (app: WebApplication) standing sitting pages =
-        app.MapGet(Html.Client, RequestDelegate(fun ctx -> Browser.script ctx))
+    let private serving (app: WebApplication) game standing sitting pages =
+        app.MapGet(Page.Client, RequestDelegate(fun ctx -> Browser.script ctx))
         |> ignore
 
-        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page standing ctx)) |> ignore
-
-        app.MapGet(Html.Stream, RequestDelegate(fun ctx -> Browser.stream standing sitting pages ctx :> Task))
+        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page game standing ctx))
         |> ignore
 
-        app.MapPost(Html.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
+        app.MapGet(Page.Stream, RequestDelegate(fun ctx -> Browser.stream game standing sitting pages ctx :> Task))
         |> ignore
 
-        app.MapPost(Html.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
+        app.MapPost(Page.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
+        |> ignore
+
+        app.MapPost(Page.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
         |> ignore
 
     /// Open a table and wait at it. Blocks until the host stops the process, which is
@@ -344,25 +385,28 @@ module Server =
     /// such a thing. What it means for the shape of this is that the waiting comes apart in
     /// two: the table is started, somebody plays at it, and when they get up it goes on
     /// standing, because their leaving their seat is not the same as closing the room.
-    let host reach model sitters keep playing =
+    let host game reach model sitters keep playing =
         let builder = WebApplication.CreateBuilder()
 
         let rivals =
-            Rival.seating (Model.seed model) (Seating.machines sitters) (Playing.game model)
+            game.Seating (Model.seed model) (Seating.machines sitters) (Model.state model)
 
-        let held = Held(Lobby.opened model rivals, keep)
+        let held = Held(Lobby.opened game model rivals, keep)
         let pages = Browser.Pages()
 
         // The console is a board, not a log. Anything the framework wants to say would
         // land in the middle of it.
         builder.Logging.ClearProviders() |> ignore
         builder.Services.AddSignalR(waiting) |> ignore
-        builder.Services.AddSingleton<Held> held |> ignore
+        // Registered as what the wire asks for rather than as what it is: the hub takes a
+        // `Table`, and a container asked for a closed generic it was never given would drop
+        // every console that tried to sit down.
+        builder.Services.AddSingleton<Table>(held) |> ignore
         builder.Services.AddSingleton<Browser.Pages> pages |> ignore
         listening builder reach
 
         let app = builder.Build()
-        guarded app Palette.standard reach
+        guarded app game (Playable.standard game) reach
         app.MapHub<TableHub>(Protocol.Path) |> ignore
 
         // What a page needs of the table, which is what a console needs of it: a way to
@@ -371,7 +415,7 @@ module Server =
         // the terminals, and there is no call in progress to borrow them from.
         let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
 
-        let sitting: Browser.Sitting =
+        let sitting: Browser.Sitting<_, _, _> =
             { Watching = fun console view -> held.Change(Lobby.join console (Guid.NewGuid().ToString "N") None view)
               Said = fun console line -> held.Change(Lobby.said console line)
               Gone = fun console -> held.Change(Lobby.left console)
@@ -379,15 +423,15 @@ module Server =
 
         // A hosted table settles nothing about colour on anybody's behalf: a console says
         // what it wants when it joins, and so does a page.
-        serving app Palette.standard sitting pages
+        serving app game (Playable.standard game) sitting pages
 
-        let seats = Game.playerCount (Playing.game model)
+        let seats = game.Rules.Seats(Model.state model)
         let mine, theirs = Seating.awaited sitters
 
         printfn ""
         printfn "=== A table for %d, waiting to be joined ===" seats
         printfn ""
-        Seating.roster sitters |> List.iter (printfn "%s")
+        Seating.roster game.Skills sitters |> List.iter (printfn "%s")
         printfn ""
 
         // The word first, because everything under it carries it and somebody reading this
@@ -414,13 +458,13 @@ module Server =
             | 1, mine ->
                 printfn "  %d of these seats are yours. This console takes one; the others are taken" mine
                 printfn "  from another terminal on this machine, by running:"
-                takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+                takeSeatAt game reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
             | _, 1 ->
                 printfn "  One of these seats is yours, at this machine. Take it by running:"
-                takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+                takeSeatAt game reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
             | _, mine ->
                 printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
-                takeSeatAt reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+                takeSeatAt game reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
 
         if theirs > 0 then
             if theirs = 1 then
@@ -428,7 +472,7 @@ module Server =
             else
                 printfn "  %d are somebody else's, from their own machines. Each of them runs:" theirs
 
-            takeSeatAt reach (Reach.told reach |> Option.defaultValue "<address>")
+            takeSeatAt game reach (Reach.told reach |> Option.defaultValue "<address>")
             |> List.iter (printfn "%s")
 
             printfn "  Both sit down at this one table, which is at:"
@@ -487,18 +531,20 @@ module Server =
         builder.Logging.ClearProviders() |> ignore
         listening builder reach
 
-        let app = builder.Build()
-        guarded app standing reach
+        let game = Solo.game solo
 
-        let sitting: Browser.Sitting =
+        let app = builder.Build()
+        guarded app game standing reach
+
+        let sitting: Browser.Sitting<_, _, _> =
             { Watching = fun console view -> aside.Change(Solo.watching console { Notes = true; View = view })
               Said = fun console line -> aside.Said(console, line)
               Gone = fun console -> aside.Change(Solo.gone console)
               Deliver = fun posts -> posts |> List.iter (Browser.send pages) }
 
-        serving app standing sitting pages
+        serving app game standing sitting pages
 
-        let seats = Game.playerCount (Playing.game (Solo.model solo))
+        let seats = game.Rules.Seats(Model.state (Solo.model solo))
 
         printfn ""
         printfn "=== A game for %d, to play in a browser ===" seats

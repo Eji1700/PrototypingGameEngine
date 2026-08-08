@@ -6,17 +6,22 @@
     <WarningLevel>5</WarningLevel>
   </PropertyGroup>
 
-  <ItemGroup Label="Common - generic, knows nothing of the game">
+  <!-- The order below is the architecture, and the only thing enforcing it. F# compiles a
+       project in the order its files are listed, so a layer cannot reach into one beneath it
+       on this list even by accident. Read top to bottom: nothing generic mentions a game,
+       and the games never mention each other. -->
+
+  <ItemGroup Label="Common - generic, knows nothing of any game">
     <Compile Include="src/Common/Result.fs" />
     <Compile Include="src/Common/Cascade.fs" />
     <Compile Include="src/Common/Random.fs" />
   </ItemGroup>
 
   <!-- Engine - what every turn-based game wants and none of them should write again: a
-       history to walk, a record that replays, seats, a machine to play one of them. It is
-       compiled *before* the game and mentions nothing in it; `Rules` is the whole seam, and
-       everything here is generic over what a move is, where a game stands, and what it says. -->
-  <ItemGroup Label="Engine - the game-shaped hole, and everything that fits round it">
+       history to walk, a record that replays, seats, a machine to play one of them. `Rules`
+       is the whole seam, and everything here is generic over what a move is, where a game
+       stands, and what it says. -->
+  <ItemGroup Label="Engine - how a game is played">
     <Compile Include="src/Engine/Seats.fs" />
     <Compile Include="src/Engine/Messages.fs" />
     <Compile Include="src/Engine/Told.fs" />
@@ -26,71 +31,109 @@
     <Compile Include="src/Engine/Model.fs" />
     <Compile Include="src/Engine/Update.fs" />
     <!-- A seat played by something that is not a person, and after `Update` because taking a
-         turn is making a move like anybody else's. Every table that seats one - a keyboard,
-         or a network - lets them play through this one loop. -->
+         turn is making a move like anybody else's. -->
     <Compile Include="src/Engine/Machines.fs" />
   </ItemGroup>
 
-  <ItemGroup Label="Domain - the language and rules of the game">
-    <Compile Include="src/Domain/Stones.fs" />
-    <Compile Include="src/Domain/Board.fs" />
-    <Compile Include="src/Domain/Players.fs" />
-    <Compile Include="src/Domain/Position.fs" />
-    <Compile Include="src/Domain/Ruling.fs" />
-    <Compile Include="src/Domain/Game.fs" />
-    <Compile Include="src/Domain/Knowledge.fs" />
-    <Compile Include="src/Domain/Events.fs" />
-    <Compile Include="src/Domain/Actions.fs" />
-    <Compile Include="src/Domain/Outcome.fs" />
-    <Compile Include="src/Domain/Setup.fs" />
-    <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
-         a turn that stays open until a stone goes back is nobody else's rule. -->
-    <Compile Include="src/Domain/Turn.fs" />
-    <!-- And the seam itself, filled in: this game as the engine takes one. -->
-    <Compile Include="src/Domain/Playing.fs" />
-    <Compile Include="src/Domain/Rival.fs" />
+  <!-- Table - how a game is *read*, which is the second seam. `Playable` is to this layer
+       what `Rules` is to the engine: fill it in and the timeline, the record, the seats, the
+       tokens, the menu, the command line and every screen already work. Nothing here names
+       a game, a piece, or a board. -->
+  <ItemGroup Label="Table - how a game is read and played">
+    <Compile Include="src/Table/Showing.fs" />
+    <Compile Include="src/Table/Waiting.fs" />
+    <Compile Include="src/Table/Palette.fs" />
+    <Compile Include="src/Table/Tint.fs" />
+    <!-- How far a table can be reached and what it takes to sit down at one. Up here
+         because the door has a page of its own, and the page is next. -->
+    <Compile Include="src/Table/Reach.fs" />
+    <!-- The browser's shell: the stream, the prompt, the colour form and the door. A game
+         brings a stylesheet and a name for the tab; the rest is the same at every game. -->
+    <Compile Include="src/Table/Page.fs" />
+    <!-- One reads a key, the other a line; both before anything that offers a screen. -->
+    <Compile Include="src/Table/Keys.fs" />
+    <Compile Include="src/Table/Commands.fs" />
+    <Compile Include="src/Table/View.fs" />
+    <!-- The seam itself. Everything below this line is written against it. -->
+    <Compile Include="src/Table/Playable.fs" />
+    <Compile Include="src/Table/Screens.fs" />
+    <!-- Who is going to be at each seat, which every way of opening a game has to settle. -->
+    <Compile Include="src/Table/Seating.fs" />
+    <Compile Include="src/Table/Solo.fs" />
+    <Compile Include="src/Table/Transcript.fs" />
+    <Compile Include="src/Table/Options.fs" />
+    <Compile Include="src/Table/Menu.fs" />
+    <Compile Include="src/Table/Launch.fs" />
   </ItemGroup>
 
-  <ItemGroup Label="Console - the only part that talks to a person">
-    <Compile Include="src/Console/Waiting.fs" />
-    <Compile Include="src/Console/Showing.fs" />
-    <Compile Include="src/Console/Words.fs" />
-    <Compile Include="src/Console/Render.fs" />
-    <Compile Include="src/Console/Parse.fs" />
-    <!-- Beside `Parse`, and for the same reason: one reads a line, the other a key. -->
-    <Compile Include="src/Console/Keys.fs" />
-    <!-- Who is going to be at each seat, which is the one thing every way of opening a game
-         has to settle. Above the menu and the command line, because both of them ask it. -->
-    <Compile Include="src/Console/Seating.fs" />
-    <!-- And the other thing every way of opening a table settles: how far it can be reached
-         and what it takes to sit down at one. Before the page and the command line, because
-         both of them say it - a browser is handed the word at the door in an address. -->
-    <Compile Include="src/Console/Reach.fs" />
-    <Compile Include="src/Console/Palette.fs" />
-    <Compile Include="src/Console/Tint.fs" />
-    <Compile Include="src/Console/Rich.fs" />
-    <Compile Include="src/Console/Html.fs" />
-    <Compile Include="src/Console/View.fs" />
-    <!-- The other half of `Keys`: the half that touches a terminal. Above `View` because a
-         screen is drawn through the same view that draws the board, and no higher, because
-         nothing about driving one has anything to do with what is being chosen. -->
-    <Compile Include="src/Console/Screens.fs" />
-    <Compile Include="src/Console/Solo.fs" />
-    <Compile Include="src/Console/Options.fs" />
-    <!-- The command line, both ways round: what can be asked for, what a typed line comes
-         to, and the line the program writes when it has to tell somebody what to type. -->
-    <Compile Include="src/Console/Launch.fs" />
-    <Compile Include="src/Console/Menu.fs" />
-    <Compile Include="src/Console/Transcript.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Net - the same game, with the players at different keyboards">
+  <ItemGroup Label="Net - the same table, with the players at different keyboards">
     <Compile Include="src/Net/Protocol.fs" />
     <!-- Before the lobby, and not after it, because it does not know there is one. -->
     <Compile Include="src/Net/Browser.fs" />
     <Compile Include="src/Net/Lobby.fs" />
     <Compile Include="src/Net/Server.fs" />
     <Compile Include="src/Net/Client.fs" />
+  </ItemGroup>
+
+  <!-- A game is a folder. Everything above this point is machinery; everything in one of
+       these is one game's rules, its words and its drawings, ending in the one value that
+       fills in both seams. -->
+  <ItemGroup Label="TCModel - stones on a map, and a seat each">
+    <Compile Include="src/Games/TCModel/Stones.fs" />
+    <Compile Include="src/Games/TCModel/Board.fs" />
+    <Compile Include="src/Games/TCModel/Players.fs" />
+    <Compile Include="src/Games/TCModel/Position.fs" />
+    <Compile Include="src/Games/TCModel/Ruling.fs" />
+    <Compile Include="src/Games/TCModel/Game.fs" />
+    <Compile Include="src/Games/TCModel/Knowledge.fs" />
+    <Compile Include="src/Games/TCModel/Events.fs" />
+    <Compile Include="src/Games/TCModel/Actions.fs" />
+    <Compile Include="src/Games/TCModel/Outcome.fs" />
+    <Compile Include="src/Games/TCModel/Setup.fs" />
+    <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
+         a turn that stays open until a stone goes back is nobody else's rule. -->
+    <Compile Include="src/Games/TCModel/Turn.fs" />
+    <Compile Include="src/Games/TCModel/Playing.fs" />
+    <Compile Include="src/Games/TCModel/Rival.fs" />
+    <Compile Include="src/Games/TCModel/Words.fs" />
+    <!-- What this game colours, which came out of `Tint` when there was a second game. -->
+    <Compile Include="src/Games/TCModel/Ink.fs" />
+    <Compile Include="src/Games/TCModel/Parse.fs" />
+    <Compile Include="src/Games/TCModel/Render.fs" />
+    <Compile Include="src/Games/TCModel/Rich.fs" />
+    <Compile Include="src/Games/TCModel/Html.fs" />
+    <!-- Both seams filled in: this game as the engine takes one, and as a table reads one. -->
+    <Compile Include="src/Games/TCModel/Offer.fs" />
+  </ItemGroup>
+
+  <!-- The second game, and the whole point of the two seams above. Nine squares against a
+       map, nothing hidden against a closed bag, no dice against a generator - and the same
+       record filled in, in the same order, at a fraction of the size. -->
+  <ItemGroup Label="Noughts and crosses - nine squares, and nothing hidden">
+    <Compile Include="src/Games/TicTacToe/Marks.fs" />
+    <Compile Include="src/Games/TicTacToe/Board.fs" />
+    <Compile Include="src/Games/TicTacToe/Session.fs" />
+    <Compile Include="src/Games/TicTacToe/Turn.fs" />
+    <Compile Include="src/Games/TicTacToe/Rival.fs" />
+    <Compile Include="src/Games/TicTacToe/Words.fs" />
+    <Compile Include="src/Games/TicTacToe/Ink.fs" />
+    <Compile Include="src/Games/TicTacToe/Parse.fs" />
+    <Compile Include="src/Games/TicTacToe/Render.fs" />
+    <Compile Include="src/Games/TicTacToe/Rich.fs" />
+    <Compile Include="src/Games/TicTacToe/Html.fs" />
+    <Compile Include="src/Games/TicTacToe/Offer.fs" />
+  </ItemGroup>
+
+  <!-- What opening a game actually involves - dealing one, keeping its record, the menu,
+       the two tables and the browser - generic in the game, and ending in the one interface
+       that seals a game's types off so that a list can hold more than one. -->
+  <ItemGroup Label="Opening a game">
+    <Compile Include="src/Play.fs" />
+  </ItemGroup>
+
+  <!-- The only file in the program that names more than one game. -->
+  <ItemGroup Label="The games there are">
+    <Compile Include="src/Games.fs" />
   </ItemGroup>
 
   <ItemGroup Label="The way in - compiled last, because it needs every layer above it">

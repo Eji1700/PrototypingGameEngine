@@ -11,7 +11,7 @@ open Falco.Datastar
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Http.Features
 open Microsoft.Extensions.Primitives
-open TCModel.Console
+open TCModel.Table
 
 /// The browser's end of a table.
 ///
@@ -26,7 +26,7 @@ open TCModel.Console
 /// are each drawn a board of their own from the one position.
 module Browser =
 
-    /// Where a page fetches its client, opens its stream and says what was typed. `Html`
+    /// Where a page fetches its client, opens its stream and says what was typed. `Page`
     /// writes these into the markup; this serves them. They are one set of names so the two
     /// cannot drift.
     [<Literal>]
@@ -135,8 +135,8 @@ module Browser =
     /// reaches consoles this file knows nothing about - the players at terminals - and what
     /// those are is settled a file later.
     [<NoComparison; NoEquality>]
-    type Sitting =
-        { Watching: string -> View -> Post list
+    type Sitting<'Move, 'State, 'Notice> =
+        { Watching: string -> View<'Move, 'State, 'Notice> -> Post list
           Said: string -> string -> Post list
           Gone: string -> Post list
           Deliver: Post list -> unit }
@@ -158,8 +158,8 @@ module Browser =
         function
         | Screen text
         | Told text -> Some(Piece text)
-        | TurnedAway why -> Some(Piece(Html.says why))
-        | Nudged -> Some(Doing Html.Nudge)
+        | TurnedAway why -> Some(Piece(Page.says why))
+        | Nudged -> Some(Doing Page.Nudge)
         | Seated _ -> None
 
     let send (pages: Pages) (post: Post) =
@@ -209,9 +209,12 @@ module Browser =
     /// A page that asks for nothing gets `standing` - whatever the command line settled on
     /// when the game was opened, so that `--colour blue=teal` means something to the first
     /// browser through the door as well as to a terminal.
-    let private paletteOf standing (ctx: HttpContext) =
+    ///
+    /// What there is to colour is the game's, which is why the game comes in: a palette read
+    /// against the wrong list of slots would quietly drop every colour it named.
+    let private paletteOf game standing (ctx: HttpContext) =
         match ctx.Request.Query.TryGetValue "colours" with
-        | true, given when given.Count > 0 -> Palette.read (String.Join(" ", given.ToArray()))
+        | true, given when given.Count > 0 -> Palette.read game.Slots (String.Join(" ", given.ToArray()))
         | _ -> standing
 
     // --- the word at the door ---------------------------------------------------------------
@@ -262,11 +265,12 @@ module Browser =
     /// other address answers with the bare refusal, because nothing else here is opened by a
     /// person - they are the page's own fetches, and a stream handed a form instead of a
     /// board would be a stranger sort of failure than the one it is reporting.
-    let turned standing (ctx: HttpContext) =
+    let turned game standing (ctx: HttpContext) =
         if ctx.Request.Method = HttpMethods.Get && ctx.Request.Path = PathString "/" then
             ctx.Response.StatusCode <- 401
             ctx.Response.ContentType <- "text/html; charset=utf-8"
-            ctx.Response.WriteAsync(Html.locked (paletteOf standing ctx) (not (List.isEmpty (presented ctx))))
+
+            ctx.Response.WriteAsync(Page.locked game.Page (paletteOf game standing ctx) (not (List.isEmpty (presented ctx))))
         else
             ctx.Response.StatusCode <- 403
             ctx.Response.ContentType <- "text/plain; charset=utf-8"
@@ -301,17 +305,17 @@ module Browser =
 
     /// The page itself. It carries no game: it opens a stream and the table answers with a
     /// board, which is the same way every board after it arrives.
-    let page standing (ctx: HttpContext) =
-        let palette = paletteOf standing ctx
+    let page game standing (ctx: HttpContext) =
+        let palette = paletteOf game standing ctx
         consoleOf ctx |> ignore
         ctx.Response.ContentType <- "text/html; charset=utf-8"
-        ctx.Response.WriteAsync(Html.page palette)
+        ctx.Response.WriteAsync(Page.page game.Page palette)
 
     /// A line typed in a browser. It may come in the address, which is how a button says
     /// what it does, or in the signals, which is how the box at the bottom says what was
     /// typed into it. Either way it is a line, and it goes to the same parser as any other.
     ///
-    /// The signals are read as `Html.Signals` - the very record the page was started with -
+    /// The signals are read as `Page.Signals` - the very record the page was started with -
     /// so the name of the one thing a page holds is settled in one place and read back by
     /// the same declaration that wrote it.
     let private lineOf (ctx: HttpContext) =
@@ -323,14 +327,14 @@ module Browser =
                 // carries no signals at all is answered with nothing rather than a
                 // complaint.
                 try
-                    match! Request.getSignals<Html.Signals> ctx with
+                    match! Request.getSignals<Page.Signals> ctx with
                     | ValueSome signals -> return (signals.Line |> Option.ofObj |> Option.defaultValue "")
                     | ValueNone -> return ""
                 with _ ->
                     return ""
         }
 
-    let say (sitting: Sitting) (ctx: HttpContext) =
+    let say (sitting: Sitting<_, _, _>) (ctx: HttpContext) =
         task {
             let console = consoleOf ctx
             let! line = lineOf ctx
@@ -340,7 +344,7 @@ module Browser =
             // The board comes back down the stream like any other, so all this has to
             // answer with is an empty box to type the next line into - said as the same
             // record the page was started with.
-            do! Response.ofPatchSignals Html.nothingTyped ctx
+            do! Response.ofPatchSignals Page.nothingTyped ctx
         }
 
     /// A page saying it has gone wrong, printed where the game was started.
@@ -395,10 +399,13 @@ module Browser =
     /// Sitting down happens here rather than when the page was served, because a seat is
     /// only worth having while somebody is holding it: a page fetched and closed again has
     /// nobody at it, and the table would be waiting on a chair nobody is in.
-    let stream standing (sitting: Sitting) (pages: Pages) (ctx: HttpContext) =
+    let stream game standing (sitting: Sitting<_, _, _>) (pages: Pages) (ctx: HttpContext) =
         task {
             let console = consoleOf ctx
-            let view = View.html (paletteOf standing ctx)
+
+            // The first way of drawing this game that a browser can show. Which one that is
+            // is the game's business; that a page gets one it can read is this file's.
+            let view = Playable.plainest InABrowser (paletteOf game standing ctx) game
 
             ctx.Features.Get<IHttpResponseBodyFeature>()
             |> Option.ofObj
@@ -447,7 +454,7 @@ module Browser =
                     beat.Cancel()
 
                     if not (Object.ReferenceEquals(settled, waiting)) then
-                        do! Response.sseExecuteScript ctx Html.Alive
+                        do! Response.sseExecuteScript ctx Page.Alive
                         do! ctx.Response.Body.FlushAsync ctx.RequestAborted
                     else
 

@@ -7,9 +7,11 @@
 #
 # So this opens a headless browser, waits for the board to arrive over the stream, and then
 # uses the page the way a person would - types a line and presses the send button, presses
-# Enter in the box, clicks a region - checking after each that the game moved.
+# Enter in the box, clicks a button that arrived with the board - checking after each that
+# the game moved.
 #
-#   pwsh tools/smoke.ps1
+#   pwsh tools/smoke.ps1                     # the game a line that names none gets
+#   pwsh tools/smoke.ps1 -Game tictactoe     # the other one
 #
 # Wants a Chromium-based browser (Edge or Chrome) on the machine. It is not in CI for that
 # reason; run it after touching anything the browser reads.
@@ -18,6 +20,9 @@ param(
     [int]$Port = 5000,
     [int]$DebugPort = 9222,
     [string]$Browser = "",
+    # Which game to serve. Empty is the one a line that names none gets.
+    [ValidateSet("", "tcmodel", "tictactoe")]
+    [string]$Game = "",
     # Serve the game with the machine in the second seat, and check the two things about
     # that which only a browser can show: that the page is told whose seat it is, and that
     # the machine's answer arrives down the stream without the page asking for it.
@@ -32,11 +37,49 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
-# Where a page opens its stream and where it says what was typed. `Html` writes these into
+# Where a page opens its stream and where it says what was typed. `Page` writes these into
 # the markup and `Browser` serves them; they are spelled out here because the second console
 # below asks for them directly rather than by being a page.
 $Stream = "/stream"
 $Say = "/say"
+
+# What differs between one game and the next, and the whole of it: what a board is made of,
+# what a player types at one, and what the table says back.
+#
+# Worth reading as the answer to a question this file was asked when there was a second game:
+# how much of driving a page in a browser is about the game on it? This much. Everything else
+# below - the stream, the box, the Enter key, the buttons carrying their own lines, the knock,
+# the heartbeat, the word at the door - is between this program and a browser, and is checked
+# once for both.
+$games = @{
+    "tcmodel" = @{
+        # What the board is built out of, and how much of it there should be.
+        Pieces = ".region"; Fewest = 12; Called = "map"
+        # Two lines to type: one that moves the game, and one that walks it back.
+        Typed  = "negotiate"; Then = "undo"
+        # A control that arrived with the board rather than with the page, and what the line
+        # it carries should look like.
+        Button = ".region .acts button"; Types = "^recruit "
+        # This game's own question, if it has one, and a word its answer should contain.
+        Asking = "rule "; Working = "holds"
+        # What a second console says, and a word the first page should see in its log.
+        Elsewhere = "negotiate"; Heard = "reserve"
+        # What the seat a machine plays is called here.
+        Machine = "Player 2"
+    }
+    "tictactoe" = @{
+        Pieces = ".cell"; Fewest = 9; Called = "board"
+        Typed  = "5"; Then = "undo"
+        Button = ".cell.free .types"; Types = "^\d+$"
+        # Nine squares in plain sight: there is nothing to ask about, and saying so by
+        # leaving this empty is the point rather than a gap.
+        Asking = ""; Working = ""
+        Elsewhere = "1"; Heard = "takes square"
+        Machine = "O"
+    }
+}
+
+$g = $games[$(if ($Game) { $Game } else { "tcmodel" })]
 
 function Report($name, $ok, $detail) {
     if ($ok) { "ok   $name" }
@@ -199,7 +242,7 @@ $script = @'
 
   await until(shows);
 
-  const out = { drew: heading(), regions: document.querySelectorAll('.region').length };
+  const out = { drew: heading(), pieces: document.querySelectorAll(PIECES).length };
 
   // Whatever landed beside the board on the way in, before anything has been clicked. At a
   // table with a machine at it, this is the table saying which seat that is - and it is a
@@ -232,42 +275,52 @@ $script = @'
     return heading;
   };
 
-  await sent('negotiate');
+  await sent(TYPED);
   document.querySelector('.prompt button').click();
   out.afterSend = await settled(out.drew);
   out.boxAfterSend = box().value;
 
   // The same, sent with the Enter key instead.
-  await sent('undo');
+  await sent(THEN);
   box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   out.afterEnter = await settled(out.afterSend);
 
   // A control that arrived with the board rather than with the page, and carries its own
   // line in its address rather than in a signal.
-  const region = document.querySelector('.region .acts button');
-  out.regionTypes = region.getAttribute('title');
-  region.click();
-  out.afterRegion = await changes(out.afterEnter);
+  const button = document.querySelector(BUTTON);
+  out.buttonTypes = button.getAttribute('title');
+  button.click();
+  out.afterButton = await changes(out.afterEnter);
   const said = [...document.querySelectorAll('#screen .said')].map(line => line.textContent);
   out.said = said.length;
-  // Recruiting ends a turn, so at a table with a machine at it the seat after this one has
-  // answered by now - and its answer is in the log, having arrived on its own down the same
-  // stream rather than because the page went and asked.
-  out.answered = said.some(line => line.indexOf('Player 2') === 0);
+  // That button ended a turn, so at a table with a machine at it the seat after this one
+  // has answered by now - and its answer is in the log, having arrived on its own down the
+  // same stream rather than because the page went and asked.
+  out.answered = said.some(line => line.indexOf(MACHINE) === 0);
 
   // A screen that lands beside the board rather than on it, and the only one made of
   // written lines rather than elements. Worth its own press: a newline is what separates
   // one instruction from the next on the way here, so a screen with newlines in it is the
   // one that would arrive in pieces if that were got wrong.
-  const why = [...document.querySelectorAll('.region .acts button')]
-    .find(b => (b.getAttribute('title') || '').startsWith('rule '));
-  // This one is not waited for by the heading: it lands beside the board and leaves the
-  // board exactly where it was, so what says it has arrived is the aside filling up.
+  //
+  // Only at a game that has something to be asked. One whose whole position is in plain
+  // sight has no such button, and looking for one there would be waiting out a timeout to
+  // find nothing was wrong.
+  const why = ASKING
+    ? [...document.querySelectorAll(BUTTON)].find(b => (b.getAttribute('title') || '').startsWith(ASKING))
+    : null;
+
   out.whyTypes = why ? why.getAttribute('title') : '';
-  if (why) why.click();
-  await until(() => document.querySelector('#told pre'));
+
+  if (why) {
+    why.click();
+    // This one is not waited for by the heading: it lands beside the board and leaves the
+    // board exactly where it was, so what says it has arrived is the aside filling up.
+    await until(() => document.querySelector('#told pre'));
+  }
+
   const aside = document.querySelector('#told pre');
-  out.working = aside ? aside.textContent : '';
+  out.working = why && aside ? aside.textContent : '';
 
   // Being told the turn has come round. What the table sends down the stream for that is a
   // line of this page's own script, and this is that line, run here by hand - with the page
@@ -381,7 +434,9 @@ $counted = @'
 
 $exe = Find-Browser
 $profile = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-smoke-$PID"
-$game = $null
+# The process serving the table. Not `$game`: that is the parameter saying which game,
+# and PowerShell does not tell the two apart.
+$table = $null
 $browser = $null
 
 try {
@@ -401,10 +456,12 @@ try {
     # Opened with a word at the door, which is what a table gets when nobody says otherwise -
     # so what is driven below is the way this is actually served rather than a way round it.
     # Given rather than made up here, because this script has to be able to say it.
-    $served = @("run", "--project", $root, "--", "serve", "2", "--seed", "42", "--code", $Code)
+    $served = @("run", "--project", $root, "--")
+    if ($Game) { $served += $Game }
+    $served += @("serve", "2", "--seed", "42", "--code", $Code)
     if ($Rival) { $served += @("--rival", $Rival) }
 
-    $game = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
+    $table = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
 
     # Wait for the table rather than guess how long it takes to open. Driving a browser at a
     # server that is not up yet fails in ways that look like the page's fault - which is
@@ -466,7 +523,17 @@ try {
     # nothing to wait for here.
     # Whether the page should expect to be told anything as it sits down, which it only is
     # when there is a machine at the table to be told about.
-    $asking = $script.Replace("ROSTER", $(if ($Rival) { "true" } else { "false" }))
+    # And what a board is made of at whichever game is being served. Substituted rather than
+    # written in, so that the script above reads as the one thing it is: a person using a
+    # page, at a game it never names.
+    $asking =
+        $script.Replace("ROSTER", $(if ($Rival) { "true" } else { "false" })).
+            Replace("PIECES", "'$($g.Pieces)'").
+            Replace("BUTTON", "'$($g.Button)'").
+            Replace("MACHINE", "'$($g.Machine)'").
+            Replace("ASKING", $(if ($g.Asking) { "'$($g.Asking)'" } else { "''" })).
+            Replace("TYPED", "'$($g.Typed)'").
+            Replace("THEN", "'$($g.Then)'")
 
     # The word goes in the address, which is how somebody sent a table's address arrives with
     # it. Everything the page fetches afterwards - its client, its stream, every line typed -
@@ -480,21 +547,23 @@ try {
     if (-not $r) { Report "the page answered at all" $false "no result came back"; exit 1 }
 
     Report "the board arrives over the stream" ($r.drew -like "Turn 1*") $r.drew
-    Report "and the whole map is drawn" ($r.regions -ge 12) "$($r.regions) regions"
+    Report "and the whole $($g.Called) is drawn" ($r.pieces -ge $g.Fewest) "$($r.pieces) of them"
     Report "a line typed in the box and sent moves the game" ($r.afterSend -ne $r.drew) "$($r.drew) -> $($r.afterSend)"
     Report "and the box is emptied for the next one" ($r.boxAfterSend -eq "") "left holding '$($r.boxAfterSend)'"
     Report "the Enter key sends one too" ($r.afterEnter -ne $r.afterSend) "$($r.afterSend) -> $($r.afterEnter)"
-    Report "a region's own button types its own line" ($r.regionTypes -match '^recruit ') $r.regionTypes
+    Report "a board's own button types its own line" ($r.buttonTypes -match $g.Types) $r.buttonTypes
     Report "and the table hears it" ($r.said -gt 0) "$($r.said) line(s) in the log"
-    Report "asking why a region is ruled as it is lands beside the board" ($r.working -match 'holds') $r.working
-    Report "and arrives with its lines still separate" ($r.working -match "`n") "no newline survived"
+    if ($g.Asking) {
+        Report "asking this game's own question lands beside the board" ($r.working -match $g.Working) $r.working
+        Report "and arrives with its lines still separate" ($r.working -match "`n") "no newline survived"
+    }
 
     Report "the page marks itself when the turn comes round and nobody is looking" ($r.marked -ne $r.calm -and $r.marked -match 'turn') "the title stayed '$($r.marked)'"
     Report "and puts its title back when somebody looks again" ($r.settled -eq $r.calm) "left saying '$($r.settled)'"
 
     if ($Rival) {
-        Report "the page is told which seat the machine is playing" ($r.onArrival -match "machine: Player 2 \($Rival\)") $r.onArrival
-        Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was Player 2's"
+        Report "the page is told which seat the machine is playing" ($r.onArrival -match "machine: $($g.Machine) \($Rival\)") $r.onArrival
+        Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was $($g.Machine)'s"
     }
 
     # --- the turn arriving from somebody else ----------------------------------------------
@@ -514,14 +583,14 @@ try {
         # A negotiation, because it is the one move that is legal at any point in an opening
         # and needs nothing said about where. It is not this script's business whether it was
         # a good move - only that it was somebody else's.
-        $said = $second.Client.PostAsync("http://localhost:$Port$Say`?line=negotiate", $null).GetAwaiter().GetResult()
+        $said = $second.Client.PostAsync("http://localhost:$Port$Say`?line=$($g.Elsewhere)", $null).GetAwaiter().GetResult()
 
         Report "a second console at the same game can say a line" ($said.IsSuccessStatusCode) "the table answered $([int]$said.StatusCode)"
 
         $b = (Invoke-InPage $null $counted).value
 
         Report "which knocks on the page that did not say it" ($b.knocks -ge 1) "knocks=$($b.knocks), and the page's board reads '$($b.heading)'"
-        Report "and the page heard the move itself as well" ($b.heading -and $b.log -match 'reserve') "the log's last lines were '$($b.log -join ' | ')'"
+        Report "and the page heard the move itself as well" ($b.heading -and $b.log -match $g.Heard) "the log's last lines were '$($b.log -join ' | ')'"
         Report "the table keeps saying something while nothing happens" ($b.beats -ge 1) "the stream was silent for a whole interval"
     }
     finally {
@@ -534,7 +603,7 @@ try {
     if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }
 }
 finally {
-    foreach ($p in @($browser, $game)) {
+    foreach ($p in @($browser, $table)) {
         if ($p -and -not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch {} }
     }
 

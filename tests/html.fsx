@@ -16,62 +16,58 @@
 //
 //   dotnet fsi tests/html.fsx
 
-#r "nuget: Falco.Datastar, 1.3.0"
-#r "nuget: Falco.Markup, 1.4.0"
-#r "nuget: Spectre.Console, 0.51.1"
-
-#load "Harness.fsx"
-#load "../src/Console/Waiting.fs"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Render.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Reach.fs"
-#load "../src/Console/Palette.fs"
-#load "../src/Console/Tint.fs"
-#load "../src/Console/Rich.fs"
-#load "../src/Console/Html.fs"
-#load "../src/Console/View.fs"
+#load "Whole.fsx"
 
 open System
 open System.Net
 open System.Text.RegularExpressions
 open System.Xml
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and the command line's argument types carry names this game already uses - `Open`.
+open TCModel.Domain
 open Harness
+open Whole
 
 let private dealt = Playing.start 3 42UL |> Result.toOption |> Option.get
 
-let private beholder = Game.active (Playing.game dealt)
+let private beholder = (Game.active (Playing.game dealt)).Id
 
 /// A game stopped in the middle of a negotiation, so that the controls a table offers only
 /// while a stone is owed are drawn at least once here.
 let private owing = dealt |> Playing.update (Make Negotiate)
 
-let private page = Html.page Palette.standard
+let private page = Page.page playing.Page standard
 
-let private view = View.html Palette.standard
+let private view = asPage
+
+/// The same page in other colours, for the checks at the foot of this file.
+let private pageIn palette = Page.page playing.Page palette
+
+/// And the same view.
+let private viewIn palette =
+    Playable.plainest InABrowser palette playing
 
 /// Every screen this view draws, and the slot each is aimed at. A page has two places
 /// anything ever lands - the board, and whatever the game last said - and which of the two
 /// a screen goes to is settled by the fragment itself, because the fragment is the only
 /// thing that knows what kind of screen it is.
 let private screens =
-    [ "board", Html.Screen, view.Board true beholder dealt
-      "board, mid-negotiation", Html.Screen, view.Board true (Game.active (Playing.game owing)) owing
-      "board with the notes off", Html.Screen, view.Board false beholder dealt
+    [ "board", Page.Screen, view.Board true beholder dealt
+      "board, mid-negotiation", Page.Screen, view.Board true (Game.active (Playing.game owing)).Id owing
+      "board with the notes off", Page.Screen, view.Board false beholder dealt
       "waiting",
-      Html.Screen,
+      Page.Screen,
       view.Waiting
-          [ { Player = beholder.Id
+          [ { Player = beholder
               Expected = false
               Away = false
               Yours = true } ]
-      "a line the game said", Html.Told, view.Says "It is Player 2's turn."
-      "the record", Html.Told, view.History beholder dealt
-      "the working behind a ruling", Html.Told, view.Ruling (List.head Board.regions).Id dealt
-      "the rules", Html.Told, view.Rules ]
+      "a line the game said", Page.Told, view.Says "It is Player 2's turn."
+      "the record", Page.Told, view.History beholder dealt
+      "the working behind a ruling", Page.Told, view.Answer $"rule {Words.number (List.head Board.regions).Id}" dealt
+      "the rules", Page.Told, view.Rules ]
 
 // --- markup that is markup --------------------------------------------------------------
 //
@@ -117,11 +113,11 @@ for name, slot, markup in screens do
         slot
         ((read markup).DocumentElement.GetAttribute "id")
 
-report "the page has a place for a board" true (page.Contains $"id=\"{Html.Screen}\"")
+report "the page has a place for a board" true (page.Contains $"id=\"{Page.Screen}\"")
 
-report "and a place for what the game says without one" true (page.Contains $"id=\"{Html.Told}\"")
+report "and a place for what the game says without one" true (page.Contains $"id=\"{Page.Told}\"")
 
-report "and carries the client rather than sending anybody off to fetch it" true (page.Contains Html.Client)
+report "and carries the client rather than sending anybody off to fetch it" true (page.Contains Page.Client)
 
 // --- attributes the carried client has actually heard of --------------------------------------
 //
@@ -195,8 +191,8 @@ let private refused =
     lines
     |> List.distinct
     |> List.filter (fun line ->
-        match Parse.line line with
-        | Ok Parse.Nothing
+        match Playable.read playing line with
+        | Ok Nothing
         | Error _ -> true
         | Ok _ -> false)
 
@@ -208,7 +204,7 @@ report "and every one of them types a line the game's own parser takes" [] refus
 report
     "a table waiting on a stone offers the move that hands one back"
     true
-    (posted (view.Board true (Game.active (Playing.game owing)) owing)
+    (posted (view.Board true (Game.active (Playing.game owing)).Id owing)
      |> List.exists (fun line -> line.StartsWith "return "))
 
 // --- the colours ---------------------------------------------------------------------------
@@ -218,23 +214,26 @@ report
 // So the palette has to reach the page, and has to reach nothing else.
 
 let private redIsTeal =
-    Palette.set "red" "teal" Palette.standard |> Result.toOption |> Option.get
+    Palette.set "red" "teal" standard |> Result.toOption |> Option.get
 
 let private mentions (needle: string) (text: string) = text.Contains needle
 
-report "the page is drawn in the palette it is given" true (Html.page redIsTeal |> mentions (Palette.paint redIsTeal.Red))
+report
+    "the page is drawn in the palette it is given"
+    true
+    (pageIn redIsTeal |> mentions (Palette.paint (Palette.shadeOf "red" redIsTeal)))
 
-report "and not in the one it was not" false (Html.page redIsTeal |> mentions (Palette.paint Palette.standard.Red))
+report "and not in the one it was not" false (pageIn redIsTeal |> mentions (Palette.paint (Palette.shadeOf "red" standard)))
 
 report
     "the board itself is the same board whatever the colours"
     (view.Board true beholder dealt)
-    ((View.html redIsTeal).Board true beholder dealt)
+    ((viewIn redIsTeal).Board true beholder dealt)
 
 report
     "the colours are offered as the same words a console types for them"
     true
-    (Html.page redIsTeal |> mentions "value=\"red=teal\"")
+    (pageIn redIsTeal |> mentions "value=\"red=teal\"")
 
 // --- being told the turn has come round ------------------------------------------------
 //
@@ -244,7 +243,7 @@ report
 // running something nobody had written, and the way that shows is a bell that never rings.
 
 /// The knock is a call, so what the page has to define is the name in front of the brackets.
-let private knocked = Html.Nudge.TrimEnd('(', ')')
+let private knocked = Page.Nudge.TrimEnd('(', ')')
 
 report "what the stream knocks on is a name the page defines" true (page |> mentions $"window.{knocked}=")
 
@@ -253,8 +252,8 @@ report "what the stream knocks on is a name the page defines" true (page |> ment
 // and back before anything on the page could ask. So it is a button, and the page's own
 // script goes looking for it by name.
 
-report "the page carries the button that asks the browser's permission" true (page |> mentions $"id=\"{Html.Notify}\"")
+report "the page carries the button that asks the browser's permission" true (page |> mentions $"id=\"{Page.Notify}\"")
 
-report "and the page's own script goes looking for it by that name" true (page |> mentions $"getElementById('{Html.Notify}')")
+report "and the page's own script goes looking for it by that name" true (page |> mentions $"getElementById('{Page.Notify}')")
 
 finish ()

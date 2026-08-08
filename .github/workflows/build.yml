@@ -29,21 +29,24 @@ jobs:
         run: dotnet build --no-restore -warnaserror
 
       - name: Check formatting
-        run: dotnet fantomas --check src tests
+        run: dotnet fantomas --check src tests tools
 
       # Every script is loaded straight from source and exits non-zero on the first failing
       # check; the runner starts them together, prints each one's whole output in the order
       # they are listed, and fails the job if any of them did.
       #
       # Together rather than one after another because nearly all of the time is `dotnet fsi`
-      # compiling the same sources again for each script - twelve times over, on one core.
+      # compiling the same sources again for each script - fourteen times over, on one core.
       # The list of which scripts there are lives in the runner and is still written out one
       # by one, so a script added without being listed shows up as a missing line in a review.
       - name: Checks
         run: pwsh tools/tests.ps1
 
       # A record is meant to replay for good. The committed one is the oldest thing in
-      # the repository that still has to work, so the build says so out loud.
-      - name: Replay the committed record
+      # the repository that still has to work, so the build says so out loud. The second
+      # one is a game of noughts and crosses, guarding the same promise for the game that
+      # was written to find out whether the promise was the machinery's or this game's.
+      - name: Replay the committed records
         run: |
           echo quit | dotnet run --no-build -- replay logs/2026-08-03-193909-2p-seed639214079490240407.log | head -2
+          echo quit | dotnet run --no-build -- tictactoe replay logs/2026-08-07-190000-2p-noughts.log | head -2

@@ -4,40 +4,25 @@
 //
 //   dotnet fsi tests/lobby.fsx
 
-#r "nuget: Falco.Datastar, 1.3.0"
-#r "nuget: Falco.Markup, 1.4.0"
-#r "nuget: Spectre.Console, 0.51.1"
-
-#load "Harness.fsx"
-#load "../src/Domain/Rival.fs"
-#load "../src/Console/Waiting.fs"
-#load "../src/Console/Showing.fs"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Render.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Reach.fs"
-#load "../src/Console/Palette.fs"
-#load "../src/Console/Tint.fs"
-#load "../src/Console/Rich.fs"
-#load "../src/Console/Html.fs"
-#load "../src/Console/View.fs"
-#load "../src/Net/Protocol.fs"
-#load "../src/Net/Lobby.fs"
+#load "Whole.fsx"
 
 open TCModel.Engine
-open TCModel.Domain
-open TCModel.Console
+open TCModel.Table
 open TCModel.Net
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and the command line's argument types carry names this game already uses - `Open`.
+open TCModel.Domain
 open Harness
+open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
 /// A table of nothing but people, which is what this file is mostly about.
-let private opened () = Lobby.opened dealt []
+let private opened () = Lobby.opened playing dealt []
 
 /// One console at the table, in the next empty seat.
 let private sits console token lobby =
-    Lobby.join console token None (View.plain Palette.standard) lobby
+    Lobby.join console token None plain lobby
 
 /// Both seats taken, which is the only state a game is played in.
 let private full () =
@@ -106,16 +91,14 @@ report
 let dropped, _ = full () |> Lobby.left "one"
 
 let _, resumed =
-    dropped
-    |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") (View.plain Palette.standard)
+    dropped |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") plain
 
 report "a token brings a console back to the seat it left" true (heard "one-again" resumed |> mentions "seated at 1")
 
 report "and back to the same stones" true (heard "one-again" resumed |> mentions "-> Player 1 (you)  bag: Rx3 Bx2 Gx3 (8)")
 
 let _, stranger =
-    full ()
-    |> Lobby.join "four" "tok-fresh" (Some "not-a-token") (View.plain Palette.standard)
+    full () |> Lobby.join "four" "tok-fresh" (Some "not-a-token") plain
 
 report "a token that claimed no seat claims none now" true (heard "four" stranger |> mentions "That is not a seat at this table.")
 
@@ -220,7 +203,14 @@ report
 let sittingPlain, _ = opened () |> sits "one" "tok-one"
 
 let mixed, mixedPosts =
-    sittingPlain |> Lobby.join "two" "tok-two" None (View.rich Palette.standard)
+    sittingPlain
+    |> Lobby.join
+        "two"
+        "tok-two"
+        None
+        (Playable.byName AtATerminal standard playing "rich"
+         |> Result.toOption
+         |> Option.get)
 
 /// Panels are drawn with box characters; nothing in the plain board has one.
 let private panelled = mentions "╭"
@@ -254,7 +244,7 @@ report "and the game does not move for it" 0 (movesMade refusedView)
 /// Seat 1 is the machine's, which leaves one seat for one person - so a single arrival fills
 /// a table of two, and the machine has already played by the time they are shown a board.
 let private machineFirst () =
-    Lobby.opened dealt (Rival.seating 42UL [ Some Rival.easy; None ] (Playing.game dealt))
+    Lobby.opened playing dealt (playing.Seating 42UL [ Some "easy"; None ] (Model.state dealt))
 
 let alone, alonePosts = machineFirst () |> sits "one" "tok-one"
 

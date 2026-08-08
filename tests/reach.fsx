@@ -13,9 +13,9 @@
 //   dotnet fsi tests/reach.fsx
 
 #load "Harness.fsx"
-#load "../src/Console/Reach.fs"
+#load "../src/Table/Reach.fs"
 
-open TCModel.Console
+open TCModel.Table
 open Harness
 
 // --- a word for the door ---------------------------------------------------------------

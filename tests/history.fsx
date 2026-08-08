@@ -3,15 +3,13 @@
 //
 //   dotnet fsi tests/history.fsx
 
-#load "Harness.fsx"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Transcript.fs"
+#load "Whole.fsx"
 
 open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
 open Harness
+open Whole
 
 let private at n = Board.tryId n |> Option.get
 
@@ -112,9 +110,9 @@ report "and writes down the same record" (Journal.moves walked.Journal) (Journal
 
 // --- and again, through the file --------------------------------------------
 
-let written = Transcript.write walked.Journal
+let written = Transcript.write playing walked.Journal
 
-let read = Transcript.read written |> Result.toOption |> Option.get
+let read = Transcript.read playing written |> Result.toOption |> Option.get
 
 report "a written record says who was dealt in" (2, 42UL) (read.Players, read.Seed)
 
@@ -129,6 +127,9 @@ report "a game read back from its file is the same game" (Playing.session walked
 
 report "state for state" (states walked) (states fromFile)
 
-report "every line of a record is either a comment or a move a player could type" true (Transcript.read written |> Result.isOk)
+report
+    "every line of a record is either a comment or a move a player could type"
+    true
+    (Transcript.read playing written |> Result.isOk)
 
 finish ()

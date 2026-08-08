@@ -12,17 +12,17 @@
 
 #r "nuget: FsCheck, 3.3.3"
 
-#load "Harness.fsx"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Transcript.fs"
+#load "Whole.fsx"
 
 open FsCheck
 open FsCheck.FSharp
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and the command line's argument types carry names this game already uses - `Open`.
+open TCModel.Domain
 open Harness
+open Whole
 
 // --- a game somebody might have played ------------------------------------------------
 
@@ -267,12 +267,12 @@ holds
     "a game written down and read back is the same game, state for state"
     (about (fun play ->
         let model = played play
-        let written = Transcript.write model.Journal
+        let written = Transcript.write playing model.Journal
 
         // The two failures are of different kinds - a file that will not read and a
         // table that will not seat - and neither may happen, so both come out as one.
         let replayed =
-            Transcript.read written
+            Transcript.read playing written
             |> Result.mapError (fun _ -> ())
             |> Result.bind (fun read ->
                 Playing.replay read.Players read.Seed read.Moves

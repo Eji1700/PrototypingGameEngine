@@ -8,29 +8,17 @@
 //
 //   dotnet fsi tests/view.fsx
 
-#r "nuget: Falco.Datastar, 1.3.0"
-#r "nuget: Falco.Markup, 1.4.0"
-#r "nuget: Spectre.Console, 0.51.1"
-
-#load "Harness.fsx"
-#load "../src/Console/Waiting.fs"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Render.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Keys.fs"
-#load "../src/Console/Reach.fs"
-#load "../src/Console/Palette.fs"
-#load "../src/Console/Tint.fs"
-#load "../src/Console/Rich.fs"
-#load "../src/Console/Html.fs"
-#load "../src/Console/View.fs"
-#load "../src/Console/Options.fs"
+#load "Whole.fsx"
 
 open System.Text.RegularExpressions
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and both Spectre and the command line's argument types carry names this game already
+// uses - `Region`, `Open`, `View`.
+open TCModel.Domain
 open Harness
+open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
@@ -69,14 +57,20 @@ let private spells (player: Player) (board: string) =
 /// Every view, in the colours the game is drawn in unless somebody says otherwise. What a
 /// player may see does not depend on what colour it is drawn in, and the checks below say
 /// so in the one palette; the ones at the foot of this file are where colour is the point.
-let private views = View.all Palette.standard
+let private views = playing.Views standard
+
+/// One view by name, in whatever colours are wanted. A view is its endpoints and those have
+/// a palette baked into them, so asking for one in different colours means asking the game
+/// afresh rather than putting a new palette on the one in hand.
+let private drawnBy palette name =
+    playing.Views palette |> List.find (fun view -> view.Name = name)
 
 // --- the rule every view keeps ----------------------------------------------------------
 
 // A sweep, so a view added later is held to this without anybody remembering to come back.
 for view in views do
     for beholder in seats do
-        let board = seen (view.Board true beholder dealt)
+        let board = seen (view.Board true beholder.Id dealt)
 
         report $"the {view.Name} view shows {Words.player beholder.Id} their own bag" true (board |> spells beholder)
 
@@ -101,12 +95,12 @@ for view in views do
     report
         $"the {view.Name} view names the drawn stone to the player who drew it"
         true
-        (seen (view.Board true drawer drawn) |> mentions $"drew a {drewColor} stone")
+        (seen (view.Board true drawer.Id drawn) |> mentions $"drew a {drewColor} stone")
 
     report
         $"the {view.Name} view does not name it to anybody else"
         false
-        (seen (view.Board true other drawn) |> mentions $"drew a {drewColor} stone")
+        (seen (view.Board true other.Id drawn) |> mentions $"drew a {drewColor} stone")
 
 // --- the notes -----------------------------------------------------------------------------
 //
@@ -136,8 +130,8 @@ let private notes =
       "what is out of sight", Render.Notes.supply ]
 
 for view in views do
-    let shown = unwrapped (view.Board true seats[0] dealt)
-    let hidden = unwrapped (view.Board false seats[0] dealt)
+    let shown = unwrapped (view.Board true seats[0].Id dealt)
+    let hidden = unwrapped (view.Board false seats[0].Id dealt)
 
     for what, note in notes do
         let note = Regex.Replace(note, @"\s+", " ")
@@ -163,7 +157,7 @@ let private blocks =
       Render.Blocks.log ]
 
 for view in views do
-    let board = (seen (view.Board true seats[0] dealt)).ToLowerInvariant()
+    let board = (seen (view.Board true seats[0].Id dealt)).ToLowerInvariant()
 
     for block in blocks do
         report $"the {view.Name} view has a block for {block}" true (board |> mentions (block.ToLowerInvariant()))
@@ -218,9 +212,7 @@ for view in views do
 
 // --- prose ---------------------------------------------------------------------------------
 
-let private plain = View.plain Palette.standard
-
-let private rich = View.rich Palette.standard
+let private rich = drawnBy standard "rich"
 
 report "the plain view leaves what the game says exactly as it said it" Render.help (plain.Says Render.help)
 
@@ -235,19 +227,19 @@ report "every view answers to its own name" [ "plain"; "rich"; "html" ] (views |
 report
     "a view can be asked for by name"
     (Ok "rich")
-    (View.byName AtATerminal Palette.standard "rich"
+    (Playable.byName AtATerminal standard playing "rich"
      |> Result.map (fun view -> view.Name))
 
 report
     "and is not case-fussy about it"
     (Ok "plain")
-    (View.byName AtATerminal Palette.standard "PLAIN"
+    (Playable.byName AtATerminal standard playing "PLAIN"
      |> Result.map (fun view -> view.Name))
 
 report
     "a name nobody answers to is refused, and says what there is"
     (Error "'fancy' is not a way of showing the game here. There is plain, rich.")
-    (View.byName AtATerminal Palette.standard "fancy"
+    (Playable.byName AtATerminal standard playing "fancy"
      |> Result.map (fun view -> view.Name))
 
 // Which views there are is one question and which of them a reader could show is another.
@@ -258,13 +250,13 @@ report
 report
     "a terminal is not offered the page"
     (Error "'html' is not a way of showing the game here. There is plain, rich.")
-    (View.byName AtATerminal Palette.standard "html"
+    (Playable.byName AtATerminal standard playing "html"
      |> Result.map (fun view -> view.Name))
 
 report
     "and a browser is not offered the terminal's boards"
     (Error "'rich' is not a way of showing the game here. There is html.")
-    (View.byName InABrowser Palette.standard "rich"
+    (Playable.byName InABrowser standard playing "rich"
      |> Result.map (fun view -> view.Name))
 
 // --- the colours it is drawn in -----------------------------------------------------------------
@@ -277,7 +269,7 @@ let private beholder = seats[0]
 
 /// The standard palette with one thing moved: Red drawn in teal rather than crimson.
 let private redIsTeal =
-    Palette.set "red" "teal" Palette.standard |> Result.toOption |> Option.get
+    Palette.set "red" "teal" standard |> Result.toOption |> Option.get
 
 /// Whether a piece of writing has been coloured with a given eight-bit colour. 45 is teal
 /// and 196 is crimson, which are the two this file moves a colour between. The escape
@@ -291,44 +283,47 @@ let private inked code text =
 report
     "a colour is changed by the words a person types"
     (Ok "teal")
-    (Palette.set "blue" "teal" Palette.standard
-     |> Result.map (fun palette -> palette.Blue.Name))
+    (Palette.set "blue" "teal" standard
+     |> Result.map (fun palette -> (Palette.shadeOf "blue" palette).Name))
 
 report
     "and only that one"
     (Ok [ "crimson"; "moss"; "gold"; "slate" ])
-    (Palette.set "blue" "teal" Palette.standard
+    (Palette.set "blue" "teal" standard
      |> Result.map (fun palette ->
-         [ palette.Red.Name
-           palette.Green.Name
-           palette.Yours.Name
-           palette.Hidden.Name ]))
+         [ (Palette.shadeOf "red" palette).Name
+           (Palette.shadeOf "green" palette).Name
+           (Palette.own palette).Name
+           (Palette.shadeOf "hidden" palette).Name ]))
 
 report
     "a colour nobody has is refused, and says what there is"
     true
-    (match Palette.set "blue" "beige" Palette.standard with
+    (match Palette.set "blue" "beige" standard with
      | Error problem -> problem |> mentions "'beige' is not a colour I have. There is crimson,"
      | Ok _ -> false)
 
 report
     "and so is a thing nobody draws"
-    (Error "There is nothing called 'walls' to colour. There is red, blue, green, yours, hidden.")
-    (Palette.set "walls" "teal" Palette.standard |> Result.map (fun _ -> ()))
+    (Error "There is nothing called 'walls' to colour. There is red, blue, green, hidden, yours.")
+    (Palette.set "walls" "teal" standard |> Result.map (fun _ -> ()))
 
-report "the rich board is drawn in the palette it is given" true ((View.rich redIsTeal).Board true beholder dealt |> inked 45)
+report
+    "the rich board is drawn in the palette it is given"
+    true
+    ((drawnBy redIsTeal "rich").Board true beholder.Id dealt |> inked 45)
 
-report "and not in the one it was not" false ((View.rich redIsTeal).Board true beholder dealt |> inked 196)
+report "and not in the one it was not" false ((drawnBy redIsTeal "rich").Board true beholder.Id dealt |> inked 196)
 
 report
     "colouring moves not one character of the board"
-    (uncoloured (rich.Board true beholder dealt))
-    (uncoloured ((View.rich redIsTeal).Board true beholder dealt))
+    (uncoloured (rich.Board true beholder.Id dealt))
+    (uncoloured ((drawnBy redIsTeal "rich").Board true beholder.Id dealt))
 
 report
     "the plain view is left plain by any of it"
-    (plain.Board true beholder dealt)
-    ((View.plain redIsTeal).Board true beholder dealt)
+    (plain.Board true beholder.Id dealt)
+    ((drawnBy redIsTeal "plain").Board true beholder.Id dealt)
 
 // A palette crosses a wire as the words a person would have typed, and is read back by the
 // same function that reads them, so there is no second spelling of one to keep in step.
@@ -336,23 +331,26 @@ report
 report
     "a palette comes back off the wire as it went on"
     [ "teal"; "azure"; "moss"; "gold"; "slate" ]
-    (let there = Palette.read (Palette.write redIsTeal)
+    (let there = Palette.read playing.Slots (Palette.write redIsTeal)
 
-     [ there.Red.Name
-       there.Blue.Name
-       there.Green.Name
-       there.Yours.Name
-       there.Hidden.Name ])
+     [ (Palette.shadeOf "red" there).Name
+       (Palette.shadeOf "blue" there).Name
+       (Palette.shadeOf "green" there).Name
+       (Palette.own there).Name
+       (Palette.shadeOf "hidden" there).Name ])
 
-report "and a word the far end does not know leaves that one as it was" "crimson" (Palette.read "red=beige blue=teal").Red.Name
+report
+    "and a word the far end does not know leaves that one as it was"
+    "crimson"
+    (Palette.shadeOf "red" (Palette.read playing.Slots "red=beige blue=teal")).Name
 
 // --- the screen that offers them ------------------------------------------------------------
 
 report
     "two words are a colour for something"
     (Ok "teal")
-    (match Options.choose Palette.standard "blue teal" with
-     | Ok(Options.Changed palette) -> Ok palette.Blue.Name
+    (match Options.choose standard "blue teal" with
+     | Ok(Options.Changed palette) -> Ok (Palette.shadeOf "blue" palette).Name
      | Ok _ -> Error "no change"
      | Error problem -> Error problem)
 
@@ -360,7 +358,7 @@ report
     "'reset' puts them all back"
     "crimson"
     (match Options.choose redIsTeal "reset" with
-     | Ok(Options.Changed palette) -> palette.Red.Name
+     | Ok(Options.Changed palette) -> (Palette.shadeOf "red" palette).Name
      | _ -> "nothing")
 
 report
@@ -384,7 +382,7 @@ report
 // It is always shown through the view built in the very palette it is offering, which is
 // what makes the samples on it a look at the colours rather than a list of names for them.
 
-let private offering = View.rich redIsTeal
+let private offering = drawnBy redIsTeal "rich"
 
 report "the colour screen shows what it is offering" true (offering.Says(Keys.draw None (Options.screen redIsTeal)) |> inked 45)
 

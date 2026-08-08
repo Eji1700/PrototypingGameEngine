@@ -16,39 +16,23 @@
 //
 //   dotnet fsi tests/solo.fsx
 
-#r "nuget: Falco.Datastar, 1.3.0"
-#r "nuget: Falco.Markup, 1.4.0"
-#r "nuget: Spectre.Console, 0.51.1"
+#load "Whole.fsx"
 
-#load "Harness.fsx"
-#load "../src/Domain/Rival.fs"
-#load "../src/Console/Waiting.fs"
-#load "../src/Console/Showing.fs"
-#load "../src/Console/Words.fs"
-#load "../src/Console/Render.fs"
-#load "../src/Console/Parse.fs"
-#load "../src/Console/Reach.fs"
-#load "../src/Console/Palette.fs"
-#load "../src/Console/Tint.fs"
-#load "../src/Console/Rich.fs"
-#load "../src/Console/Html.fs"
-#load "../src/Console/View.fs"
-#load "../src/Console/Solo.fs"
-
-open TCModel.Domain
 open TCModel.Engine
-open TCModel.Console
+open TCModel.Table
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
+// and the command line's argument types carry names this game already uses - `Open`.
+open TCModel.Domain
 open Harness
+open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
-let private reading =
-    { Notes = true
-      View = View.plain Palette.standard }
+let private reading = { Notes = true; View = plain }
 
 /// A game with one person at it, which is the ordinary case.
 let private sitting =
-    Solo.opened "first" dealt |> Solo.watching "keyboard" reading |> fst
+    Solo.opened playing "first" dealt |> Solo.watching "keyboard" reading |> fst
 
 /// Type a line and take what came of it. The stamp handed in is only ever used by a line
 /// that deals a fresh game, so it is named for that here.
@@ -80,7 +64,7 @@ let private saidTo (posts: Post list) =
 report
     "sitting down draws you a board"
     1
-    (Solo.watching "one" reading (Solo.opened "s" dealt)
+    (Solo.watching "one" reading (Solo.opened playing "s" dealt)
      |> snd
      |> screens
      |> List.length)
@@ -88,7 +72,7 @@ report
 report
     "a line typed by somebody who is not watching is turned away"
     [ "You are not watching this game." ]
-    (Solo.said "afresh" "stranger" "negotiate" (Solo.opened "s" dealt)
+    (Solo.said "afresh" "stranger" "negotiate" (Solo.opened playing "s" dealt)
      |> fun (_, posts, _) -> saidTo posts)
 
 // Two people can watch one hot seat - the same game open in two browsers - and a move
@@ -139,7 +123,7 @@ report
 // One keyboard, so the board belongs to whoever is to play. Over a network it belongs to
 // whoever is reading it, and that is the whole of the difference between `Solo` and `Lobby`.
 
-let private boardSays (solo: Solo) (needle: string) =
+let private boardSays (solo: Solo<_, _, _>) (needle: string) =
     match Solo.board "keyboard" solo with
     | Some board -> board.Contains needle
     | None -> false
@@ -263,11 +247,8 @@ report
 // the sort of difference that only shows up in the one place nobody is looking.
 
 let private inABrowser =
-    Solo.opened "first" dealt
-    |> Solo.watching
-        "page"
-        { Notes = true
-          View = View.html Palette.standard }
+    Solo.opened playing "first" dealt
+    |> Solo.watching "page" { Notes = true; View = asPage }
     |> fst
 
 report
@@ -280,7 +261,7 @@ report
     true
     (match Solo.saying "page" "Record saved to somewhere.log" inABrowser |> saidTo with
      | [ said ] ->
-         said.StartsWith $"<aside id=\"{Html.Told}\""
+         said.StartsWith $"<aside id=\"{Page.Told}\""
          && said.Contains "Record saved to somewhere.log"
      | _ -> false)
 
@@ -305,11 +286,11 @@ report
 // table is a person, and what `undo` means when half the moves were not yours.
 
 let private facing sitting solo =
-    Solo.against (Rival.seating 42UL sitting (Playing.game (Solo.model solo))) solo
+    Solo.against (playing.Seating 42UL sitting (Model.state (Solo.model solo))) solo
 
 let private opposed =
-    Solo.opened "first" dealt
-    |> facing [ None; Some Rival.medium ]
+    Solo.opened playing "first" dealt
+    |> facing [ None; Some "medium" ]
     |> fst
     |> Solo.watching "keyboard" reading
     |> fst
@@ -368,8 +349,8 @@ report
 // and there is nothing about the first seat that keeps a person in it.
 
 let private noPeople =
-    Solo.opened "first" dealt
-    |> facing (Game.players (Playing.game dealt) |> List.map (fun _ -> Some Rival.easy))
+    Solo.opened playing "first" dealt
+    |> facing (Game.players (Playing.game dealt) |> List.map (fun _ -> Some "easy"))
 
 report "a table of nothing but machines plays itself out as it sits down" true (Playing.isOver (Solo.model (fst noPeople)))
 
@@ -383,7 +364,7 @@ report
 report
     "while a table of people asks for nothing when it opens"
     true
-    (match snd (facing [] (Solo.opened "first" dealt)) with
+    (match snd (facing [] (Solo.opened playing "first" dealt)) with
      | Carrying -> true
      | _ -> false)
 
@@ -393,8 +374,8 @@ report
 report
     "sitting down at a table with a machine at it says which seat that is"
     [ "Played by the machine: Player 2 (medium)." ]
-    (Solo.opened "first" dealt
-     |> facing [ None; Some Rival.medium ]
+    (Solo.opened playing "first" dealt
+     |> facing [ None; Some "medium" ]
      |> fst
      |> Solo.watching "keyboard" reading
      |> snd
@@ -403,6 +384,8 @@ report
 report
     "and a table of people says nothing at all"
     []
-    (Solo.watching "keyboard" reading (Solo.opened "first" dealt) |> snd |> saidTo)
+    (Solo.watching "keyboard" reading (Solo.opened playing "first" dealt)
+     |> snd
+     |> saidTo)
 
 finish ()

@@ -6,6 +6,8 @@
 // `Machines.fs` would be there whatever game was being checked, and everything after
 // `Stones.fs` is this one.
 
+#load "Checks.fsx"
+
 #load "../src/Common/Result.fs"
 #load "../src/Common/Cascade.fs"
 #load "../src/Common/Random.fs"
@@ -18,38 +20,29 @@
 #load "../src/Engine/Model.fs"
 #load "../src/Engine/Update.fs"
 #load "../src/Engine/Machines.fs"
-#load "../src/Domain/Stones.fs"
-#load "../src/Domain/Board.fs"
-#load "../src/Domain/Players.fs"
-#load "../src/Domain/Position.fs"
-#load "../src/Domain/Ruling.fs"
-#load "../src/Domain/Game.fs"
-#load "../src/Domain/Knowledge.fs"
-#load "../src/Domain/Events.fs"
-#load "../src/Domain/Actions.fs"
-#load "../src/Domain/Outcome.fs"
-#load "../src/Domain/Setup.fs"
-#load "../src/Domain/Turn.fs"
-#load "../src/Domain/Playing.fs"
+#load "../src/Games/TCModel/Stones.fs"
+#load "../src/Games/TCModel/Board.fs"
+#load "../src/Games/TCModel/Players.fs"
+#load "../src/Games/TCModel/Position.fs"
+#load "../src/Games/TCModel/Ruling.fs"
+#load "../src/Games/TCModel/Game.fs"
+#load "../src/Games/TCModel/Knowledge.fs"
+#load "../src/Games/TCModel/Events.fs"
+#load "../src/Games/TCModel/Actions.fs"
+#load "../src/Games/TCModel/Outcome.fs"
+#load "../src/Games/TCModel/Setup.fs"
+#load "../src/Games/TCModel/Turn.fs"
+#load "../src/Games/TCModel/Playing.fs"
 
 open TCModel.Engine
 open TCModel.Domain
 
-let mutable failures = 0
+// Keeping score lives on its own, so that the other game's checks - which cannot load this
+// file, both games having a `Board.fs` - can have it without it. Named through again here,
+// so nothing that already says `open Harness` has to learn a second name.
+let report = Checks.report
 
-let report name expected actual =
-    if actual = expected then
-        printfn "ok   %s" name
-    else
-        failures <- failures + 1
-        printfn "FAIL %s: expected %A, got %A" name expected actual
-
-let finish () =
-    printfn ""
-
-    if failures = 0 then printfn "all checks passed" else printfn "%d check(s) failed" failures
-
-    exit failures
+let finish = Checks.finish
 
 /// A game with the given regions stocked and the given bags held; everything else
 /// is emptied. Regions are named by number.

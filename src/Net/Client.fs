@@ -5,7 +5,7 @@ open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http.Connections.Client
 open Microsoft.AspNetCore.SignalR.Client
-open TCModel.Console
+open TCModel.Table
 
 /// A console at somebody else's table.
 ///
@@ -53,7 +53,7 @@ module Client =
 
     let private wait (task: Task) = task.GetAwaiter().GetResult()
 
-    let join given resuming code (chosen: View) =
+    let join game given resuming code (chosen: View<_, _, _>) =
         match Reach.endpoint Protocol.Path given with
         | Error problem ->
             eprintfn "%s" problem
@@ -102,13 +102,13 @@ module Client =
             fun seat mine ->
                 token.Value <- mine
                 printfn ""
-                printfn "You are Player %d. If you drop, this brings you back to the same seat:" seat
+                printfn "You are at seat %d. If you drop, this brings you back to it:" seat
                 printfn ""
                 // Written from the same declaration the command line is read by, so what
                 // a player is told to type is something the program is certain to accept -
                 // including the word at the door, which they would otherwise have to
                 // remember they had been given.
-                printfn "  dotnet run -- %s" (Launch.write (Launch.Join(given, Some mine, code)))
+                printfn "  dotnet run -- %s" (Launch.written game (Launch.Join(given, Some mine, code)))
         )
         |> ignore
 

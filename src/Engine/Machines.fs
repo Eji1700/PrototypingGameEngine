@@ -1,5 +1,18 @@
 namespace TCModel.Engine
 
+/// A seat played by the program: given where the game stands, what it plays and what it
+/// becomes.
+///
+/// A function, and recursive, so that whatever a machine carries between turns - a
+/// generator, a plan, a book of openings, nothing at all - stays its own business instead of
+/// becoming a type parameter on every table, screen and seating above it. The engine only
+/// ever asks one; what is inside is the game's.
+///
+/// Answering `None` is a machine with nothing to play, which stops the run as surely as a
+/// finished game does.
+[<NoComparison; NoEquality>]
+type Machine<'Move, 'State> = Choosing of ('State -> ('Move * Machine<'Move, 'State>) option)
+
 /// Seats played by something that is not a person, and when they take their turns.
 ///
 /// What a machine *chooses* is the game's own and is nowhere near here - it comes in as one
@@ -26,6 +39,10 @@ module Machines =
     /// it, or one `undo` would simply be answered again before the board was looked at.
     let holds rules rivals model =
         toAct rules rivals model |> Option.isSome
+
+    /// What one machine plays, in the shape `answering` asks for it. Here so that the usual
+    /// case - a seat held by nothing but a `Machine` - needs no lambda at the call site.
+    let playing state (Choosing choose) = choose state
 
     let private withRival playerId rival rivals =
         rivals

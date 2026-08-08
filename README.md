@@ -8,7 +8,7 @@ faction. A bag played out to nothing wins nothing.
 
 It is a stone-placement game built as a Model-View-Update loop in F#. The core is pure:
 `Setup.deal` deals a game from a seed and `Update.update` folds a `Msg` into the
-next `Model`. Nothing below the console layer knows a screen exists, and every
+next `Model`. Nothing below the table layer knows a screen exists, and every
 screen a player reads goes through a `View` - so how the game looks is swappable,
 and it is: `plain` writes blocks of text, `rich` builds panels and charts, and two
 players at one networked table can each pick their own.
@@ -17,6 +17,21 @@ Seats can be played by the program rather than by somebody in the room. A machin
 at a seat is held to what a player is held to: it asks the rules what they will
 take rather than keeping its own opinion, it reads the map and its own bag and
 nothing else, and it picks a `Move` - the very thing a typed line turns into.
+
+**There are two games in here now.** The second is noughts and crosses, and it is not a
+feature - it is the only honest test of the claim the machinery makes about itself. About
+four fifths of this program is not about stones: a history to walk back through, a record
+that replays, seats and tokens, a machine to play one of them, three ways of drawing a
+board, a table over a wire. All of that was extracted on the grounds that it is generic,
+and a claim like that cannot be tested by the game it was extracted from. So there is a
+second one, at a fraction of the size, going through the same two seams and getting the
+same machinery for nothing - and [what that turned up](#what-a-second-game-found) is the
+most useful thing in this file.
+
+```powershell
+dotnet run                      # asks which game, then that game's own menu
+dotnet run -- tictactoe play 2  # or say which, and everything after it is read by that game
+```
 
 **Playing** — [Running](#running) · [Rules as implemented](#rules-as-implemented) ·
 [The map](#the-map) · [The four actions](#the-four-actions) · [Ruling](#ruling) ·
@@ -34,9 +49,16 @@ nothing else, and it picks a `Move` - the very thing a typed line turns into.
 ## Running
 
 ```powershell
-dotnet run                     # the start menu: how many are playing, then who is in each seat
+dotnet run                     # which game, then that game's own menu: how many are playing,
+                               #   then who is in each seat
                                #   (arrows or wasd to move, a number to pick)
-dotnet run -- play 3           # 3 players, random seed - straight to the board
+dotnet run -- tictactoe        # or say which, and go straight to that game's menu
+dotnet run -- tictactoe play 2 # everything after the name is read by that game
+dotnet run -- tictactoe serve 2 --rival hard   # nine buttons in a browser, against a machine
+                               #   that cannot be beaten
+
+dotnet run -- play 3           # a line that names no game means the one there has always been
+
 dotnet run -- play 3 --seed 42 # the same game again, from a seed
 dotnet run -- play 2 --view rich --colour blue=teal
 
@@ -59,6 +81,11 @@ dotnet run -- host 3 --cert stones.pfx --cert-password <pw>  # ...or is held her
 
 dotnet run -- --help           # every command; --help works on each of them too
 ```
+
+Everything below this line is about **TCModel**, the game of stones. Noughts and crosses
+takes the same commands - `play`, `serve`, `host`, `join`, `replay`, `--rival`, `--view`,
+`--colour`, `undo`, `save` - because none of them are this game's, and it has a `help` of
+its own for the four words that are.
 
 Once a game is dealt, everything else is typed at the prompt:
 
@@ -388,7 +415,7 @@ rather than closing the window on itself.
 
 A bag is held closed and so is the reserve, so nobody sees the whole game. The
 screen belongs to whoever is to play, and `Knowledge.seenBy`
-([Knowledge.fs](src/Domain/Knowledge.fs)) is what they are shown:
+([Knowledge.fs](src/Games/TCModel/Knowledge.fs)) is what they are shown:
 
 | | what they see |
 | --- | --- |
@@ -410,7 +437,7 @@ game is over `Knowledge.laidBare` opens everything, because there is no longer
 anything to hold back.
 
 Two things a player is told would otherwise give a closed bag away, and both are
-worded around in [Words.fs](src/Console/Words.fs):
+worded around in [Words.fs](src/Games/TCModel/Words.fs):
 
 - **A stone drawn from the reserve** goes straight into a closed bag. The player
   who drew it is told its colour; everyone else is told only that a stone was
@@ -434,7 +461,7 @@ game's hands anyway.
 
 ## How the board is shown
 
-A **view** ([View.fs](src/Console/View.fs)) is every screen a player ever reads.
+A **view** ([View.fs](src/Table/View.fs)) is every screen a player ever reads.
 Nothing else in the program prints anything a player would call part of the game,
 so a new way of showing it is written once and everything picks it up - one
 keyboard or five over a network.
@@ -478,23 +505,23 @@ question, and `view html` at a terminal is answered with the two views a termina
 **The endpoints take the model, not somebody else's finished text**, so a view is
 free to lay a screen out however it likes rather than only colouring what it is
 handed. That is the whole difference between the three: `plain` writes the board as
-one block of text, `rich` ([Rich.fs](src/Console/Rich.fs)) builds it out of Spectre's
+one block of text, `rich` ([Rich.fs](src/Games/TCModel/Rich.fs)) builds it out of Spectre's
 panels, tables and charts - every region a panel bordered in the colour of whoever
 rules it, bags drawn stone by stone, a closed bag drawn as the row of stones nobody
 can name, land ruled as a bar chart, what is out of sight as a breakdown - and `html`
-([Html.fs](src/Console/Html.fs)) builds the same things out of elements.
+([Html.fs](src/Games/TCModel/Html.fs)) builds the same things out of elements.
 
 **The three factions are Red, Blue and Green**, written `R`, `B` and `G`. Each is
 drawn a good deal brighter than the flat version of its own colour, because a stone
 in plain blue is barely there on a dark screen. Because a colour's name and its glyph
 now begin with the same letter, one lookup serves both: `Gx4`, a lone `G` on the map,
 the word "Green" in a sentence, a bar in a chart and a region's border all follow from
-[Tint.fs](src/Console/Tint.fs) and `Words.glyph`. The reader's own seat is marked in
+[Tint.fs](src/Table/Tint.fs) and `Words.glyph`. The reader's own seat is marked in
 gold rather than a fourth hue that could be mistaken for a stone.
 
 ### Colours a player chooses
 
-Which colour is drawn for what is a **palette** ([Palette.fs](src/Console/Palette.fs)),
+Which colour is drawn for what is a **palette** ([Palette.fs](src/Table/Palette.fs)),
 and `colours` at the menu opens the screen that changes one:
 
 ```
@@ -639,7 +666,7 @@ The host prints the addresses it can be reached at, the word at its door, and th
 line each of the others types — that line is written by `Launch.write`, so what somebody is
 told to type is something the program is certain to accept. A player says a machine name,
 an address, or a whole URL; the port and the path are filled in
-([Reach.fs](src/Console/Reach.fs)). Nobody plays until every seat a person has is taken - a
+([Reach.fs](src/Table/Reach.fs)). Nobody plays until every seat a person has is taken - a
 game dealt for three hands out three bags whether or not three people have arrived, so
 starting early would mean somebody playing a bag that is not theirs. A seat the program
 plays was never empty and is not waited for.
@@ -785,7 +812,7 @@ its stream and every line it types from the root — `/stream`, not `../stream` 
 while `join https://example.org/stones/table` from a terminal works fine, because a console
 is given the whole path and keeps it. A subdomain, or the hostname a tunnel hands you, and
 the split does not arise. Fixing it properly means `UsePathBase`, `X-Forwarded-Prefix` and
-relative URLs in [Html.fs](src/Console/Html.fs); it is written down rather than done because
+relative URLs in [Html.fs](src/Games/TCModel/Html.fs); it is written down rather than done because
 nothing yet needs this table to share a hostname with anything.
 
 **A wire between houses goes quiet, and then goes away.** Three defaults were written for
@@ -831,7 +858,7 @@ can honestly be asked about.
 There are two, and they are the same shape: hand one a typed line and it gives back the
 next table and a list of things to show, each addressed to somebody.
 
-| | [Solo.fs](src/Console/Solo.fs) | [Lobby.fs](src/Net/Lobby.fs) |
+| | [Solo.fs](src/Table/Solo.fs) | [Lobby.fs](src/Net/Lobby.fs) |
 | --- | --- | --- |
 | who is at it | one pair of hands, however many are watching | one seat each |
 | seats the program plays | any of them | any of them, and they are not waited for |
@@ -929,7 +956,7 @@ So the page does not lean on them. It keeps its own watch instead, which it woul
 wanted anyway: neither knob covers a stream that ended tidily, or one that stopped arriving
 without saying so.
 
-Two small deviations from what the library emits, both in [Html.fs](src/Console/Html.fs)
+Two small deviations from what the library emits, both in [Html.fs](src/Games/TCModel/Html.fs)
 with the reason written down: `data-bind:line` is given an empty value rather than standing
 for itself, and the Enter-key expression asks a question rather than using `&&`. Both are
 so that every screen stays well-formed markup, which is a thing the checks can hold it to.
@@ -1079,7 +1106,7 @@ drawn a perfectly good board, and said nothing at all. So it is fenced in three 
 and each of them is a thing the compiler or a check can hold it to.
 
 **It keeps no second copy of the rules.** To find out whether a move is allowed, it
-asks [Actions.fs](src/Domain/Actions.fs) - the same functions `Update` asks - and
+asks [Actions.fs](src/Games/TCModel/Actions.fs) - the same functions `Update` asks - and
 takes the answer. A machine that worked legality out for itself would be a second
 opinion about the rules, free to drift from the ones being played, and the way that
 shows up at a table is a machine asking for something, being told no, and asking
@@ -1089,7 +1116,7 @@ again with the turn never passing. Over two whole machine-played games,
 **It reads the map and one bag.** The function that weighs a position takes a
 `Position` and a `Pile`, which is the whole of what somebody at that seat can see.
 There is nothing in the arguments to cheat with. Working out how the land stands from
-a position alone is what [Ruling.fs](src/Domain/Ruling.fs) does, so this is the game's
+a position alone is what [Ruling.fs](src/Games/TCModel/Ruling.fs) does, so this is the game's
 own reckoning rather than a copy of it. And the same thing is said again from outside:
 the stones in the bags it cannot see are poured together and dealt back out between
 those players, and it has to pick the same move it picked before. Between them, not
@@ -1108,7 +1135,7 @@ same deal against the same machines plays the same game twice.
 ### Three sets of numbers, not three machines
 
 There is one machine. What `easy`, `medium` and `hard` name is a set of weights and
-two knobs, all at the foot of [Rival.fs](src/Domain/Rival.fs):
+two knobs, all at the foot of [Rival.fs](src/Games/TCModel/Rival.fs):
 
 | | `easy` | `medium` | `hard` |
 | --- | --- | --- | --- |
@@ -1215,8 +1242,8 @@ replays, seats at a table, a machine to play one of them, a screen per player, a
 between them — none of that is a fact about this game, and all of it took longer to get
 right than the rules did.
 
-So it is compiled *before* the game and knows nothing about it. `src/Engine` mentions no
-type in `src/Domain` and never will: the whole of what it knows is one record.
+So it is compiled *before* the games and knows nothing about them. `src/Engine` mentions no
+type in `src/Games` and never will: the whole of what it knows is one record.
 
 ```fsharp
 type Rules<'Move, 'State, 'Notice> =
@@ -1243,10 +1270,10 @@ that [lobby.fsx](tests/lobby.fsx) can check without a socket. A game that return
 **Things moved both ways to make the seam honest.** Down into the game went everything the
 old middle layer had quietly accumulated about *this* game: the phase a turn is in, the run
 of negotiations that ends it, what a turn even is. A turn that stays open until a stone goes
-back is nobody else's rule, and it now sits in [Turn.fs](src/Domain/Turn.fs) beside the rest
-of them. Up into the engine went `PlayerId` — which seat, said without saying who is in it —
-because the record, the tables, the wire and the screens all speak it and none of that is
-about stones.
+back is nobody else's rule, and it now sits in [Turn.fs](src/Games/TCModel/Turn.fs) beside
+the rest of them. Up into the engine went `PlayerId` — which seat, said without saying who
+is in it — because the record, the tables, the wire and the screens all speak it and none of
+that is about stones.
 
 **And the game names its own shapes once**, so nothing above carries three type arguments
 about:
@@ -1257,24 +1284,108 @@ type Told  = Told<Move, Notice>
 type Model = Model<Move, Session, Notice>
 ```
 
-[Playing.fs](src/Domain/Playing.fs) is the other half of plugging in: the engine's own
-machinery with these rules already bound into it. Which is why nothing above that file
-mentions the seam at all — the prompt, the three views, both tables and the record all say
-`Playing.update` and `Playing.game`, exactly as they said `Update.update` and `Model.game`
-when there was no engine to be on the other side of.
+[Playing.fs](src/Games/TCModel/Playing.fs) is the other half of plugging in: the engine's
+own machinery with these rules already bound into it.
 
-**What is not done.** `src/Console` is still two things in one drawer: generic screen
-machinery (the keyed screens, seats, reach, the table loops, the colour plumbing) sitting
-beside this game's own words and drawings. And a view is still handed the whole model and
-trusted to ask `Knowledge` what its reader may see — a discipline three renderers keep and
-[view.fsx](tests/view.fsx) patrols, where an engine ought to hand a view only what that seat
-may know and make a leak unwriteable. Both are worth doing. Neither is worth doing on
-speculation: the only honest test of a seam is a second game through it, and there is not
-one yet.
+### The second seam
+
+`Rules` answers how a game is *played*. It held. What did not exist was a seam for how a
+game is *read* — seventeen files above the game reached into it by direct module reference,
+so every screen, menu and command line in the program was bound to stones. `Playable` is
+that second seam, and it lives at the top of [src/Table](src/Table/Playable.fs):
+
+```fsharp
+type Playable<'Move, 'State, 'Notice> =
+    { Rules:   Rules<'Move, 'State, 'Notice>
+      Name:    string;  Title: string;  Blurb: string
+      Fewest:  int;     Most:   int
+      Read:    string -> Result<Command<'Move>, string>   // this game's own words
+      Write:   Msg<'Move> -> string                       // what a record is made of
+      Seat:    PlayerId -> string
+      Says:    'Notice -> string
+      SeenBy:  PlayerId -> 'Notice -> string
+      Resign:  'Move option
+      Faults:  string list
+      Slots:   Slot list                                  // what takes a colour
+      Skills:  (string * string) list
+      Seating: uint64 -> string option list -> 'State -> (PlayerId * Seated<'Move,'State>) list
+      Page:    Shell
+      Views:   Palette -> View<'Move, 'State, 'Notice> list }
+```
+
+Fill both records in and everything above is already written: the timeline, the record on
+disk, the seats and their tokens, the menu and the seat list, the colour screen, the command
+line, the wire, the browser, and the machine loop.
+
+Three things had to change for it to fit. **`View` lost its game types** — `Board` took this
+game's `Player` and `Ruling` took this game's `RegionId`, which is what kept every screen
+bound to one game; a seat is a `PlayerId` now, and anything else a game can be asked about
+arrives at `Answer` as the words that were typed. **`Command` split off** — `help`, `quit`,
+`undo`, `save`, `view rich`, `restart` mean the same thing whatever is on the board, so they
+are read once in [Commands.fs](src/Table/Commands.fs) for every game and a game's own reader
+never sees them. **`Palette` became keyed** — the game says what it colours, so the colour
+screen, the line that changes one, the form on the page and both halves of sending a palette
+down a wire stopped knowing there are three factions.
+
+There is one more seam, at the far end. Two games have different moves, states and notices,
+so no list holds both — [Play.fs](src/Play.fs) ends in a plain interface with no type
+parameters at all, implemented by closing over a game. That is where the types stop, which
+is what makes [Games.fs](src/Games.fs) a two-line list.
+
+### What a second game found
+
+Noughts and crosses is nine files and about 450 lines, of which the rules are 60. It
+compiled the first time it was asked to and needed no change to `Engine`, `Table` or `Net`.
+What it turned up along the way was worth more than the game:
+
+- **`Solo.walking` compared two game states for equality** to decide whether a move landed.
+  Generic code cannot require that — nothing about a game says it has to be comparable. It
+  asks the history now, which is what `Machines.answering` had been doing all along for the
+  same reason. The engine had solved it; the table had not noticed.
+- **Six sentences were the engine talking in the game's voice.** "There is nothing left to
+  take back", "the game is over, so there is nothing left to play" — a game with an opinion
+  about undo. They live in `Told.inWords` now, and both games' renderers reach the same
+  copy. It took writing the second renderer to make copying them a third time obviously
+  absurd.
+- **`Solo` hard-coded `Make Resign`.** What putting a game down *plays* is the game's;
+  that a person may put one down is not.
+- **A machine as a recursive closure erases a type parameter.** `Machine<'Move,'State> =
+  Choosing of ('State -> ('Move * Machine<...>) option)` means whatever a machine remembers
+  between turns — a generator, a plan, nothing at all — stays its own business instead of
+  appearing in every table, screen and seating signature above it.
+- **The wire broke, and nothing caught it.** Making the table generic turned the SignalR hub
+  into a generic type, and a generic type named in a route cannot be tied to the game being
+  played: F# infers `MapHub<TableHub<_,_,_>>` as `obj`, the container is asked for a hub it
+  was never given, and every console that tries to sit down is dropped without a word. No
+  test read that, because every test either folds a value or drives a browser. It was found
+  by joining a table, and [wire.ps1](tools/wire.ps1) is that, written down.
+- **The line a table reads out was one word short.** `dotnet run -- join <address>` finds
+  the table and draws the right board whichever game it is — and then reads every colour
+  asked for against the wrong list of them. A second game is what makes a printed
+  instruction's missing word visible.
+
+And two places where the seam is wider than it needs to be, left as they are and said out
+loud rather than papered over. `View.Answer` exists for TCModel's `rule 8`; a game whose
+whole position is nine squares in plain sight fills it with a line explaining there is
+nothing to explain, and nothing can ever reach it. And `Update.start` takes a seed from
+every game, including one with no dice at all — so a tic-tac-toe record says `deal 2` and a
+number off the clock, and two identical games land in differently-named files. Both cost one
+line. Fixing either properly costs a field on the seam, which is worse.
+
+**What is still not done.** A view is handed the whole model and trusted to ask `Knowledge`
+what its reader may see — a discipline three renderers keep and [view.fsx](tests/view.fsx)
+patrols, where an engine ought to hand a view only what that seat may know and make a leak
+unwriteable. The second game is the wrong shape to force it: it hides nothing, which is
+itself the useful half of the answer — `Knowledge` is a game's own idea and not something
+the screens require.
 
 ### Layout
 
-Six layers, each depending only on the ones above it.
+Seven layers, each depending only on the ones above it. **The order in
+[TCModel.fsproj](TCModel.fsproj) is the architecture, and the only thing enforcing it**:
+F# compiles a project in the order its files are listed, so a layer cannot reach into one
+beneath it even by accident. Read it top to bottom — nothing generic mentions a game, and
+the games never mention each other.
 
 **`src/Common`** — generic, and knows nothing about the game.
 
@@ -1300,50 +1411,31 @@ hole](#a-game-shaped-hole).
 | [Update.fs](src/Engine/Update.fs) | `Rules -> Msg -> Model -> Model`, and nothing in it can fail |
 | [Machines.fs](src/Engine/Machines.fs) | Seats played by something that is not a person, and when they take their turns |
 
-**`src/Domain`** — the language and the rules. No English a player would read.
+**`src/Table`** — how a game is *read*, which is the second seam. Nothing here names a
+game, a piece, or a board.
 
 | File | Role |
 | --- | --- |
-| [Stones.fs](src/Domain/Stones.fs) | `StoneColor` and `Pile`, a multiset of stones |
-| [Board.fs](src/Domain/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
-| [Players.fs](src/Domain/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
-| [Position.fs](src/Domain/Position.fs) | Which stones stand where |
-| [Ruling.fs](src/Domain/Ruling.fs) | Who rules a region, and how the land stands - both read off a position alone |
-| [Game.fs](src/Domain/Game.fs) | The game in progress, and what can be asked of it |
-| [Knowledge.fs](src/Domain/Knowledge.fs) | What one player can see of a game, and what they cannot |
-| [Events.fs](src/Domain/Events.fs) | What happened, and why an action was refused |
-| [Actions.fs](src/Domain/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
-| [Outcome.fs](src/Domain/Outcome.fs) | Which faction carries the board, and which player carries the faction |
-| [Setup.fs](src/Domain/Setup.fs) | Dealing a fresh game |
-| [Turn.fs](src/Domain/Turn.fs) | `Move`, and where a game stands: the phase, the turn, the run of negotiations, and how a turn ends |
-| [Playing.fs](src/Domain/Playing.fs) | This game as the engine takes one, and the engine with it already in |
-| [Rival.fs](src/Domain/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
+| [Showing.fs](src/Table/Showing.fs) | What a table shows one console, and which console it is for |
+| [Waiting.fs](src/Table/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
+| [Palette.fs](src/Table/Palette.fs) | Which colour is drawn for what, keyed by the words a game says it colours |
+| [Tint.fs](src/Table/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
+| [Reach.fs](src/Table/Reach.fs) | How far a table can be reached and what it takes to sit down at one: the port, the word at the door, what it is all wrapped in, and an address as somebody says it |
+| [Page.fs](src/Table/Page.fs) | The browser's shell: the stream, the prompt, the colour form, the door, and the two places a fragment can land. A game brings a stylesheet and a name for the tab |
+| [Keys.fs](src/Table/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
+| [Commands.fs](src/Table/Commands.fs) | The words a person can type at *any* game, read once for all of them |
+| [View.fs](src/Table/View.fs) | Every screen a player reads, generic in the game |
+| [Playable.fs](src/Table/Playable.fs) | **The seam**: everything a game has to say about itself to be read and played here |
+| [Screens.fs](src/Table/Screens.fs) | Driving a screen at a real terminal: clear it, draw it, read a key, hand back a line |
+| [Seating.fs](src/Table/Seating.fs) | Who is in each seat before a game is dealt, and everything that falls out of it |
+| [Solo.fs](src/Table/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
+| [Transcript.fs](src/Table/Transcript.fs) | A journal as a file, and a file back into a journal |
+| [Options.fs](src/Table/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
+| [Menu.fs](src/Table/Menu.fs) | The start menu and the seat list: what there is to open, and what a typed line asks for |
+| [Launch.fs](src/Table/Launch.fs) | The command line, both ways round: the commands and their options, what a typed line comes to, what is refused at the door, and the line the program writes when it has to tell somebody what to type |
 
-**`src/Console`** — the only part that talks to a person.
-
-| File | Role |
-| --- | --- |
-| [Waiting.fs](src/Console/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
-| [Showing.fs](src/Console/Showing.fs) | What a table shows one console, and which console it is for |
-| [Words.fs](src/Console/Words.fs) | Every string a player reads, including how events and rejections are worded |
-| [Render.fs](src/Console/Render.fs) | The `plain` view: every screen as blocks of text |
-| [Parse.fs](src/Console/Parse.fs) | Console text to `Msg`, checking region numbers against the board |
-| [Keys.fs](src/Console/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
-| [Seating.fs](src/Console/Seating.fs) | Who is in each seat before a game is dealt, and everything that falls out of it |
-| [Reach.fs](src/Console/Reach.fs) | How far a table can be reached and what it takes to sit down at one: the port, the word at the door, what it is all wrapped in, and an address as somebody says it |
-| [Palette.fs](src/Console/Palette.fs) | Which colour is drawn for what, and the words a person says for them |
-| [Tint.fs](src/Console/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
-| [Rich.fs](src/Console/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
-| [Html.fs](src/Console/Html.fs) | The `html` view: every screen as a fragment of a page, and the page they land in |
-| [View.fs](src/Console/View.fs) | Every screen a player reads, and choosing which way to read them |
-| [Solo.fs](src/Console/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
-| [Options.fs](src/Console/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
-| [Launch.fs](src/Console/Launch.fs) | The command line, both ways round: the commands and their options, what a typed line comes to, what is refused at the door, and the line the program writes when it has to tell somebody what to type |
-| [Menu.fs](src/Console/Menu.fs) | The start menu and the seat list: what there is to open, and what a typed line asks for |
-| [Transcript.fs](src/Console/Transcript.fs) | A journal as a file, and a file back into a journal |
-
-**`src/Net`** — the same game with the players at different keyboards. Only the
-last three files here touch a socket.
+**`src/Net`** — the same table with the players at different keyboards. Only the last
+three files here touch a socket.
 
 | File | Role |
 | --- | --- |
@@ -1353,10 +1445,60 @@ last three files here touch a socket.
 | [Server.fs](src/Net/Server.fs) | The host, and the local game served to a browser: a table behind a lock, with pages and sockets over it, and the door everybody arrives at |
 | [Client.fs](src/Net/Client.fs) | A console at somebody else's table |
 
-And [src/Program.fs](src/Program.fs) is the way in: the start menu, the
-read/update/render loop, and the choice between playing here and playing over a wire.
-It sits outside all six because it needs all six - F# compiles in order and a file
-sees only what came before it, so the door has to be the last thing built.
+**`src/Games/TCModel`** — one game: its rules, its words, its drawings. A game is a folder,
+and it ends in the one value that fills in both seams.
+
+| File | Role |
+| --- | --- |
+| [Stones.fs](src/Games/TCModel/Stones.fs) | `StoneColor` and `Pile`, a multiset of stones |
+| [Board.fs](src/Games/TCModel/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
+| [Players.fs](src/Games/TCModel/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
+| [Position.fs](src/Games/TCModel/Position.fs) | Which stones stand where |
+| [Ruling.fs](src/Games/TCModel/Ruling.fs) | Who rules a region, and how the land stands - both read off a position alone |
+| [Game.fs](src/Games/TCModel/Game.fs) | The game in progress, and what can be asked of it |
+| [Knowledge.fs](src/Games/TCModel/Knowledge.fs) | What one player can see of a game, and what they cannot |
+| [Events.fs](src/Games/TCModel/Events.fs) | What happened, and why an action was refused |
+| [Actions.fs](src/Games/TCModel/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
+| [Outcome.fs](src/Games/TCModel/Outcome.fs) | Which faction carries the board, and which player carries the faction |
+| [Setup.fs](src/Games/TCModel/Setup.fs) | Dealing a fresh game |
+| [Turn.fs](src/Games/TCModel/Turn.fs) | `Move`, and where a game stands: the phase, the turn, the run of negotiations, and how a turn ends |
+| [Playing.fs](src/Games/TCModel/Playing.fs) | This game as the engine takes one, and the engine with it already in |
+| [Rival.fs](src/Games/TCModel/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
+| [Words.fs](src/Games/TCModel/Words.fs) | Every string a player reads, including how events and rejections are worded |
+| [Ink.fs](src/Games/TCModel/Ink.fs) | What this game colours, and its alphabet for laying colour over a drawn board |
+| [Parse.fs](src/Games/TCModel/Parse.fs) | This game's own words as a `Move` - and only those, the rest having been read already |
+| [Render.fs](src/Games/TCModel/Render.fs) | The `plain` view: every screen as blocks of text |
+| [Rich.fs](src/Games/TCModel/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
+| [Html.fs](src/Games/TCModel/Html.fs) | The `html` view: every screen as a fragment of a page |
+| [Offer.fs](src/Games/TCModel/Offer.fs) | Both seams filled in: this game as the engine takes one, and as a table reads one |
+
+**`src/Games/TicTacToe`** — the other one, in the same shape and a fifth of the size.
+Worth reading beside the folder above, because that is the whole argument for the seams
+being where they are.
+
+| File | Role |
+| --- | --- |
+| [Marks.fs](src/Games/TicTacToe/Marks.fs) | `Mark`, and the squares - the runs that win worked out from the side rather than written down |
+| [Board.fs](src/Games/TicTacToe/Board.fs) | What is on the board, and the line somebody holds all of |
+| [Session.fs](src/Games/TicTacToe/Session.fs) | Where the game stands, and which seat plays which mark |
+| [Turn.fs](src/Games/TicTacToe/Turn.fs) | `Move`, and how a turn goes: the square has to exist and be free |
+| [Rival.fs](src/Games/TicTacToe/Rival.fs) | A seat played by the program: the game walked to its end, with alpha-beta so it answers |
+| [Words.fs](src/Games/TicTacToe/Words.fs) | Every string a player reads |
+| [Ink.fs](src/Games/TicTacToe/Ink.fs) | Two colours, against the other game's four |
+| [Parse.fs](src/Games/TicTacToe/Parse.fs) | A number, which on this board is the whole move |
+| [Render.fs](src/Games/TicTacToe/Render.fs) | The `plain` view, and the words the other two borrow |
+| [Rich.fs](src/Games/TicTacToe/Rich.fs) | The `rich` view: walled squares, in colour |
+| [Html.fs](src/Games/TicTacToe/Html.fs) | The `html` view: nine buttons, each typing its own number |
+| [Offer.fs](src/Games/TicTacToe/Offer.fs) | Both seams filled in |
+
+**And the way in**, which needs every layer above it — F# compiles in order and a file sees
+only what came before it, so the door has to be the last thing built.
+
+| File | Role |
+| --- | --- |
+| [Play.fs](src/Play.fs) | What opening a game *involves*: dealing one, keeping its record, the menu loops, both tables and the browser - still generic - ending in the interface that seals a game's types off |
+| [Games.fs](src/Games.fs) | The games there are, and the only file in the program that names more than one |
+| [Program.fs](src/Program.fs) | Which game a line is about, the screen that asks when nothing says, and nothing else |
 
 ### Keeping invalid states out
 
@@ -1379,7 +1521,7 @@ down in the first place.
 - **`Phase` is `AwaitingAction` or `AwaitingReturn`**, so a turn cannot be both open
   to any action and waiting on a stone to go back.
 - **Events and rejections are data**, not sentences. The domain says
-  `NothingToDriveOut(region, colour)` and [Words.fs](src/Console/Words.fs) decides
+  `NothingToDriveOut(region, colour)` and [Words.fs](src/Games/TCModel/Words.fs) decides
   how that reads, so wording can change without touching a rule.
 - **`Msg` separates a `Move` from walking the history.** Only a move can be
   attempted against a position, so `attempt` never has to answer what `Undo` does
@@ -1409,7 +1551,7 @@ game would have used, before anything is dealt:
 9 players? The game takes 2 to 5.
 ```
 
-Writing one is the other direction, and it is why [Launch.fs](src/Console/Launch.fs)
+Writing one is the other direction, and it is why [Launch.fs](src/Table/Launch.fs)
 exists. A player whose console drops off a networked table is shown the line that brings
 them back to their seat; the host of a locked table is shown the line each of the others
 types. Both are command lines the program will later be handed. Written by hand they are
@@ -1437,7 +1579,7 @@ command line takes, so an instruction the program prints is always one it will a
 
 Everything that reads a command line stops at a `Launch` and hands it on, so there is
 one place that knows what opening a game involves rather than a road through `main` per
-entry point. With no arguments at all, the menu ([Menu.fs](src/Console/Menu.fs)) asks:
+entry point. With no arguments at all, the menu ([Menu.fs](src/Table/Menu.fs)) asks:
 
 ```
 === TCModel ===
@@ -1485,7 +1627,7 @@ how many first, because the list of seats is exactly as long as the answer:
   Enter takes the next one along, and so does the seat's own number.
 ```
 
-A **seating** ([Seating.fs](src/Console/Seating.fs)) is one `Sitter` to a seat, in the order
+A **seating** ([Seating.fs](src/Table/Seating.fs)) is one `Sitter` to a seat, in the order
 the game deals them: `Here`, `Machine of Skill`, or `Elsewhere`. That is the whole value,
 and how many are playing is how long it is — so the count and the seats cannot disagree,
 which is the one sum the old menu could get wrong and did: a game dealt for two against
@@ -1548,7 +1690,7 @@ anything:
      4  Tell players  this machine's own addresses
 ```
 
-It is the seat list's own trick again. A **reach** ([Reach.fs](src/Console/Reach.fs)) is one
+It is the seat list's own trick again. A **reach** ([Reach.fs](src/Table/Reach.fs)) is one
 value, and every row on either screen stands for the *whole* of what is being opened after
 its own change — a seating and a reach, in one line:
 
@@ -1595,7 +1737,7 @@ The one place the two readings of a key meet is the steering letters. With nothi
 they steer; with a line underway every letter belongs to it, or an address with an `a` in
 it could not be spelt out at all.
 
-[Keys.fs](src/Console/Keys.fs) holds the shape of such a screen and what a press comes to,
+[Keys.fs](src/Table/Keys.fs) holds the shape of such a screen and what a press comes to,
 including where a person has got to — which list they have opened into, where the mark is,
 what they have typed. All of it is a value, so walking about can be checked without a
 keyboard, and `Program` is left with drawing what it says and asking for the next key. That
@@ -1643,11 +1785,35 @@ dotnet fsi tests/cli.fsx        # the command surface, that both halves of it ag
 dotnet fsi tests/properties.fsx # the invariants, over games FsCheck thinks up itself
 dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays legally, that it
                                 #   plays fairly, and that the skills mean something
+dotnet fsi tests/tictactoe.fsx  # the second game - its rules, its three views, its machine,
+                                #   and everything above it that it gets for nothing
 ```
+
+**Two harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
+loaded file by its basename, and both games have a `Board.fs`, a `Turn.fs`, a `Words.fs` and
+four more - which compile happily side by side in one project and cannot be loaded into one
+script. So [Checks.fsx](tests/Checks.fsx) keeps score and loads nothing at all, and
+[Whole.fsx](tests/Whole.fsx) and [Noughts.fsx](tests/Noughts.fsx) each load the same stack in
+the project's own order with one game on the end of it. The thirteen scripts above the last
+one used to keep a hand-ordered `#load` list apiece; they had already drifted, which is the
+same disease the seams are for.
+
+Two more, which want a process rather than a value:
+
+```powershell
+pwsh tools/smoke.ps1                  # a real browser, driven: the stream, the box, the
+pwsh tools/smoke.ps1 -Game tictactoe  #   buttons, the knock, the door
+pwsh tools/wire.ps1                   # a hosted table with two consoles at it, over SignalR
+pwsh tools/wire.ps1 -Game tictactoe
+```
+
+Neither is in the runner: `smoke.ps1` wants a Chromium-based browser, and both want ports.
+`wire.ps1` exists because a regression got past everything else - see [what a second game
+found](#what-a-second-game-found).
 
 **Together, because nearly all of it is compiling.** Each script is its own `dotnet fsi`,
 and each of those recompiles the same sources from scratch: `lobby.fsx` takes five seconds,
-and two tenths of one of them are spent on its checks. Thirteen of those in a row is most of
+and two tenths of one of them are spent on its checks. Fourteen of those in a row is most of
 a minute of one core while the rest of the machine watches. They share nothing — separate
 processes folding values from fixed seeds — so there is no order between them to get wrong,
 and running them at once cannot change what any of them decides. Started together they take
@@ -1753,9 +1919,9 @@ means rather than quietly covering both.
 ## Tooling
 
 ```powershell
-dotnet tool restore              # once
-dotnet fantomas src tests        # format
-dotnet fantomas --check src tests # or just say what is unformatted
+dotnet tool restore                     # once
+dotnet fantomas src tests tools          # format
+dotnet fantomas --check src tests tools  # or just say what is unformatted
 ```
 
 [Fantomas](https://fsprojects.github.io/fantomas/) is pinned in
@@ -1772,9 +1938,12 @@ are not defaults and are worth knowing about:
 - `max_line_length = 130` - the comments here are prose and run to the margin.
 
 [.github/workflows/build.yml](.github/workflows/build.yml) runs the build with
-`-warnaserror`, the format check, every test script, and one more thing: it replays the
-oldest committed record. That file is the oldest thing in the repository that still has
-to work, so the build says so out loud.
+`-warnaserror`, the format check, every test script, and one more thing: it replays the two
+committed records. One is the oldest thing in the repository that still has to work; the
+other is a game of noughts and crosses, holding the same promise for the game that was
+written to find out whose promise it was. The two scripts that want a browser or a port -
+[smoke.ps1](tools/smoke.ps1) and [wire.ps1](tools/wire.ps1) - are not in there, and are run
+by hand after touching anything a browser or a socket reads.
 
 ### What it depends on
 
