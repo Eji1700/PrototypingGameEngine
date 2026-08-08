@@ -1,4 +1,4 @@
-namespace TCModel.Domain
+namespace TCModel.Turncoats
 
 /// Identifies a region of the map. The case is private to this file, so the only
 /// way to get one is from the board below - which means a `RegionId` always names a

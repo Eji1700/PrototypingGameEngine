@@ -5,7 +5,7 @@
 
 #load "Whole.fsx"
 
-open TCModel.Domain
+open TCModel.Turncoats
 open TCModel.Engine
 open TCModel.Table
 open Harness

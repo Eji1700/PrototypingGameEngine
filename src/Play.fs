@@ -180,6 +180,9 @@ let private hostFor game view sitters seed reach =
 type private Opening<'Move, 'State, 'Notice> =
     | Play of Model<'Move, 'State, 'Notice> * View<'Move, 'State, 'Notice> * Sitter list
     | Done of code: int
+    /// The player walked back out of this game's front door. Not the same as leaving: there
+    /// is a list of games behind it, and that is where they meant to be.
+    | Back
 
 /// The colour screen, which runs until the player is done with it and gives back the view
 /// they came in reading - the same one, in whatever colours they settled on.
@@ -274,29 +277,31 @@ and private answering game view word sitters reach at line asked =
 /// The start menu, which runs until it has settled on a game. Everything it offers either
 /// opens one or comes back round to here, so there is no way out of it but the two, and no
 /// way to be at the prompt with nothing to play.
-let rec private welcome game (view: View<_, _, _>) at said =
+let rec private welcome game (view: View<_, _, _>) behind at said =
     // The menu is shown in the view it is offering, so 'view rich' shows what rich looks
     // like before a whole game is committed to it.
-    match Screens.asking view.Says said (Menu.screen game view) at with
+    match Screens.asking view.Says said (Menu.screen game view behind) at with
     | None, _ -> Done 0
     | Some line, at ->
 
     /// Say what went wrong and ask again, with the cursor where it was left. The menu is the
     /// only place to be when there is no game yet, so nothing here leaves except by being
     /// asked to.
-    let retry problem = welcome game view at problem
+    let retry problem = welcome game view behind at problem
 
     match Menu.choose game view.Palette line with
     // There is nothing behind the front door, so backing out of it is asking again.
-    | Ok Menu.Waiting
-    | Ok Menu.Backing -> welcome game view at ""
+    | Ok Menu.Waiting -> welcome game view behind at ""
+    // Backing out of the front door lands wherever it was opened from, which is the list of
+    // games if there is one and here if there is not.
+    | Ok Menu.Backing -> if behind then Back else welcome game view behind at ""
     | Ok Menu.Leave -> Done 0
     | Ok Menu.Rules ->
         printfn "%s" view.Rules
         Screens.held ()
-        welcome game view at ""
-    | Ok(Menu.Looking chosen) -> welcome game chosen at ""
-    | Ok Menu.Options -> welcome game (colouring game view 0 "") at ""
+        welcome game view behind at ""
+    | Ok(Menu.Looking chosen) -> welcome game chosen behind at ""
+    | Ok Menu.Options -> welcome game (colouring game view 0 "") behind at ""
     | Ok(Menu.Sitting(sitters, asked)) ->
         // One word for this way through the menu, made up here because a screen cannot make
         // one up: it is what the door starts out holding, and what walking the door shut
@@ -306,7 +311,7 @@ let rec private welcome game (view: View<_, _, _>) at said =
 
         match sitting game view word sitters (asked |> Option.defaultValue (Reach.locked word)) 0 "" with
         | Some opening -> opening
-        | None -> welcome game view at ""
+        | None -> welcome game view behind at ""
     | Ok chosen ->
         match starting game view chosen with
         | Ok opening -> opening
@@ -396,7 +401,11 @@ type Chosen =
     abstract FromCommandLine: string seq -> int
 
     /// Or ask, at the menu, and play whatever it settles on.
-    abstract FromMenu: unit -> int
+    ///
+    /// `behind` is whether there is anything to go back to - a list of games, if this
+    /// program has more than one. `None` back means the player walked out of this game's
+    /// front door rather than leaving, and expects to be asked which game again.
+    abstract FromMenu: behind: bool -> int option
 
 /// A game, as one of those.
 ///
@@ -413,11 +422,12 @@ let chosen (game: Playable<'Move, 'State, 'Notice>) =
         member _.Faults = game.Faults
         member _.FromCommandLine argv = Launch.run game (opening game) argv
 
-        member _.FromMenu() =
+        member _.FromMenu behind =
             // The plainest way this game can be drawn at a terminal, which is what somebody
             // who has said nothing about how they read gets. The menu offers the rest.
             let plain = Playable.plainest AtATerminal (Playable.standard game) game
 
-            match welcome game plain 0 "" with
-            | Play(model, view, sitters) -> play game view sitters model
-            | Done code -> code }
+            match welcome game plain behind 0 "" with
+            | Play(model, view, sitters) -> Some(play game view sitters model)
+            | Done code -> Some code
+            | Back -> None }

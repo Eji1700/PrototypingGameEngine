@@ -1,4 +1,4 @@
-namespace TCModel.Domain
+namespace TCModel.Turncoats
 
 open System
 open System.Text.Json.Serialization
@@ -9,7 +9,7 @@ open TCModel.Table
 // Last, so this game's own names win: an explicit open outranks the enclosing
 // namespace, and both `Spectre.Console` and the command line's argument types carry
 // names this game already uses - `Region`, `Open`, `View`.
-open TCModel.Domain
+open TCModel.Turncoats
 
 /// The board as a page, for a player reading in a browser rather than at a terminal.
 ///
@@ -397,6 +397,6 @@ body { --half: 7.5rem; }
     /// What this game brings to a browser, and the whole of it. Everything else about the
     /// page is the same at every game and is written once, at `Page`.
     let shell =
-        { Title = "A game of stones"
+        { Title = "Turncoats"
           Sheet = sheet
           Placeholder = "type a move - r b 5, b r 8, m g 8 5 2, help" }

@@ -1,4 +1,4 @@
-namespace TCModel.Domain
+namespace TCModel.Turncoats
 
 open System
 open System.Text
@@ -8,7 +8,7 @@ open TCModel.Table
 // Last, so this game's own names win: an explicit open outranks the enclosing
 // namespace, and both `Spectre.Console` and the command line's argument types carry
 // names this game already uses - `Region`, `Open`, `View`.
-open TCModel.Domain
+open TCModel.Turncoats
 
 /// The V of MVU: a pure projection from the model to console text.
 module Render =

@@ -2,7 +2,7 @@
 
 #load "Harness.fsx"
 
-open TCModel.Domain
+open TCModel.Turncoats
 open Harness
 
 let private size =

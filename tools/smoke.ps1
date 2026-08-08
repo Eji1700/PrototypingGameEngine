@@ -21,7 +21,7 @@ param(
     [int]$DebugPort = 9222,
     [string]$Browser = "",
     # Which game to serve. Empty is the one a line that names none gets.
-    [ValidateSet("", "tcmodel", "tictactoe")]
+    [ValidateSet("", "turncoats", "tictactoe")]
     [string]$Game = "",
     # Serve the game with the machine in the second seat, and check the two things about
     # that which only a browser can show: that the page is told whose seat it is, and that
@@ -52,7 +52,7 @@ $Say = "/say"
 # the heartbeat, the word at the door - is between this program and a browser, and is checked
 # once for both.
 $games = @{
-    "tcmodel" = @{
+    "turncoats" = @{
         # What the board is built out of, and how much of it there should be.
         Pieces = ".region"; Fewest = 12; Called = "map"
         # Two lines to type: one that moves the game, and one that walks it back.
@@ -79,7 +79,7 @@ $games = @{
     }
 }
 
-$g = $games[$(if ($Game) { $Game } else { "tcmodel" })]
+$g = $games[$(if ($Game) { $Game } else { "turncoats" })]
 
 function Report($name, $ok, $detail) {
     if ($ok) { "ok   $name" }

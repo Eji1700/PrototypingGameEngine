@@ -9,7 +9,7 @@ open TCModel.TicTacToe
 /// This game, filled into both seams. One value, and it is the only thing the rest of the
 /// program is handed.
 ///
-/// Worth reading beside `TCModel.Domain.Offer`, because the two are the whole argument for
+/// Worth reading beside `TCModel.Turncoats.Offer`, because the two are the whole argument for
 /// the seams being where they are: one game has a map, hidden bags, a generator, four kinds
 /// of move and three ways of being won; the other has nine squares. What they fill in is the
 /// same record, and everything above it - the timeline, the record on disk, the seats and

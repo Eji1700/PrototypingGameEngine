@@ -1,4 +1,4 @@
-namespace TCModel.Domain
+namespace TCModel.Turncoats
 
 open TCModel.Common
 open TCModel.Engine
@@ -108,8 +108,8 @@ module Offer =
               // twice from the same record restarts the same way twice.
               Reseed = fun session -> Rng.next (Session.game session).Rng |> fst }
 
-          Name = "tcmodel"
-          Title = "TCModel"
+          Name = "turncoats"
+          Title = "Turncoats"
           Blurb = "Stones on a map, and a seat each."
           Fewest = Table.MinPlayers
           Most = Table.MaxPlayers

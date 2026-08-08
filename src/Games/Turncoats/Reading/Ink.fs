@@ -1,4 +1,4 @@
-namespace TCModel.Domain
+namespace TCModel.Turncoats
 
 open System.Text.RegularExpressions
 open TCModel.Table

@@ -40,21 +40,21 @@
 #load "../src/Net/Protocol.fs"
 #load "../src/Net/Lobby.fs"
 
-#load "../src/Games/TCModel/Rules/Words.fs"
-#load "../src/Games/TCModel/Rules/Rival.fs"
-#load "../src/Games/TCModel/Reading/Ink.fs"
-#load "../src/Games/TCModel/Reading/Parse.fs"
-#load "../src/Games/TCModel/Reading/Render.fs"
-#load "../src/Games/TCModel/Reading/Rich.fs"
-#load "../src/Games/TCModel/Reading/Html.fs"
-#load "../src/Games/TCModel/Offer.fs"
+#load "../src/Games/Turncoats/Rules/Words.fs"
+#load "../src/Games/Turncoats/Rules/Rival.fs"
+#load "../src/Games/Turncoats/Reading/Ink.fs"
+#load "../src/Games/Turncoats/Reading/Parse.fs"
+#load "../src/Games/Turncoats/Reading/Render.fs"
+#load "../src/Games/Turncoats/Reading/Rich.fs"
+#load "../src/Games/Turncoats/Reading/Html.fs"
+#load "../src/Games/Turncoats/Offer.fs"
 
 open TCModel.Table
 
 /// The game every script below is checking. Named once here, so a check reads as a check
 /// on a table rather than on this game in particular - and so the day there is a second
 /// game, what it takes to point one of these at it is this line.
-let playing = TCModel.Domain.Offer.playable
+let playing = TCModel.Turncoats.Offer.playable
 
 /// The colours nobody has changed.
 let standard = Playable.standard playing

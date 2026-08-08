@@ -20,22 +20,22 @@
 #load "../src/Engine/Model.fs"
 #load "../src/Engine/Update.fs"
 #load "../src/Engine/Machines.fs"
-#load "../src/Games/TCModel/Rules/Stones.fs"
-#load "../src/Games/TCModel/Rules/Board.fs"
-#load "../src/Games/TCModel/Rules/Players.fs"
-#load "../src/Games/TCModel/Rules/Position.fs"
-#load "../src/Games/TCModel/Rules/Ruling.fs"
-#load "../src/Games/TCModel/Rules/Game.fs"
-#load "../src/Games/TCModel/Rules/Knowledge.fs"
-#load "../src/Games/TCModel/Rules/Events.fs"
-#load "../src/Games/TCModel/Rules/Actions.fs"
-#load "../src/Games/TCModel/Rules/Outcome.fs"
-#load "../src/Games/TCModel/Rules/Setup.fs"
-#load "../src/Games/TCModel/Rules/Turn.fs"
-#load "../src/Games/TCModel/Rules/Playing.fs"
+#load "../src/Games/Turncoats/Rules/Stones.fs"
+#load "../src/Games/Turncoats/Rules/Board.fs"
+#load "../src/Games/Turncoats/Rules/Players.fs"
+#load "../src/Games/Turncoats/Rules/Position.fs"
+#load "../src/Games/Turncoats/Rules/Ruling.fs"
+#load "../src/Games/Turncoats/Rules/Game.fs"
+#load "../src/Games/Turncoats/Rules/Knowledge.fs"
+#load "../src/Games/Turncoats/Rules/Events.fs"
+#load "../src/Games/Turncoats/Rules/Actions.fs"
+#load "../src/Games/Turncoats/Rules/Outcome.fs"
+#load "../src/Games/Turncoats/Rules/Setup.fs"
+#load "../src/Games/Turncoats/Rules/Turn.fs"
+#load "../src/Games/Turncoats/Rules/Playing.fs"
 
 open TCModel.Engine
-open TCModel.Domain
+open TCModel.Turncoats
 
 // Keeping score lives on its own, so that the other game's checks - which cannot load this
 // file, both games having a `Board.fs` - can have it without it. Named through again here,

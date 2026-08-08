@@ -91,39 +91,39 @@
        but a fact you can check, because not one file in there opens it. `Reading` is how it
        is read. `Offer.fs` is the two halves joined, and the only file either layer above ever
        sees. -->
-  <ItemGroup Label="TCModel - how it is played">
-    <Compile Include="src/Games/TCModel/Rules/Stones.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Board.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Players.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Position.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Ruling.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Game.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Knowledge.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Events.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Actions.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Outcome.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Setup.fs" />
+  <ItemGroup Label="Turncoats - how it is played">
+    <Compile Include="src/Games/Turncoats/Rules/Stones.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Board.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Players.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Position.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Ruling.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Game.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Knowledge.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Events.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Actions.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Outcome.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Setup.fs" />
     <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
          a turn that stays open until a stone goes back is nobody else's rule. -->
-    <Compile Include="src/Games/TCModel/Rules/Turn.fs" />
-    <Compile Include="src/Games/TCModel/Rules/Playing.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Turn.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Playing.fs" />
     <!-- Words are in here rather than beside the drawings because they are the game talking,
          not a screen: what an event or a refusal *says* is settled once, and the three views
          lay the same sentence out three ways. -->
-    <Compile Include="src/Games/TCModel/Rules/Words.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Words.fs" />
     <!-- And a seat played by the program, which reads the game the way a player does and
          draws nothing at all. -->
-    <Compile Include="src/Games/TCModel/Rules/Rival.fs" />
+    <Compile Include="src/Games/Turncoats/Rules/Rival.fs" />
   </ItemGroup>
 
-  <ItemGroup Label="TCModel - how it is read">
-    <Compile Include="src/Games/TCModel/Reading/Ink.fs" />
-    <Compile Include="src/Games/TCModel/Reading/Parse.fs" />
-    <Compile Include="src/Games/TCModel/Reading/Render.fs" />
-    <Compile Include="src/Games/TCModel/Reading/Rich.fs" />
-    <Compile Include="src/Games/TCModel/Reading/Html.fs" />
+  <ItemGroup Label="Turncoats - how it is read">
+    <Compile Include="src/Games/Turncoats/Reading/Ink.fs" />
+    <Compile Include="src/Games/Turncoats/Reading/Parse.fs" />
+    <Compile Include="src/Games/Turncoats/Reading/Render.fs" />
+    <Compile Include="src/Games/Turncoats/Reading/Rich.fs" />
+    <Compile Include="src/Games/Turncoats/Reading/Html.fs" />
     <!-- Both seams filled in: this game as the engine takes one, and as a table reads one. -->
-    <Compile Include="src/Games/TCModel/Offer.fs" />
+    <Compile Include="src/Games/Turncoats/Offer.fs" />
   </ItemGroup>
 
   <!-- The second game, and the whole point of the two seams above. Nine squares against a

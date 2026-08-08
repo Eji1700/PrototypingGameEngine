@@ -7,7 +7,7 @@ module TCModel.Games
 ///
 /// In the order they are offered. The first is what somebody who says nothing gets.
 let all =
-    [ Play.chosen TCModel.Domain.Offer.playable
+    [ Play.chosen TCModel.Turncoats.Offer.playable
       Play.chosen TCModel.TicTacToe.Offer.playable ]
 
 /// The one a line that named no game is about. There is always at least one game, so this

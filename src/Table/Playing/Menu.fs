@@ -211,7 +211,13 @@ module Menu =
 
     /// The menu is shown in the view it is offering, so a player choosing one can see what
     /// they are choosing before they commit a game to it.
-    let screen game (showing: View<_, _, _>) : Keys.Screen =
+    /// The front door.
+    ///
+    /// `behind` is whether there is anything to go back *to*. There was not, when this
+    /// program had one game in it, and backing out of the front door meant asking again;
+    /// with a list of games in front of it there is, and a door that could not be walked
+    /// back out of would leave a player having to close the program to change their mind.
+    let screen game (showing: View<_, _, _>) behind : Keys.Screen =
         // Bound out here rather than said inside the note below: an interpolation cannot
         // carry a quoted string of its own.
         let machines = game.Skills |> List.map fst |> String.concat ", "
@@ -257,8 +263,8 @@ module Menu =
               $"'{game.Fewest} 42' for that same game again, 'serve {game.Fewest}',"
               $"'host {game.Fewest}', 'vs <skill>...' for {machines},"
               $"'join <address> [word]', 'replay <file>', 'view <{Playable.namesFor AtATerminal game}>',"
-              "'colours', 'rules', 'quit'." ]
-          Backs = None }
+              (if behind then "'colours', 'rules', 'back', 'quit'." else "'colours', 'rules', 'quit'.") ]
+          Backs = (if behind then Some "back" else None) }
 
     // --- a typed line ----------------------------------------------------------------------
 

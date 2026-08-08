@@ -25,7 +25,7 @@ open TCModel.Engine
 open TCModel.Table
 // Last, so this game's own names win: an explicit open outranks the enclosing namespace,
 // and the command line's argument types carry names this game already uses - `Open`.
-open TCModel.Domain
+open TCModel.Turncoats
 open Harness
 open Whole
 
@@ -460,7 +460,10 @@ report
      | Error problem -> problem.Contains "one hot seat"
      | Ok _ -> false)
 
-report "and the menu says the machine is on offer" true ((Keys.draw None (Menu.screen playing plain)).Contains "vs <skill>...")
+report
+    "and the menu says the machine is on offer"
+    true
+    ((Keys.draw None (Menu.screen playing plain false)).Contains "vs <skill>...")
 
 // A table somebody was told about is an address and a word, so that is what the menu takes.
 // Coming back to a seat already held is the other thing, and is a command line - written by
@@ -491,7 +494,7 @@ report
 // on it. A row that came to offer something `Menu.choose` has never heard of would be a dead
 // end a player finds by pressing Enter on it, and nothing else in the program would notice.
 
-let private front = Menu.screen playing plain
+let private front = Menu.screen playing plain false
 
 let rec private everyRow (screen: Keys.Screen) =
     screen.Rows
@@ -582,6 +585,24 @@ report
      |> List.collect (fun sitters ->
          everyReach
          |> List.collect (fun reach -> unread chosen (Menu.reaches "kbd4-9mtx-7rfp" sitters reach))))
+
+// The front door has something behind it only when this program has more than one game in
+// it. With one there is nothing to go back to and the row would be a dead end; with two,
+// leaving it out would strand a player in a game they only meant to look at.
+report
+    "a front door with a list of games behind it can be walked back out of"
+    true
+    (front.Backs = None && (Menu.screen playing plain true).Backs = Some "back")
+
+report
+    "and that way out is a line the menu reads as going back"
+    true
+    (match (Menu.screen playing plain true).Backs with
+     | Some line ->
+         match chosen line with
+         | Ok Menu.Backing -> true
+         | _ -> false
+     | None -> false)
 
 report
     "the way back out of the seat list is a line too, and it goes back rather than dealing"

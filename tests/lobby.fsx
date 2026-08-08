@@ -11,7 +11,7 @@ open TCModel.Table
 open TCModel.Net
 // Last, so this game's own names win: an explicit open outranks the enclosing namespace,
 // and the command line's argument types carry names this game already uses - `Open`.
-open TCModel.Domain
+open TCModel.Turncoats
 open Harness
 open Whole
 

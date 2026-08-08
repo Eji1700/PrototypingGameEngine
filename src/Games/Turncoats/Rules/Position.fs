@@ -1,4 +1,4 @@
-namespace TCModel.Domain
+namespace TCModel.Turncoats
 
 /// The stones standing on the map. Every board region has an entry, so asking what
 /// is in a region always answers.

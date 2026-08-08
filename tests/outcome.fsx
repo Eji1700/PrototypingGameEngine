@@ -6,7 +6,7 @@
 #load "Harness.fsx"
 
 open TCModel.Engine
-open TCModel.Domain
+open TCModel.Turncoats
 open Harness
 
 // --- the winning faction ----------------------------------------------------
