@@ -1363,6 +1363,14 @@ What it turned up along the way was worth more than the game:
   the table and draws the right board whichever game it is — and then reads every colour
   asked for against the wrong list of them. A second game is what makes a printed
   instruction's missing word visible.
+- **`--help` was one game's help, printed for both.** The parser was a module-level value
+  with the blurb, the examples and the program name written into it, so
+  `dotnet run -- tictactoe --help` said "stones on a map" and offered `--rival hard`
+  without saying what the other two were. Half of it is `IArgParserTemplate.Usage` being a
+  *static* member — no option can name its own game's views — and the fix is the same shape
+  as `Chosen`: one parser per game, with the lists the options point at written by the one
+  function that has a game to ask. One of those options had been left naming them anyway,
+  and came out as a sentence ending in a colon and nothing at all.
 
 And two places where the seam is wider than it needs to be, left as they are and said out
 loud rather than papered over. `View.Answer` exists for TCModel's `rule 8`; a game whose

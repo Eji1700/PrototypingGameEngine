@@ -100,7 +100,12 @@ type HostArgs =
             match this with
             | Players _ -> "how many are playing"
             | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
-            | View _ -> $"how your own board is drawn, if a seat here is yours: {Playable.namesFor AtATerminal}"
+            // "See the list below" like the other four, and for a reason worth writing down:
+            // `Usage` is a *static* member, so it cannot be handed the game being opened and
+            // cannot name that game's views. Naming them was left here by accident and came
+            // out as a sentence ending in a colon and nothing at all. What there is to choose
+            // from is in the epilogue, which is written by a function that has the game.
+            | View _ -> "how your own board is drawn, if a seat here is yours - see the list below"
             | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
             | Port _ -> "listen on this port rather than the usual one"
             | Code _ -> "the word players say at the door, rather than one made up here"
@@ -182,33 +187,79 @@ module Launch =
     // a launch back into words means handing each command its own arguments, and the same
     // declaration that reads them is what puts them back in order.
 
-    /// What somebody asking for help is shown above the list. Worked lines rather than a
-    /// description, because the list below already says what each option is *for* and what
-    /// it does not say is what a whole command looks like with three of them on it.
-    let private examples =
+    /// What somebody asking for help is shown above the list, and the lists the options
+    /// themselves point at.
+    ///
+    /// Worked lines rather than a description, because the list below already says what each
+    /// option is *for*, and what it does not say is what a whole command looks like with
+    /// three of them on it. Written from the game rather than out by hand, and that is not
+    /// tidiness: `IArgParserTemplate.Usage` is a *static* member, so not one of the options
+    /// above can name this game's views or its machines. They say "see the list below", and
+    /// this is the list below - the only place in the help that has the game to ask.
+    let private examples (game: Playable<_, _, _>) =
+        let shown line said = sprintf "    %-38s %s" line said
+        let name = game.Name
+        let few, many = game.Fewest, game.Most
+
+        let drawn =
+            Playable.offered AtATerminal (Playable.standard game) game
+            |> List.map (fun view -> view.Name)
+
+        let another = drawn |> List.tryLast |> Option.defaultValue "plain"
+
         String.concat
             Environment.NewLine
-            [ "Stones on a map, and a seat each. With no arguments at all, the menu asks."
-              ""
-              "For example:"
-              ""
-              "    tcmodel play 3                       three of you, here at this keyboard"
-              "    tcmodel play 2 --rival hard          the seat after yours, played by the machine"
-              "    tcmodel play 2 --seed 42 --view rich the same game again, drawn in panels"
-              "    tcmodel serve 3                      the same game, read in a browser"
-              "    tcmodel host 3                       a table for three at their own machines"
-              "    tcmodel host 3 --open                ...with no word at the door, for a room you trust"
-              "    tcmodel host 3 --behind --at stones.example.org"
-              "    tcmodel join greg-pc --code kbd4-9mtx-7rfp"
-              "    tcmodel replay logs/2026-08-02-215823-2p-seed42.log" ]
+            ([ $"{game.Title} - {game.Blurb} With no arguments at all, the menu asks."
+               ""
+               "For example:"
+               "" ]
+             @ [ shown $"{name} play {many}" $"{many} of you, here at this keyboard" ]
+             @ (match game.Skills with
+                | [] -> []
+                | skills ->
+                    [ shown $"{name} play {few} --rival {fst (List.last skills)}" "the seat after yours, played by the machine" ])
+             @ [ shown $"{name} play {few} --seed 42 --view {another}" "the same game again, drawn another way"
+                 shown $"{name} serve {few}" "the same game, read in a browser"
+                 shown $"{name} host {many}" $"a table for {many} at their own machines"
+                 shown $"{name} host {many} --open" "...with no word at the door, for a room you trust"
+                 $"    {name} host {many} --behind --at {name}.example.org"
+                 $"    {name} join greg-pc --code kbd4-9mtx-7rfp"
+                 $"    {name} replay logs/2026-08-02-215823-2p-seed42.log"
+                 ""
+                 shown "How the board can be drawn:" (String.concat ", " drawn)
+                 shown "  ...and in a browser:" (Playable.namesFor InABrowser game) ]
+             @ (match game.Skills with
+                | [] -> []
+                | skills -> [ shown "The machine plays:" (skills |> List.map fst |> String.concat ", ") ])
+             @ [ shown
+                     "What takes a colour:"
+                     (Palette.slots (Playable.standard game)
+                      |> List.map (fun slot -> slot.Key)
+                      |> String.concat ", ") ])
 
-    let private parser =
-        ArgumentParser.Create<Argument>(
-            programName = "tcmodel",
-            errorHandler = ExceptionExiter(),
-            usageStringCharacterWidth = 100,
-            helpTextMessage = examples
+    /// One parser per game, because the help it prints is that game's - its name at the head
+    /// of every usage line, its blurb, its views, its machines. Kept rather than built afresh
+    /// on every read: `Create` goes over the argument types by reflection, and the command
+    /// line is read hundreds of times by [cli.fsx](tests/cli.fsx) alone.
+    let private readers =
+        Collections.Concurrent.ConcurrentDictionary<string, ArgumentParser<Argument>>()
+
+    let private parserFor (game: Playable<_, _, _>) =
+        readers.GetOrAdd(
+            game.Name,
+            fun _ ->
+                ArgumentParser.Create<Argument>(
+                    programName = game.Name,
+                    errorHandler = ExceptionExiter(),
+                    usageStringCharacterWidth = 100,
+                    helpTextMessage = examples game
+                )
         )
+
+    /// And one for writing a line back out, which never prints a program name and so needs
+    /// no game to be about.
+    let private parser =
+        ArgumentParser.Create<Argument>(programName = "", errorHandler = ExceptionExiter())
 
     let private playing = ArgumentParser.Create<PlayArgs>(programName = "tcmodel play")
 
@@ -309,9 +360,9 @@ module Launch =
     let words launch =
         parser.PrintCommandLineArguments(arguments launch) |> List.ofArray
 
-    /// The same thing written out for somebody to read - and to type, which is the point.
-    /// A player whose console drops off a table is shown this and expected to run it.
-    let write launch =
+    /// The launch on its own, written out flat. Private, because the only thing that reads
+    /// one is `written` below and a line short of its game is not a line to hand anybody.
+    let private write launch =
         parser.PrintCommandLineArgumentsFlat(arguments launch)
 
     /// And the whole line, game and all.
@@ -515,7 +566,7 @@ module Launch =
             |> Array.ofSeq
 
         try
-            match opened game (parser.ParseCommandLine(words, raiseOnUsage = true)) with
+            match opened game ((parserFor game).ParseCommandLine(words, raiseOnUsage = true)) with
             | Ok(launch, view) -> Opening(launch, view)
             | Error problem -> Wrong problem
         with

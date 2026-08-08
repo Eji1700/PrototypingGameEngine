@@ -1,10 +1,6 @@
 namespace TCModel.TicTacToe
 
 open TCModel.Engine
-open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
-// and the command line's argument types carry names this game already uses - `Open`.
-open TCModel.TicTacToe
 
 /// Putting the game into English. The rules report what happened in their own terms;
 /// everything a player actually reads is written here.

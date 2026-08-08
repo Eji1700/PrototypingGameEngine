@@ -1,11 +1,6 @@
 namespace TCModel.Domain
 
 open TCModel.Engine
-open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing
-// namespace, and both `Spectre.Console` and the command line's argument types carry
-// names this game already uses - `Region`, `Open`, `View`.
-open TCModel.Domain
 
 /// Putting the game into English. The domain reports what happened in its own terms;
 /// everything a player actually reads is written here.
@@ -40,26 +35,6 @@ module Words =
     /// them - the board, and the table still filling up.
     let seated yours playerId =
         player playerId + (if yours then " (you)" else "")
-
-    /// Who at a table is the machine, said to somebody as they sit down to it.
-    ///
-    /// Nothing on the board says so and nothing should: a machine's stones look like
-    /// anybody's, and they are. But a game where you cannot tell who you are playing has a
-    /// secret in it that is no part of the game, so it is said once, plainly, to whoever
-    /// arrives - and nothing at all is said at a table of nothing but people.
-    ///
-    /// Here rather than at either table, because both tables seat machines and there is one
-    /// sentence for it. A seat and the name of how it plays is the whole of what the sentence
-    /// wants, so that is what it takes.
-    let roster (machines: (PlayerId * string) list) =
-        match machines with
-        | [] -> None
-        | machines ->
-            machines
-            |> List.map (fun (playerId, skill) -> $"{player playerId} ({skill})")
-            |> String.concat ", "
-            |> sprintf "Played by the machine: %s."
-            |> Some
 
     /// Ground nobody holds, and ground nobody holds outright. Both are read as a chart's
     /// label and as the end of a sentence, so they are words rather than either.

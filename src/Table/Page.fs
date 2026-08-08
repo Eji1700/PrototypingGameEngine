@@ -339,7 +339,7 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
               // Written as a question rather than with an `and`, which is two characters
               // markup would rather read as the start of something escaped.
               "?Notification.permission==='granted':false){"
-              "const said=new Notification('Your turn',{body:calm,tag:'stones',renotify:true});"
+              "const said=new Notification('Your turn',{body:calm,tag:'turn',renotify:true});"
               "said.onclick=()=>{window.focus();said.close()}}};"
               $"const asking=document.getElementById('{Notify}');"
               "if(window.Notification?Notification.permission==='default':false)"

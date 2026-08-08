@@ -29,7 +29,6 @@ open TCModel.Table
 ///
 /// So the types stop here, the same way they stop at `Chosen`: by the time the wire is
 /// involved everything being said is a string or a number anyway.
-[<AllowNullLiteral>]
 type Table =
     /// Take a seat, or come back to one. `resuming` is the token of a seat already held;
     /// `offered` is the one a new seat would be given, minted outside so the lobby stays a
@@ -484,14 +483,15 @@ module Server =
             printfn ""
 
             // Said where it is true rather than everywhere, and said in terms of what it
-            // costs: a game read by whoever is between two houses is a game whose bags are
-            // no longer private, which is the one thing the rules are built around.
+            // costs. A board drawn for one seat is drawn for that seat alone - at a game with
+            // anything held back, whoever is between two houses can read what was held.
             match reach.Wrapping, Reach.told reach with
             | InTheClear, Some _ ->
                 printfn "  This table speaks http, so anything between it and a player can read the"
-                printfn "  boards going past - which at this game means their stones. Over anything"
-                printfn "  further than a network you trust, put it behind a tunnel or a proxy that"
-                printfn "  holds a certificate and say --behind, or hold one here with --cert."
+                printfn "  boards going past - and a board is drawn for one seat and nobody else."
+                printfn "  Over anything further than a network you trust, put it behind a tunnel or"
+                printfn "  a proxy that holds a certificate and say --behind, or hold one here with"
+                printfn "  --cert."
                 printfn ""
             | (InTheClear | Kept _ | Ahead), _ -> ()
 
