@@ -56,9 +56,3 @@ module Ink =
                     if found.Value.StartsWith "X" || found.Value.StartsWith "C" then Cross else Nought
 
                 Tint.wrap (ink palette mark) found.Value }
-
-    /// Plain text in, Spectre markup out - for text going inside a widget.
-    let markup = Tint.markup marking
-
-    /// And the same, rendered, for text that is going straight to a console.
-    let paint = Tint.painter marking

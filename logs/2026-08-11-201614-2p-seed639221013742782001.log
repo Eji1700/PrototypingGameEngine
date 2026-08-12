@@ -1,0 +1,47 @@
+# A Noughts and crosses game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+#   dotnet run -- tictactoe replay <this file>
+
+deal 2 639221013742782001
+
+#   1  turn 1, X
+place 1
+#      X takes square 1.
+
+#   2  turn 2, O
+place 5
+#      O takes square 5.
+
+#   3  turn 3, X
+place 9
+#      X takes square 9.
+
+#   4  turn 4, O
+place 8
+#      O takes square 8.
+
+#   5  turn 5, X
+place 2
+#      X takes square 2.
+
+#   6  turn 6, O
+place 3
+#      O takes square 3.
+
+#   7  turn 7, X
+place 7
+#      X takes square 7.
+
+#   8  turn 8, O
+place 4
+#      O takes square 4.
+
+#   9  turn 9, X
+place 6
+#      X takes square 6.
+#      The game is over: the board is full and neither has three in a row.

@@ -64,46 +64,25 @@ module Offer =
 
     // --- how it is drawn ----------------------------------------------------------------------
 
-    let private views palette =
-        [ { Name = "plain"
-            Describe = "plain text, and nothing this terminal has to understand"
-            Shown = AtATerminal
-            Palette = palette
-            Board = Render.model
-            History = Render.history
-            // Nothing here is worked out, so there is nothing to ask about. The field is
-            // filled rather than left, because a game that answered nothing at all would be
-            // a game whose players learn that by being ignored.
-            Answer = fun _ _ -> Render.nothingToExplain
-            Rules = Render.help
-            Says = id
-            Waiting = Render.waiting }
-
-          { Name = "rich"
-            Describe = "walled squares and colour, for a terminal that can show them"
-            Shown = AtATerminal
-            Palette = palette
-            Board = Rich.board palette
-            History = Rich.history palette
-            Answer = fun _ _ -> Rich.answer palette
-            Rules = Rich.rules palette
-            Says = Ink.paint palette
-            Waiting = Rich.waiting palette }
-
-          // This one takes no palette into its endpoints, and it is the only one that does
-          // not. A page carries its colours in its own head - `Page.page` writes them there
-          // as custom properties - and every fragment draws in those, so one board serves
-          // however many people are reading it.
-          { Name = "html"
-            Describe = "a page with nine buttons on it, for a player reading in a browser"
-            Shown = InABrowser
-            Palette = palette
-            Board = Html.board
-            History = Html.history
-            Answer = fun _ _ -> Html.answer
-            Rules = Html.rules
-            Says = Html.says
-            Waiting = Html.waiting } ]
+    /// Every screen this game has, described once - and the three ways of reading one come
+    /// back from `Readers` already written.
+    ///
+    /// This used to be forty lines and three files. What a board *is* has not changed; what
+    /// has gone is saying it three times over and keeping the three in step by hand.
+    let private scenes: Readers.Scenes<Move, Session, Notice> =
+        { Board = Render.board
+          History = Render.history
+          // Nothing here is worked out, so there is nothing to ask about. The field is filled
+          // rather than left, because a game that answered nothing at all would be a game
+          // whose players learn that by being ignored.
+          Answer = fun _ _ -> Render.answer
+          Rules = Render.rules
+          Waiting = Render.waiting
+          Marking = Ink.marking
+          // Wide enough for the board, the two seats beside it and a line of the log, and no
+          // wider: this board is small, and a screen padded out to fill a terminal is a
+          // screen with a lot of nothing in the middle of it.
+          Width = 72 }
 
     // --- and the whole of it ------------------------------------------------------------------
 
@@ -145,5 +124,5 @@ module Offer =
                     { Skill = rival.Skill.Name
                       Plays = machine rival })
 
-          Page = Html.shell
-          Views = views }
+          Page = Render.shell
+          Views = Readers.views scenes }

@@ -366,7 +366,11 @@ for view in views do
     report
         $"the {view.Name} view answers a table still filling up"
         true
-        (seen (view.Waiting arriving) |> mentions Render.Filling.title)
+        // In `Scene`'s words rather than this game's. A table still filling up is drawn from
+        // a list of who has arrived and nothing else, so there is no game in it to differ
+        // about - and it had been written out once per game, in wordings that had already
+        // begun to drift apart.
+        (seen (view.Waiting arriving) |> mentions Scene.Filling.title)
 
 // --- the page, which can go wrong in ways nothing else can ------------------------------------
 //
@@ -427,7 +431,12 @@ report
     (Page.page noughts.Page crossesAreTeal
      |> mentions (Palette.paint Palette.crimson))
 
-report "the game's own stylesheet reaches the page" true (page |> mentions ".cell")
+// A game describing its screens gets every shape on the page from `Page`'s own sheet - the
+// walls round a cell, the grid they sit in, a glyph drawn large - so what is left of this
+// game's stylesheet is the one thing that is this game's, which is how big nine squares want
+// to be. That it still reaches the page is what is being asked here: the seam is the same
+// one, and a game with a whole sheet of its own would arrive by it just as this does.
+report "the game's own stylesheet reaches the page" true (page |> mentions "--cell")
 
 report
     "and the board itself is the same board whatever the colours"
@@ -457,6 +466,62 @@ report
          | Ok _ -> false))
 
 report "a square already taken is not a button" [] (buttons |> List.filter (fun line -> [ "1"; "2"; "3" ] |> List.contains line))
+
+// --- one description, three readers -------------------------------------------------------
+//
+// The sweep above asks each view the same questions and holds the answers up against each
+// other, which is how this was checked for as long as there were three views to write. There
+// is one now: this game says what a screen is made of and `Readers` draws it three ways.
+//
+// So the questions worth asking have changed shape. Not "do the three agree" - they cannot
+// disagree, there being one description - but whether the description says what it should,
+// and whether each reader is really drawing what it was handed.
+
+/// Every control in a described screen: what it is captioned, and the line it types.
+let rec private controls scene =
+    match scene with
+    | Does(caption, line, _) -> [ caption, line ]
+    | Block(_, body)
+    | Stack body
+    | Beside body
+    | Tile(_, _, body) -> body |> List.collect controls
+    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect controls)
+    | _ -> []
+
+let private described = controls (Render.board true (Seat.at 1) walked)
+
+// The one thing a `Does` is for. A control carries the line it would type, so what a player
+// at a terminal is told to type and what a browser posts when the same control is clicked are
+// not two strings that have to be kept in step - they are one string, read twice.
+
+report "every control types the line it is captioned with" [] (described |> List.filter (fun (caption, line) -> caption <> line))
+
+report "and the page's buttons are exactly the controls the game described" (described |> List.map snd) buttons
+
+report
+    "and the terminal is told to type the very same lines"
+    true
+    (described |> List.forall (fun (caption, _) -> plain.Board true (Seat.at 1) walked |> mentions caption))
+
+// A note is the game's decision and not a reader's, so it is off in the description before it
+// is off on any screen - which is what makes turning it off in one place enough.
+
+let rec private notes scene =
+    match scene with
+    | Note text -> [ text ]
+    | Block(_, body)
+    | Stack body
+    | Beside body
+    | Tile(_, _, body) -> body |> List.collect notes
+    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect notes)
+    | _ -> []
+
+report
+    "the notes the game explains its board with"
+    [ Render.Notes.board; Render.Notes.winning ]
+    (notes (Render.board true (Seat.at 1) walked))
+
+report "and not one of them survives turning them off" [] (notes (Render.board false (Seat.at 1) walked))
 
 // --- the seat the program plays --------------------------------------------------------------
 //

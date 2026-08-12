@@ -230,6 +230,29 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
 .who { min-width: 12ch; }
 .said { max-width: 100ch; }
 
+/* The shapes a described screen is built out of - a `Scene`, drawn by `Readers.Pages`.
+   They are here rather than with a game because not one of them is one: a block beside
+   another block, cells in rows, a wall round a cell and a glyph drawn large are what any
+   game's screen is made of, and a game that had to write these again would be a game
+   with an opinion about what a row is. `--cell` is the one measurement, because a grid's
+   rows are shifted in halves of it. */
+.beside { display: flex; gap: 1.4rem; flex-wrap: wrap; align-items: flex-start; }
+.rows { display: table; border-spacing: .6rem 0; margin-left: -.6rem; }
+.rows .row { display: table-row; }
+.rows .row > span { display: table-cell; padding-bottom: .2rem; white-space: pre; }
+
+.grid { --cell: 4.5rem; display: inline-flex; flex-direction: column; gap: 4px; margin: .2rem 0; }
+.grid .row { display: flex; gap: 4px; }
+.tile {
+  min-width: var(--cell); min-height: var(--cell);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1px solid var(--edge); border-radius: .4rem; background: var(--raised);
+}
+.tile h3 { font-size: .7rem; font-weight: 600; margin: 0 0 .2rem; color: var(--edge); }
+.tile .types { width: 100%; height: 100%; border: none; background: transparent; }
+.tile:hover { border-color: var(--yours); }
+.big { font-size: 2.2rem; font-weight: 700; line-height: 1; }
+
 #told {
   position: fixed; right: 1rem; bottom: 4.5rem; max-height: 60vh; width: min(60ch, 45vw);
   overflow: auto; padding: .8rem; border: 1px solid var(--edge); border-radius: .4rem;

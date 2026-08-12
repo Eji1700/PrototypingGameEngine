@@ -47,6 +47,10 @@
     <Compile Include="src/Table/Parts/Invoked.fs" />
     <Compile Include="src/Table/Parts/Showing.fs" />
     <Compile Include="src/Table/Parts/Waiting.fs" />
+    <!-- What a screen is made of, before anybody has decided what it looks like. Here rather
+         than beside the readers below, because a scene is described by games and drawn by
+         readers and neither end should have to reach past the other. -->
+    <Compile Include="src/Table/Parts/Scene.fs" />
     <Compile Include="src/Table/Parts/Palette.fs" />
     <!-- How far a table can be reached and what it takes to sit down at one. Above the page
          because the door has a page of its own. -->
@@ -63,6 +67,10 @@
     <Compile Include="src/Table/Parts/Page.fs" />
     <Compile Include="src/Table/Parts/Screens.fs" />
     <Compile Include="src/Table/Parts/Options.fs" />
+    <!-- And the three ways of reading a scene, written once for every game there will ever
+         be. Last, because they are built out of everything above: the colours, the ink, and
+         the page. -->
+    <Compile Include="src/Table/Parts/Readers.fs" />
   </ItemGroup>
 
   <!-- The seam itself. Everything below this line is written against it, and everything
@@ -140,11 +148,11 @@
   </ItemGroup>
 
   <ItemGroup Label="Noughts and crosses - how it is read">
+    <!-- Three files where the other game has five, and the two missing ones are the point:
+         this game describes its screens once as a `Scene` and `Readers` draws all three. -->
     <Compile Include="src/Games/TicTacToe/Reading/Ink.fs" />
     <Compile Include="src/Games/TicTacToe/Reading/Parse.fs" />
     <Compile Include="src/Games/TicTacToe/Reading/Render.fs" />
-    <Compile Include="src/Games/TicTacToe/Reading/Rich.fs" />
-    <Compile Include="src/Games/TicTacToe/Reading/Html.fs" />
     <Compile Include="src/Games/TicTacToe/Offer.fs" />
   </ItemGroup>
 

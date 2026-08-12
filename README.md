@@ -42,6 +42,7 @@ dotnet run -- tictactoe play 2  # or say which, and everything after it is read 
 **At the table** — [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
 [Who knows what](#who-knows-what) ·
 [How the board is shown](#how-the-board-is-shown) ·
+[A screen described once](#a-screen-described-once) ·
 [Playing from different machines](#playing-from-different-machines) ·
 [Playing against the program](#playing-against-the-program)
 
@@ -576,6 +577,77 @@ because a record is meant to replay for good - the game in
 Adding to the game means adding an endpoint here and answering it in every view.
 That is the trade: a wide seam, but one that cannot be half-implemented without the
 compiler saying so.
+
+### A screen described once
+
+The trade above is paid per game as well as per endpoint. Three views with six screens apiece
+is eighteen answers before a new game is playable, and noughts and crosses paid all of it for
+nine squares. Worse, the compiler only checks that the eighteen *exist*. It has
+nothing to say about whether they agree, and they did not: the same border was a "side" in
+one view and a "wall" in another, one view called the dead region wild, and two of the four
+notes were shown by one view and silently missing from the others. Nothing failed. Every
+board still drew. [view.fsx](tests/view.fsx) is what catches that, and it catches it
+afterwards.
+
+So there is now a middle ground, and it sits *under* the view seam rather than replacing it.
+A **scene** ([Scene.fs](src/Table/Parts/Scene.fs)) is what a screen is made of, said once and
+with nothing in it about what it looks like:
+
+```fsharp
+type Scene =
+    | Blank
+    | Heading of string
+    | Say of Line                                       // one line of the game talking
+    | Note of string                                    // writing that goes when the notes do
+    | Written of string                                 // already laid out; keep it as it is
+    | Block of title: string * Scene list
+    | Stack of Scene list
+    | Beside of Scene list                              // side by side where there is room
+    | Aligned of Line list list                         // columns lined up, no walls
+    | Walled of across: int * Course list               // cells in rows, with walls
+    | Tile of title: string option * tone: Tone * body: Scene list
+    | Big of Span                                       // one glyph, drawn to be seen
+    | Does of caption: string * line: string * tone: Tone   // a control that types a line
+```
+
+[Readers.fs](src/Table/Parts/Readers.fs) draws one three ways - `Plain` counts characters into
+columns, `Panels` builds Spectre's widgets, `Pages` builds elements - and a game that
+describes its screens says `Views = Readers.views scenes` and has all three. Noughts and
+crosses does, and `Rich.fs` and `Html.fs` went with it: 396 lines deleted, and the board,
+the record, the rules, the waiting room and nine buttons all still there.
+
+**Three things stop being tests and become facts.**
+
+- **A control cannot offer a line the parser would refuse**, because `Does` carries the line
+  and every reader draws *that*. A page makes it a button and a terminal prints it as the
+  thing to type, so what you are told to type and what a click posts are not two strings
+  kept in step - they are one string read twice. [tictactoe.fsx](tests/tictactoe.fsx) walks
+  the description and holds the page's buttons up against it.
+- **A block cannot be shown by two readers and missing from the third**, there being one
+  description and all three walking it.
+- **A note cannot be worded one way here and another way there**, for the same reason. The
+  table still filling up had been written out once per game, and the two wordings had
+  already drifted - one said a console had "gone" and the other that it had "dropped". It is
+  `Scene.waiting` now, and a game that wants it says so in one line.
+
+**Colour is described, not applied.** A `Tone` is `Plainly`, `Quiet`, `Yours`, or `Slot` of
+one of the words the game says it colours - so a scene names the same slots the colour screen
+offers, and each reader spends them its own way: `Panels` in Spectre's markup, `Pages` in the
+custom properties the page carries in its head, and `Plain` not at all, because it lays out by
+counting characters and an escape code inserted mid-layout pushes everything after it
+sideways.
+
+**And a reader may refuse a hint.** `Walled` carries how much room a cell *wants*; a reader
+honours it if it can afford to. The one counting characters into columns cannot, and gives a
+cell what is in it. That is the difference between a description and a layout, and it is why
+the half-cell `Shift` on a `Course` is not a hint: the offset is what makes a region on a
+lattice touch six others rather than four, so it is a fact about the board, and a reader that
+dropped it would be drawing a different map.
+
+**None of this is compulsory.** The `View` seam is untouched and Turncoats still fills it in
+by hand, which is the right answer for a honeycomb laid out by counting characters into
+columns - the screen no general reader would have thought of. What is on offer is that a game
+which does not want to should not have to.
 
 **What a view may not do is decide anything.** Three rules keep that honest:
 
@@ -1445,6 +1517,7 @@ point: `Parts` does not know there is a seam, and `Playing` is written against i
 | --- | --- |
 | [Showing.fs](src/Table/Parts/Showing.fs) | What a table shows one console, and which console it is for |
 | [Waiting.fs](src/Table/Parts/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
+| [Scene.fs](src/Table/Parts/Scene.fs) | What a screen is made of, before anybody has decided what it looks like |
 | [Palette.fs](src/Table/Parts/Palette.fs) | Which colour is drawn for what, keyed by the words a game says it colours |
 | [Reach.fs](src/Table/Parts/Reach.fs) | How far a table can be reached and what it takes to sit down at one: the port, the word at the door, what it is all wrapped in, and an address as somebody says it |
 | [Keys.fs](src/Table/Parts/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
@@ -1455,6 +1528,7 @@ point: `Parts` does not know there is a seam, and `Playing` is written against i
 | [Page.fs](src/Table/Parts/Page.fs) | The browser's shell: the stream, the prompt, the colour form, the door, and the two places a fragment can land. A game brings a stylesheet and a name for the tab |
 | [Screens.fs](src/Table/Parts/Screens.fs) | Driving a screen at a real terminal: clear it, draw it, read a key, hand back a line |
 | [Options.fs](src/Table/Parts/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
+| [Readers.fs](src/Table/Parts/Readers.fs) | The three ways of reading a `Scene` - as text, as Spectre's widgets, as a page - written once for every game there will ever be |
 | [Playable.fs](src/Table/Playable.fs) | **The seam**: everything a game has to say about itself to be read and played here |
 | [Solo.fs](src/Table/Playing/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
 | [Transcript.fs](src/Table/Playing/Transcript.fs) | A journal as a file, and a file back into a journal |
@@ -1516,10 +1590,13 @@ being where they are.
 | [Rival.fs](src/Games/TicTacToe/Rules/Rival.fs) | A seat played by the program: the game walked to its end, with alpha-beta so it answers |
 | [Ink.fs](src/Games/TicTacToe/Reading/Ink.fs) | Two colours, against the other game's four |
 | [Parse.fs](src/Games/TicTacToe/Reading/Parse.fs) | A number, which on this board is the whole move |
-| [Render.fs](src/Games/TicTacToe/Reading/Render.fs) | The `plain` view, and the words the other two borrow |
-| [Rich.fs](src/Games/TicTacToe/Reading/Rich.fs) | The `rich` view: walled squares, in colour |
-| [Html.fs](src/Games/TicTacToe/Reading/Html.fs) | The `html` view: nine buttons, each typing its own number |
+| [Render.fs](src/Games/TicTacToe/Reading/Render.fs) | Every screen described once as a [`Scene`](#a-screen-described-once), which `Readers` then draws three ways |
 | [Offer.fs](src/Games/TicTacToe/Offer.fs) | Both seams filled in |
+
+Three files where the other game has five, and the two that are missing are the point.
+`Rich.fs` and `Html.fs` were the same board written out a second and a third time; this game
+says what a screen is *made of* and the readers in the table layer do the drawing. See
+[A screen described once](#a-screen-described-once).
 
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.
