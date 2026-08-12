@@ -516,13 +516,13 @@ module Atlas =
     /// which capped the first version of this map at about half the borders drawn. A region three
     /// or four hexes across has sides to spare, so it can touch everything it really touches.
     ///
-    /// **It is still not allowed to lie.** Turncoats' board is a patch of a triangular lattice,
-    /// so every one of its twenty-three borders can be drawn and `problems` insists every one of
-    /// them is - the picture *is* the border table. This board cannot manage that, so what is
-    /// demanded is one-directional: **every side this picture draws between two provinces is a
-    /// real border, and a border it cannot reach is left undrawn rather than faked.** All but two
-    /// of the two hundred and six are drawn - Armenia with Sevastopol, and Moscow with St
-    /// Petersburg. `borders vie` answers those two, out of the tables above.
+    /// **And it is the border table.** Turncoats' board is a patch of a triangular lattice, so
+    /// every one of its twenty-three borders can be drawn and `problems` insists every one of them
+    /// is - the picture *is* its border table. That was the thing this board was thought not to be
+    /// able to manage, and for a long time what was demanded here was one direction only: a side
+    /// drawn is a border, a border may go undrawn. It is both directions now. **Every side this
+    /// picture draws between two provinces is a real border, and every one of the two hundred and
+    /// six borders is drawn.** `problems` refuses a game either way round.
     ///
     /// A side between two hexes of the *same* province is not a border at all - it is the inside
     /// of a country - so `problems` passes over those and looks only at where two different names
@@ -571,21 +571,26 @@ module Atlas =
     /// Venice could get at neither Rome nor Tuscany. The cell between them went to Rome and
     /// Piedmont's southern tip went to Venice, and with that every province in Italy - Rome,
     /// Venice, Tuscany, Apulia, Naples, Piedmont - touches everything it borders.
+    ///
+    /// The last two were Armenia with Sevastopol and Moscow with St Petersburg, and they are the
+    /// reason the promise above is now made in both directions. Sevastopol takes one more hex east
+    /// of the Black Sea and Armenia one under it; St Petersburg runs down the far side of Livonia
+    /// on three cells that had nothing in them. With those the map draws every border there is.
     let private places =
         [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
           -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
           -4, [ "mao"; "iri"; "nao"; "cly"; "cly"; "cly"; "edi"; "nwg"; "nwy"; "stp"; "stp"; "stp"; "stp" ]
           -5, [ "mao"; "iri"; "lvp"; "cly"; "lvp"; "lvp"; "edi"; "nwg"; "nwy"; "nwy"; "nwy"; "nwy"; "nwy"; "stp" ]
           -4, [ "mao"; "iri"; "lvp"; "lvp"; "wal"; "yor"; "nth"; "nth"; "nth"; "nth"; "ska"; "swe"; "fin"; "stp" ]
-          -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "."; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "lvn" ]
-          -2, [ "mao"; "eng"; "eng"; "lon"; "lon"; "nth"; "hel"; "den"; "bal"; "bal"; "bot"; "bot"; "bot"; "lvn" ]
-          -3, [ "mao"; "eng"; "eng"; "eng"; "eng"; "nth"; "hol"; "kie"; "bal"; "bal"; "bal"; "bal"; "lvn"; "lvn" ]
+          -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "."; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "stp"; "stp" ]
+          -2, [ "mao"; "eng"; "eng"; "lon"; "lon"; "nth"; "hel"; "den"; "bal"; "bal"; "bot"; "bot"; "bot"; "lvn"; "stp" ]
+          -3, [ "mao"; "eng"; "eng"; "eng"; "eng"; "nth"; "hol"; "kie"; "bal"; "bal"; "bal"; "bal"; "lvn"; "lvn"; "stp" ]
           -4, [ "mao"; "bre"; "pic"; "bel"; "."; "bel"; "hol"; "kie"; "kie"; "ber"; "pru"; "pru"; "pru"; "war"; "mos" ]
           -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "."; "kie"; "ber"; "pru"; "."; "war"; "war"; "mos" ]
           -6, [ "mao"; "."; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
           -5, [ "mao"; "gas"; "gas"; "bur"; "bur"; "bur"; "bur"; "bur"; "mun"; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
-          -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "."; "."; "."; "."; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev" ]
-          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla" ]
+          -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "."; "."; "."; "."; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev"; "sev" ]
+          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla"; "arm" ]
           -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "ven"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
           -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "rom"; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
           -2, [ "mao"; "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
@@ -812,21 +817,36 @@ module Atlas =
               if not (Set.contains code reachedTogether) then
                   yield $"{code} cannot be reached from Vienna by any piece at all"
 
-          // --- and whether the map as drawn is telling the truth
+          // --- and whether the map as drawn is the board
           //
-          // One direction only, and that is the whole of what this board's picture claims: a
-          // side drawn is a border, a border may go undrawn. The other game demands both and
-          // can; this one cannot, and says which half it is keeping.
+          // Both directions: every side the picture draws is a border, and every border is
+          // drawn. Which is to say the picture *is* the border table, and a player who reads
+          // the map has read the whole truth about where a piece may go.
+          //
+          // It was one direction only for a long time, and the argument for that was sound
+          // while it lasted: a province here has up to eleven neighbours where a hexagon has six
+          // sides, so no map giving each province one hex could ever have drawn them all, and
+          // the honest thing was to promise the half that could be kept. What answered it was
+          // letting a province take as many hexes as its borders need, and then going back over
+          // the places the layout had settled for less. The second half of the promise is made
+          // here rather than described in a comment, so an edit that quietly drops a border
+          // fails before a game is dealt, in the words of the border it dropped.
           let laid = placedPlaces |> List.collect id |> List.map fst
 
           let touching =
             Set.ofList
                 [ for from, into in together do
-                      for other in into -> asPair from other ]
+                      for other in into do
+                          if from <> other then
+                              yield asPair from other ]
 
           for one, other in drawnBorders do
               if not (Set.contains (asPair one other) touching) then
                   yield $"the map draws {one} touching {other}, and they do not border"
+
+          for one, other in touching do
+              if not (Set.contains (asPair one other) drawnBorders) then
+                  yield $"{one} borders {other}, and the map draws them apart"
 
           for code in laid do
               if not (Set.contains code known) then

@@ -1256,49 +1256,53 @@ orders, and what makes `press france ...` a line only France reads.
   written down and checked against each other. A table mirrored from one end agrees with itself
   however wrong it is, and Turncoats' twenty-three borders are small enough that mirroring is
   the right call. At three hundred it stops being one.
-- **A map does not have to be complete to be honest — it has to not lie.** Turncoats prints a
-  honeycomb, and can, because its borders are a patch of a triangular lattice: the picture *is*
-  the border table, and `Board.problems` demands that every one of the twenty-three is drawn.
-  This map is not a lattice. A province here has up to eleven neighbours where a hexagon has
-  six sides, so no arrangement of them could ever show all two hundred and six borders — and
-  the first answer here was that a board which cannot be drawn faithfully is better not drawn
-  at all.
+- **"A picture of a board must be the board" was the right rule; "one region, one cell" was the
+  wrong reason it seemed impossible.** Turncoats prints a honeycomb, and can, because its borders
+  are a patch of a triangular lattice: the picture *is* the border table, and `Board.problems`
+  demands every one of the twenty-three be drawn. This map is not a lattice. A province here has
+  up to eleven neighbours where a hexagon has six sides, so no arrangement of them could show all
+  two hundred and six borders — and the first answer here was that a board which cannot be drawn
+  faithfully is better not drawn at all.
 
-  That was the wrong half of the choice. What Turncoats' check really buys is not completeness
-  but *truthfulness*, and those come apart on a board this size. So the provinces are laid out
-  on the same honeycomb under a one-directional rule, checked by `Atlas.problems` before a game
-  is ever dealt: **every side the picture draws between two provinces is a real border, and a
-  border the honeycomb cannot reach is left undrawn rather than faked.**
+  That was the wrong half of the choice, and it took four goes to find out why.
 
-  Then a second thing had to give, and it is the more useful of the two. The first map gave
-  every province one hex — and a hexagon has six sides where a province here has up to eleven
-  neighbours, so it stuck at about half the borders. **A province takes as many hexes as it
-  needs.** Its name repeats across all of them, a side between two of its own hexes is the
-  inside of a country rather than a border, and a region three or four across has sides to
-  spare. All but two of the two hundred and six are drawn now, against a little over half before.
+  **First**, a map under a weaker rule. What Turncoats' check really buys, the argument went, is
+  not completeness but *truthfulness*, and on a board this size those come apart — so the
+  provinces went on the honeycomb one hex apiece under a one-directional promise: every side
+  drawn is a real border, a border the picture cannot reach is left undrawn rather than faked.
+  Half the borders were drawn. Honest, and not much use.
 
-  The shapes were grown rather than drawn: seeded a hex apiece at roughly the right places, then
-  spread a hex at a time into whatever space met a neighbour they had not met, never into one
-  that would put them beside a province they do not border. Some of the results are odd — the
-  Norwegian Sea wraps round the Barents — and odd is the price of the adjacencies coming out
-  right, which is what a map of this is for.
+  **Second**, the thing that actually mattered: **a province takes as many hexes as it needs.**
+  Six sides is a limit on a cell, not on a country. A region three or four hexes across has sides
+  to spare; its name repeats over all of them, and a side between two of its own hexes is the
+  inside of a country rather than a border. That took it from a little over half to nine in ten.
+  The shapes were grown rather than drawn — seeded a hex apiece and spread outward, always into
+  space that met a neighbour they had not met, never into space beside a province they do not
+  border.
 
-  Then a third thing gave, one level down. `Scene` could describe a grid of *cells* but not a
-  grid of *regions*, so a province came out as four boxes that happened to share a name — and
-  Spectre's tables, which have one wall in one colour and no way to leave a wall out, could not
-  have drawn it any other way. A cell of a map is a
+  **Third**, one level down, because the drawing could not keep up. `Scene` could describe a grid
+  of *cells* but not a grid of *regions*, so a province came out as four boxes that happened to
+  share a name — and Spectre's tables, which have one wall in one colour and no way to leave a
+  wall out, could not have drawn it any other way. A cell of a map is a
   [`Patch`](src/Table/Parts/Scene.fs) now and says which shape it belongs to. Both terminal
   readers hand the same layout the same rows and differ only in the alphabet they draw it with,
   so a province is one outline in the colour of whoever holds its centre, and the two maps are
   the same map wall for wall. That is the seam paying for itself in the direction it was meant
-  to: the thing a third game needed was general, and the two games that came before it got it
-  without being touched.
+  to: what a third game needed was general, and the two games before it got it untouched.
 
-  Worth having as the generalisation it is. Turncoats' rule reads like "a picture of a board
-  must be the board", and it can afford that because its board is a lattice and its regions fit
-  one cell each. Neither half survives contact with a real map. The version that does is "a
-  picture must not say anything false, and a region is as big as it needs to be" — and only a
-  board that breaks both makes the difference visible.
+  **Fourth**, the last tenth, one border at a time. The grower could only ever add a hex where
+  one was free and safe — it could never take a hex off a neighbour or move a province across, so
+  wherever that was the answer it stopped, and stopped somewhere that broke no rule and made no
+  sense. The Eastern Mediterranean sat in the middle of the Ionian touching none of the three
+  provinces it exists to touch; Burgundy was penned in by a row of Piedmont whose hexes touched
+  only Piedmont and empty space. Undoing those by hand cost nothing anybody was using.
+
+  So the rule this board ended up under is the one it was thought unable to keep. **Every side the
+  picture draws is a real border, and every one of the two hundred and six borders is drawn** —
+  checked both ways by `Atlas.problems` before a game is dealt, so an edit that quietly drops one
+  fails in the words of the border it dropped. The generalisation is not that a picture may be
+  incomplete. It is that **"one region, one cell" was never part of the rule** — and until a board
+  turned up that broke it, there was no way to tell the two apart.
 - **`View.Answer` stopped being a field with one caller.** It was put there for `rule 8`, and
   the second game filled it with a line saying there was nothing to explain. Here it is what
   makes an incomplete map safe to draw — `borders vie` is the whole truth for one province,

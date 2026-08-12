@@ -186,12 +186,19 @@ let private realBorders =
         [ for province in Atlas.all do
               for other in touches province.Id -> min province.Id other, max province.Id other ]
 
-// Not a fact about the rules - a floor under the picture, so that a map quietly reduced to a
-// scattering of provinces with no sides between them fails here rather than passing as honest.
-// Nineteen in twenty is under what the layout actually manages - it is two borders short of all
-// two hundred and six - and far over what one hex a province could ever manage, which is the
-// point the floor is guarding.
-report "and it draws nineteen borders in twenty" true (Set.count sides * 20 >= Set.count realBorders * 19)
+// And the other half, which used to be a floor under the coverage because it could not be a
+// claim. A province here has up to eleven neighbours where a hexagon has six sides, so a map of
+// one hex a province could never have drawn them all and the honest thing was to promise only
+// the direction above. A province taking as many hexes as its borders need answered that, and
+// then the places the layout had settled for less were gone back over one at a time. The picture
+// *is* the border table now, and this says so exactly rather than approximately.
+report
+    "and every border the board has is drawn"
+    []
+    (Set.difference realBorders sides
+     |> Set.toList
+     |> List.map (fun (one, other) -> $"{Atlas.code one}-{Atlas.code other}")
+     |> List.sort)
 
 // --- and the picture the readers make of it ---------------------------------------------------------
 //

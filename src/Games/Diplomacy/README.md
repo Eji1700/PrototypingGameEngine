@@ -31,8 +31,8 @@ ever be, so a record reads the way anybody who plays this would write it.
 tests them by being unlike everything else the machinery had been asked for. Seven seats. No
 chance at all. Orders written in secret by every power at once. A year made of three kinds of
 phase, two of them skipped most years. A move that changes nothing on the board and is still
-the most important thing anybody does. And a map that cannot be drawn completely. [What that
-turned up](../../../README.md#what-a-third-game-found) is in the engine's README.
+the most important thing anybody does. And a map with more borders than a honeycomb has sides.
+[What that turned up](../../../README.md#what-a-third-game-found) is in the engine's README.
 
 ## A year
 
@@ -114,25 +114,28 @@ decoration — a gap is what keeps two provinces that do not border from being d
 **Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
 eleven neighbours — so one hex a province caps the picture at about half its borders, which is
 exactly where the first version of this map stuck. A region three or four hexes across has
-sides to spare and can touch everything it really touches. **All but two of the two hundred and
-six are drawn** — Armenia with Sevastopol, and Moscow with St Petersburg.
+sides to spare and can touch everything it really touches. **All two hundred and six borders are
+drawn.**
 
 **What the picture promises.** Turncoats prints
 [a honeycomb](../Turncoats/README.md#drawn-as-a-map) whose every border can be drawn, because
 its board really is a patch of a triangular lattice — the picture *is* its border table. This
-board still cannot manage that, so the promise is one-directional, and it is checked before a
-game is ever dealt:
+board was thought not to be able to manage that, and for a long time the promise here was
+one-directional. It is both directions now, and it is checked before a game is ever dealt:
 
-> **Every side the map draws between two provinces is a real border. A border it cannot reach
-> is not drawn.**
+> **Every side the map draws between two provinces is a real border, and every border is drawn.**
+
+So two provinces share a side exactly when they border each other, and two drawn apart do not.
+What you can see is what a piece can do.
 
 A side between two hexes of the *same* province is not a border but the inside of a country: it
-is no part of that claim, and it is not drawn at all. `Atlas.problems` walks the layout against
-the border tables, refuses to deal onto a map that draws a side which is not there, and also
-refuses one that draws a province in two separate pieces. The drawing itself is checked
-too — [diplomacy.fsx](../../../tests/diplomacy.fsx) counts the walls the layout calls for and
-then counts the walls on the board, so a picture that put a wall through the middle of a country
-or ran two countries together would fail even with the tables underneath it perfectly honest.
+is no part of either half of that claim, and it is not drawn at all. `Atlas.problems` walks the
+layout against the border tables, refuses to deal onto a map that draws a side which is not
+there **or** leaves out one that is, and also refuses one that draws a province in two separate
+pieces. The drawing itself is checked too — [diplomacy.fsx](../../../tests/diplomacy.fsx) counts
+the walls the layout calls for and then counts the walls on the board, so a picture that put a
+wall through the middle of a country or ran two countries together would fail even with the
+tables underneath it perfectly honest.
 
 **The shapes were grown, not drawn.** The regions were seeded a hex apiece at roughly the right
 places and then spread outwards, one hex at a time, always into the space that met a neighbour
@@ -164,6 +167,10 @@ have been put right by hand since, and every one of them is that same failing:
 - **Italy** took two cells. The empty one between Rome and Venice went to Rome, Piedmont's
   southern tip went to Venice, and with that Rome, Venice, Tuscany, Apulia, Naples and Piedmont
   all touch everything they border.
+- **Armenia with Sevastopol** and **Moscow with St Petersburg** were the last two, and they are
+  why the promise above can be made in both directions. Sevastopol takes one more hex east of the
+  Black Sea and Armenia one under it; St Petersburg runs down the far side of Livonia on three
+  cells that had nothing in them.
 
 For the rest, ask:
 

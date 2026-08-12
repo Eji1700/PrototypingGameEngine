@@ -8,32 +8,32 @@ open TCModel.Diplomacy
 
 /// Every screen this game has, described once.
 ///
-/// **The map is drawn, a province takes as many hexes as it needs, and what the picture promises
-/// is one-directional.**
+/// **The map is drawn, a province takes as many hexes as it needs, and the picture *is* the
+/// border table.**
 ///
-/// It went through three answers. First there was no map, on the argument that a board which
+/// It went through four answers. First there was no map, on the argument that a board which
 /// cannot be drawn faithfully is better not drawn: the other game of maps here prints a
 /// honeycomb because its borders really are a patch of a triangular lattice, so its picture *is*
 /// its border table. Then there was a map of one hex a province - and that argument turned out
 /// to be about completeness rather than honesty, which are not the same thing.
 ///
-/// The third answer is the one here, and it is what fixed it. One hex gives a province six
-/// sides; provinces on this board have up to eleven neighbours, and that ceiling is what held
-/// the first map to about half its borders. A region three or four hexes across has sides to
-/// spare. All but two of the two hundred and six are drawn now.
+/// The third answer is what fixed it. One hex gives a province six sides; provinces on this board
+/// have up to eleven neighbours, and that ceiling is what held the first map to about half its
+/// borders. A region three or four hexes across has sides to spare.
 ///
 /// What that cost was a word in the description. A cell of this map is a `Patch` and says which
 /// region it is part of, so the readers draw a province as one shape rather than four boxes
 /// sharing a name - and the wall round the shape takes the colour of whoever holds its centre,
 /// which is the one thing on this board that says at a glance whose is whose.
 ///
-/// The rule `Atlas.problems` refuses to deal a game without is unchanged: **every side the
-/// picture draws between two provinces is a real border**, and a border the shape cannot reach
-/// is left undrawn rather than faked. A side between two hexes of the same province is not a
-/// border but the inside of a country, and is no part of the claim.
+/// The fourth was going back over the places the layout had settled for less, which took the map
+/// from nine borders in ten to all two hundred and six - so `Atlas.problems` now refuses a game
+/// in both directions: **every side the picture draws between two provinces is a real border, and
+/// every border is drawn.** The picture *is* the border table. A side between two hexes of the
+/// same province is not a border but the inside of a country, and is no part of either half.
 ///
-/// The note under the board says all of that in a sentence, because a player who reads the
-/// picture as the whole truth is a player the picture has misled.
+/// The note under the board says what the shapes mean, because a player who cannot tell the
+/// inside of a country from a border has not been told what they are looking at.
 module Render =
 
     module Blocks =
@@ -53,7 +53,7 @@ module Render =
             "Write an order for each of your units, then 'commit'. Nobody sees what you have written until every power has committed, and then everybody sees all of it at once."
 
         let borders =
-            "A province takes as many hexes as it needs and is drawn as one shape with its name written across it. Two provinces sharing a side do border each other, and all but a couple of this board's borders are drawn - so two drawn apart very likely do not border, though 'borders vie' is the whole answer for any one province."
+            "A province takes as many hexes as it needs and is drawn as one shape with its name written across it. Two provinces share a side exactly when they border each other, and two drawn apart do not - the picture is the whole of it, so what you can see is what a piece can do. 'borders vie' spells one province out in words, and 'vie - tri' is refused if the map does not show them touching."
 
         let press =
             "'press france ...' sends a line to one power and to nobody else. 'press all ...' sends it to the table. Nothing in the rules makes anybody keep their word."
