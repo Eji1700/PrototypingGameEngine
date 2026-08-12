@@ -5,6 +5,22 @@ open Argu
 open TCModel.Common
 open TCModel.Engine
 
+/// Where a game comes from: dealt fresh for that many, or a saved one taken up again.
+///
+/// The two answer the same three questions - how many are playing, what they were dealt
+/// from, and who is in each seat - and a record answers all three at once, which is what
+/// makes taking one up the other way of saying the same thing rather than a special case
+/// beside it. So it is one type here, asked in the same words by every way of opening a
+/// game, and none of them has to know which of the two answers it got.
+[<RequireQualifiedAccess>]
+type Start =
+    /// A seed left unsaid is taken from the clock, and the skills are the seats after the
+    /// first, in order, that the machine is to play.
+    | Dealt of players: int * seed: uint64 option * rivals: string list
+    /// A record, which says all three itself - and which the game goes on being written to,
+    /// so one game stays one record however many sittings it took.
+    | Saved of path: string
+
 /// What a command line asks the program to open, as a value.
 ///
 /// Nothing here opens anything. This is the typed answer to "what was asked for", and the
@@ -13,18 +29,16 @@ open TCModel.Engine
 /// makes everybody answer.
 [<RequireQualifiedAccess>]
 type Launch =
-    /// Deal and play at this keyboard. A seed left unsaid is taken from the clock, and the
-    /// skills are the seats after the first, in order, that the machine is to play.
-    | Deal of players: int * seed: uint64 option * rivals: string list
+    /// Play at this keyboard.
+    | Play of Start
     /// The same game, played in a browser rather than at this keyboard. It opens a port, so
     /// it says how far it can be reached like anything else that does.
-    | Serve of players: int * seed: uint64 option * rivals: string list * reach: Reach
-    /// Deal and wait for the other players to arrive from their own machines.
-    | Host of players: int * seed: uint64 option * reach: Reach
+    | Serve of Start * reach: Reach
+    /// Open it and wait for the other players to arrive from their own machines.
+    | Host of Start * reach: Reach
     /// Sit down at somebody else's table, resuming a seat if a token says which, and saying
     /// the word at the door if that table has one.
     | Join of address: string * token: string option * code: string option
-    | Replay of path: string
 
 // --- what can be asked for -----------------------------------------------------------------
 //
@@ -42,6 +56,7 @@ type PlayArgs =
     | [<MainCommand>] Players of players: int
     | [<AltCommandLine("-s")>] Seed of seed: uint64
     | [<AltCommandLine("-r")>] Rival of skill: string
+    | [<AltCommandLine("-f")>] From of path: string
     | View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
 
@@ -51,6 +66,7 @@ type PlayArgs =
             | Players _ -> "how many are playing"
             | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
             | Rival _ -> "let the machine play the next seat; may be given more than once - see the list below"
+            | From _ -> "take up this saved game instead of dealing one, against the players it names"
             | View _ -> "how the board is drawn - see the list below"
             | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
 
@@ -58,6 +74,7 @@ type ServeArgs =
     | [<MainCommand>] Players of players: int
     | [<AltCommandLine("-s")>] Seed of seed: uint64
     | [<AltCommandLine("-r")>] Rival of skill: string
+    | [<AltCommandLine("-f")>] From of path: string
     | [<AltCommandLine("--color")>] Colour of slot: string
     | [<AltCommandLine("-p")>] Port of port: int
     | Code of code: string
@@ -73,6 +90,7 @@ type ServeArgs =
             | Players _ -> "how many are playing"
             | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
             | Rival _ -> "let the machine play the next seat; may be given more than once - see the list below"
+            | From _ -> "take up this saved game instead of dealing one, against the players it names"
             | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
             | Port _ -> "listen on this port rather than the usual one"
             | Code _ -> "the word players say at the door, rather than one made up here"
@@ -85,6 +103,7 @@ type ServeArgs =
 type HostArgs =
     | [<MainCommand>] Players of players: int
     | [<AltCommandLine("-s")>] Seed of seed: uint64
+    | [<AltCommandLine("-f")>] From of path: string
     | View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
     | [<AltCommandLine("-p")>] Port of port: int
@@ -100,6 +119,7 @@ type HostArgs =
             match this with
             | Players _ -> "how many are playing"
             | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
+            | From _ -> "take up this saved game instead of dealing one, against the players it names"
             // "See the list below" like the other four, and for a reason worth writing down:
             // `Usage` is a *static* member, so it cannot be handed the game being opened and
             // cannot name that game's views. Naming them was left here by accident and came
@@ -232,7 +252,9 @@ module Launch =
                  shown $"{name} host {many} --open" "...with no word at the door, for a room you trust"
                  $"    {name} host {many} --behind --at {game.Name}.example.org"
                  $"    {name} join greg-pc --code kbd4-9mtx-7rfp"
-                 $"    {name} replay logs/2026-08-02-215823-2p-seed42.log"
+                 ""
+                 shown $"{name} replay logs/<saved>.log" "a saved game, taken up where it was left"
+                 shown $"{name} serve --from logs/<saved>.log" "...the same game, taken up in a browser"
                  ""
                  listed "How the board can be drawn:" (String.concat ", " drawn)
                  listed "  ...and in a browser:" (Playable.namesFor InABrowser game) ]
@@ -307,22 +329,28 @@ module Launch =
           | Some address -> yield at address
           | None -> () ]
 
+    /// Where the game came from, written out. `host` has no machines to name, so it hands in
+    /// no way of naming one and a seating it could not have asked for cannot be written.
+    let private starting players seed rival from start =
+        match start with
+        | Start.Dealt(count, seeded, rivals) ->
+            [ players count ]
+            @ (seeded |> Option.toList |> List.map seed)
+            @ (rivals |> List.collect (fun skill -> rival |> Option.toList |> List.map (fun name -> name skill)))
+        | Start.Saved path -> [ from path ]
+
     let private arguments launch =
         match launch with
-        | Launch.Deal(players, seed, rivals) ->
+        | Launch.Play start ->
             [ Play(
                   playing.ToParseResults(
-                      [ PlayArgs.Players players ]
-                      @ (seed |> Option.toList |> List.map PlayArgs.Seed)
-                      @ (rivals |> List.map PlayArgs.Rival)
+                      starting PlayArgs.Players PlayArgs.Seed (Some PlayArgs.Rival) PlayArgs.From start
                   )
               ) ]
-        | Launch.Serve(players, seed, rivals, reach) ->
+        | Launch.Serve(start, reach) ->
             [ Serve(
                   serving.ToParseResults(
-                      [ ServeArgs.Players players ]
-                      @ (seed |> Option.toList |> List.map ServeArgs.Seed)
-                      @ (rivals |> List.map ServeArgs.Rival)
+                      starting ServeArgs.Players ServeArgs.Seed (Some ServeArgs.Rival) ServeArgs.From start
                       @ reaching
                           ServeArgs.Port
                           ServeArgs.Code
@@ -334,11 +362,10 @@ module Launch =
                           reach
                   )
               ) ]
-        | Launch.Host(players, seed, reach) ->
+        | Launch.Host(start, reach) ->
             [ Host(
                   hosting.ToParseResults(
-                      [ HostArgs.Players players ]
-                      @ (seed |> Option.toList |> List.map HostArgs.Seed)
+                      starting HostArgs.Players HostArgs.Seed None HostArgs.From start
                       @ reaching
                           HostArgs.Port
                           HostArgs.Code
@@ -358,7 +385,6 @@ module Launch =
                       @ (code |> Option.toList |> List.map JoinArgs.Code)
                   )
               ) ]
-        | Launch.Replay path -> [ Replay(replaying.ToParseResults [ ReplayArgs.Path path ]) ]
 
     /// A launch as the words a shell would hand the program, one to an entry.
     ///
@@ -455,6 +481,31 @@ module Launch =
     let private counted game players =
         Commands.tryPlayerCount (Playable.seats game) (string (players |> Option.defaultValue game.Fewest))
 
+    /// Where the game is coming from, which every way of opening one asks in the same words.
+    ///
+    /// A record already says how many are playing, what they were dealt from and who was in
+    /// each seat, so saying any of those alongside `--from` is not a shorter way of saying
+    /// the same thing - it is two different games asked for at once, and there is no way to
+    /// tell which was meant. Refused in the words the person typed, like everything else here.
+    let private opening game players seed rivals from =
+        match from with
+        | Some path ->
+            match
+                [ if Option.isSome players then "how many are playing"
+                  if Option.isSome seed then "--seed"
+                  if not (List.isEmpty rivals) then "--rival" ]
+            with
+            | [] -> Ok(Start.Saved path)
+            | also ->
+                let said = String.Join(" and ", also)
+                Error $"--from takes up a saved game, which already says {said}. Say one or the other."
+        | None ->
+            result {
+                let! count = counted game players
+                let! skills = facing game count rivals
+                return Start.Dealt(count, seed, skills)
+            }
+
     /// Everything that can be said two ways at once is refused here rather than settled
     /// quietly, because each of these pairs is somebody meaning one of two quite different
     /// things and there is no way to tell which.
@@ -509,15 +560,28 @@ module Launch =
             match taken.GetAllResults() |> List.tryHead with
             | Some(Play args) ->
                 let! view = reading game (args.GetResults PlayArgs.Colour) (args.TryGetResult PlayArgs.View)
-                let! players = counted game (args.TryGetResult PlayArgs.Players)
-                let! rivals = facing game players (args.GetResults PlayArgs.Rival)
-                return Launch.Deal(players, args.TryGetResult PlayArgs.Seed, rivals), view
+
+                let! start =
+                    opening
+                        game
+                        (args.TryGetResult PlayArgs.Players)
+                        (args.TryGetResult PlayArgs.Seed)
+                        (args.GetResults PlayArgs.Rival)
+                        (args.TryGetResult PlayArgs.From)
+
+                return Launch.Play start, view
             | Some(Serve args) ->
                 // No `--view` here and no choice to make: there is one way of drawing a board
                 // a browser can read.
                 let! palette = painted game (args.GetResults ServeArgs.Colour)
-                let! players = counted game (args.TryGetResult ServeArgs.Players)
-                let! rivals = facing game players (args.GetResults ServeArgs.Rival)
+
+                let! start =
+                    opening
+                        game
+                        (args.TryGetResult ServeArgs.Players)
+                        (args.TryGetResult ServeArgs.Seed)
+                        (args.GetResults ServeArgs.Rival)
+                        (args.TryGetResult ServeArgs.From)
 
                 let! reach =
                     reached
@@ -529,12 +593,17 @@ module Launch =
                         (args.Contains ServeArgs.Behind)
                         (args.TryGetResult ServeArgs.At)
 
-                return
-                    Launch.Serve(players, args.TryGetResult ServeArgs.Seed, rivals, reach),
-                    Playable.plainest InABrowser palette game
+                return Launch.Serve(start, reach), Playable.plainest InABrowser palette game
             | Some(Host args) ->
                 let! view = reading game (args.GetResults HostArgs.Colour) (args.TryGetResult HostArgs.View)
-                let! players = counted game (args.TryGetResult HostArgs.Players)
+
+                let! start =
+                    opening
+                        game
+                        (args.TryGetResult HostArgs.Players)
+                        (args.TryGetResult HostArgs.Seed)
+                        []
+                        (args.TryGetResult HostArgs.From)
 
                 let! reach =
                     reached
@@ -546,7 +615,7 @@ module Launch =
                         (args.Contains HostArgs.Behind)
                         (args.TryGetResult HostArgs.At)
 
-                return Launch.Host(players, args.TryGetResult HostArgs.Seed, reach), view
+                return Launch.Host(start, reach), view
             | Some(Join args) ->
                 let! view = reading game (args.GetResults JoinArgs.Colour) (args.TryGetResult JoinArgs.View)
 
@@ -557,9 +626,13 @@ module Launch =
                         args.TryGetResult JoinArgs.Code
                     ),
                     view
+            // The short way of saying `play --from <file>`, which is how people already ask
+            // for it and is what every record's own header tells them to type. It reads to
+            // the very same launch, so the two cannot come to mean different things - the
+            // same bargain the seating shorthands keep.
             | Some(Replay args) ->
                 let! view = reading game (args.GetResults ReplayArgs.Colour) (args.TryGetResult ReplayArgs.View)
-                return Launch.Replay(args.GetResult ReplayArgs.Path), view
+                return Launch.Play(Start.Saved(args.GetResult ReplayArgs.Path)), view
             | None -> return! Error "That does not say what to open. Say 'play', 'serve', 'host', 'join' or 'replay'."
         }
 

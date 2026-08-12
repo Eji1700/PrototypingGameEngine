@@ -94,6 +94,7 @@ dotnet run -- serve 3          # the same game, played in a browser on this mach
 dotnet run -- serve 2 --rival hard
 
 dotnet run -- replay logs/...-2p-seed42.log  # take a saved game up again, machines and all
+dotnet run -- serve --from logs/...-2p-seed42.log   # ...the same game, taken up in a browser
 
 dotnet run -- host 3                        # open a table at their own machines
 dotnet run -- host 3 --open                 # ...with no word at the door, for a room you trust
@@ -197,11 +198,21 @@ same two commands that take a move back during play are what walk a finished gam
 backwards and forwards for review, and a game that ends stays open at the prompt
 rather than closing the window on itself.
 
-**Which makes it a resume rather than a viewing.** Three things follow from a
+**Which makes it a resume rather than a viewing.** Four things follow from a
 record being a game you can carry on with:
 
 - **The machines come back.** The seating is on the deal line, so they take the
   seats they were playing at the strength they were playing them.
+- **It can be taken up any of the three ways in.** `play`, `serve` and `host` all
+  ask where the game comes from in the same words — a count and a seed, or
+  `--from <record>` — because it is the same question, and a record answers it
+  more completely than a count does. So a game put down at one keyboard can be
+  taken up in a browser or as a table others join. The machines keep their seats
+  and only the people move: whether they are in this room or at their own machines
+  is what the three verbs *mean*, not something the game remembers. (`replay <file>`
+  is the short way of saying `play --from <file>`, and reads to the same value, so
+  the two cannot drift apart.) Saying a count, a seed or a `--rival` alongside
+  `--from` is refused rather than half-heard — that is two games asked for at once.
 - **It is one game and one record.** A resumed game goes on writing to the file it
   came out of rather than forking a second beside it. It knows which file that is
   from the name — built in one place and taken apart in the same one — and a record

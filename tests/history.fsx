@@ -149,6 +149,21 @@ report
     [ None; Some "hard" ]
     (Seating.machines read.Sitters)
 
+// And only the machines. Whether the people at a table are in this room or at their own
+// machines is not a fact about the game - it is what `play`, `serve` and `host` mean - so a
+// game put down at one keyboard can be taken up as a table others join, and the other way
+// about, with the machines in the seats they were playing either way.
+
+report
+    "a game put down here can be taken up as a table others join"
+    [ Elsewhere; Machine "hard"; Elsewhere ]
+    (Seating.resuming Elsewhere [ Here; Machine "hard"; Here ])
+
+report
+    "and one put down there taken up here"
+    [ Here; Machine "hard"; Here ]
+    (Seating.resuming Here [ Elsewhere; Machine "hard"; Elsewhere ])
+
 // Records were written before a seating was part of one, and they still play. The reading
 // that cannot be wrong about them is that everybody at the table was a person: a machine put
 // back at a seat it never played, or at a strength it never played, would be a different game.

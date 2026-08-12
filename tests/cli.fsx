@@ -1,4 +1,4 @@
-// The command line, both ways round.
+﻿// The command line, both ways round.
 //
 // `Launch` reads the arguments the process was started with, and writes a command line the
 // program will later be handed back - the line a dropped player is told to type to get back
@@ -113,15 +113,25 @@ let private launches =
             Gen.zip seed (Gen.elements seatings)
             |> Gen.map (fun (seed, rivals) -> players, seed, rivals))
 
+    // Where a game comes from, either way round: dealt for that many, or a record taken up.
+    // `host` names no machines, so a start of its own that did would be a line the program
+    // could not have written.
+    let starting =
+        Gen.oneof
+            [ dealing |> Gen.map Start.Dealt
+              path |> Gen.map Start.Saved ]
+
+    let hosting =
+        Gen.oneof
+            [ Gen.zip players seed |> Gen.map (fun (players, seed) -> Start.Dealt(players, seed, []))
+              path |> Gen.map Start.Saved ]
+
     Gen.oneof
-        [ dealing |> Gen.map Launch.Deal
-          Gen.zip dealing reach
-          |> Gen.map (fun ((players, seed, rivals), reach) -> Launch.Serve(players, seed, rivals, reach))
-          Gen.zip (Gen.zip players seed) reach
-          |> Gen.map (fun ((players, seed), reach) -> Launch.Host(players, seed, reach))
+        [ starting |> Gen.map Launch.Play
+          Gen.zip starting reach |> Gen.map Launch.Serve
+          Gen.zip hosting reach |> Gen.map Launch.Host
           Gen.zip (Gen.zip address token) code
-          |> Gen.map (fun ((address, token), code) -> Launch.Join(address, token, code))
-          path |> Gen.map Launch.Replay ]
+          |> Gen.map (fun ((address, token), code) -> Launch.Join(address, token, code)) ]
     |> Arb.fromGen
 
 // --- what the program writes, the program reads ----------------------------------------------
@@ -235,27 +245,48 @@ report
 
 report "which `serve` says too, dealing the same table" true (turnedAway [ "serve"; "2"; "--rival"; "easy"; "--rival"; "hard" ])
 
+// --- taking a saved game up --------------------------------------------------------------
+//
+// A record already says how many are playing, what they were dealt from and who was in each
+// seat. Saying any of it again alongside is not a shorter way of saying the same thing - it
+// is two different games asked for at once, and there is no telling which was meant.
+
+let private saved = "logs/2026-08-02-215823-2p-seed42.log"
+
+report "a count said alongside a record is refused" true (turnedAway [ "play"; "2"; "--from"; saved ])
+
+report "and a seed" true (turnedAway [ "play"; "--from"; saved; "--seed"; "42" ])
+
+report "and a machine" true (turnedAway [ "serve"; "--from"; saved; "--rival"; "hard" ])
+
+report
+    "and the refusal says which of the two to drop"
+    true
+    (match Launch.read playing [ "play"; "2"; "--from"; saved ] with
+     | Error problem -> problem.Contains "--from" && problem.Contains "how many are playing"
+     | Ok _ -> false)
+
 // --- the defaults --------------------------------------------------------------------------------
 
 report
     "a game asked for with no number is dealt for the fewest that can play"
-    (0, Some(Launch.Deal(Table.MinPlayers, None, [])))
+    (0, Some(Launch.Play(Start.Dealt(Table.MinPlayers, None, []))))
     (through [ "play" ])
 
-report "a seed left unsaid is left unsaid, for the clock to answer" (0, Some(Launch.Deal(3, None, []))) (through [ "play"; "3" ])
+report "a seed left unsaid is left unsaid, for the clock to answer" (0, Some(Launch.Play(Start.Dealt(3, None, [])))) (through [ "play"; "3" ])
 
-report "and a seed given is carried through" (0, Some(Launch.Deal(3, Some 42UL, []))) (through [ "play"; "3"; "--seed"; "42" ])
+report "and a seed given is carried through" (0, Some(Launch.Play(Start.Dealt(3, Some 42UL, [])))) (through [ "play"; "3"; "--seed"; "42" ])
 
 report
     "how the board is drawn can be said in either spelling"
-    (0, Some(Launch.Deal(2, None, [])))
+    (0, Some(Launch.Play(Start.Dealt(2, None, []))))
     (through [ "play"; "2"; "--color"; "blue=teal" ])
 
-report "a game with nobody said to play it is a game between people" (0, Some(Launch.Deal(3, None, []))) (through [ "play"; "3" ])
+report "a game with nobody said to play it is a game between people" (0, Some(Launch.Play(Start.Dealt(3, None, [])))) (through [ "play"; "3" ])
 
 report
     "and the machines are taken in the order they were named"
-    (0, Some(Launch.Deal(3, None, [ "hard"; "easy" ])))
+    (0, Some(Launch.Play(Start.Dealt(3, None, [ "hard"; "easy" ]))))
     (through [ "play"; "3"; "--rival"; "hard"; "--rival"; "easy" ])
 
 // A table that opens a port makes up a word for its door when nobody says otherwise, so the
@@ -265,8 +296,8 @@ report
 
 let private without launch =
     match launch with
-    | Launch.Serve(players, seed, rivals, reach) -> Launch.Serve(players, seed, rivals, { reach with Doorway = Ajar })
-    | Launch.Host(players, seed, reach) -> Launch.Host(players, seed, { reach with Doorway = Ajar })
+    | Launch.Serve(start, reach) -> Launch.Serve(start, { reach with Doorway = Ajar })
+    | Launch.Host(start, reach) -> Launch.Host(start, { reach with Doorway = Ajar })
     | opened -> opened
 
 let private unlocked words =
@@ -275,8 +306,36 @@ let private unlocked words =
 
 report
     "a browser's table takes them the same way"
-    (0, Some(Launch.Serve(2, Some 42UL, [ "medium" ], Reach.ajar)))
+    (0, Some(Launch.Serve(Start.Dealt(2, Some 42UL, [ "medium" ]), Reach.ajar)))
     (unlocked [ "serve"; "2"; "--seed"; "42"; "-r"; "medium" ])
+
+// Every way in asks where the game comes from in the same words, because it is the same
+// question. So a game put down at one keyboard can be taken up in a browser or as a table
+// others join, and the machines stay where they were sitting whichever it is.
+
+report
+    "a saved game can be taken up at this keyboard"
+    (0, Some(Launch.Play(Start.Saved saved)))
+    (through [ "play"; "--from"; saved ])
+
+report
+    "or in a browser"
+    (0, Some(Launch.Serve(Start.Saved saved, Reach.ajar)))
+    (unlocked [ "serve"; "--from"; saved; "--open" ])
+
+report
+    "or as a table others join"
+    (0, Some(Launch.Host(Start.Saved saved, Reach.ajar)))
+    (unlocked [ "host"; "--from"; saved; "--open" ])
+
+// `replay <file>` is the short way of saying `play --from <file>` - the way people already
+// ask for it, and what every record's own header tells them to type. It reads to the very
+// same launch, so the two cannot come to mean different things.
+
+report
+    "and 'replay' is the short way of saying the same thing"
+    (through [ "play"; "--from"; saved ])
+    (through [ "replay"; saved ])
 
 // --- how far a table is opened ------------------------------------------------------------
 //
@@ -288,8 +347,8 @@ report
 
 let private door words =
     match through words with
-    | 0, Some(Launch.Host(_, _, reach)) -> Ok reach.Doorway
-    | 0, Some(Launch.Serve(_, _, _, reach)) -> Ok reach.Doorway
+    | 0, Some(Launch.Host(_, reach)) -> Ok reach.Doorway
+    | 0, Some(Launch.Serve(_, reach)) -> Ok reach.Doorway
     | code, _ -> Error code
 
 report
@@ -339,8 +398,7 @@ report
     (0,
      Some(
          Launch.Host(
-             3,
-             None,
+             Start.Dealt(3, None, []),
              { Reach.ajar with
                  Wrapping = Ahead
                  Address = Some "stones.example.org" }
@@ -918,3 +976,5 @@ report
            key ConsoleKey.RightArrow ])
 
 finish ()
+
+

@@ -124,31 +124,30 @@ let private takeUp game path =
 let private machines game sitters model =
     game.Seating (Model.seed model) (Seating.machines sitters) (Model.state model)
 
-/// Deal a game and serve it to a browser on this machine. Nothing comes back: like a
-/// hosted table it runs until the process is stopped, because a page has no way of saying
-/// the game is over and done with.
-let private serveFor game palette sitters seed reach =
-    match dealt game (List.length sitters) seed with
-    | Error problem ->
-        eprintfn "%s" problem
-        1
-    | Ok model ->
-        let keep model stamp =
-            if Journal.isEmpty model.Journal then
-                None
-            else
-                let path = Transcript.save game stamp sitters model.Journal
-                Some(Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
+/// Serve a game to a browser on this machine. Nothing comes back: like a hosted table it
+/// runs until the process is stopped, because a page has no way of saying the game is over
+/// and done with.
+///
+/// The game arrives already opened - dealt or taken up from a record - because which of the
+/// two it was is settled once, further down, and nothing below that line has any business
+/// asking again.
+let private serveFor game palette reach (model, sitters, stamp) =
+    let keep model stamp =
+        if Journal.isEmpty model.Journal then
+            None
+        else
+            let path = Transcript.save game stamp sitters model.Journal
+            Some(Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
 
-        // Nobody is watching yet. A browser adds itself when it opens its stream, which is
-        // the only moment anybody is really there - and the machines have already played up
-        // to the first seat a person has to fill by the time it does.
-        let solo, doing =
-            Solo.opened game (stampNow ()) model
-            |> Solo.against (machines game sitters model)
+    // Nobody is watching yet. A browser adds itself when it opens its stream, which is
+    // the only moment anybody is really there - and the machines have already played up
+    // to the first seat a person has to fill by the time it does.
+    let solo, doing =
+        Solo.opened game stamp model
+        |> Solo.against (machines game sitters model)
 
-        errand game sitters doing
-        Server.serve reach palette solo stampNow keep
+    errand game sitters doing
+    Server.serve reach palette solo stampNow keep
 
 /// Open a table for players at their own machines. Nothing comes back: the table waits
 /// until whoever opened it stops the process, because no one player may close it on all
@@ -158,46 +157,39 @@ let private serveFor game palette sitters seed reach =
 /// at some of its seats - those are played here and are never waited for. The reach goes in
 /// whole for the same reason: how far the table can be reached and what it takes to sit down
 /// at it are settled together or they contradict each other.
-let private hostFor game view sitters seed reach =
-    match dealt game (List.length sitters) seed with
-    | Error problem ->
-        eprintfn "%s" problem
-        1
-    | Ok model ->
-        let stamp = stampNow ()
+let private hostFor game view reach (model, sitters, stamp) =
+    // A seat of the host's own is taken from here, by a console sitting down at this very
+    // table over the same wire everybody else arrives on. Nothing about the table is
+    // special-cased for it: it joins, it is handed a seat and a token, it is drawn a board
+    // per turn, and if the process it is inside had been on another machine the table
+    // could not tell the difference. Which is the point - a seat played by a shortcut
+    // would be a second way of sitting down, and there is no room here for two.
+    let mine, _ = Seating.awaited sitters
 
-        // A seat of the host's own is taken from here, by a console sitting down at this very
-        // table over the same wire everybody else arrives on. Nothing about the table is
-        // special-cased for it: it joins, it is handed a seat and a token, it is drawn a board
-        // per turn, and if the process it is inside had been on another machine the table
-        // could not tell the difference. Which is the point - a seat played by a shortcut
-        // would be a second way of sitting down, and there is no room here for two.
-        let mine, _ = Seating.awaited sitters
+    let playing =
+        if mine = 0 then
+            None
+        else
+            Some(fun () ->
+                match Client.join game (Reach.at reach "localhost") None (Reach.word reach) view with
+                // The console got up, and the table it got up from is this process. It
+                // goes on standing - a player leaving their seat is not the same as
+                // closing the room - so what is left is to say so, where before there
+                // was a prompt that had stopped answering and no word about why.
+                | 0 ->
+                    printfn ""
+                    printfn "  The table is still open to whoever else is at it. Ctrl+C closes it."
+                    printfn ""
+                // It never sat down, and said why on its way past. The table stands
+                // regardless: a console that could not find a seat is no reason to
+                // close one on everybody who did.
+                | _ -> ())
 
-        let playing =
-            if mine = 0 then
-                None
-            else
-                Some(fun () ->
-                    match Client.join game (Reach.at reach "localhost") None (Reach.word reach) view with
-                    // The console got up, and the table it got up from is this process. It
-                    // goes on standing - a player leaving their seat is not the same as
-                    // closing the room - so what is left is to say so, where before there
-                    // was a prompt that had stopped answering and no word about why.
-                    | 0 ->
-                        printfn ""
-                        printfn "  The table is still open to whoever else is at it. Ctrl+C closes it."
-                        printfn ""
-                    // It never sat down, and said why on its way past. The table stands
-                    // regardless: a console that could not find a seat is no reason to
-                    // close one on everybody who did.
-                    | _ -> ())
+    let keep model =
+        if not (Journal.isEmpty model.Journal) then
+            Transcript.save game stamp sitters model.Journal |> ignore
 
-        let keep model =
-            if not (Journal.isEmpty model.Journal) then
-                Transcript.save game stamp sitters model.Journal |> ignore
-
-        Server.host game reach model sitters keep playing
+    Server.host game reach model sitters keep playing
 
 /// What the menu settled on: a game to play at this keyboard, or a way of playing that
 /// runs to its own end and only has an exit code to give back.
@@ -236,10 +228,15 @@ let private starting game (view: View<_, _, _>) choice =
     let clocked seed =
         seed |> Option.defaultValue (clockSeed ())
 
+    /// A table from a seating the menu settled on: dealt, and filed under a fresh name.
+    let dealing sitters seed =
+        dealt game (List.length sitters) (clocked seed)
+        |> Result.map (fun model -> model, sitters, stampNow ())
+
     match choice with
     | Menu.Deal(sitters, seed) ->
-        dealt game (List.length sitters) (clocked seed)
-        |> Result.map (fun model -> Play(model, view, sitters, stampNow ()))
+        dealing sitters seed
+        |> Result.map (fun (model, sitters, stamp) -> Play(model, view, sitters, stamp))
     // In whatever colours the player settled on here, which is the same promise the
     // command line's --colour keeps.
     //
@@ -248,9 +245,11 @@ let private starting game (view: View<_, _, _>) choice =
     // seat list and the screen behind it send says the whole of it, so this is only reached
     // by somebody typing the short way round.
     | Menu.Serve(sitters, seed, reach) ->
-        Ok(Done(serveFor game view.Palette sitters (clocked seed) (reach |> Option.defaultWith Reach.fresh)))
+        dealing sitters seed
+        |> Result.map (fun table -> Done(serveFor game view.Palette (reach |> Option.defaultWith Reach.fresh) table))
     | Menu.Host(sitters, seed, reach) ->
-        Ok(Done(hostFor game view sitters (clocked seed) (reach |> Option.defaultWith Reach.fresh)))
+        dealing sitters seed
+        |> Result.map (fun table -> Done(hostFor game view (reach |> Option.defaultWith Reach.fresh) table))
     | Menu.Join(address, code) -> Ok(Done(Client.join game address None code view))
     | Menu.Replay path ->
         takeUp game path
@@ -375,35 +374,47 @@ let private play game view sitters stamp model =
 /// is one place that knows what opening a game actually involves, and adding a way in means
 /// adding a case rather than another road through `main`.
 let private opening game (view: View<_, _, _>) launch =
-    let orElse outcome =
+    let clocked seed =
+        seed |> Option.defaultValue (clockSeed ())
+
+    /// The table a way in opens, settled once for all three of them: a game, who is at it,
+    /// and the file its record belongs in.
+    ///
+    /// `others` is who the people at this table are - somebody at this keyboard, or somebody
+    /// arriving from their own machine - and that is a fact about the way in rather than
+    /// about the game. Which is what lets a game put down at one keyboard be taken up as a
+    /// table for four: the machines come back out of the record, because which seat one
+    /// played and how well it played are written down nowhere else, and everybody else is
+    /// whoever this way in means.
+    ///
+    /// The command line names the machines rather than the seats - `--rival hard` is the seat
+    /// after yours - so what it asks for is a seating said shorter, spelt out here.
+    let table others start =
+        match start with
+        | Start.Dealt(players, seed, rivals) ->
+            dealt game players (clocked seed)
+            |> Result.map (fun model -> model, Seating.after players rivals |> Seating.resuming others, stampNow ())
+        | Start.Saved path ->
+            takeUp game path
+            |> Result.map (fun (model, sitters, stamp) ->
+                model, Seating.resuming others sitters, stamp |> Option.defaultWith stampNow)
+
+    let onward how outcome =
         match outcome with
-        | Ok(model, sitters, stamp) ->
-            printfn "%s" view.Rules
-            play game view sitters stamp model
+        | Ok table -> how table
         | Error problem ->
             eprintfn "%s" problem
             1
 
-    let clocked seed =
-        seed |> Option.defaultValue (clockSeed ())
-
-    // The command line names the machines rather than the seats - `--rival hard` is the seat
-    // after yours - so what it asks for is a seating said shorter, and it is spelt out into
-    // one here. There is one kind of table below this line, and it is the seating.
     match launch with
-    | Launch.Deal(players, seed, rivals) ->
-        dealt game players (clocked seed)
-        |> Result.map (fun model -> model, Seating.after players rivals, stampNow ())
-        |> orElse
-    | Launch.Serve(players, seed, rivals, reach) -> serveFor game view.Palette (Seating.after players rivals) (clocked seed) reach
-    | Launch.Host(players, seed, reach) -> hostFor game view (Seating.hosting players) (clocked seed) reach
+    | Launch.Play start ->
+        table Here start
+        |> onward (fun (model, sitters, stamp) ->
+            printfn "%s" view.Rules
+            play game view sitters stamp model)
+    | Launch.Serve(start, reach) -> table Here start |> onward (serveFor game view.Palette reach)
+    | Launch.Host(start, reach) -> table Elsewhere start |> onward (hostFor game view reach)
     | Launch.Join(address, token, code) -> Client.join game address token code view
-    // The seating and the file both come out of the record rather than out of the line that
-    // asked for it, which is what makes this taking a game up rather than looking at one.
-    | Launch.Replay path ->
-        takeUp game path
-        |> Result.map (fun (model, sitters, stamp) -> model, sitters, stamp |> Option.defaultWith stampNow)
-        |> orElse
 
 // --- one game, with its types sealed off behind it --------------------------------------
 //

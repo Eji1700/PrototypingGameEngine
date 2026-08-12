@@ -147,6 +147,23 @@ module Seating =
               | Some skill -> Machine skill
               | None -> Here ]
 
+    /// A seating taken up again, where `others` is whoever the people at it are this time.
+    ///
+    /// The machines come out of the record and everybody else comes out of the way the game
+    /// is being opened, and that split is the whole of it. Which seat a machine played and
+    /// how well it played are decided before the deal and are written down nowhere but the
+    /// record, so they can only come from there. Whether the people at it are in this room or
+    /// at their own machines is not a fact about the game at all - it is what `play`, `serve`
+    /// and `host` mean - so a game put down at one keyboard can be taken up as a table for
+    /// four, and the machines stay exactly where they were.
+    let resuming others sitters =
+        sitters
+        |> List.map (fun sitter ->
+            match sitter with
+            | Machine _ -> sitter
+            | Here
+            | Elsewhere -> others)
+
     // --- reading one -------------------------------------------------------------------------
 
     /// A seating from the words it was said in, checked against the table there is for it.
