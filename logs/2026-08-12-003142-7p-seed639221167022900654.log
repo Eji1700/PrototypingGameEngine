@@ -1,0 +1,15 @@
+# A Diplomacy game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+#   dotnet run -- diplomacy replay <this file>
+
+deal 7 639221167022900654
+
+#   1  turn 1, Austria
+resign
+#      Austria walks away. Its units stand where they are.
+#      Spring 1901. Write orders for your units, then 'commit'.

@@ -114,7 +114,8 @@ decoration — a gap is what keeps two provinces that do not border from being d
 **Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
 eleven neighbours — so one hex a province caps the picture at about half its borders, which is
 exactly where the first version of this map stuck. A region three or four hexes across has
-sides to spare and can touch everything it really touches. **Nine borders in ten are drawn.**
+sides to spare and can touch everything it really touches. **Nineteen borders in twenty are
+drawn.**
 
 **What the picture promises.** Turncoats prints
 [a honeycomb](../Turncoats/README.md#drawn-as-a-map) whose every border can be drawn, because
@@ -140,10 +141,16 @@ border. That is why some shapes are odd — the Norwegian Sea wraps round the Ba
 round the Eastern Mediterranean. Those are the shapes that make the adjacencies come out right,
 and the adjacencies are what a map of this is *for*.
 
-The Mid-Atlantic is the one extended by hand afterwards, being the worst-served province on the
-board. It now runs the whole western margin, round the foot of Portugal and along the top of
-North Africa — which is where the Atlantic is — and picks up Portugal, the Western Mediterranean
-and North Africa doing it. Only the North Atlantic is still beyond it.
+Two seas have been put right by hand since, both places where the grower stopped somewhere that
+broke no rule and made no sense. The **Mid-Atlantic** was the worst-served province on the board;
+it now runs the whole western margin, round the foot of Portugal and along the top of North
+Africa at one end and up past Ireland to the North Atlantic at the other, and reaches all ten of
+the provinces it borders. The **Barents** had been left in the middle of the top row with the
+Norwegian Sea on either side of it and nothing else within reach, which is no use at all when the
+whole point of it is that Russia's northern fleet sails into it; it sits above Norway and St
+Petersburg now, and touches all three of the provinces it really touches. Moving it freed the
+column between Edinburgh and Norway, which is the Norwegian Sea in any atlas and is drawn as it
+now — so that sea runs down to meet the North Sea, which it had never managed to touch either.
 
 For the rest, ask:
 

@@ -520,8 +520,8 @@ module Atlas =
     /// so every one of its twenty-three borders can be drawn and `problems` insists every one of
     /// them is - the picture *is* the border table. This board cannot manage that, so what is
     /// demanded is one-directional: **every side this picture draws between two provinces is a
-    /// real border, and a border it cannot reach is left undrawn rather than faked.** Nine in ten
-    /// are drawn. `borders vie` answers the rest, out of the tables above.
+    /// real border, and a border it cannot reach is left undrawn rather than faked.** Nineteen in
+    /// twenty are drawn. `borders vie` answers the rest, out of the tables above.
     ///
     /// A side between two hexes of the *same* province is not a border at all - it is the inside
     /// of a country - so `problems` passes over those and looks only at where two different names
@@ -534,19 +534,30 @@ module Atlas =
     /// the Barents, and the Ionian round the Eastern Mediterranean. Those are the shapes that make
     /// the adjacencies come out right, and the adjacencies are what a map of this is *for*.
     ///
-    /// The one region since extended by hand is the Mid-Atlantic, and it was the worst-served
-    /// province on the board: it runs the whole west coast of Europe and reaches four provinces
-    /// the grower left it short of. It now runs on down the western margin, round the foot of
-    /// Portugal and along the top of North Africa - which is where the Atlantic actually is - and
-    /// picks up Portugal, the Western Mediterranean and North Africa on the way. The map costs
-    /// nothing for it: the western margin was already open at every row it uses, so the board is
-    /// not one column wider than it was. Only the North Atlantic is still out of its reach.
+    /// Two regions have since been put right by hand, and both were cases of the grower stopping
+    /// somewhere that broke no rule and made no sense.
+    ///
+    /// The Mid-Atlantic was the worst-served province on the board: it runs the whole west coast
+    /// of Europe and reached four provinces short. It now runs on down the western margin, round
+    /// the foot of Portugal and along the top of North Africa at one end and up past Ireland to
+    /// the North Atlantic at the other - which is where the Atlantic actually is - and it now
+    /// reaches every one of the ten provinces it borders. The map costs nothing for it: the
+    /// western margin was already open at every row it uses, so the board is not one column wider
+    /// than it was.
+    ///
+    /// The Barents had been left in the middle of the top row with the Norwegian Sea on both
+    /// sides of it, touching nothing else - a sea of no consequence at all, when the whole of what
+    /// it is for is that Russia's fleet comes out of St Petersburg into it. It sits at the top
+    /// right now, above Norway and St Petersburg with the Norwegian Sea to its west, and has all
+    /// three of the borders it really has. That freed the column between Edinburgh and Norway,
+    /// which is the Norwegian Sea in every atlas and is drawn as it now - so the Norwegian Sea
+    /// runs down to meet the North Sea, which it had never managed to touch.
     let private places =
-        [ 0, [ "nao"; "nwg"; "bar"; "nwg"; "nwg"; "nwy"; "stp" ]
-          -1, [ "nao"; "cly"; "nwg"; "nwg"; "edi"; "."; "nwy"; "stp" ]
-          -2, [ "iri"; "nao"; "cly"; "cly"; "cly"; "edi"; "."; "nwy"; "stp"; "stp"; "stp"; "stp" ]
-          -3, [ "iri"; "lvp"; "cly"; "lvp"; "lvp"; "edi"; "."; "nwy"; "nwy"; "nwy"; "nwy"; "nwy"; "stp" ]
-          -2, [ "iri"; "lvp"; "lvp"; "wal"; "yor"; "nth"; "nth"; "nth"; "nth"; "ska"; "swe"; "fin"; "stp" ]
+        [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
+          -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
+          -4, [ "mao"; "iri"; "nao"; "cly"; "cly"; "cly"; "edi"; "nwg"; "nwy"; "stp"; "stp"; "stp"; "stp" ]
+          -5, [ "mao"; "iri"; "lvp"; "cly"; "lvp"; "lvp"; "edi"; "nwg"; "nwy"; "nwy"; "nwy"; "nwy"; "nwy"; "stp" ]
+          -4, [ "mao"; "iri"; "lvp"; "lvp"; "wal"; "yor"; "nth"; "nth"; "nth"; "nth"; "ska"; "swe"; "fin"; "stp" ]
           -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "."; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "lvn" ]
           -2, [ "mao"; "eng"; "eng"; "lon"; "lon"; "nth"; "hel"; "den"; "bal"; "bal"; "bot"; "bot"; "bot"; "lvn" ]
           -3, [ "mao"; "eng"; "eng"; "eng"; "eng"; "nth"; "hol"; "kie"; "bal"; "bal"; "bal"; "bal"; "lvn"; "lvn" ]
