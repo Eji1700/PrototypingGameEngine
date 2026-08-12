@@ -140,6 +140,11 @@ border. That is why some shapes are odd — the Norwegian Sea wraps round the Ba
 round the Eastern Mediterranean. Those are the shapes that make the adjacencies come out right,
 and the adjacencies are what a map of this is *for*.
 
+The Mid-Atlantic is the one extended by hand afterwards, being the worst-served province on the
+board. It now runs the whole western margin, round the foot of Portugal and along the top of
+North Africa — which is where the Atlantic is — and picks up Portugal, the Western Mediterranean
+and North Africa doing it. Only the North Atlantic is still beyond it.
+
 For the rest, ask:
 
 ```

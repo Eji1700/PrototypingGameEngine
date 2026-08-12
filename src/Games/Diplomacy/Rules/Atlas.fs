@@ -533,6 +533,14 @@ module Atlas =
     /// they do not border. That is why some of the shapes are odd - the Norwegian Sea wraps round
     /// the Barents, and the Ionian round the Eastern Mediterranean. Those are the shapes that make
     /// the adjacencies come out right, and the adjacencies are what a map of this is *for*.
+    ///
+    /// The one region since extended by hand is the Mid-Atlantic, and it was the worst-served
+    /// province on the board: it runs the whole west coast of Europe and reaches four provinces
+    /// the grower left it short of. It now runs on down the western margin, round the foot of
+    /// Portugal and along the top of North Africa - which is where the Atlantic actually is - and
+    /// picks up Portugal, the Western Mediterranean and North Africa on the way. The map costs
+    /// nothing for it: the western margin was already open at every row it uses, so the board is
+    /// not one column wider than it was. Only the North Atlantic is still out of its reach.
     let private places =
         [ 0, [ "nao"; "nwg"; "bar"; "nwg"; "nwg"; "nwy"; "stp" ]
           -1, [ "nao"; "cly"; "nwg"; "nwg"; "edi"; "."; "nwy"; "stp" ]
@@ -546,12 +554,12 @@ module Atlas =
           -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "."; "kie"; "ber"; "pru"; "."; "war"; "war"; "mos" ]
           -6, [ "mao"; "."; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
           -5, [ "mao"; "gas"; "gas"; "bur"; "."; "."; "."; "."; "."; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
-          -4, [ "spa"; "spa"; "gas"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev" ]
-          -3, [ "spa"; "spa"; "spa"; "mar"; "pie"; "."; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla" ]
-          -2, [ "por"; "por"; "spa"; "gol"; "tus"; "tus"; "pie"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
-          1, [ "spa"; "gol"; "tus"; "rom"; "."; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
-          0, [ "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
-          1, [ "naf"; "wes"; "tys"; "tys"; "ion"; "adr"; "ion"; "ion"; "alb"; "gre"; "gre"; "aeg"; "smy"; "syr"; "syr" ]
+          -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev" ]
+          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "."; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla" ]
+          -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "pie"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "."; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          -2, [ "mao"; "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
+          -1, [ "naf"; "naf"; "wes"; "tys"; "tys"; "ion"; "adr"; "ion"; "ion"; "alb"; "gre"; "gre"; "aeg"; "smy"; "syr"; "syr" ]
           2, [ "naf"; "tun"; "tun"; "ion"; "ion"; "ion"; "eas"; "ion"; "ion"; "aeg"; "aeg"; "smy"; "syr" ] ]
 
     /// Every cell with the half-column it stands in, gaps and all.
