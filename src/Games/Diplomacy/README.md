@@ -114,8 +114,8 @@ decoration — a gap is what keeps two provinces that do not border from being d
 **Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
 eleven neighbours — so one hex a province caps the picture at about half its borders, which is
 exactly where the first version of this map stuck. A region three or four hexes across has
-sides to spare and can touch everything it really touches. **Nineteen borders in twenty are
-drawn.**
+sides to spare and can touch everything it really touches. **All but two of the two hundred and
+six are drawn** — Armenia with Sevastopol, and Moscow with St Petersburg.
 
 **What the picture promises.** Turncoats prints
 [a honeycomb](../Turncoats/README.md#drawn-as-a-map) whose every border can be drawn, because
@@ -141,16 +141,29 @@ border. That is why some shapes are odd — the Norwegian Sea wraps round the Ba
 round the Eastern Mediterranean. Those are the shapes that make the adjacencies come out right,
 and the adjacencies are what a map of this is *for*.
 
-Two seas have been put right by hand since, both places where the grower stopped somewhere that
-broke no rule and made no sense. The **Mid-Atlantic** was the worst-served province on the board;
-it now runs the whole western margin, round the foot of Portugal and along the top of North
-Africa at one end and up past Ireland to the North Atlantic at the other, and reaches all ten of
-the provinces it borders. The **Barents** had been left in the middle of the top row with the
-Norwegian Sea on either side of it and nothing else within reach, which is no use at all when the
-whole point of it is that Russia's northern fleet sails into it; it sits above Norway and St
-Petersburg now, and touches all three of the provinces it really touches. Moving it freed the
-column between Edinburgh and Norway, which is the Norwegian Sea in any atlas and is drawn as it
-now — so that sea runs down to meet the North Sea, which it had never managed to touch either.
+**What the grower could not do is back out of a corner.** It only ever added a hex where one was
+free and safe, so wherever the right answer was to take a hex off somebody or move a province
+across, it stopped — and stopped somewhere that broke no rule and made no sense. Those places
+have been put right by hand since, and every one of them is that same failing:
+
+- The **Mid-Atlantic** was the worst-served province on the board. It now runs the whole western
+  margin, round the foot of Portugal and along the top of North Africa at one end and up past
+  Ireland to the North Atlantic at the other, and reaches all ten of the provinces it borders.
+- The **Barents** had been left mid-row with the Norwegian Sea on either side and nothing else in
+  reach — no use at all when the whole point of it is that Russia's northern fleet sails into it.
+  It sits above Norway and St Petersburg now. Moving it freed the column between Edinburgh and
+  Norway, which is the Norwegian Sea in any atlas and is drawn as it now, so that sea runs down to
+  meet the North Sea.
+- The **Eastern Mediterranean** was the Barents over again: one hex in the middle of the Ionian,
+  with Ionian on all six sides and none of the three provinces it exists to touch. It is at the
+  east end of the bottom row now, under Smyrna and Syria with the Aegean beside it.
+- **Burgundy** and **Munich** were short of each other and of Ruhr, penned in by a row of Piedmont
+  that was doing nothing — three of Piedmont's six hexes touched only Piedmont and empty space.
+  Handing that row to Burgundy joins all three, and what is left of it is the gap between France
+  and Italy, which is the Alps and belongs there.
+- **Italy** took two cells. The empty one between Rome and Venice went to Rome, Piedmont's
+  southern tip went to Venice, and with that Rome, Venice, Tuscany, Apulia, Naples and Piedmont
+  all touch everything they border.
 
 For the rest, ask:
 

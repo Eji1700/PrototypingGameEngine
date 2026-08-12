@@ -188,9 +188,10 @@ let private realBorders =
 
 // Not a fact about the rules - a floor under the picture, so that a map quietly reduced to a
 // scattering of provinces with no sides between them fails here rather than passing as honest.
-// Nine in ten is under what the layout actually manages and far over what one hex a province
-// could ever manage, which is the point the floor is guarding.
-report "and it draws nine borders in ten" true (Set.count sides * 10 >= Set.count realBorders * 9)
+// Nineteen in twenty is under what the layout actually manages - it is two borders short of all
+// two hundred and six - and far over what one hex a province could ever manage, which is the
+// point the floor is guarding.
+report "and it draws nineteen borders in twenty" true (Set.count sides * 20 >= Set.count realBorders * 19)
 
 // --- and the picture the readers make of it ---------------------------------------------------------
 //

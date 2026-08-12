@@ -20,7 +20,7 @@ open TCModel.Diplomacy
 /// The third answer is the one here, and it is what fixed it. One hex gives a province six
 /// sides; provinces on this board have up to eleven neighbours, and that ceiling is what held
 /// the first map to about half its borders. A region three or four hexes across has sides to
-/// spare. Nineteen borders in twenty are drawn now.
+/// spare. All but two of the two hundred and six are drawn now.
 ///
 /// What that cost was a word in the description. A cell of this map is a `Patch` and says which
 /// region it is part of, so the readers draw a province as one shape rather than four boxes
@@ -53,7 +53,7 @@ module Render =
             "Write an order for each of your units, then 'commit'. Nobody sees what you have written until every power has committed, and then everybody sees all of it at once."
 
         let borders =
-            "A province takes as many hexes as it needs and is drawn as one shape with its name written across it. Two provinces sharing a side do border each other; two drawn apart may still border, because about one border in twenty is more than the shape will hold. 'borders vie' is the whole answer for any one province."
+            "A province takes as many hexes as it needs and is drawn as one shape with its name written across it. Two provinces sharing a side do border each other, and all but a couple of this board's borders are drawn - so two drawn apart very likely do not border, though 'borders vie' is the whole answer for any one province."
 
         let press =
             "'press france ...' sends a line to one power and to nobody else. 'press all ...' sends it to the table. Nothing in the rules makes anybody keep their word."

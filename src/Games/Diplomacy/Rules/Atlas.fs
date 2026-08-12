@@ -520,8 +520,9 @@ module Atlas =
     /// so every one of its twenty-three borders can be drawn and `problems` insists every one of
     /// them is - the picture *is* the border table. This board cannot manage that, so what is
     /// demanded is one-directional: **every side this picture draws between two provinces is a
-    /// real border, and a border it cannot reach is left undrawn rather than faked.** Nineteen in
-    /// twenty are drawn. `borders vie` answers the rest, out of the tables above.
+    /// real border, and a border it cannot reach is left undrawn rather than faked.** All but two
+    /// of the two hundred and six are drawn - Armenia with Sevastopol, and Moscow with St
+    /// Petersburg. `borders vie` answers those two, out of the tables above.
     ///
     /// A side between two hexes of the *same* province is not a border at all - it is the inside
     /// of a country - so `problems` passes over those and looks only at where two different names
@@ -534,8 +535,11 @@ module Atlas =
     /// the Barents, and the Ionian round the Eastern Mediterranean. Those are the shapes that make
     /// the adjacencies come out right, and the adjacencies are what a map of this is *for*.
     ///
-    /// Two regions have since been put right by hand, and both were cases of the grower stopping
-    /// somewhere that broke no rule and made no sense.
+    /// What the grower could not do is back out of a corner. It only ever added a hex where one
+    /// was free and safe, so wherever the right answer was to take a hex away from somebody or to
+    /// move a province across, it simply stopped - and stopped somewhere that broke no rule and
+    /// made no sense. Those places have since been put right by hand, and each of them is a case
+    /// of that same failing.
     ///
     /// The Mid-Atlantic was the worst-served province on the board: it runs the whole west coast
     /// of Europe and reached four provinces short. It now runs on down the western margin, round
@@ -552,6 +556,21 @@ module Atlas =
     /// three of the borders it really has. That freed the column between Edinburgh and Norway,
     /// which is the Norwegian Sea in every atlas and is drawn as it now - so the Norwegian Sea
     /// runs down to meet the North Sea, which it had never managed to touch.
+    ///
+    /// The Eastern Mediterranean was the Barents over again: one hex in the middle of the Ionian,
+    /// with Ionian on all six sides and none of the three provinces it exists to touch. It is at
+    /// the east end of the bottom row now, under Smyrna and Syria with the Aegean beside it, and
+    /// the Ionian - which is the biggest sea on the board and can afford it - runs along the rest.
+    ///
+    /// Burgundy and Munich were short of each other and of Ruhr, penned in by a row of Piedmont
+    /// that was doing nothing: three of Piedmont's six hexes touched only Piedmont and empty
+    /// space, and one of Tyrolia's was the same. Handing that row to Burgundy joins all three, and
+    /// what is left of it is the gap between France and Italy, which is the Alps and belongs there.
+    ///
+    /// Italy took two cells and no more. Rome had nowhere to reach Venice or Apulia from, and
+    /// Venice could get at neither Rome nor Tuscany. The cell between them went to Rome and
+    /// Piedmont's southern tip went to Venice, and with that every province in Italy - Rome,
+    /// Venice, Tuscany, Apulia, Naples, Piedmont - touches everything it borders.
     let private places =
         [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
           -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
@@ -564,14 +583,14 @@ module Atlas =
           -4, [ "mao"; "bre"; "pic"; "bel"; "."; "bel"; "hol"; "kie"; "kie"; "ber"; "pru"; "pru"; "pru"; "war"; "mos" ]
           -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "."; "kie"; "ber"; "pru"; "."; "war"; "war"; "mos" ]
           -6, [ "mao"; "."; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
-          -5, [ "mao"; "gas"; "gas"; "bur"; "."; "."; "."; "."; "."; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
-          -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev" ]
-          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "."; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla" ]
-          -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "pie"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
-          -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "."; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          -5, [ "mao"; "gas"; "gas"; "bur"; "bur"; "bur"; "bur"; "bur"; "mun"; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
+          -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "."; "."; "."; "."; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev" ]
+          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla" ]
+          -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "ven"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "rom"; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
           -2, [ "mao"; "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
           -1, [ "naf"; "naf"; "wes"; "tys"; "tys"; "ion"; "adr"; "ion"; "ion"; "alb"; "gre"; "gre"; "aeg"; "smy"; "syr"; "syr" ]
-          2, [ "naf"; "tun"; "tun"; "ion"; "ion"; "ion"; "eas"; "ion"; "ion"; "aeg"; "aeg"; "smy"; "syr" ] ]
+          2, [ "naf"; "tun"; "tun"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "eas"; "eas" ] ]
 
     /// Every cell with the half-column it stands in, gaps and all.
     let private placedCells =

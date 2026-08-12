@@ -1275,7 +1275,7 @@ orders, and what makes `press france ...` a line only France reads.
   neighbours, so it stuck at about half the borders. **A province takes as many hexes as it
   needs.** Its name repeats across all of them, a side between two of its own hexes is the
   inside of a country rather than a border, and a region three or four across has sides to
-  spare. Nineteen borders in twenty are drawn now, against a little over half before.
+  spare. All but two of the two hundred and six are drawn now, against a little over half before.
 
   The shapes were grown rather than drawn: seeded a hex apiece at roughly the right places, then
   spread a hex at a time into whatever space met a neighbour they had not met, never into one
