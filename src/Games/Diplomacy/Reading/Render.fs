@@ -8,18 +8,27 @@ open TCModel.Diplomacy
 
 /// Every screen this game has, described once.
 ///
-/// **There is no picture of the map, and that is a decision rather than an omission.** The
-/// other game of maps here draws one, and can: its borders are a patch of a triangular lattice,
-/// so the honeycomb it prints *is* the border table and cannot disagree with it. This board is
-/// not a lattice and never was. Any grid of seventy-five provinces would put pairs side by side
-/// that share no border and pull apart pairs that do, and a player would read the picture -
-/// there is no other reason to draw one. A board that lies about where the armies can walk is
-/// worse than no board.
+/// **The map is drawn, a province takes as many hexes as it needs, and what the picture promises
+/// is one-directional.**
 ///
-/// So what is drawn is what is actually true: every supply centre and who holds it, every unit
-/// and where it stands, grouped the way people who play this talk about the map. The borders
-/// are one question away - `borders vie` - and that answer comes straight out of the table the
-/// rules use.
+/// It went through three answers. First there was no map, on the argument that a board which
+/// cannot be drawn faithfully is better not drawn: the other game of maps here prints a
+/// honeycomb because its borders really are a patch of a triangular lattice, so its picture *is*
+/// its border table. Then there was a map of one hex a province - and that argument turned out
+/// to be about completeness rather than honesty, which are not the same thing.
+///
+/// The third answer is the one here, and it is what fixed it. One hex gives a province six
+/// sides; provinces on this board have up to eleven neighbours, and that ceiling is what held
+/// the first map to about half its borders. A region three or four hexes across has sides to
+/// spare. Nine borders in ten are drawn now.
+///
+/// The rule `Atlas.problems` refuses to deal a game without is unchanged: **every side the
+/// picture draws between two provinces is a real border**, and a border the shape cannot reach
+/// is left undrawn rather than faked. A side between two hexes of the same province is not a
+/// border but the inside of a country, and is no part of the claim.
+///
+/// The note under the board says all of that in a sentence, because a player who reads the
+/// picture as the whole truth is a player the picture has misled.
 module Render =
 
     module Blocks =
@@ -33,13 +42,13 @@ module Render =
 
     module Notes =
         let board =
-            "A letter beside a province is the power that owns the centre; a dot is a centre nobody holds. The letter under it is the unit standing there - A for an army, F for a fleet."
+            "On one hex of each province: the letter of whoever holds its supply centre, or a star where nobody does, and under it whatever is standing there - A for an army, F for a fleet, and the letter of the power it belongs to."
 
         let orders =
             "Write an order for each of your units, then 'commit'. Nobody sees what you have written until every power has committed, and then everybody sees all of it at once."
 
         let borders =
-            "Provinces are grouped by where they are, not by what borders what. 'borders vie' says what a piece in Vienna can reach."
+            "A province takes as many hexes as it needs, so its name is repeated across all of them. Two provinces sharing a side do border each other; two drawn apart may still border, because about one border in ten is more than the shape will hold. 'borders vie' is the whole answer for any one province."
 
         let press =
             "'press france ...' sends a line to one power and to nobody else. 'press all ...' sends it to the table. Nothing in the rules makes anybody keep their word."
@@ -105,63 +114,88 @@ module Render =
         | Africa -> "Africa"
         | Waters -> Blocks.sea
 
-    /// One province: what it is called, who owns it if it is worth owning, and what is standing
-    /// in it. A province that is neither a centre nor occupied is not drawn at all - there are
-    /// forty-one of those and nothing is happening in any of them.
-    let private row (position: Position) (province: ProvinceId) =
-        let owner =
-            match Atlas.centreOf province with
-            | NotACentre -> Scene.cell Tone.Quiet ""
-            | _ ->
-                match Position.ownerOf province position with
-                | Some power -> Scene.cell (Tone.Slot(Ink.key power)) (Power.letter power)
-                | None -> Scene.cell Tone.Quiet "."
+    // --- the board drawn as a board ------------------------------------------------------------------
 
-        let unit =
-            match Position.at province position with
+    /// Which hex of each province carries what is standing on it: the first one, in reading
+    /// order.
+    ///
+    /// A province takes as many hexes as it needs its sides, so most of them take several - and
+    /// a unit drawn in every hex of a province would look like four armies rather than one. So
+    /// the name is written in every hex, which is what shows the region's shape, and everything
+    /// else is written once.
+    let private seatOfEach =
+        Atlas.layout
+        |> List.mapi (fun row (_, cells) -> cells |> List.mapi (fun step cell -> (row, step), cell))
+        |> List.collect id
+        |> List.fold
+            (fun (met, seats) (where, cell) ->
+                match cell with
+                | Some province when not (Set.contains province met) -> Set.add province met, Set.add where seats
+                | _ -> met, seats)
+            (Set.empty, Set.empty)
+        |> snd
+
+    /// One province as a cell of the map: its three letters, and - on the one hex that carries
+    /// them - who holds the centre and what is standing there.
+    ///
+    /// Two lines whether or not there is a unit, so that every cell is the same height and a row
+    /// of them looks like a row rather than a broken comb.
+    let private cell position carries province =
+        let owner = Position.ownerOf province position
+        let isCentre = Atlas.isCentre province
+
+        let held =
+            match owner with
+            | Some power when isCentre -> Tone.Slot(Ink.key power)
+            | _ -> Tone.Quiet
+
+        let named =
+            match owner, isCentre with
+            | Some power, true -> Tone.Slot(Ink.key power)
+            | None, true -> Tone.Plainly
+            | _ -> Tone.Quiet
+
+        // The three letters, and after them who holds the centre - their own letter, or a star
+        // where nobody does, or nothing at all where there is no centre to hold. Said in a
+        // character rather than left to the colour, because the plainest reader drops every tone
+        // it is given and a board that only says who owns what in colour says it to nobody there.
+        let head =
+            Atlas.code province
+            + (if not carries then
+                   ""
+               else
+                   match owner, isCentre with
+                   | Some power, true -> Power.letter power
+                   | None, true -> "*"
+                   | _ -> "")
+
+        let standing =
+            match (if carries then Position.at province position else None) with
             | Some piece ->
-                Scene.cell
-                    (Tone.Slot(Ink.key piece.Power))
-                    $"{Kind.letter piece.Kind} {Power.letter piece.Power}"
-            | None -> Scene.cell Tone.Quiet ""
+                Say [ Span.toned (Tone.Slot(Ink.key piece.Power)) $"{Kind.letter piece.Kind} {Power.letter piece.Power}" ]
+            | None -> Say [ Span.quiet "" ]
 
-        [ Scene.cell Tone.Plainly (Atlas.nameOf province); owner; unit ]
+        Tile(None, held, [ Say [ Span.toned named head ]; standing ])
 
-    let private worthDrawing position province =
-        Atlas.isCentre province || Position.occupied province position
-
-    let private regionBlock position region =
-        let places =
-            Atlas.all
-            |> List.filter (fun province -> province.Region = region && worthDrawing position province.Id)
-            |> List.map (fun province -> province.Id)
-
-        match places with
-        | [] -> Blank
-        | places -> Block(regionName region, [ Aligned(places |> List.map (row position)) ])
-
-    /// The land, in three columns of regions. Which region a province is in is nothing the rules
-    /// know about; it is how everybody who plays this talks about the board, and a board grouped
-    /// the way it is talked about is a board that can be read at a glance.
-    let private mainland position =
-        let column regions =
-            Stack(regions |> List.map (regionBlock position))
-
-        Beside
-            [ column [ TheIsles; FranceAnd; Iberia; TheLowCountries ]
-              column [ GermanyAnd; Scandinavia; RussiaAnd; Africa ]
-              column [ AustriaAnd; ItalyAnd; TheBalkans; TurkeyAnd ] ]
-
-    /// The waters, and only the ones with something in them. Nineteen empty seas drawn every
-    /// turn would be nineteen lines of nothing.
-    let private seas position =
-        match Atlas.all |> List.filter (fun province -> province.Terrain = Sea && Position.occupied province.Id position) with
-        | [] -> Blank
-        | busy ->
-            Block(
-                Blocks.sea,
-                [ Aligned(busy |> List.map (fun province -> row position province.Id)) ]
-            )
+    /// The whole board as a honeycomb. Each row sits half a cell across from the one above, which
+    /// is what gives a cell six sides to share; `Atlas.layout` says where everything lies and
+    /// `Atlas.problems` refuses to deal a game if any side it draws between two provinces is not
+    /// a real border.
+    let private honeycomb position =
+        Walled(
+            4,
+            Atlas.layout
+            |> List.mapi (fun row (shift, cells) ->
+                { Shift = shift
+                  Cells =
+                    cells
+                    |> List.mapi (fun step ->
+                        function
+                        | Some province -> cell position (Set.contains (row, step) seatOfEach) province
+                        // A cell with nothing in it, which is what keeps two provinces that do
+                        // not border from being drawn side by side.
+                        | None -> Tile(None, Tone.Quiet, [])) })
+        )
 
     // --- what this power has been asked for ------------------------------------------------------------
 
@@ -204,7 +238,9 @@ module Render =
         let laid rows =
             match rows with
             | [] -> Blank
-            | rows -> Walled(20, [ Scene.squared rows ])
+            // Beside rather than a walled grid: the map below is the one grid on this screen, and
+            // a cell wide enough to hold `bud s vie - tri` would blow it out to a page across.
+            | rows -> Beside rows
 
         match play.Stage with
         | Moving _ ->
@@ -430,8 +466,7 @@ module Render =
               Beside
                   [ Block(Blocks.powers, [ powers beholder session ])
                     Block(Blocks.orders, [ chores notes beholder play ]) ]
-              Block(Blocks.board, [ mainland position; Scene.noted notes Notes.board; Scene.noted notes Notes.borders ])
-              seas position
+              Block(Blocks.board, [ honeycomb position; Scene.noted notes Notes.board; Scene.noted notes Notes.borders ])
               lastTime play
               Block(Blocks.commands, [ Written commands ])
               Block(Blocks.log, log beholder model) ]
@@ -525,7 +560,9 @@ module Render =
         let standing province =
             written
                 (Atlas.nameOf province)
-                [ (match Position.at province play.Board with
+                [ $"{Atlas.code province} - {Words.province province}, in {regionName (Atlas.regionOf province)}."
+                  ""
+                  (match Position.at province play.Board with
                    | Some piece -> $"{Words.named piece} stands in {Words.province province}."
                    | None -> $"Nothing stands in {Words.province province}.")
                   ""
@@ -559,12 +596,17 @@ module Render =
 
     // --- and what this game brings to a page --------------------------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that. Cells hold a whole order rather
-    /// than a glyph, so they want to be wide and short where the game of nine squares wanted
-    /// them square.
+    /// This game's own rules of drawing, and no more than that.
+    ///
+    /// Two sizes, because this game has two kinds of cell. The map is sixteen columns of three
+    /// letters and wants them small; a unit's orders are whole lines like `bud s vie - tri` and
+    /// want room. `--cell` belongs to the grid, and the map is the only grid here, so the order
+    /// tiles sit in a row of their own and are sized by what is in them.
     let private sheet =
         """
-.grid { --cell: 11rem; }
+.grid { --cell: 3.4rem; }
+.grid .tile { padding: .15rem .2rem; font-size: .78rem; line-height: 1.15; }
+.beside .tile { min-width: 9rem; }
 .tile h3 { font-size: 0.95rem; }
 .beside { align-items: flex-start; }
 """

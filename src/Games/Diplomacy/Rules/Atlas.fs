@@ -501,6 +501,119 @@ module Atlas =
     /// the machine to work out how far a centre is, and by nothing in the rules.
     let walkable from into = armyReach from |> List.contains into
 
+    // --- where they lie, so the board can be drawn as a board -------------------------------------
+
+    /// Rows north to south. Within a row the provinces stand two half-columns apart; each row is
+    /// offset an odd number of half-columns from the one above. So a province touches the two
+    /// beside it and two in each of the rows above and below - six shared sides, drawn as a
+    /// honeycomb, exactly the way the other game of maps here draws its twelve regions.
+    ///
+    /// `"."` is a cell with nothing in it, and there are a good many. They are not decoration:
+    /// a gap is what keeps two provinces that do not border from being drawn side by side.
+    ///
+    /// **A province takes as many hexes as it needs, and that is the whole trick.** One hex a
+    /// province gives it six sides and no more, and provinces here have up to eleven neighbours -
+    /// which capped the first version of this map at about half the borders drawn. A region three
+    /// or four hexes across has sides to spare, so it can touch everything it really touches.
+    ///
+    /// **It is still not allowed to lie.** Turncoats' board is a patch of a triangular lattice,
+    /// so every one of its twenty-three borders can be drawn and `problems` insists every one of
+    /// them is - the picture *is* the border table. This board cannot manage that, so what is
+    /// demanded is one-directional: **every side this picture draws between two provinces is a
+    /// real border, and a border it cannot reach is left undrawn rather than faked.** Nine in ten
+    /// are drawn. `borders vie` answers the rest, out of the tables above.
+    ///
+    /// A side between two hexes of the *same* province is not a border at all - it is the inside
+    /// of a country - so `problems` passes over those and looks only at where two different names
+    /// meet.
+    ///
+    /// Grown rather than drawn by hand: the regions were seeded a hex apiece at roughly the right
+    /// places and then spread outwards, a hex at a time, always into the space that met a
+    /// neighbour they had not met yet and never into one that would put them beside a province
+    /// they do not border. That is why some of the shapes are odd - the Norwegian Sea wraps round
+    /// the Barents, and the Ionian round the Eastern Mediterranean. Those are the shapes that make
+    /// the adjacencies come out right, and the adjacencies are what a map of this is *for*.
+    let private places =
+        [ 0, [ "nao"; "nwg"; "bar"; "nwg"; "nwg"; "nwy"; "stp" ]
+          -1, [ "nao"; "cly"; "nwg"; "nwg"; "edi"; "."; "nwy"; "stp" ]
+          -2, [ "iri"; "nao"; "cly"; "cly"; "cly"; "edi"; "."; "nwy"; "stp"; "stp"; "stp"; "stp" ]
+          -3, [ "iri"; "lvp"; "cly"; "lvp"; "lvp"; "edi"; "."; "nwy"; "nwy"; "nwy"; "nwy"; "nwy"; "stp" ]
+          -2, [ "iri"; "lvp"; "lvp"; "wal"; "yor"; "nth"; "nth"; "nth"; "nth"; "ska"; "swe"; "fin"; "stp" ]
+          -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "."; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "lvn" ]
+          -2, [ "mao"; "eng"; "eng"; "lon"; "lon"; "nth"; "hel"; "den"; "bal"; "bal"; "bot"; "bot"; "bot"; "lvn" ]
+          -3, [ "mao"; "eng"; "eng"; "eng"; "eng"; "nth"; "hol"; "kie"; "bal"; "bal"; "bal"; "bal"; "lvn"; "lvn" ]
+          -4, [ "mao"; "bre"; "pic"; "bel"; "."; "bel"; "hol"; "kie"; "kie"; "ber"; "pru"; "pru"; "pru"; "war"; "mos" ]
+          -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "."; "kie"; "ber"; "pru"; "."; "war"; "war"; "mos" ]
+          -6, [ "mao"; "."; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
+          -5, [ "mao"; "gas"; "gas"; "bur"; "."; "."; "."; "."; "."; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
+          -4, [ "spa"; "spa"; "gas"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev" ]
+          -3, [ "spa"; "spa"; "spa"; "mar"; "pie"; "."; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla" ]
+          -2, [ "por"; "por"; "spa"; "gol"; "tus"; "tus"; "pie"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          1, [ "spa"; "gol"; "tus"; "rom"; "."; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          0, [ "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
+          1, [ "naf"; "wes"; "tys"; "tys"; "ion"; "adr"; "ion"; "ion"; "alb"; "gre"; "gre"; "aeg"; "smy"; "syr"; "syr" ]
+          2, [ "naf"; "tun"; "tun"; "ion"; "ion"; "ion"; "eas"; "ion"; "ion"; "aeg"; "aeg"; "smy"; "syr" ] ]
+
+    /// Every cell with the half-column it stands in, gaps and all.
+    let private placedCells =
+        places
+        |> List.map (fun (start, cells) -> cells |> List.mapi (fun step code -> code, start + 2 * step))
+
+    /// The same with the gaps thrown away, which is what the borders are read off.
+    let private placedPlaces =
+        placedCells |> List.map (List.filter (fun (code, _) -> code <> "."))
+
+    let private asPair one other = min one other, max one other
+
+    /// The borders this layout draws: two *different* provinces two half-columns apart in one
+    /// row, or one half-column apart in rows that touch. Every one of them had better be real.
+    ///
+    /// Two hexes of the same province share a side as well, and that side is not a border - it
+    /// is the inside of a country. Those are passed over rather than checked, which is the one
+    /// thing that lets a province be more than one hex.
+    let private drawnBorders =
+        Set.ofList
+            [ for row in placedPlaces do
+                  for one, here in row do
+                      for other, there in row do
+                          if one <> other && abs (here - there) = 2 then
+                              yield asPair one other
+
+              for above, below in List.pairwise placedPlaces do
+                  for one, here in above do
+                      for other, there in below do
+                          if one <> other && abs (here - there) = 1 then yield asPair one other ]
+
+    /// Which hexes each province stands on, for the checks that ask about a region's shape.
+    let private hexesOf =
+        placedCells
+        |> List.mapi (fun row cells -> cells |> List.map (fun (code, here) -> code, (row, here)))
+        |> List.collect id
+        |> List.filter (fun (code, _) -> code <> ".")
+        |> List.groupBy fst
+        |> List.map (fun (code, cells) -> code, cells |> List.map snd)
+
+    /// The six hexes around one: two beside it, and two in each of the rows above and below.
+    let private around (row, here) =
+        [ row, here - 2
+          row, here + 2
+          row - 1, here - 1
+          row - 1, here + 1
+          row + 1, here - 1
+          row + 1, here + 1 ]
+
+    /// The rows as a screen wants them: how far the row is shifted from the westmost cell on the
+    /// board, in half-columns, and then its cells in order - a province, or nothing at all.
+    let layout =
+        let westmost = placedCells |> List.collect id |> List.map snd |> List.min
+
+        placedCells
+        |> List.map (fun row ->
+            let start = row |> List.map snd |> List.min
+
+            start - westmost,
+            row |> List.map (fun (code, _) -> if code = "." then None else byCode code))
+
     // --- what could be wrong with all of it ------------------------------------------------------
 
     /// What this game says is wrong with its own board, before anybody sits down to one.
@@ -659,4 +772,54 @@ module Atlas =
 
           for code in codes do
               if not (Set.contains code reachedTogether) then
-                  yield $"{code} cannot be reached from Vienna by any piece at all" ]
+                  yield $"{code} cannot be reached from Vienna by any piece at all"
+
+          // --- and whether the map as drawn is telling the truth
+          //
+          // One direction only, and that is the whole of what this board's picture claims: a
+          // side drawn is a border, a border may go undrawn. The other game demands both and
+          // can; this one cannot, and says which half it is keeping.
+          let laid = placedPlaces |> List.collect id |> List.map fst
+
+          let touching =
+            Set.ofList
+                [ for from, into in together do
+                      for other in into -> asPair from other ]
+
+          for one, other in drawnBorders do
+              if not (Set.contains (asPair one other) touching) then
+                  yield $"the map draws {one} touching {other}, and they do not border"
+
+          for code in laid do
+              if not (Set.contains code known) then
+                  yield $"the map lays out '{code}', which is not a province"
+
+          for code in codes do
+              if not (List.contains code laid) then
+                  yield $"{code} is on the board and nowhere on the map"
+
+          // A province may hold as many hexes as it needs, and they have to be one region. Two
+          // blobs a map apart both labelled Munich are two Munichs, whatever the tables say.
+          for code, hexes in hexesOf do
+              let held = Set.ofList hexes
+
+              let rec walk seen edge =
+                  match edge with
+                  | [] -> seen
+                  | hex :: rest when Set.contains hex seen -> walk seen rest
+                  | hex :: rest -> walk (Set.add hex seen) ((around hex |> List.filter (fun n -> Set.contains n held)) @ rest)
+
+              match hexes with
+              | [] -> ()
+              | first :: _ ->
+                  if Set.count (walk Set.empty [ first ]) <> List.length hexes then
+                      yield $"{code} is drawn on the map in more than one piece"
+
+          // A row whose cells do not alternate parity with the row above cannot share a side
+          // with it at all, which would be a map in two halves rather than one map.
+          for above, below in List.pairwise placedCells do
+              let parity row = row |> List.map (snd >> abs >> (fun h -> h % 2)) |> List.distinct
+
+              match parity above, parity below with
+              | [ one ], [ other ] when one <> other -> ()
+              | _ -> yield "two rows of the map do not sit half a cell apart" ]

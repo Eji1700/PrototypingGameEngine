@@ -12,7 +12,7 @@ dotnet run -- diplomacy host 7      # seven of you, at your own machines
 ```
 
 [A year](#a-year) · [The orders](#the-orders) ·
-[The map, and why there is no picture of one](#the-map-and-why-there-is-no-picture-of-one) ·
+[The map](#the-map) ·
 [Points the rules leave to the adjudicator](#points-the-rules-leave-to-the-adjudicator-decided-here) ·
 [The machine](#the-machine) · [The files](#the-files)
 
@@ -31,7 +31,7 @@ ever be, so a record reads the way anybody who plays this would write it.
 tests them by being unlike everything else the machinery had been asked for. Seven seats. No
 chance at all. Orders written in secret by every power at once. A year made of three kinds of
 phase, two of them skipped most years. A move that changes nothing on the board and is still
-the most important thing anybody does. And a map that cannot honestly be drawn. [What that
+the most important thing anybody does. And a map that cannot be drawn completely. [What that
 turned up](../../../README.md#what-a-third-game-found) is in the engine's README.
 
 ## A year
@@ -80,7 +80,7 @@ units stand where they are and are taken off the board as they are pushed out, w
 these rules call civil disorder. Units it owes and does not name are taken furthest from home
 first, so a table never waits forever on somebody who has gone.
 
-## The map, and why there is no picture of one
+## The map
 
 Armies walk the land; fleets sail the water and hug the coast. **They do not travel the same
 map**, and neither graph can be worked out from the other: Rome and Venice border, and a fleet
@@ -89,17 +89,50 @@ waters, so a fleet standing there is standing on one of them and a fleet sent th
 which — unless only one is reachable from where it is, in which case being asked would be
 pedantry rather than a rule.
 
-Turncoats prints [a honeycomb](../Turncoats/README.md#drawn-as-a-map) because its borders are a patch of a triangular
-lattice, so the picture *is* the border table and cannot lie. This map is not a lattice. Any
-grid of seventy-five provinces would put pairs side by side that share no border and pull apart
-pairs that do, and a player would read the picture — there is no other reason to draw one. So
-the board shows what is actually true: every supply centre and who holds it, every unit and
-where it stands, grouped the way people who play this talk about the map. The borders are one
-question away.
+The board is drawn as a honeycomb, and **a province takes as many hexes as it needs** — its
+name is repeated across all of them, which is what shows its shape. One hex of each carries the
+letter of whoever holds the supply centre (or a `*` where nobody does), and under it whatever
+is standing there.
+
+```
+    ╭──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────╮
+    │ iri  │ lvpE │ cly  │ lvp  │ lvp  │ edi  │      │ nwy  │
+    │      │ A E  │      │      │      │      │      │      │
+    ╰──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────╯
+```
+
+**Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
+eleven neighbours — so one hex a province caps the picture at about half its borders, which is
+exactly where the first version of this map stuck. A region three or four hexes across has
+sides to spare and can touch everything it really touches. **Nine borders in ten are drawn.**
+
+**What the picture promises.** Turncoats prints
+[a honeycomb](../Turncoats/README.md#drawn-as-a-map) whose every border can be drawn, because
+its board really is a patch of a triangular lattice — the picture *is* its border table. This
+board still cannot manage that, so the promise is one-directional, and it is checked before a
+game is ever dealt:
+
+> **Every side the map draws between two provinces is a real border. A border it cannot reach
+> is not drawn.**
+
+A side between two hexes of the *same* province is not a border but the inside of a country,
+and is no part of that claim. `Atlas.problems` walks the layout against the border tables,
+refuses to deal onto a map that draws a side which is not there, and also refuses one that
+draws a province in two separate pieces. The empty cells are not decoration: a gap is what
+keeps two provinces that do not border from being drawn side by side.
+
+**The shapes were grown, not drawn.** The regions were seeded a hex apiece at roughly the right
+places and then spread outwards, one hex at a time, always into the space that met a neighbour
+they had not met yet and never into one that would put them beside a province they do not
+border. That is why some shapes are odd — the Norwegian Sea wraps round the Barents, the Ionian
+round the Eastern Mediterranean. Those are the shapes that make the adjacencies come out right,
+and the adjacencies are what a map of this is *for*.
+
+For the rest, ask:
 
 ```
 borders vie      what a piece in Vienna could reach, by land and by sea
-where mun        what is standing there, and who holds the centre
+where mun        what is standing there, who holds the centre, and where it is
 ```
 
 That answer comes out of the same table the adjudicator walks, so it cannot be out of date and
@@ -159,7 +192,7 @@ use — [Turncoats](../Turncoats/README.md#the-files) has twenty-one and
 | File | Role |
 | --- | --- |
 | [Powers.fs](Rules/Powers.fs) | The seven, army and fleet, and which coastline of a province that has two |
-| [Atlas.fs](Rules/Atlas.fs) | The board: seventy-five provinces and the two graphs over them, both ends of every border written out, and the checks that they agree |
+| [Atlas.fs](Rules/Atlas.fs) | The board: seventy-five provinces, the two graphs over them with both ends of every border written out, where they all lie so the map can be drawn, and the checks that all three agree |
 | [Position.fs](Rules/Position.fs) | What is standing where, who owns which centres, and the opening |
 | [Orders.fs](Rules/Orders.fs) | The eight orders, and what each phase will take |
 | [Adjudicate.fs](Rules/Adjudicate.fs) | What happened when everybody moved at once: strengths, cut supports, dislodgement, convoys, and the two rules for a cycle that answers differently depending on what it is told about itself |
@@ -169,5 +202,5 @@ use — [Turncoats](../Turncoats/README.md#the-files) has twenty-one and
 | [Rival.fs](Rules/Rival.fs) | A seat played by the program: it wants centres, it wants them near, and the better ones put a second unit behind a push |
 | [Ink.fs](Reading/Ink.fs) | Seven colours, against the other games' four and two |
 | [Parse.fs](Reading/Parse.fs) | The words every printed set of these rules uses, and the other half of the bargain `Words.order` writes |
-| [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), and the argument for drawing no map |
+| [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), including the map and what it does and does not promise |
 | [Offer.fs](Offer.fs) | Both seams filled in |

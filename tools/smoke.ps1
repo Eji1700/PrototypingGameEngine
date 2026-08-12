@@ -94,9 +94,10 @@ $games = @{
         # them being played. This is the only game here that is not two, which is the whole
         # reason the number stopped being written into the line below.
         Seats = 7
-        # One tile per unit of the seat reading, each carrying every order that unit could be
-        # given. Austria opens with three.
-        Pieces = ".tile"; Fewest = 3; Called = "set of orders"
+        # The map: one cell per province, laid out as a honeycomb. Scoped to the grid because
+        # this game draws tiles elsewhere too - a unit's orders are a tile apiece - and a count
+        # that picked those up as well would pass whatever the map did.
+        Pieces = ".grid .tile"; Fewest = 70; Called = "map"
         # `commit` rather than an order, and for a reason worth writing down: at this game a
         # move by one power changes nothing anybody else can see, so an order typed into the
         # box would move the game without moving the board - and the seat after this one is

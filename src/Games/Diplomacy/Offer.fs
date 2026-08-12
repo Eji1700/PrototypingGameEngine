@@ -57,10 +57,10 @@ module Offer =
           Rules = Render.rules
           Waiting = Render.waiting
           Marking = Ink.marking
-          // Wide, and it has to be: three columns of regions side by side, and an order that
-          // reads `bud s vie - tri` beside what became of it. The game of nine squares asked
-          // for seventy-two and would look silly in this.
-          Width = 112 }
+          // Wide, and it has to be: the map is seventeen hexes across at its widest, and an
+          // order reads `bud s vie - tri` beside what became of it. The game of nine squares
+          // asked for seventy-two and would look silly in this.
+          Width = 138 }
 
     // --- and the whole of it -------------------------------------------------------------------------------
 

@@ -95,6 +95,102 @@ report "a fleet on Spain's south coast can" true (Atlas.canGo Fleet (loc "spa/sc
 report "Bulgaria has two coasts" [ East; South ] (Atlas.coastsOf (p "bul"))
 report "Vienna has none" [] (Atlas.coastsOf (p "vie"))
 
+// --- the map, and the one thing it promises ---------------------------------------------------------
+//
+// `Faults` already refuses to deal a game onto a map that lies, and the first check in this file
+// insists that list is empty. This asks the same question of the layout the renderers are
+// actually handed, which is the published one rather than the private table behind it - so a
+// map that drifted from the tables could not pass by way of a check that reads the same drift.
+
+/// Everything that province touches, by either kind of piece, coasts flattened away.
+let private touches province =
+    let afloat =
+        match Atlas.coastsOf province with
+        | [] -> Atlas.fleetReach { At = province; Coast = None }
+        | coasts -> coasts |> List.collect (fun coast -> Atlas.fleetReach { At = province; Coast = Some coast })
+
+    Atlas.armyReach province @ (afloat |> List.map (fun there -> there.At)) |> List.distinct
+
+/// The map as half-columns: a cell is two half-columns from the next, and the row is shifted by
+/// its own head. Read off `Atlas.layout` the same way a renderer reads it.
+let private mapped =
+    Atlas.layout
+    |> List.map (fun (shift, cells) ->
+        cells |> List.mapi (fun step cell -> cell, shift + 2 * step) |> List.choose (fun (c, h) -> c |> Option.map (fun p -> p, h)))
+
+/// Two *different* provinces the picture puts side by side: two half-columns apart in one row,
+/// or one half-column apart in rows that touch. A side between two hexes of the same province is
+/// the inside of a country rather than a border, and is no business of this check.
+let private sides =
+    Set.ofList
+        [ for row in mapped do
+              for one, here in row do
+                  for other, there in row do
+                      if one <> other && abs (here - there) = 2 then yield min one other, max one other
+
+          for above, below in List.pairwise mapped do
+              for one, here in above do
+                  for other, there in below do
+                      if one <> other && abs (here - there) = 1 then yield min one other, max one other ]
+
+report
+    "every province is somewhere on the map"
+    []
+    (Atlas.all
+     |> List.map (fun province -> province.Id)
+     |> List.filter (fun id -> mapped |> List.sumBy (List.filter (fst >> (=) id) >> List.length) = 0)
+     |> List.map Atlas.nameOf)
+
+// A province takes as many hexes as it needs sides - that is what lets a map of this board be
+// drawn at all - and they have to be one region. Two blobs a map apart, both labelled Munich,
+// are two Munichs whatever the border tables say.
+report
+    "and each of them is drawn in one piece"
+    []
+    (let hexes =
+        mapped
+        |> List.mapi (fun row cells -> cells |> List.map (fun (province, here) -> province, (row, here)))
+        |> List.collect id
+        |> List.groupBy fst
+
+     let around (row, here) =
+         [ row, here - 2; row, here + 2; row - 1, here - 1; row - 1, here + 1; row + 1, here - 1; row + 1, here + 1 ]
+
+     hexes
+     |> List.filter (fun (_, cells) ->
+         let held = cells |> List.map snd |> Set.ofList
+
+         let rec walk seen edge =
+             match edge with
+             | [] -> seen
+             | hex :: rest when Set.contains hex seen -> walk seen rest
+             | hex :: rest -> walk (Set.add hex seen) ((around hex |> List.filter (fun n -> Set.contains n held)) @ rest)
+
+         Set.count (walk Set.empty [ Set.minElement held ]) <> Set.count held)
+     |> List.map (fst >> Atlas.nameOf))
+
+// The whole of what this picture claims. It may leave a border undrawn - a province here has
+// more neighbours than a hexagon has sides, so it must - but it may never draw one that is not
+// there, because a player reads the picture and has no way to know which half they are looking at.
+report
+    "and every side the map draws is a real border"
+    []
+    (sides
+     |> Set.filter (fun (one, other) -> not (touches one |> List.contains other))
+     |> Set.toList
+     |> List.map (fun (one, other) -> $"{Atlas.code one}-{Atlas.code other}"))
+
+let private realBorders =
+    Set.ofList
+        [ for province in Atlas.all do
+              for other in touches province.Id -> min province.Id other, max province.Id other ]
+
+// Not a fact about the rules - a floor under the picture, so that a map quietly reduced to a
+// scattering of provinces with no sides between them fails here rather than passing as honest.
+// Four in five is well under what the layout actually manages and well over what one hex a
+// province could ever manage, which is the point the floor is guarding.
+report "and it draws four borders in five" true (Set.count sides * 5 >= Set.count realBorders * 4)
+
 // --- one unit beats one unit, and nothing else does ------------------------------------------------
 
 let private bounce =

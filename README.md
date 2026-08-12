@@ -48,7 +48,7 @@ was extracted on the grounds that it is generic. A claim like that cannot be tes
 it was extracted from. Noughts and crosses tests it by being *small* — two seats, nothing
 hidden, no chance — and Diplomacy by being unlike everything else the machinery had ever been
 asked for: seven seats, no chance at all, orders written in secret by everybody at once, a year
-made of three kinds of phase, and a board that cannot honestly be drawn. What those two turned
+made of three kinds of phase, and a board no picture can show all of. What those two turned
 up along the way is the most useful thing in this file: [what a second game
 found](#what-a-second-game-found), and [what a third game found](#what-a-third-game-found).
 
@@ -1243,17 +1243,42 @@ orders, and what makes `press france ...` a line only France reads.
   written down and checked against each other. A table mirrored from one end agrees with itself
   however wrong it is, and Turncoats' twenty-three borders are small enough that mirroring is
   the right call. At three hundred it stops being one.
-- **The board that cannot be drawn.** Turncoats prints a honeycomb, and can, because its
-  borders are a patch of a triangular lattice — the picture *is* the border table. This map is
-  not a lattice, so any grid of seventy-five provinces would put pairs side by side that share
-  no border and pull apart pairs that do. A player would read the picture; there is no other
-  reason to draw one. So there is no map on the screen, and `borders vie` answers out of the
-  same table the adjudicator walks. That is a decision the second game could never have forced,
-  because nine squares can always be drawn.
+- **A map does not have to be complete to be honest — it has to not lie.** Turncoats prints a
+  honeycomb, and can, because its borders are a patch of a triangular lattice: the picture *is*
+  the border table, and `Board.problems` demands that every one of the twenty-three is drawn.
+  This map is not a lattice. A province here has up to eleven neighbours where a hexagon has
+  six sides, so no arrangement of them could ever show all two hundred and six borders — and
+  the first answer here was that a board which cannot be drawn faithfully is better not drawn
+  at all.
+
+  That was the wrong half of the choice. What Turncoats' check really buys is not completeness
+  but *truthfulness*, and those come apart on a board this size. So the provinces are laid out
+  on the same honeycomb under a one-directional rule, checked by `Atlas.problems` before a game
+  is ever dealt: **every side the picture draws between two provinces is a real border, and a
+  border the honeycomb cannot reach is left undrawn rather than faked.**
+
+  Then a second thing had to give, and it is the more useful of the two. The first map gave
+  every province one hex — and a hexagon has six sides where a province here has up to eleven
+  neighbours, so it stuck at about half the borders. **A province takes as many hexes as it
+  needs.** Its name repeats across all of them, a side between two of its own hexes is the
+  inside of a country rather than a border, and a region three or four across has sides to
+  spare. Nine borders in ten are drawn now, against a little over half before.
+
+  The shapes were grown rather than drawn: seeded a hex apiece at roughly the right places, then
+  spread a hex at a time into whatever space met a neighbour they had not met, never into one
+  that would put them beside a province they do not border. Some of the results are odd — the
+  Norwegian Sea wraps round the Barents — and odd is the price of the adjacencies coming out
+  right, which is what a map of this is for.
+
+  Worth having as the generalisation it is. Turncoats' rule reads like "a picture of a board
+  must be the board", and it can afford that because its board is a lattice and its regions fit
+  one cell each. Neither half survives contact with a real map. The version that does is "a
+  picture must not say anything false, and a region is as big as it needs to be" — and only a
+  board that breaks both makes the difference visible.
 - **`View.Answer` stopped being a field with one caller.** It was put there for `rule 8`, and
-  the second game filled it with a line saying there was nothing to explain. Here it is the
-  only way to see the map at all, which retroactively settles the argument about whether it
-  earns its place on the seam.
+  the second game filled it with a line saying there was nothing to explain. Here it is what
+  makes an incomplete map safe to draw — `borders vie` is the whole truth for one province,
+  which is exactly what the picture cannot be for all of them.
 - **The browser check had one game's vocabulary written into it.** `tools/smoke.ps1` waited for
   a board whose heading `startsWith('Turn')`. Two games counted their turns, so it read as
   machinery; a game whose seasons are called Spring and Autumn is what made it a fact about
