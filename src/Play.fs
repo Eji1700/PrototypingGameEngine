@@ -48,7 +48,12 @@ let private tell posts =
     for post in posts do
         match post.Say with
         | Told text
-        | TurnedAway text -> printf "%s" (text + Environment.NewLine)
+        | TurnedAway text
+        // Never said at this table - there are no seats here to get up from, and putting
+        // the game down ends the loop below rather than being reported to it. Printed
+        // anyway, because a sentence addressed to the person at the keyboard is a sentence
+        // to show them whatever came to say it.
+        | GotUp text -> printf "%s" (text + Environment.NewLine)
         | Nudged -> printf "\a"
         | Screen _
         | Seated _ -> ()
@@ -165,8 +170,19 @@ let private hostFor game view sitters seed reach =
                 None
             else
                 Some(fun () ->
-                    Client.join game (Reach.at reach "localhost") None (Reach.word reach) view
-                    |> ignore)
+                    match Client.join game (Reach.at reach "localhost") None (Reach.word reach) view with
+                    // The console got up, and the table it got up from is this process. It
+                    // goes on standing - a player leaving their seat is not the same as
+                    // closing the room - so what is left is to say so, where before there
+                    // was a prompt that had stopped answering and no word about why.
+                    | 0 ->
+                        printfn ""
+                        printfn "  The table is still open to whoever else is at it. Ctrl+C closes it."
+                        printfn ""
+                    // It never sat down, and said why on its way past. The table stands
+                    // regardless: a console that could not find a seat is no reason to
+                    // close one on everybody who did.
+                    | _ -> ())
 
         let keep model =
             if not (Journal.isEmpty model.Journal) then

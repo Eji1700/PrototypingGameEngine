@@ -789,6 +789,23 @@ same declaration the command line is read by - so what a player is told to type 
 something the program is certain to accept. See [Two halves of a command
 line](#two-halves-of-a-command-line).
 
+**Getting up.** `quit` is the same thing to the table as dropping off - the seat is kept,
+the game waits, and nobody else may take it - and it is the one thing a player may do at
+every table there is: one still filling up, one whose game has finished, one whose seat
+the game no longer has. What is different is that this one was *meant*, so the table says
+so. `GotUp` carries the sentence, and a console at a terminal ends on it: print the words,
+hang up, stop.
+
+Which is the whole reason it is a thing the table says rather than a word the console
+knows. A client that read `quit` for itself would be a second opinion about what it means,
+free to differ from the one the game keeps - so it types the word like any other line and
+what comes back is what stops it. For a while nothing came back: the seat was kept,
+everybody else was drawn again, and the console that had typed it was sent nothing at all.
+At a terminal that is a prompt that has stopped answering, which is exactly what a table
+that has *gone* looks like. The table it got up from goes on standing until whoever opened
+it presses Ctrl+C, because one player leaving their seat is not the same as closing the
+room on everybody still in it.
+
 **Where the state is.** `Lobby` is a value like everything else, and every rule
 above is decided by folding a typed line into it - `Lobby.said` returns the next
 lobby and the list of things to say. [Server.fs](src/Net/Server.fs) holds one mutable

@@ -92,6 +92,20 @@ try {
 
     Wait-For "the move to reach the other console" 60 { (Told $two) -match $m.Heard } | Out-Null
 
+    # And getting up from the table, which is the other thing only a real console can be
+    # asked about. The table's half folds in `tests/lobby.fsx` and says the right sentence
+    # there; what it cannot show is whether the console at the far end ever comes out of its
+    # loop - and for a long time it did not. A player typed `quit` at a finished game and the
+    # prompt simply stopped answering, which is what a table that has gone looks like.
+    Types $two "quit"
+
+    Wait-For "the console that got up to be told it has" 60 { (Told $two) -match "You are up from the table" } | Out-Null
+
+    # The check that matters, and the one no value could make: the process ends. Waited for
+    # rather than looked at, because hanging up is a round trip and this end is not the one
+    # deciding when it is done.
+    $left = $two.Process.WaitForExit(30000)
+
     $first = Told $one
     $second = Told $two
 
@@ -112,6 +126,10 @@ try {
     # Which is the half nothing else covers: a move made at one keyboard reaching another
     # over a socket, drawn there for that seat and nobody else's.
     Report "a move made at one console reaches the other" ($second -match $m.Heard) "the second console never heard it"
+
+    Report "a console that types quit is told it is up from the table" ($second -match "You are up from the table") "it was told nothing about getting up"
+    Report "and told the seat is kept for it" ($second -match "Your seat is kept") "it was not told what becomes of the seat"
+    Report "and stops, rather than sitting at a prompt nothing answers" $left "it was still running 30 seconds later"
 
     ""
     if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }

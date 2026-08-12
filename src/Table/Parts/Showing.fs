@@ -22,6 +22,17 @@ type ToPlayer =
     | Told of text: string
     /// There is no seat here for you, and this is why.
     | TurnedAway of why: string
+    /// You are up from the table, and this is what there is to say about coming back.
+    ///
+    /// The one thing a table says that is not about the game. A player who puts a game down
+    /// has to be told they have - a seat left quietly looks exactly like a seat still being
+    /// played from - and what a console *does* about it is the far end's: a terminal says the
+    /// words, stops reading and hangs up, and a page shows them if it is still there to.
+    ///
+    /// It carries words for the same reason `TurnedAway` does. Getting up from a table with
+    /// seats at it is not the end of anything: the seat is kept, and there is a line that
+    /// brings the player back to it.
+    | GotUp of said: string
     /// The game has come round to you, and nothing you did brought it round.
     ///
     /// It carries no words, because it is not something to read. A player who is looking at

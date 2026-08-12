@@ -39,7 +39,8 @@ let private heard console posts =
         match post.Say with
         | Told text
         | Screen text
-        | TurnedAway text -> text
+        | TurnedAway text
+        | GotUp text -> text
         | Seated(seat, token) -> $"seated at {seat} holding {token}"
         | Nudged -> "(nudged)")
     |> String.concat "\n"
@@ -102,6 +103,44 @@ let _, stranger =
 
 report "a token that claimed no seat claims none now" true (heard "four" stranger |> mentions "That is not a seat at this table.")
 
+// --- getting up -------------------------------------------------------------------------
+//
+// The half that was missing, and it was missing in the way that is hard to see from inside:
+// the table did the right thing with `quit` - the seat kept, the game waiting, everybody
+// else drawn again - and said not one word to the console that typed it. What that looks
+// like at a terminal is a prompt that has stopped answering, which is exactly what a table
+// that has gone looks like.
+
+let private upFrom lobby = lobby |> Lobby.said "one" "quit"
+
+let stood, stoodPosts = full () |> upFrom
+
+report "a console that gets up is told it has" true (heard "one" stoodPosts |> mentions "You are up from the table")
+
+report "and told the seat is kept" true (heard "one" stoodPosts |> mentions "Your seat is kept")
+
+// Which is what a console at a terminal ends on. Nothing else the table says would do:
+// a board is what it sends when nothing has changed, and it sends nothing at all to
+// somebody who is not there.
+report
+    "and it is said as getting up rather than as anything else"
+    true
+    (stoodPosts
+     |> List.exists (fun post ->
+         post.To = "one"
+         && match post.Say with
+            | GotUp _ -> true
+            | _ -> false))
+
+report "the table lets go of the console" true (heard "one" (stood |> Lobby.said "one" "history" |> snd) |> mentions "You are not sitting at this table.")
+
+report "but keeps the seat, so the token still brings them back" true (heard "one-again" (stood |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") plain |> snd) |> mentions "seated at 1")
+
+// A table still filling up answered every line with the waiting screen, whatever it said,
+// so this was the one place a player could sit with nothing to look at and no way out of
+// it. The game that has finished is checked further down, where there is one.
+report "getting up works at a table still filling up" true (heard "one" (seatedOne |> upFrom |> snd) |> mentions "You are up from the table")
+
 // --- who may act ----------------------------------------------------------------------
 
 let waited, waitedPosts = full () |> Lobby.said "two" "recruit r 3"
@@ -154,6 +193,10 @@ let private played =
 report "those four lines end the game" true (Playing.isOver (Lobby.model (fst played)))
 
 report "and a game that is over has come round to nobody" (false, false) (nudged "one" (snd played), nudged "two" (snd played))
+
+// The table this was reported from: the game had finished, the host typed `quit`, and the
+// board it was looking at was the last thing it ever heard.
+report "a player may get up from a game that has finished" true (heard "one" (fst played |> upFrom |> snd) |> mentions "You are up from the table")
 
 // --- what a player may not ask for -----------------------------------------------------
 

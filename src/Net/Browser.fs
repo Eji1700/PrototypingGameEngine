@@ -159,6 +159,10 @@ module Browser =
         | Screen text
         | Told text -> Some(Piece text)
         | TurnedAway why -> Some(Piece(Page.says why))
+        // The page is very often gone by the time this could reach it - closing the tab is
+        // how a browser puts a game down - and where it is not, saying so is the whole of
+        // what there is to do. A page has no loop to come out of.
+        | GotUp said -> Some(Piece(Page.says said))
         | Nudged -> Some(Doing Page.Nudge)
         | Seated _ -> None
 

@@ -287,6 +287,35 @@ module Lobby =
         let redraw seat lobby =
             lobby, [ screenFor lobby (console, seat) ]
 
+        /// Getting up, which is the same thing to this table as dropping off: the seat is
+        /// kept and the game waits, because there is nobody with the standing to play
+        /// somebody else's pieces and no reason to think they are not coming back.
+        ///
+        /// What is not the same is that this one was meant, so it is said out loud. A player
+        /// who put the game down and heard nothing has no way of telling that from a table
+        /// that stopped answering - and a console at a terminal has nothing else to end on:
+        /// it holds no opinion about what `quit` means, and should not be given one.
+        let gotUp () =
+            let lobby, posts = left console lobby
+
+            lobby,
+            posts
+            @ just
+                console
+                (GotUp(
+                    seat.View.Says
+                        "You are up from the table. Your seat is kept - nobody else may take it - and the line you were given when you sat down brings you back to it."
+                ))
+
+        // Before the two guards below rather than after them, because getting up is the one
+        // thing a player may do at every table there is: one still filling up, one whose game
+        // has finished, one whose seat the game no longer has. It was the only thing they
+        // could not do at any of them - a line typed at a table still waiting was answered
+        // with the waiting screen, whatever it said.
+        match Playable.read lobby.Game typed with
+        | Ok Leave -> gotUp ()
+        | read ->
+
         if not (everyoneHere lobby) then
             redraw seat lobby
         elif not (stillSeated seat lobby) then
@@ -297,11 +326,14 @@ module Lobby =
         /// this one console is drawn again and nobody else hears about it.
         let mine seat = lobby |> withSeat seat |> redraw seat
 
-        match Playable.read lobby.Game typed with
+        match read with
         | Error problem -> told problem
         | Ok Nothing -> redraw seat lobby
         | Ok Help -> lobby, just console (Told seat.View.Rules)
-        | Ok Leave -> left console lobby
+        // Answered above, and here so that the whole of what a line can be is still read in
+        // one place - a case added to `Command` has to be answered by this match or it will
+        // not compile, and that is worth more than the line it costs.
+        | Ok Leave -> gotUp ()
         | Ok(Notes wanted) ->
             mine
                 { seat with

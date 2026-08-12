@@ -90,6 +90,19 @@ module Client =
         // come back to the same seat rather than being handed a new one - or worse, none.
         let token = ref (resuming |> Option.defaultValue "")
 
+        /// Whether the table has said this console is up from it.
+        ///
+        /// A cell for the same reason the token is one: it is set from inside a handler,
+        /// which runs on the wire's own thread. The handler sets it and nothing else - the
+        /// socket is the main thread's to hang up, and a handler that closed the connection
+        /// it was being called from would be closing it from inside itself.
+        let up = ref false
+
+        /// And a console with nothing left to do, which is either of two quite different
+        /// things arriving on two different threads: the table saying this seat is up, or a
+        /// keyboard with nothing more coming.
+        let over = new ManualResetEventSlim(false)
+
         /// Sitting down says who this console is and how it would like to read, because a
         /// board is drawn at the table and the table has to know before it draws one. The
         /// colours go with it for the same reason: a board arrives already coloured, so a
@@ -122,6 +135,18 @@ module Client =
             fun why ->
                 printfn ""
                 printfn "%s" why
+        )
+        |> ignore
+
+        // The table saying this console is done, which arrives as the answer to the line
+        // that said so. No prompt after it, because there is nothing more to type.
+        connection.On<string>(
+            Protocol.Call.GotUp,
+            fun said ->
+                printfn ""
+                printfn "%s" said
+                up.Value <- true
+                over.Set()
         )
         |> ignore
 
@@ -181,7 +206,14 @@ module Client =
 
         wait (sitDown ())
 
-        let rec loop () =
+        // Read a line and say it, until either the keyboard or the table is done.
+        //
+        // Whether a line ends the game is the table's to decide and not this end's. A console
+        // that read `quit` for itself would be a second opinion about what it means, free to
+        // differ from the one the game keeps - and wrong at a table that never sat it down in
+        // the first place. So it types the word like any other, and what comes back is what
+        // stops it.
+        let rec reading () =
             match System.Console.ReadLine() with
             | null -> ()
             | line ->
@@ -189,16 +221,37 @@ module Client =
                 // thing not to do about it is fall over: the seat is still this player's,
                 // the game has not moved, and saying it again in a moment will work. This is
                 // the one place a console can be left holding something the table never
-                // heard, so it is the one place that has to say so.
+                // heard, so it is the one place that has to say so - unless the wire is going
+                // because this console is, in which case there is nothing to say again.
                 try
                     wait (connection.InvokeAsync(Protocol.Call.Say, box line))
                 with _ ->
-                    printfn ""
-                    printfn "That did not reach the table. Say it again in a moment."
-                    show ""
+                    if not up.Value then
+                        printfn ""
+                        printfn "That did not reach the table. Say it again in a moment."
+                        show ""
 
-                loop ()
+                if not up.Value then reading ()
 
-        loop ()
+        // On a thread of its own, and waited on from here, because the two things that end a
+        // console cannot wait for each other. `ReadLine` is already blocked by the time the
+        // table's answer arrives - the player has typed their last line and the console has
+        // gone straight back to asking for another - and a keyboard nobody is going to touch
+        // again is a wait that never comes back. Nor can it be got round by checking a flag
+        // after each line: what the table says arrives on the wire's own thread, and there is
+        // nothing to say how late it may be.
+        //
+        // So the reader is left where it stands when the table is the one that finished. It
+        // is blocked on a keyboard, it holds nothing, and it goes when the process does.
+        let hands =
+            Thread(
+                ThreadStart(fun () ->
+                    reading ()
+                    over.Set()),
+                IsBackground = true
+            )
+
+        hands.Start()
+        over.Wait()
         wait (connection.StopAsync())
         0

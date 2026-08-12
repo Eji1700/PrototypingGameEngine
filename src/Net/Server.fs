@@ -149,6 +149,7 @@ module Wire =
             | Screen text -> console.SendAsync(Protocol.Call.Screen, box text)
             | Told text -> console.SendAsync(Protocol.Call.Told, box text)
             | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why)
+            | GotUp said -> console.SendAsync(Protocol.Call.GotUp, box said)
             | Nudged -> console.SendAsync Protocol.Call.Nudged)
         |> Task.WhenAll
 
