@@ -98,6 +98,21 @@ and Scene =
     /// wall is drawn in, and what is inside.
     | Tile of title: string option * tone: Tone * body: Scene list
 
+    /// One cell of a grid that is a piece of something larger, and the name of the thing it
+    /// is a piece of.
+    ///
+    /// A tile is a cell and its own walls; a patch is part of a shape. Cells carrying the
+    /// same `shape` that touch are one region, so the wall between them is the inside of a
+    /// country rather than a border and is not drawn at all - which is what lets a map lay a
+    /// province out over as many cells as its borders need and still look like one province.
+    /// The tone is the shape's, so a region owned by somebody is outlined in their colour.
+    ///
+    /// Here rather than left to each reader for the same reason a row's shift is: which cells
+    /// make one region is a fact about the board, and a reader is not in a position to guess
+    /// it. Two provinces held by the same power are two provinces and the border between them
+    /// is real - the tone cannot say what the shape says.
+    | Patch of shape: string * tone: Tone * body: Scene list
+
     /// One glyph, drawn large. A mark in a square is a thing to see across a room rather
     /// than a letter in a sentence, and every reader has its own way of saying so.
     | Big of Span

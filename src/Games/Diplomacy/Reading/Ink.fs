@@ -8,7 +8,7 @@ open TCModel.Diplomacy
 
 /// What this game colours.
 ///
-/// Seven things, against the other games' four and two, and that is the whole argument for the
+/// Eight things, against the other games' four and two, and that is the whole argument for the
 /// list being a list. The colour screen, the line that changes one, the form on the page and
 /// both halves of sending a palette down a wire work off whatever is here, and not one of them
 /// has an opinion about how many there should be.
@@ -37,7 +37,26 @@ module Ink =
           Shows = $"{Power.letter power}  {Power.name power}"
           Standard = standardFor power }
 
-    let slots = Power.all |> List.map slot
+    /// The one thing this game colours that is not a side.
+    ///
+    /// Nineteen provinces of this board are open water and the rest is not, and which is which
+    /// decides half of what a player may do - a fleet lives out there and an army cannot go
+    /// near it. So the water is coloured, and the tildes round a sea's name on the map are
+    /// coloured with it.
+    ///
+    /// Teal rather than a blue, and the reason is who is already wearing blue: England is azure
+    /// and France a paler blue still. The tildes are what actually says "sea" - they are there
+    /// at a terminal that draws no colour at all - and the colour is the second saying of it.
+    [<Literal>]
+    let Sea = "sea"
+
+    let private water =
+        { Key = Sea
+          Draws = "the open water, and the tildes round the name of a sea"
+          Shows = "~nth~  the North Sea"
+          Standard = Palette.shades |> List.find (fun shade -> shade.Name = "teal") }
+
+    let slots = (Power.all |> List.map slot) @ [ water ]
 
     let ink palette power = Palette.inkOf (key power) palette
 

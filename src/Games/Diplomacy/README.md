@@ -89,17 +89,27 @@ waters, so a fleet standing there is standing on one of them and a fleet sent th
 which — unless only one is reachable from where it is, in which case being asked would be
 pedantry rather than a rule.
 
-The board is drawn as a honeycomb, and **a province takes as many hexes as it needs** — its
-name is repeated across all of them, which is what shows its shape. One hex of each carries the
-letter of whoever holds the supply centre (or a `*` where nobody does), and under it whatever
-is standing there.
+The board is drawn as a honeycomb, and **a province takes as many hexes as it needs**. There
+are no walls inside one: a province is drawn as a single shape with its name written across it,
+and where its centre is held the shape is **outlined in that power's colour**. One hex of each
+carries the letter of whoever holds the centre (or a `*` where nobody does), and under it
+whatever is standing there.
+
+**A name between tildes is open water** — `~nth~` is the North Sea, and only a fleet can go
+there. It is said in characters and not only in colour, because the plainest terminal draws no
+colour at all and half of what you may do turns on whether a province is wet. The water has a
+colour of its own on top of that, which is the eighth thing this game says it colours and can be
+changed like any of the others.
 
 ```
-    ╭──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────╮
-    │ iri  │ lvpE │ cly  │ lvp  │ lvp  │ edi  │      │ nwy  │
-    │      │ A E  │      │      │      │      │      │      │
-    ╰──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────╯
+    ╰──╮  ╰──╮  ╰─────╯  ╭─────┬──┴──┬──┴─────┴──────────────┬─────┬─────┬──┴──╮  ╰──╮
+       │~iri~│ lvp   lvp │ wal │ yor │~nth~ ~nth~ ~nth~ ~nth~│~ska~│swe* │ fin │ stp │
+       │     │           │     │     │                       │     │     │     │     │
+    ╭──┴──╮  ╰────────┬──╯  ╭──┴──┬──╯  ╭─────╮     ╭────────┴──┬──╯  ╭──┴──┬──╯  ╭──┴──╮
 ```
+
+Liverpool is two hexes and the North Sea four, and each is one outline. The empty hexes are not
+decoration — a gap is what keeps two provinces that do not border from being drawn side by side.
 
 **Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
 eleven neighbours — so one hex a province caps the picture at about half its borders, which is
@@ -115,11 +125,13 @@ game is ever dealt:
 > **Every side the map draws between two provinces is a real border. A border it cannot reach
 > is not drawn.**
 
-A side between two hexes of the *same* province is not a border but the inside of a country,
-and is no part of that claim. `Atlas.problems` walks the layout against the border tables,
-refuses to deal onto a map that draws a side which is not there, and also refuses one that
-draws a province in two separate pieces. The empty cells are not decoration: a gap is what
-keeps two provinces that do not border from being drawn side by side.
+A side between two hexes of the *same* province is not a border but the inside of a country: it
+is no part of that claim, and it is not drawn at all. `Atlas.problems` walks the layout against
+the border tables, refuses to deal onto a map that draws a side which is not there, and also
+refuses one that draws a province in two separate pieces. The drawing itself is checked
+too — [diplomacy.fsx](../../../tests/diplomacy.fsx) counts the walls the layout calls for and
+then counts the walls on the board, so a picture that put a wall through the middle of a country
+or ran two countries together would fail even with the tables underneath it perfectly honest.
 
 **The shapes were grown, not drawn.** The regions were seeded a hex apiece at roughly the right
 places and then spread outwards, one hex at a time, always into the space that met a neighbour
@@ -200,7 +212,7 @@ use — [Turncoats](../Turncoats/README.md#the-files) has twenty-one and
 | [Turn.fs](Rules/Turn.fs) | `Move` - write an order, take one back, commit, send a word, walk away - and the total `Play` |
 | [Words.fs](Rules/Words.fs) | Every string a player reads, including which sentence a seat gets for an order it did not write |
 | [Rival.fs](Rules/Rival.fs) | A seat played by the program: it wants centres, it wants them near, and the better ones put a second unit behind a push |
-| [Ink.fs](Reading/Ink.fs) | Seven colours, against the other games' four and two |
+| [Ink.fs](Reading/Ink.fs) | Eight colours - seven powers and the open water - against the other games' four and two |
 | [Parse.fs](Reading/Parse.fs) | The words every printed set of these rules uses, and the other half of the bargain `Words.order` writes |
 | [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), including the map and what it does and does not promise |
 | [Offer.fs](Offer.fs) | Both seams filled in |

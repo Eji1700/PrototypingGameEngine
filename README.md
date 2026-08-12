@@ -334,6 +334,7 @@ type Scene =
     | Aligned of Line list list                         // columns lined up, no walls
     | Walled of across: int * Course list               // cells in rows, with walls
     | Tile of title: string option * tone: Tone * body: Scene list
+    | Patch of shape: string * tone: Tone * body: Scene list  // a cell of a bigger shape
     | Big of Span                                       // one glyph, drawn to be seen
     | Does of caption: string * line: string * tone: Tone   // a control that types a line
 ```
@@ -371,6 +372,18 @@ cell what is in it. That is the difference between a description and a layout, a
 the half-cell `Shift` on a `Course` is not a hint: the offset is what makes a region on a
 lattice touch six others rather than four, so it is a fact about the board, and a reader that
 dropped it would be drawing a different map.
+
+**A grid of tiles is a table; a grid of patches is a map.** A `Tile` is a cell and its own four
+walls, which is what a board of nine squares is made of. A `Patch` says which *shape* it is a
+piece of - so cells carrying the same shape that touch are drawn as one region, with no walls
+inside it and the wall round it in the region's own tone. That is what lets Diplomacy lay a
+province over as many hexes as its borders need and still have it read as one province, outlined
+in the colour of whoever holds its centre. The shape has to be said rather than guessed: two
+provinces held by the same power are two provinces, and the tone cannot tell you what the shape
+does. Both terminal readers hand the same layout the same rows and differ only in the alphabet
+they draw it with - box characters for one, dashes and bars for the other - so the two maps are
+the same map, wall for wall. A browser's cells do not touch, being laid out with a gap and
+rounded corners, so a page keeps the colour and drops the merging.
 
 **None of this is compulsory.** The `View` seam is untouched and Turncoats still fills it in
 by hand, which is the right answer for a honeycomb laid out by counting characters into
@@ -1269,6 +1282,17 @@ orders, and what makes `press france ...` a line only France reads.
   that would put them beside a province they do not border. Some of the results are odd — the
   Norwegian Sea wraps round the Barents — and odd is the price of the adjacencies coming out
   right, which is what a map of this is for.
+
+  Then a third thing gave, one level down. `Scene` could describe a grid of *cells* but not a
+  grid of *regions*, so a province came out as four boxes that happened to share a name — and
+  Spectre's tables, which have one wall in one colour and no way to leave a wall out, could not
+  have drawn it any other way. A cell of a map is a
+  [`Patch`](src/Table/Parts/Scene.fs) now and says which shape it belongs to. Both terminal
+  readers hand the same layout the same rows and differ only in the alphabet they draw it with,
+  so a province is one outline in the colour of whoever holds its centre, and the two maps are
+  the same map wall for wall. That is the seam paying for itself in the direction it was meant
+  to: the thing a third game needed was general, and the two games that came before it got it
+  without being touched.
 
   Worth having as the generalisation it is. Turncoats' rule reads like "a picture of a board
   must be the board", and it can afford that because its board is a lattice and its regions fit

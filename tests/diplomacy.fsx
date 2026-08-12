@@ -18,6 +18,7 @@
 #load "Europe.fsx"
 
 open System
+open System.Text.RegularExpressions
 open System.Xml
 open TCModel.Engine
 open TCModel.Table
@@ -190,6 +191,95 @@ let private realBorders =
 // Four in five is well under what the layout actually manages and well over what one hex a
 // province could ever manage, which is the point the floor is guarding.
 report "and it draws four borders in five" true (Set.count sides * 5 >= Set.count realBorders * 4)
+
+// --- and the picture the readers make of it ---------------------------------------------------------
+//
+// Everything above reads `Atlas.layout`, which is the table. This reads the board a player is
+// actually looking at, because between the two sits a piece of machinery this game did not
+// write. A cell of the map is a `Patch` and says which region it belongs to, and a reader draws
+// a region as one shape with no walls inside it - so a wall drawn through the middle of a
+// country, or two countries drawn with none between them at all, would be a picture that lies
+// while the table under it stayed perfectly honest.
+
+let private dealt =
+    match Update.start rules 7 0UL with
+    | Ok model -> model
+    | Error why -> failwith why
+
+/// A wall stands wherever two cells side by side are not the same province, and nowhere else.
+/// Counted off the layout here, and off the drawing below.
+let private wallsAcross =
+    Atlas.layout
+    |> List.sumBy (fun (_, cells) ->
+        let cells = Array.ofList cells
+        let at index = if index >= 0 && index < cells.Length then cells[index] else None
+
+        [ 0 .. cells.Length ]
+        |> List.filter (fun edge ->
+            let one, other = at (edge - 1), at edge
+            (one.IsSome || other.IsSome) && one <> other)
+        |> List.length)
+
+/// The lines of the drawn map with the writing on them - bars and letters, and none of the
+/// dashes the line between two rows is made of.
+let private drawnRows =
+    (plain.Board true (Power.seatOf Austria) dealt).Replace("\r\n", "\n").Split '\n'
+    |> List.ofArray
+    |> List.filter (fun line -> line.Contains "|" && not (line.Contains "-") && not (line.Contains "+"))
+
+report "the map is drawn two lines to a row" (2 * List.length Atlas.layout) (List.length drawnRows)
+
+report
+    "and puts a wall between two provinces and none inside one"
+    (2 * wallsAcross)
+    (drawnRows |> List.sumBy (fun line -> line |> Seq.filter ((=) '|') |> Seq.length))
+
+// The other half of what a patch is for, and the one thing on this board that says at a glance
+// whose is whose. It is drawn on the walls rather than written in words, so a reader that lost
+// the tone on the way would still draw a perfectly good map and say nothing about it.
+
+let private rich = diplomacy.Views standard |> List.find (fun view -> view.Name = "rich")
+
+let private painted = rich.Board true (Power.seatOf Austria) dealt
+
+/// What a slot comes out as at a terminal, asked of the very machinery that paints with it
+/// rather than written down here a second time.
+let private inkOf key =
+    let sample = Tint.renderAt 20 (Spectre.Console.Markup(Tint.wrap (Palette.inkOf key standard) "x"))
+
+    Regex.Match(sample, "38;5;([0-9]+)").Groups[1].Value
+
+report
+    "and outlines a held centre in the colour of whoever holds it"
+    []
+    (Power.all
+     |> List.filter (fun power -> not (Regex.IsMatch(painted, $"\\[38;5;{inkOf (Ink.key power)}m[─-╿]")))
+     |> List.map Power.name)
+
+// Which provinces are wet decides half of what a player may do - a fleet lives out there and an
+// army may never go near it - so it is said in characters as well as in colour. The tildes are
+// the whole of what a terminal drawing no colour has to go on, and the partition has to be exact
+// in both directions: a sea drawn dry is as much a lie as a field drawn wet.
+
+let private seas, lands =
+    Atlas.all |> List.partition (fun province -> Atlas.terrainOf province.Id = Sea)
+
+let private drawnPlainly = plain.Board true (Power.seatOf Austria) dealt
+
+let private marked (province: Province) =
+    drawnPlainly.Contains $"~{Atlas.code province.Id}~"
+
+report
+    "the map writes every sea between tildes"
+    []
+    (seas |> List.filter (marked >> not) |> List.map (fun province -> Atlas.code province.Id))
+
+report
+    "and nothing that is not a sea"
+    []
+    (lands |> List.filter marked |> List.map (fun province -> Atlas.code province.Id))
+
+report "and the water has a colour of its own" true (Regex.IsMatch(painted, $"\\[38;5;{inkOf Ink.Sea}m~[a-z]+~"))
 
 // --- one unit beats one unit, and nothing else does ------------------------------------------------
 
@@ -556,11 +646,8 @@ for msg in roundTrip do
     report $"a record says '{written}' and reads it back" written andBack
 
 // --- and the machinery none of this game wrote --------------------------------------------------------------------
-
-let private dealt =
-    match Update.start rules 7 0UL with
-    | Ok model -> model
-    | Error why -> failwith why
+//
+// `dealt` is the game of seven the map above was drawn from.
 
 report "a table of six is turned away" true (Result.isError (Update.start rules 6 0UL))
 
@@ -770,7 +857,7 @@ report "the game names itself once" "diplomacy" diplomacy.Name
 report "seven seats and no other number" (7, 7) (diplomacy.Fewest, diplomacy.Most)
 report "a seat is a power" "Austria" (diplomacy.Seat (Seat.at 1))
 report "the last seat too" "Turkey" (diplomacy.Seat (Seat.at 7))
-report "it colours seven things" 7 (List.length diplomacy.Slots)
+report "it colours eight things - seven powers and the water" 8 (List.length diplomacy.Slots)
 report "and offers three machines" 3 (List.length diplomacy.Skills)
 report "and can be put down" true diplomacy.Resign.IsSome
 
