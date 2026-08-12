@@ -1,4 +1,4 @@
-# TCModel — two games, one engine
+# TCModel — three games, one engine
 
 **Turncoats** is the game this was built for. Two to five players draw bags of coloured
 stones and place them into fourteen regions. Nobody commands a faction - the stones are
@@ -6,8 +6,8 @@ red, blue and green whoever holds them - so the game is settled twice over: the 
 ruling the most land carries the board, and the player left holding most of that colour
 carries the faction. A bag played out to nothing wins nothing.
 
-TCModel is the *program* it is played in, and there are two games in it now. The other is
-noughts and crosses, and the reason for it is below.
+TCModel is the *program* it is played in, and there are three games in it now. The others are
+noughts and crosses and Diplomacy, and the reason for them is below.
 
 It is a stone-placement game built as a Model-View-Update loop in F#. The core is pure:
 `Setup.deal` deals a game from a seed and `Update.update` folds a `Msg` into the
@@ -30,9 +30,24 @@ game it was extracted from. So there is a second one, at a fraction of the size,
 through the same two seams and getting the same machinery for nothing - and [what that
 turned up](#what-a-second-game-found) is the most useful thing in this file.
 
+**And why a third.** Noughts and crosses tests the seams by being *small*. It has two seats,
+nothing hidden, no chance and one kind of turn, so what it proves is that a game can be tiny
+and still get everything. It cannot prove the seams are the right shape, because it never asks
+them for anything they were not already doing.
+
+**Diplomacy** does. Seven seats rather than two. No chance at all - not a die, not a shuffle,
+not a card - where the game this was built for turns on a generator. Orders written in secret
+by every power at once and carried out together, where both the others take turns. A year made
+of three different kinds of phase, two of which are skipped most years. A move that changes
+nothing on the board and is still the most important thing anybody does. And a map of
+seventy-five provinces with two different graphs over it, which is a board that cannot be
+drawn. Every one of those is a thing the machinery had never been asked for, and [what a third
+game found](#what-a-third-game-found) is why it is here.
+
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
 dotnet run -- tictactoe play 2  # or say which, and everything after it is read by that game
+dotnet run -- diplomacy play 7  # seven powers, and no dice anywhere in it
 ```
 
 **Playing** — [Running](#running) · [Rules as implemented](#rules-as-implemented) ·
@@ -45,6 +60,9 @@ dotnet run -- tictactoe play 2  # or say which, and everything after it is read 
 [A screen described once](#a-screen-described-once) ·
 [Playing from different machines](#playing-from-different-machines) ·
 [Playing against the program](#playing-against-the-program)
+
+**The other two games** — [Noughts and crosses](#what-a-second-game-found) ·
+[Diplomacy](#diplomacy)
 
 **The code** — [How it is put together](#how-it-is-put-together) ·
 [Tests](#tests) · [One file](#one-file) · [Tooling](#tooling)
@@ -59,6 +77,10 @@ dotnet run -- tictactoe        # or say which, and go straight to that game's me
 dotnet run -- tictactoe play 2 # everything after the name is read by that game
 dotnet run -- tictactoe serve 2 --rival hard   # nine buttons in a browser, against a machine
                                #   that cannot be beaten
+
+dotnet run -- diplomacy play 7 # seven powers, all of them at this keyboard
+dotnet run -- diplomacy play 7 --rival hard --rival hard --rival hard --rival hard \
+                               --rival hard --rival hard    # ...or six of them played for you
 
 dotnet run -- turncoats play 3 # or name it; a line that names none means the first game
 
@@ -85,10 +107,10 @@ dotnet run -- host 3 --cert stones.pfx --cert-password <pw>  # ...or is held her
 dotnet run -- --help           # every command; --help works on each of them too
 ```
 
-Everything below this line is about **Turncoats**, the game of stones. Noughts and crosses
-takes the same commands - `play`, `serve`, `host`, `join`, `replay`, `--rival`, `--view`,
-`--colour`, `undo`, `save` - because none of them are this game's, and it has a `help` of
-its own for the four words that are.
+Everything below this line is about **Turncoats**, the game of stones. The other two take the
+same commands - `play`, `serve`, `host`, `join`, `replay`, `--rival`, `--view`, `--colour`,
+`undo`, `save` - because none of them are this game's, and each has a `help` of its own for
+the handful of words that are. [Diplomacy](#diplomacy) has its own section below.
 
 Once a game is dealt, everything else is typed at the prompt:
 
@@ -1336,6 +1358,110 @@ which was never empty, so nobody waits for it and nobody can sit down in it. The
 play as the last person arrives rather than before, because a game dealt for four is not
 begun until four are sitting at it.
 
+## Diplomacy
+
+The standard board, played by the standard rules. Seven powers, seventy-five provinces,
+thirty-four supply centres, and no chance in it anywhere — not a die, not a shuffle, not a
+card. Hold eighteen centres and you have won.
+
+```powershell
+dotnet run -- diplomacy play 7      # seven seats at this keyboard
+dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard \
+              --rival hard --rival hard --rival hard    # one of you, in a browser
+dotnet run -- diplomacy host 7      # seven of you, at your own machines
+```
+
+**Seven, and exactly seven.** There is no variant here for a table of five, and there should
+not be: the balance of the whole thing is built on all seven home countries being played. A
+seat with nobody in it is given to the machine, which is what `--rival` is for — once per seat
+you are giving away. Seat one is Austria and seat seven is Turkey, at every game there will
+ever be, so a record reads the way anybody who plays this would write it.
+
+### A year
+
+| Phase | What is asked for |
+| --- | --- |
+| Spring, Autumn | An order for each of your units, then `commit` |
+| Retreats | Where each beaten unit goes, or `disband` |
+| Winter | Builds or removals, to match your centres |
+
+The centres are counted once a year, after the autumn's retreats. **A phase with nobody in it
+is skipped without anybody being stopped to be asked** — most seasons dislodge nobody and most
+winters owe nothing, so a quiet year is two phases and not five.
+
+**Everybody writes at once.** The seats come round one at a time, and what any of them has
+written stays that power's own business until the last of them has committed. Then the whole
+season resolves and everybody sees all of it together. That is not a concession to the
+machinery — it is exactly the guarantee that writing orders at one table in one room is
+supposed to give.
+
+### The orders
+
+| Order | Written |
+| --- | --- |
+| Hold | `vie hold` |
+| Move | `vie - tri`, and `mao - spa/nc` where a province has two coasts |
+| Support a unit where it stands | `bud s vie` |
+| Support a move | `bud s vie - tri` |
+| Convoy an army over water | `nth c lon - bel` |
+| Retreat | `vie - tri`, the same as a move |
+| Disband, build | `disband vie`, `build a vie`, `build f stp/sc` |
+| Take one back | `cancel vie` |
+| Finish | `commit` |
+
+Provinces are named by their first three letters, or by their name with the spaces taken out —
+`stp` and `stpetersburg` are the same place. `A vie - tri` works too; the piece is named in
+every printed set of these rules and the order does not need it.
+
+**Talking** is `press france <anything>`, read by France and by nobody else, or `press all
+<anything>` for the table. Everybody is told that a message went and nobody else is told what
+was in it. Nothing in the rules makes anybody keep a promise, and that is the game. The machine
+does not read its press.
+
+**Walking away** is `resign`, and it does not end a game of seven because one power left: its
+units stand where they are and are taken off the board as they are pushed out, which is what
+these rules call civil disorder. Units it owes and does not name are taken furthest from home
+first, so a table never waits forever on somebody who has gone.
+
+### The map, and why there is no picture of one
+
+Armies walk the land; fleets sail the water and hug the coast. **They do not travel the same
+map**, and neither graph can be worked out from the other: Rome and Venice border, and a fleet
+cannot use it. Spain, Bulgaria and St Petersburg have two coastlines each that face different
+waters, so a fleet standing there is standing on one of them and a fleet sent there has to say
+which — unless only one is reachable from where it is, in which case being asked would be
+pedantry rather than a rule.
+
+Turncoats prints [a honeycomb](#drawn-as-a-map) because its borders are a patch of a triangular
+lattice, so the picture *is* the border table and cannot lie. This map is not a lattice. Any
+grid of seventy-five provinces would put pairs side by side that share no border and pull apart
+pairs that do, and a player would read the picture — there is no other reason to draw one. So
+the board shows what is actually true: every supply centre and who holds it, every unit and
+where it stands, grouped the way people who play this talk about the map. The borders are one
+question away.
+
+```
+borders vie      what a piece in Vienna could reach, by land and by sea
+where mun        what is standing there, and who holds the centre
+```
+
+That answer comes out of the same table the adjudicator walks, so it cannot be out of date and
+cannot be wrong. In a browser every unit carries the question as a button beside its orders.
+
+### Points the rules leave to the adjudicator, decided here
+
+- **Convoy or march.** An army ordered somewhere it can walk to is walking, whatever fleets are
+  sitting in the water beside it; an army ordered somewhere it cannot is asking to be carried.
+  Decided by the map rather than by reading intent into the order, which is what saves this
+  from needing a rule about intent.
+- **Paradoxes.** A convoy that holds only if it is not attacked and is attacked only if it
+  holds is broken by disrupting the convoy — Szykman's rule, which is the one most sets of
+  these rules end up at. A ring of units all moving is not a paradox and all of it gets through.
+- **Support to a province, not to a coast.** A support names provinces; which coast the
+  supported unit lands on is its own business.
+- **Retreat as a move.** `vie - tri` in a retreat phase is a retreat, because the parser reads a
+  line without being told which phase the game is in and one line should not mean two things.
+
 ## How it is put together
 
 Everything above is what the game does. What follows is how it is arranged so that it
@@ -1494,6 +1620,84 @@ unwriteable. The second game is the wrong shape to force it: it hides nothing, w
 itself the useful half of the answer — `Knowledge` is a game's own idea and not something
 the screens require.
 
+### What a third game found
+
+Diplomacy is about fourteen hundred lines, of which four hundred are the map typed out and two
+hundred are the adjudicator. It compiled the first time it was asked to and needed no change
+to `Engine`, `Table` or `Net` — the same result the second game got, which is worth saying
+because this one was chosen to be as unlike both as the machinery would take.
+
+**The thing it was supposed to break, and did not.** `Rules.Active` says *one* seat is to
+play, and Diplomacy is the game where everybody plays at once. That looked like the seam's
+first real failure. It is not, and the reason is worth having: a phase is seven powers each
+writing orders and then saying they have finished, and *writing* is a move like any other. The
+seats come round one at a time; nobody may read anybody else's orders until the last power
+seals; and when it does, the whole season resolves inside one `Play`. What the seam asks for
+is a total function from a move and a position to the next position, and "everybody moves at
+once" turns out to be a fact about what a *phase* is, not about what a move is.
+
+The half of that which does need something is secrecy, and the seam already had it. `SeenBy`
+was put there for a game with a closed bag of stones; it is what stops France reading Austria's
+orders, and what makes `press france ...` a line only France reads.
+
+- **A move may legitimately change nothing.** `press` puts a line in the record, tells two
+  people something and leaves every province exactly where it was. Everything above held —
+  the timeline takes it, the journal writes it, undo walks back over it — because nothing in
+  the engine ever asked a move to *do* anything. It was worth checking, because the whole
+  machinery is built on watching whether the timeline grew.
+- **`Machines.answering` stops when the timeline stops growing, and that is load-bearing in a
+  way it had not been.** At the other two games a machine takes one turn. Here it writes five
+  orders and then commits, one call at a time, and the run only ends because a machine that has
+  written everything says `commit` — and the phase resolving is what moves the seat on. A
+  machine that answered `Some` forever would spin. It cannot: the seat stops being its own.
+- **Two graphs over one board, and neither is derivable from the other.** Armies walk the land,
+  fleets sail the water and the coast, and a fleet may not cross a land border — Rome to Venice
+  is a border and a fleet cannot use it. Nothing above the game had an opinion about this, which
+  is the seam working; what it cost the *game* is that `Faults` had to grow up. Three hundred
+  borders typed out by hand will have a mistake in them, so both ends of every border are
+  written down and checked against each other. A table mirrored from one end agrees with itself
+  however wrong it is, and Turncoats' twenty-three borders are small enough that mirroring is
+  the right call. At three hundred it stops being one.
+- **The board that cannot be drawn.** Turncoats prints a honeycomb, and can, because its
+  borders are a patch of a triangular lattice — the picture *is* the border table. This map is
+  not a lattice, so any grid of seventy-five provinces would put pairs side by side that share
+  no border and pull apart pairs that do. A player would read the picture; there is no other
+  reason to draw one. So there is no map on the screen, and `borders vie` answers out of the
+  same table the adjudicator walks. That is a decision the second game could never have forced,
+  because nine squares can always be drawn.
+- **`View.Answer` stopped being a field with one caller.** It was put there for `rule 8`, and
+  the second game filled it with a line saying there was nothing to explain. Here it is the
+  only way to see the map at all, which retroactively settles the argument about whether it
+  earns its place on the seam.
+- **The browser check had one game's vocabulary written into it.** `tools/smoke.ps1` waited for
+  a board whose heading `startsWith('Turn')`. Two games counted their turns, so it read as
+  machinery; a game whose seasons are called Spring and Autumn is what made it a fact about
+  those two games. It is a substituted string now, like everything else in that script that is
+  about the game rather than about the browser.
+- **And it found a check that had been quietly dead.** Running that script against a third game
+  meant running it at all, and `-Game tictactoe` had been failing since that game's three
+  renderers were folded into one `Scene`: a square stopped being a `.cell` and became a `.tile`,
+  and the selector was never updated. Nothing said so, because a selector matching nothing
+  throws inside the page and the page's own error was the first thing reported. Two values in a
+  table. The check has been fixed and is passing; it had not run since the refactor that broke
+  it.
+
+**Where the seam was widened, said out loud.** `Play` cannot fail, and a phase resolving inside
+it does a great deal — adjudication, retreats, centres changing hands, builds, elimination, and
+walking on through however many phases have nobody in them. All of that comes back as notices,
+which is right, but it means one move can produce twenty of them where the other two games
+produce one or two. Nothing broke; `Model.LogDepth` truncates and the journal keeps the rest.
+It is worth knowing that the engine's idea of "what one move can say" is looser than either of
+the other games would suggest.
+
+**And one place it is honestly worse than a real game of this.** Diplomacy is played in the
+negotiation, and the negotiation happens in a room. `press` carries a line to one power with
+the right secrecy, and that is all it is: there is no side channel, no simultaneous private
+conversation, no way to lie to two people differently at the same moment except by sending two
+messages. The machine at a seat does not read its press at all, and says so in `help`. This is
+a program that adjudicates Diplomacy correctly and lets people talk through it; it is not a
+program that plays Diplomacy for you.
+
 ### Layout
 
 Seven layers, each depending only on the ones above it. **The order in
@@ -1614,6 +1818,27 @@ Three files where the other game has five, and the two that are missing are the 
 `Rich.fs` and `Html.fs` were the same board written out a second and a third time; this game
 says what a screen is *made of* and the readers in the table layer do the drawing. See
 [A screen described once](#a-screen-described-once).
+
+**`src/Games/Diplomacy`** — the third, in the same shape again and about fourteen hundred
+lines. Chosen to be as unlike the other two as the seams would take: seven seats, no chance at
+all, and every power writing in secret at the same time. See [what a third game
+found](#what-a-third-game-found).
+
+| File | Role |
+| --- | --- |
+| [Powers.fs](src/Games/Diplomacy/Rules/Powers.fs) | The seven, army and fleet, and which coastline of a province that has two |
+| [Atlas.fs](src/Games/Diplomacy/Rules/Atlas.fs) | The board: seventy-five provinces and the two graphs over them, both ends of every border written out, and the checks that they agree |
+| [Position.fs](src/Games/Diplomacy/Rules/Position.fs) | What is standing where, who owns which centres, and the opening |
+| [Orders.fs](src/Games/Diplomacy/Rules/Orders.fs) | The eight orders, and what each phase will take |
+| [Adjudicate.fs](src/Games/Diplomacy/Rules/Adjudicate.fs) | What happened when everybody moved at once: strengths, cut supports, dislodgement, convoys, and the two rules for a cycle that answers differently depending on what it is told about itself |
+| [Session.fs](src/Games/Diplomacy/Rules/Session.fs) | The year: three kinds of phase, the ones with nobody in them walked straight through, and the centres counted once |
+| [Turn.fs](src/Games/Diplomacy/Rules/Turn.fs) | `Move` - write an order, take one back, commit, send a word, walk away - and the total `Play` |
+| [Words.fs](src/Games/Diplomacy/Rules/Words.fs) | Every string a player reads, including which sentence a seat gets for an order it did not write |
+| [Rival.fs](src/Games/Diplomacy/Rules/Rival.fs) | A seat played by the program: it wants centres, it wants them near, and the better ones put a second unit behind a push |
+| [Ink.fs](src/Games/Diplomacy/Reading/Ink.fs) | Seven colours, against the other games' four and two |
+| [Parse.fs](src/Games/Diplomacy/Reading/Parse.fs) | The words every printed set of these rules uses, and the other half of the bargain `Words.order` writes |
+| [Render.fs](src/Games/Diplomacy/Reading/Render.fs) | Every screen described once as a [`Scene`](#a-screen-described-once), and the argument for drawing no map |
+| [Offer.fs](src/Games/Diplomacy/Offer.fs) | Both seams filled in |
 
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.
@@ -1911,22 +2136,27 @@ dotnet fsi tests/rival.fsx      # the seat the program plays: that it plays lega
                                 #   plays fairly, and that the skills mean something
 dotnet fsi tests/tictactoe.fsx  # the second game - its rules, its three views, its machine,
                                 #   and everything above it that it gets for nothing
+dotnet fsi tests/diplomacy.fsx  # the third game - the adjudication cases every set of these
+                                #   rules is judged on, the year and its skipped phases, what
+                                #   one seat may read of another's orders, and a few thousand
+                                #   machine moves played out and replayed from the record
 ```
 
-**Two harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
-loaded file by its basename, and both games have a `Board.fs`, a `Turn.fs`, a `Words.fs` and
-four more - which compile happily side by side in one project and cannot be loaded into one
-script. So [Checks.fsx](tests/Checks.fsx) keeps score and loads nothing at all, and
-[Whole.fsx](tests/Whole.fsx) and [Noughts.fsx](tests/Noughts.fsx) each load the same stack in
-the project's own order with one game on the end of it. The thirteen scripts above the last
-one used to keep a hand-ordered `#load` list apiece; they had already drifted, which is the
-same disease the seams are for.
+**Three harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
+loaded file by its basename, and all three games have a `Turn.fs` and a `Words.fs` - which
+compile happily side by side in one project and cannot be loaded into one script. So
+[Checks.fsx](tests/Checks.fsx) keeps score and loads nothing at all, and
+[Whole.fsx](tests/Whole.fsx), [Noughts.fsx](tests/Noughts.fsx) and
+[Europe.fsx](tests/Europe.fsx) each load the same stack in the project's own order with one
+game on the end of it. The thirteen scripts above the last two used to keep a hand-ordered
+`#load` list apiece; they had already drifted, which is the same disease the seams are for.
 
 Two more, which want a process rather than a value:
 
 ```powershell
 pwsh tools/smoke.ps1                  # a real browser, driven: the stream, the box, the
 pwsh tools/smoke.ps1 -Game tictactoe  #   buttons, the knock, the door
+pwsh tools/smoke.ps1 -Game diplomacy
 pwsh tools/wire.ps1                   # a hosted table with two consoles at it, over SignalR
 pwsh tools/wire.ps1 -Game tictactoe
 ```
@@ -1997,6 +2227,23 @@ but the clock.
 `-Rival` serves the same game with the program in the second seat, and checks the two things
 about that which only a browser can show: that the page is told whose seat it is, and that
 the machine's own move arrives down the stream without the page going and asking for it.
+
+`-Game` says which. What differs between one game and the next is a row of a table at the top
+of the script — what a board is made of, what a player types at one, what the table says back —
+and everything under it is between this program and a browser. **Two things had been written
+into that machinery rather than into the table, and a third game is what found them.** The
+script waited for a board whose heading `startsWith('Turn')`, which was true of two games that
+count their turns and is not true of one whose seasons are called Spring and Autumn. And the
+number of seats was the literal `2`, because there had never been a game that was not — a
+browser can only sit in one of seven, so every other seat has to be filled or the table waits
+forever for people who are not coming.
+
+**And it found a check that had stopped running.** `-Game tictactoe` had been failing since
+that game's three renderers were folded into one `Scene`: a square stopped being a `.cell` and
+became a `.tile`, and the selector in the table was never updated. Nothing said so, because a
+selector matching nothing throws inside the page and the page's own error is the first thing
+reported — so the failure read as "the page is broken", which is exactly the alarm this script
+exists to raise honestly. It is two values, they are fixed, and all three games pass.
 
 It wants Edge or Chrome on the machine, which is why it is not in CI. Run it after touching
 anything the browser reads.

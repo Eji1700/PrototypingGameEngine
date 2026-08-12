@@ -21,7 +21,7 @@ param(
     [int]$DebugPort = 9222,
     [string]$Browser = "",
     # Which game to serve. Empty is the one a line that names none gets.
-    [ValidateSet("", "turncoats", "tictactoe")]
+    [ValidateSet("", "turncoats", "tictactoe", "diplomacy")]
     [string]$Game = "",
     # Serve the game with the machine in the second seat, and check the two things about
     # that which only a browser can show: that the page is told whose seat it is, and that
@@ -53,6 +53,8 @@ $Say = "/say"
 # once for both.
 $games = @{
     "turncoats" = @{
+        # How many sit down, which the game says and this only repeats.
+        Seats = 2
         # What the board is built out of, and how much of it there should be.
         Pieces = ".region"; Fewest = 12; Called = "map"
         # Two lines to type: one that moves the game, and one that walks it back.
@@ -64,18 +66,56 @@ $games = @{
         Asking = "rule "; Working = "holds"
         # What a second console says, and a word the first page should see in its log.
         Elsewhere = "negotiate"; Heard = "reserve"
-        # What the seat a machine plays is called here.
-        Machine = "Player 2"
+        # What the first board this game draws opens with.
+        Opens = "Turn 1"
+        # What the seat a machine plays is called here - in the roster the table reads out as
+        # somebody sits down, and at the head of the lines that seat puts in the log.
+        Machine = "Player 2"; Answers = "Player 2"
     }
     "tictactoe" = @{
-        Pieces = ".cell"; Fewest = 9; Called = "board"
+        Seats = 2
+        # `.tile` and not `.cell`, which is what these said until a third game was added and
+        # somebody ran this. A square stopped being a shape this game drew and became a cell of
+        # a `Scene` when its three renderers were folded into one description - and nothing
+        # failed, because a selector that matches nothing throws where it is *used* and the use
+        # was inside the page. The board check never got as far as being wrong.
+        Pieces = ".tile"; Fewest = 9; Called = "board"
         Typed  = "5"; Then = "undo"
-        Button = ".cell.free .types"; Types = "^\d+$"
+        Button = ".tile .types"; Types = "^\d+$"
         # Nine squares in plain sight: there is nothing to ask about, and saying so by
         # leaving this empty is the point rather than a gap.
         Asking = ""; Working = ""
         Elsewhere = "1"; Heard = "takes square"
-        Machine = "O"
+        Opens = "Turn 1"
+        Machine = "O"; Answers = "O"
+    }
+    "diplomacy" = @{
+        # Seven, because the map has seven home countries and the game is built on all of
+        # them being played. This is the only game here that is not two, which is the whole
+        # reason the number stopped being written into the line below.
+        Seats = 7
+        # One tile per unit of the seat reading, each carrying every order that unit could be
+        # given. Austria opens with three.
+        Pieces = ".tile"; Fewest = 3; Called = "set of orders"
+        # `commit` rather than an order, and for a reason worth writing down: at this game a
+        # move by one power changes nothing anybody else can see, so an order typed into the
+        # box would move the game without moving the board - and the seat after this one is
+        # never reached until this one says it has finished. Committing is the line that does
+        # both, which is what the checks below are actually about.
+        Typed  = "commit"; Then = "undo"
+        Button = ".tile .types"; Types = "^(bud|tri|vie) "
+        Asking = "borders vie"; Working = "Tyrolia"
+        # Nothing here, and unlike the game of nine squares it is not because there is nothing
+        # to say. Everybody writes at once, so the only seat that may say anything is the one
+        # being asked - and a second console sitting down at this table is by definition not
+        # it. There is no line for somebody else to say out of turn.
+        Elsewhere = ""; Heard = ""
+        Opens = "Spring 1901"
+        # Two names rather than one, because at seven seats they are not the same answer. The
+        # roster names the machines in seating order and England leads it; the log holds the
+        # last dozen lines, and by the time a season has resolved those belong to the power
+        # that wrote last.
+        Machine = "England"; Answers = "Turkey"
     }
 }
 
@@ -237,7 +277,10 @@ $script = @'
     while (Date.now() < stop && !settled()) await wait(25);
     return settled();
   };
-  const shows = () => heading().startsWith('Turn');
+  // What the first board this game draws opens with. Substituted rather than written in: it
+  // read `Turn` for as long as there were only games that counted their turns, and a game
+  // whose seasons are called Spring and Autumn is what made that a thing to be told.
+  const shows = () => heading().startsWith(OPENS);
   const changes = async was => { await until(() => heading() !== was); return heading(); };
 
   await until(shows);
@@ -275,15 +318,27 @@ $script = @'
     return heading;
   };
 
+  // Whether the seat the machine plays has put a line in the log without this page having
+  // gone and asked for one. Read after every step rather than only at the end, because the
+  // log holds the last dozen lines and nothing says the machine's are still among them: at a
+  // game of two the answer comes back with the very next board, and at a game of seven a
+  // season resolving pushes thirty lines through it.
+  const machineSpoke = () =>
+    [...document.querySelectorAll('#screen .said')].some(line => line.textContent.indexOf(MACHINE) === 0);
+
+  out.answered = false;
+
   await sent(TYPED);
   document.querySelector('.prompt button').click();
   out.afterSend = await settled(out.drew);
   out.boxAfterSend = box().value;
+  out.answered = out.answered || machineSpoke();
 
   // The same, sent with the Enter key instead.
   await sent(THEN);
   box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
   out.afterEnter = await settled(out.afterSend);
+  out.answered = out.answered || machineSpoke();
 
   // A control that arrived with the board rather than with the page, and carries its own
   // line in its address rather than in a signal.
@@ -293,10 +348,10 @@ $script = @'
   out.afterButton = await changes(out.afterEnter);
   const said = [...document.querySelectorAll('#screen .said')].map(line => line.textContent);
   out.said = said.length;
-  // That button ended a turn, so at a table with a machine at it the seat after this one
-  // has answered by now - and its answer is in the log, having arrived on its own down the
-  // same stream rather than because the page went and asked.
-  out.answered = said.some(line => line.indexOf(MACHINE) === 0);
+  // At a table with a machine at it, one of the lines above ended a turn - and the seat after
+  // it answered on its own, down the same stream, rather than because this page went and
+  // asked for anything.
+  out.answered = out.answered || machineSpoke();
 
   // A screen that lands beside the board rather than on it, and the only one made of
   // written lines rather than elements. Worth its own press: a newline is what separates
@@ -458,8 +513,14 @@ try {
     # Given rather than made up here, because this script has to be able to say it.
     $served = @("run", "--project", $root, "--")
     if ($Game) { $served += $Game }
-    $served += @("serve", "2", "--seed", "42", "--code", $Code)
-    if ($Rival) { $served += @("--rival", $Rival) }
+    $served += @("serve", "$($g.Seats)", "--seed", "42", "--code", $Code)
+
+    # Every seat the browser is not in has to be filled, or the table sits waiting for people
+    # who are not coming and no board is ever drawn. At a game of two that is the one seat
+    # `-Rival` was already about; at a game of seven it is the other six, and a run that named
+    # no machine gets one anyway because there is no other way to have a game at all.
+    $fill = if ($Rival) { $Rival } elseif ($g.Seats -gt 2) { "easy" } else { "" }
+    if ($fill) { for ($seat = 1; $seat -lt $g.Seats; $seat++) { $served += @("--rival", $fill) } }
 
     $table = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
 
@@ -530,7 +591,8 @@ try {
         $script.Replace("ROSTER", $(if ($Rival) { "true" } else { "false" })).
             Replace("PIECES", "'$($g.Pieces)'").
             Replace("BUTTON", "'$($g.Button)'").
-            Replace("MACHINE", "'$($g.Machine)'").
+            Replace("MACHINE", "'$($g.Answers)'").
+            Replace("OPENS", "'$($g.Opens)'").
             Replace("ASKING", $(if ($g.Asking) { "'$($g.Asking)'" } else { "''" })).
             Replace("TYPED", "'$($g.Typed)'").
             Replace("THEN", "'$($g.Then)'")
@@ -546,7 +608,7 @@ try {
 
     if (-not $r) { Report "the page answered at all" $false "no result came back"; exit 1 }
 
-    Report "the board arrives over the stream" ($r.drew -like "Turn 1*") $r.drew
+    Report "the board arrives over the stream" ($r.drew -like "$($g.Opens)*") $r.drew
     Report "and the whole $($g.Called) is drawn" ($r.pieces -ge $g.Fewest) "$($r.pieces) of them"
     Report "a line typed in the box and sent moves the game" ($r.afterSend -ne $r.drew) "$($r.drew) -> $($r.afterSend)"
     Report "and the box is emptied for the next one" ($r.boxAfterSend -eq "") "left holding '$($r.boxAfterSend)'"
@@ -563,7 +625,7 @@ try {
 
     if ($Rival) {
         Report "the page is told which seat the machine is playing" ($r.onArrival -match "machine: $($g.Machine) \($Rival\)") $r.onArrival
-        Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was $($g.Machine)'s"
+        Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was $($g.Answers)'s"
     }
 
     # --- the turn arriving from somebody else ----------------------------------------------
@@ -576,6 +638,14 @@ try {
     #
     # So a second console sits down - not a browser, just a cookie and a held-open stream -
     # and says one line. The page above should hear about it without being asked.
+
+    # Skipped at a game where nobody may speak out of turn, and said out loud rather than
+    # quietly dropped: the delivery below is real machinery, and a game that cannot exercise
+    # it should say which game it is and why.
+    if (-not $g.Elsewhere) {
+    "skip a second console saying a line: at this game only the seat being asked may say anything"
+    }
+    else {
 
     $second = Join-AsConsole "http://localhost:$Port"
 
@@ -597,6 +667,8 @@ try {
         $second.Body.Dispose()
         $second.Held.Dispose()
         $second.Client.Dispose()
+    }
+
     }
 
     ""

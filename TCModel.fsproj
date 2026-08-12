@@ -156,6 +156,35 @@
     <Compile Include="src/Games/TicTacToe/Offer.fs" />
   </ItemGroup>
 
+  <!-- The third game, and the one that leans on the seams hardest. Everybody moves at once,
+       so a phase is seven seats writing in secret and one resolution; a year is three kinds of
+       phase, two of which are usually skipped; and the map is a table of three hundred borders
+       rather than a shape. None of that needed a line changing above it. -->
+  <ItemGroup Label="Diplomacy - how it is played">
+    <Compile Include="src/Games/Diplomacy/Rules/Powers.fs" />
+    <Compile Include="src/Games/Diplomacy/Rules/Atlas.fs" />
+    <Compile Include="src/Games/Diplomacy/Rules/Position.fs" />
+    <Compile Include="src/Games/Diplomacy/Rules/Orders.fs" />
+    <!-- Working out what happened when everybody moved at once, which is the only hard thing
+         in this game and is hard because an order's outcome can depend on itself. -->
+    <Compile Include="src/Games/Diplomacy/Rules/Adjudicate.fs" />
+    <Compile Include="src/Games/Diplomacy/Rules/Session.fs" />
+    <Compile Include="src/Games/Diplomacy/Rules/Turn.fs" />
+    <Compile Include="src/Games/Diplomacy/Rules/Words.fs" />
+    <!-- And a seat played by the program, which reads the board a player reads and draws
+         nothing at all. -->
+    <Compile Include="src/Games/Diplomacy/Rules/Rival.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Diplomacy - how it is read">
+    <!-- Three files, like the game of nine squares and unlike the game of stones: this one
+         describes its screens once as a `Scene` and `Readers` draws all three. -->
+    <Compile Include="src/Games/Diplomacy/Reading/Ink.fs" />
+    <Compile Include="src/Games/Diplomacy/Reading/Parse.fs" />
+    <Compile Include="src/Games/Diplomacy/Reading/Render.fs" />
+    <Compile Include="src/Games/Diplomacy/Offer.fs" />
+  </ItemGroup>
+
   <!-- What opening a game actually involves - dealing one, keeping its record, the menu,
        the two tables and the browser - generic in the game, and ending in the one interface
        that seals a game's types off so that a list can hold more than one. -->

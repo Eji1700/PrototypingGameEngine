@@ -8,7 +8,8 @@ module TCModel.Games
 /// In the order they are offered. The first is what somebody who says nothing gets.
 let all =
     [ Play.chosen TCModel.Turncoats.Offer.playable
-      Play.chosen TCModel.TicTacToe.Offer.playable ]
+      Play.chosen TCModel.TicTacToe.Offer.playable
+      Play.chosen TCModel.Diplomacy.Offer.playable ]
 
 /// The one a line that named no game is about. There is always at least one game, so this
 /// is a list that cannot be empty rather than an answer that might not be there.
