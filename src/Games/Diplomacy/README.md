@@ -108,8 +108,15 @@ changed like any of the others.
     ╭──┴──╮  ╰────────┬──╯  ╭──┴──┬──╯  ╭─────╮     ╭────────┴──┬──╯  ╭──┴──┬──╯  ╭──┴──╮
 ```
 
-Liverpool is two hexes and the North Sea four, and each is one outline. The empty hexes are not
-decoration — a gap is what keeps two provinces that do not border from being drawn side by side.
+Liverpool is two hexes and the North Sea four, and each is one outline.
+
+**There is one hole in the map, and it is Switzerland.** A gap used to be load-bearing here —
+it was what kept two provinces that do not border from being drawn side by side — and there were
+a good many. Once every border was drawn most of them were keeping nothing apart, so they were
+filled in. The four cells left over sit between Marseilles, Burgundy, Munich, Tyrolia and
+Piedmont, which are exactly the five provinces that ring Switzerland on the printed board, and
+nothing may ever enter it. That is checked too, so a gap anywhere else is an accident rather than
+scenery.
 
 **Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
 eleven neighbours — so one hex a province caps the picture at about half its borders, which is

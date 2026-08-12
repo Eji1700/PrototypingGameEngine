@@ -508,8 +508,16 @@ module Atlas =
     /// beside it and two in each of the rows above and below - six shared sides, drawn as a
     /// honeycomb, exactly the way the other game of maps here draws its twelve regions.
     ///
-    /// `"."` is a cell with nothing in it, and there are a good many. They are not decoration:
-    /// a gap is what keeps two provinces that do not border from being drawn side by side.
+    /// `"."` is a cell with nothing in it, and there are four of them - all in one row, all in
+    /// the same place. A gap used to be load-bearing here: it was what kept two provinces that do
+    /// not border from being drawn side by side, and there were a good many. Once the map drew
+    /// every border there was, most of them were keeping nothing apart and were filled in.
+    ///
+    /// What is left is not a hole. It is **Switzerland**, which is not a province of this game
+    /// because nothing may ever enter it, and the five provinces round it - Marseilles, Burgundy,
+    /// Munich, Tyrolia, Piedmont - are exactly the five that ring Switzerland on the printed
+    /// board. `diplomacy.fsx` checks that, so a gap opened anywhere else is an accident and fails
+    /// rather than passing as scenery.
     ///
     /// **A province takes as many hexes as it needs, and that is the whole trick.** One hex a
     /// province gives it six sides and no more, and provinces here have up to eleven neighbours -
@@ -582,17 +590,17 @@ module Atlas =
           -4, [ "mao"; "iri"; "nao"; "cly"; "cly"; "cly"; "edi"; "nwg"; "nwy"; "stp"; "stp"; "stp"; "stp" ]
           -5, [ "mao"; "iri"; "lvp"; "cly"; "lvp"; "lvp"; "edi"; "nwg"; "nwy"; "nwy"; "nwy"; "nwy"; "nwy"; "stp" ]
           -4, [ "mao"; "iri"; "lvp"; "lvp"; "wal"; "yor"; "nth"; "nth"; "nth"; "nth"; "ska"; "swe"; "fin"; "stp" ]
-          -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "."; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "stp"; "stp" ]
+          -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "nth"; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "stp"; "stp" ]
           -2, [ "mao"; "eng"; "eng"; "lon"; "lon"; "nth"; "hel"; "den"; "bal"; "bal"; "bot"; "bot"; "bot"; "lvn"; "stp" ]
           -3, [ "mao"; "eng"; "eng"; "eng"; "eng"; "nth"; "hol"; "kie"; "bal"; "bal"; "bal"; "bal"; "lvn"; "lvn"; "stp" ]
-          -4, [ "mao"; "bre"; "pic"; "bel"; "."; "bel"; "hol"; "kie"; "kie"; "ber"; "pru"; "pru"; "pru"; "war"; "mos" ]
-          -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "."; "kie"; "ber"; "pru"; "."; "war"; "war"; "mos" ]
-          -6, [ "mao"; "."; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
+          -4, [ "mao"; "bre"; "pic"; "bel"; "bel"; "bel"; "hol"; "kie"; "kie"; "ber"; "pru"; "pru"; "pru"; "war"; "mos" ]
+          -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "kie"; "kie"; "ber"; "pru"; "pru"; "war"; "war"; "mos" ]
+          -6, [ "mao"; "mao"; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
           -5, [ "mao"; "gas"; "gas"; "bur"; "bur"; "bur"; "bur"; "bur"; "mun"; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
           -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "."; "."; "."; "."; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev"; "sev" ]
-          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "tyr"; "."; "tri"; "ser"; "rum"; "bla"; "bla"; "bla"; "arm" ]
-          -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "ven"; "ven"; "ven"; "tri"; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
-          -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "rom"; "ven"; "."; "."; "tri"; "."; "ser"; "bul"; "con"; "ank"; "arm" ]
+          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "tyr"; "tri"; "tri"; "ser"; "rum"; "bla"; "bla"; "bla"; "arm" ]
+          -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "ven"; "ven"; "ven"; "tri"; "tri"; "ser"; "ser"; "bul"; "con"; "ank"; "arm" ]
+          -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "rom"; "ven"; "adr"; "adr"; "tri"; "ser"; "ser"; "bul"; "con"; "ank"; "arm" ]
           -2, [ "mao"; "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
           -1, [ "naf"; "naf"; "wes"; "tys"; "tys"; "ion"; "adr"; "ion"; "ion"; "alb"; "gre"; "gre"; "aeg"; "smy"; "syr"; "syr" ]
           2, [ "naf"; "tun"; "tun"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "eas"; "eas" ] ]

@@ -119,6 +119,10 @@ let private mapped =
     |> List.map (fun (shift, cells) ->
         cells |> List.mapi (fun step cell -> cell, shift + 2 * step) |> List.choose (fun (c, h) -> c |> Option.map (fun p -> p, h)))
 
+/// The six cells round one, on a lattice where a row sits half a cell across from the one above.
+let private around (row, here) =
+    [ row, here - 2; row, here + 2; row - 1, here - 1; row - 1, here + 1; row + 1, here - 1; row + 1, here + 1 ]
+
 /// Two *different* provinces the picture puts side by side: two half-columns apart in one row,
 /// or one half-column apart in rows that touch. A side between two hexes of the same province is
 /// the inside of a country rather than a border, and is no business of this check.
@@ -153,9 +157,6 @@ report
         |> List.mapi (fun row cells -> cells |> List.map (fun (province, here) -> province, (row, here)))
         |> List.collect id
         |> List.groupBy fst
-
-     let around (row, here) =
-         [ row, here - 2; row, here + 2; row - 1, here - 1; row - 1, here + 1; row + 1, here - 1; row + 1, here + 1 ]
 
      hexes
      |> List.filter (fun (_, cells) ->
@@ -198,6 +199,32 @@ report
     (Set.difference realBorders sides
      |> Set.toList
      |> List.map (fun (one, other) -> $"{Atlas.code one}-{Atlas.code other}")
+     |> List.sort)
+
+// Which leaves the holes. A gap used to be load-bearing - it was what kept two provinces that do
+// not border from being drawn side by side - and most of them were doing no such thing by the
+// end, so they were filled in. What is left is one four-cell hole, and it is not a hole: it is
+// Switzerland, which is not a province of this game because nothing may ever enter it. The five
+// provinces round it are exactly the five that ring Switzerland on the printed board, which is
+// the whole of the claim being made here - a gap anywhere else would be an accident, and would
+// fail.
+report
+    "and the only gap left in the map is Switzerland"
+    [ "bur"; "mar"; "mun"; "pie"; "tyr" ]
+    (let placed =
+        Atlas.layout
+        |> List.mapi (fun row (shift, cells) -> cells |> List.mapi (fun step cell -> (row, shift + 2 * step), cell))
+        |> List.collect id
+
+     let filled =
+         placed |> List.choose (fun (where, cell) -> cell |> Option.map (fun province -> where, province)) |> Map.ofList
+
+     placed
+     |> List.filter (snd >> Option.isNone)
+     |> List.collect (fst >> around)
+     |> List.choose (fun where -> Map.tryFind where filled)
+     |> List.map Atlas.code
+     |> List.distinct
      |> List.sort)
 
 // --- and the picture the readers make of it ---------------------------------------------------------

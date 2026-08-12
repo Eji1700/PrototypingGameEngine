@@ -53,7 +53,7 @@ module Render =
             "Write an order for each of your units, then 'commit'. Nobody sees what you have written until every power has committed, and then everybody sees all of it at once."
 
         let borders =
-            "A province takes as many hexes as it needs and is drawn as one shape with its name written across it. Two provinces share a side exactly when they border each other, and two drawn apart do not - the picture is the whole of it, so what you can see is what a piece can do. 'borders vie' spells one province out in words, and 'vie - tri' is refused if the map does not show them touching."
+            "A province takes as many hexes as it needs and is drawn as one shape with its name written across it. Two provinces share a side exactly when they border each other, and two drawn apart do not - the picture is the whole of it, so what you can see is what a piece can do. The one hole in it is Switzerland, which nothing may enter. 'borders vie' spells one province out in words."
 
         let press =
             "'press france ...' sends a line to one power and to nobody else. 'press all ...' sends it to the table. Nothing in the rules makes anybody keep their word."
