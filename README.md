@@ -93,7 +93,7 @@ dotnet run -- play 4 --rival easy --rival hard   # once per seat you are giving 
 dotnet run -- serve 3          # the same game, played in a browser on this machine
 dotnet run -- serve 2 --rival hard
 
-dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
+dotnet run -- replay logs/...-2p-seed42.log  # take a saved game up again, machines and all
 
 dotnet run -- host 3                        # open a table at their own machines
 dotnet run -- host 3 --open                 # ...with no word at the door, for a room you trust
@@ -162,8 +162,15 @@ There is no second format. Every move is written exactly as it is typed at the
 prompt, one to a line, and everything else is a comment — so reading a record back
 is the same job as reading a player's input, done by the same parser.
 
+The one line that is not a move is the deal, and it carries the whole of what a
+game cannot recover from its own moves: how many were playing, what they were
+dealt from, and **who was in each seat** — `you` for a person at the keyboard, a
+skill for the program. Which seat the machine played and how well it played are
+decided before the first move and are written down nowhere else, so a record that
+left them out would replay into a table where every seat was suddenly yours.
+
 ```
-deal 2 42
+deal 2 42 you hard
 
 #   1  turn 1, Player 1
 recruit r 3
@@ -189,6 +196,22 @@ Replay stops where the game left off, which is also where `undo` starts. So the
 same two commands that take a move back during play are what walk a finished game
 backwards and forwards for review, and a game that ends stays open at the prompt
 rather than closing the window on itself.
+
+**Which makes it a resume rather than a viewing.** Three things follow from a
+record being a game you can carry on with:
+
+- **The machines come back.** The seating is on the deal line, so they take the
+  seats they were playing at the strength they were playing them.
+- **It is one game and one record.** A resumed game goes on writing to the file it
+  came out of rather than forking a second beside it. It knows which file that is
+  from the name — built in one place and taken apart in the same one — and a record
+  that has been renamed is filed afresh instead, on the principle that a file you
+  cannot prove is this game's is a file not to write over.
+- **`quit` leaves the game standing.** It used to resign first, so a record said
+  how it ended rather than simply stopping. That was right while a record was a
+  finished thing to read back; it is wrong once one is a game to take up, because
+  it made putting a game down for the evening the same act as losing it. Conceding
+  is `resign`, which is a move a player makes on purpose and always was.
 
 ## How the board is shown
 
@@ -1517,7 +1540,7 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Table/Playing/Men
 
   -> 1  New game         how many are playing, and who each of them is
      2  Join a table     sit down at one somebody else is hosting
-     3  Replay a record  a saved game, played through again
+     3  Replay a record  a saved game, taken up where it was left
      4  How it is drawn  now plain - plain text, and nothing this terminal has to understand
      5  Colours          which colour is drawn for what
      6  Rules            the rules and the commands, at length

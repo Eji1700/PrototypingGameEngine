@@ -139,7 +139,7 @@ type ReplayArgs =
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Path _ -> "the saved record to play again"
+            | Path _ -> "the saved game to take up again"
             | View _ -> "how the board is drawn - see the list below"
             | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
 
@@ -168,7 +168,7 @@ type Argument =
             | Serve _ -> "deal a game for that many and play it in a browser"
             | Host _ -> "open a table for that many and wait for them to arrive"
             | Join _ -> "sit down at a table someone else is hosting"
-            | Replay _ -> "play a saved record again, and stop where it left off"
+            | Replay _ -> "take up a saved game where it was left, against the same players"
 
 /// What a command line came to: a game to open and how to read it, something to print, or
 /// something to say about what was typed.

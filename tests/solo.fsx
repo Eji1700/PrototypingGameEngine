@@ -173,12 +173,22 @@ report
      | Keeping(_, "first", true) -> true
      | _ -> false)
 
+// And leaves the game standing. A record is something to take up again, so a game still in
+// play is written down as it stands rather than conceded on the way out - otherwise putting
+// one down for the evening would be the same act as losing it. Conceding is `resign`.
 report
-    "'quit' asks for it too, and resigns first so the record says how it ended"
+    "'quit' asks for it too, and leaves the game where it stands"
     true
     (match errandOf "quit" moved with
-     | Leaving(model, "first") -> Playing.isOver model
+     | Leaving(model, "first") -> not (Playing.isOver model)
      | _ -> false)
+
+report
+    "so a game put down can be taken up again"
+    (Playing.session (Solo.model moved))
+    (match errandOf "quit" moved with
+     | Leaving(model, _) -> Playing.session model
+     | _ -> failwith "quitting wrote nothing down")
 
 // The one that would be easy to get wrong, and was worth pulling out of the loop to be able
 // to ask: a restart writes the game it has just cleared away, under the name that game was

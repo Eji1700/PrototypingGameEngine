@@ -249,7 +249,7 @@ module Menu =
           Rows =
             [ Keys.opens (Keys.nth 0) "New game" "how many are playing, and who each of them is" (counting game)
               Keys.types (Keys.nth 1) "Join a table" "sit down at one somebody else is hosting" "join "
-              Keys.types (Keys.nth 2) "Replay a record" "a saved game, played through again" "replay "
+              Keys.types (Keys.nth 2) "Replay a record" "a saved game, taken up where it was left" "replay "
               drawn
               Keys.sends (Keys.nth 4) "Colours" "which colour is drawn for what" "colours"
               Keys.sends (Keys.nth 5) "Rules" "the rules and the commands, at length" "rules"

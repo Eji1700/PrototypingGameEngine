@@ -290,16 +290,13 @@ module Solo =
             | Ok view -> mine { reading with View = view }
             | Error problem -> told problem
         | Ok Keep -> solo, [], Keeping(solo.Model, solo.Stamp, true)
-        | Ok Leave ->
-            // A game still in play is resigned first, so the record says how it ended
-            // rather than simply stopping - if this game has a way of resigning at all.
-            let ended =
-                match solo.Game.Resign with
-                | Some move when not (isOver solo) -> Update.update (rules solo) (Make move) solo.Model
-                | _ -> solo.Model
-
-            let solo = { solo with Model = ended }
-            solo, drawAll solo, Leaving(ended, solo.Stamp)
+        // Written down as it stands and left standing. A game still in play used to be
+        // resigned on the way out, so that its record said how it ended rather than simply
+        // stopping - which was the right answer while a record was a finished thing to read
+        // back. It is not, now: a record is a game to take up again, and a game conceded on
+        // the way out of the room is a game nobody can come back to. Conceding is `resign`,
+        // which is a move a player makes on purpose and always was.
+        | Ok Leave -> solo, drawAll solo, Leaving(solo.Model, solo.Stamp)
         | Ok(Send(Restart _ as msg)) ->
             // The old game's record is closed and kept before the table is cleared, which
             // is why the errand carries that game rather than this one. The machines stay

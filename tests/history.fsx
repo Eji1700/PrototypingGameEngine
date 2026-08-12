@@ -110,7 +110,9 @@ report "and writes down the same record" (Journal.moves walked.Journal) (Journal
 
 // --- and again, through the file --------------------------------------------
 
-let written = Transcript.write playing walked.Journal
+let private seating = [ Here; Machine "hard" ]
+
+let written = Transcript.write playing seating walked.Journal
 
 let read = Transcript.read playing written |> Result.toOption |> Option.get
 
@@ -131,5 +133,57 @@ report
     "every line of a record is either a comment or a move a player could type"
     true
     (Transcript.read playing written |> Result.isOk)
+
+// --- and who was at it ---------------------------------------------------------
+//
+// A record has to say who was in each seat or it cannot be taken up again as the game it was.
+// Everything else about a game comes back from the deal and the moves; a machine does not,
+// because which seat it played and how well it played are decisions made before the deal and
+// are written down nowhere else. A record without them replays into a table where every seat
+// is suddenly yours.
+
+report "and says who was in each seat" seating read.Sitters
+
+report
+    "so the machines sit back down where they were"
+    [ None; Some "hard" ]
+    (Seating.machines read.Sitters)
+
+// Records were written before a seating was part of one, and they still play. The reading
+// that cannot be wrong about them is that everybody at the table was a person: a machine put
+// back at a seat it never played, or at a strength it never played, would be a different game.
+
+report
+    "a record written before seatings were says everybody was a person"
+    (Ok [ Here; Here ])
+    (Transcript.read playing "deal 2 42" |> Result.map (fun read -> read.Sitters))
+
+// A seating a table would take, at a deal that does not match it. The count is said twice in
+// a record - once as a number and once as a list of seats - so it can disagree with itself,
+// and a record that does is not one to take a game up from.
+report
+    "and a record that seats more than it deals is refused"
+    true
+    (match Transcript.read playing "deal 2 42 you you you" with
+     | Error problem -> problem.Contains "deals 2" && problem.Contains "seats 3"
+     | Ok _ -> false)
+
+// --- and the file it goes back into ----------------------------------------------
+//
+// One game, one record. A game taken up again goes on writing to the file it came out of
+// rather than starting a second one beside it, and the way it knows which file that is, is
+// the name it is already under - built in one place and taken apart in the same one.
+
+let private filed = Transcript.path "2026-08-12-120000" walked.Journal
+
+report
+    "a record is filed under the stamp it was saved with"
+    (Some "2026-08-12-120000")
+    (Transcript.stampOf filed 2 42UL)
+
+report
+    "and one nobody can show is this game's is left alone"
+    None
+    (Transcript.stampOf "logs/somebody-renamed-this.log" 2 42UL)
 
 finish ()

@@ -9,7 +9,14 @@ dotnet run -- diplomacy play 7      # seven seats at this keyboard
 dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard \
               --rival hard --rival hard --rival hard    # one of you, in a browser
 dotnet run -- diplomacy host 7      # seven of you, at your own machines
+
+dotnet run -- diplomacy replay logs/...-7p-seed<n>.log   # take a saved game up again
 ```
+
+**A game of this takes a while, so put it down and come back.** `quit` writes the record and
+leaves the board exactly as it stands; `replay` takes it up again, with the same powers played
+by the same machines at the same strength. Conceding is `resign`, which is a different thing
+said on purpose.
 
 [A year](#a-year) · [The orders](#the-orders) ·
 [The map](#the-map) ·

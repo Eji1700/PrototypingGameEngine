@@ -319,7 +319,7 @@ module Render =
           ("m g 8 5 2", "march 2 Green from 8 into 5"), ("undo, redo", "walk the game back")
           ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
           ("notes", "hide this and every note"), ("save", "write the record now")
-          ("help", "every command, at length"), ("quit", "leave, saving first") ]
+          ("help", "every command, at length"), ("quit", "leave; 'replay' takes the game up again") ]
         |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) -> sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
 
     /// A player and their bag as the reader sees it - their own laid out, everyone

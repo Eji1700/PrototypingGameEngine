@@ -168,9 +168,9 @@ report "and there is nothing to take back at the deal" (standing dealt) (standin
 // The record, which is written in the words the prompt takes and read back by the same
 // parser - so a game plays again from its own file without a second language in between.
 
-let private record = Transcript.write noughts walked.Journal
+let private record = Transcript.write noughts [ Here; Machine "hard" ] walked.Journal
 
-report "a record says how the game was dealt" true (record |> mentions "deal 2 0")
+report "a record says how the game was dealt, and who was at it" true (record |> mentions "deal 2 0 you hard")
 
 report "and names the game it is a record of" true (record |> mentions noughts.Title)
 

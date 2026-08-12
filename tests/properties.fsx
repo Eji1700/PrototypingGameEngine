@@ -267,7 +267,7 @@ holds
     "a game written down and read back is the same game, state for state"
     (about (fun play ->
         let model = played play
-        let written = Transcript.write playing model.Journal
+        let written = Transcript.write playing (Seating.here (Model.players model)) model.Journal
 
         // The two failures are of different kinds - a file that will not read and a
         // table that will not seat - and neither may happen, so both come out as one.

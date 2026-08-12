@@ -24,13 +24,13 @@ let private Keyboard = "keyboard"
 /// the awkward case where a restart has to write the game it just swept away rather than
 /// the one in hand - and this does it, which is the only reason there is a `Program.fs`
 /// between a keyboard and a fold.
-let private errand game doing =
+let private errand game sitters doing =
     let write model stamp announce =
         if announce then
-            let path = Transcript.save game stamp model.Journal
+            let path = Transcript.save game stamp sitters model.Journal
             printfn "Record saved to %s" (Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
         elif not (Journal.isEmpty model.Journal) then
-            Transcript.save game stamp model.Journal |> ignore
+            Transcript.save game stamp sitters model.Journal |> ignore
 
     match doing with
     | Carrying -> ()
@@ -67,7 +67,7 @@ let private tell posts =
 ///
 /// Which game it is, is the table's rather than this loop's: `Solo` carries it, and nothing
 /// between here and the file being written has to be told.
-let rec private loop solo =
+let rec private loop sitters solo =
     Solo.board Keyboard solo |> Option.iter (printf "%s")
     printf "%s" (if Solo.isOver solo then "(over) > " else "> ")
 
@@ -75,12 +75,12 @@ let rec private loop solo =
         let next, posts, doing = Solo.said (stampNow ()) Keyboard line solo
 
         tell posts
-        errand (Solo.game solo) doing
+        errand (Solo.game solo) sitters doing
 
         match doing with
         | Leaving _ -> Solo.model next
         | Carrying
-        | Keeping _ -> loop next
+        | Keeping _ -> loop sitters next
 
     match Console.ReadLine() with
     // Nothing more coming. The same as saying so, and answered the same way, so that a
@@ -93,9 +93,18 @@ let rec private loop solo =
 /// no longer has to know what it is that refuses, which is a fair test of the seam.
 let private dealt game players seed = Update.start game.Rules players seed
 
-/// Play a saved game again and stop where it left off, from where `undo` walks back
-/// through every state it passed on the way.
-let private replayFrom game path =
+/// Take a saved game up again: played through move by move to where it was left, with the
+/// same players back in the same seats, and `undo` able to walk back through every state it
+/// passed on the way.
+///
+/// Three things come back, and all three are the difference between taking a game up and
+/// merely looking at one. The model is the game. The seating is who was at it, so the
+/// machines sit back down at the seats they were playing and at the strength they were
+/// playing them - without that, taking a game up again hands you every seat at the table and
+/// the game you resume is not the game you put down. And the stamp is the file it came out
+/// of, so it goes on being written to rather than forked into a second record beside the
+/// first.
+let private takeUp game path =
     if not (File.Exists path) then
         Error $"There is no record at '{path}'."
     else
@@ -104,9 +113,9 @@ let private replayFrom game path =
             Update.replay game.Rules reading.Players reading.Seed reading.Moves
             |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
             |> Result.map (fun model ->
-                printfn "Replayed %d move(s) from %s." (List.length reading.Moves) path
+                printfn "Took up %d move(s) from %s." (List.length reading.Moves) path
                 printfn "Take them back with 'undo', or read them with 'history'."
-                model))
+                model, reading.Sitters, Transcript.stampOf path reading.Players reading.Seed))
 
 /// The machines this seating asks for, seated at the game that was dealt.
 ///
@@ -128,7 +137,7 @@ let private serveFor game palette sitters seed reach =
             if Journal.isEmpty model.Journal then
                 None
             else
-                let path = Transcript.save game stamp model.Journal
+                let path = Transcript.save game stamp sitters model.Journal
                 Some(Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
 
         // Nobody is watching yet. A browser adds itself when it opens its stream, which is
@@ -138,7 +147,7 @@ let private serveFor game palette sitters seed reach =
             Solo.opened game (stampNow ()) model
             |> Solo.against (machines game sitters model)
 
-        errand game doing
+        errand game sitters doing
         Server.serve reach palette solo stampNow keep
 
 /// Open a table for players at their own machines. Nothing comes back: the table waits
@@ -186,7 +195,7 @@ let private hostFor game view sitters seed reach =
 
         let keep model =
             if not (Journal.isEmpty model.Journal) then
-                Transcript.save game stamp model.Journal |> ignore
+                Transcript.save game stamp sitters model.Journal |> ignore
 
         Server.host game reach model sitters keep playing
 
@@ -194,7 +203,10 @@ let private hostFor game view sitters seed reach =
 /// runs to its own end and only has an exit code to give back.
 [<NoComparison; NoEquality>]
 type private Opening<'Move, 'State, 'Notice> =
-    | Play of Model<'Move, 'State, 'Notice> * View<'Move, 'State, 'Notice> * Sitter list
+    /// A game to play here: the game, how it is read, who is at it, and the file its record
+    /// belongs in - which is a fresh one for a fresh deal and the old one for a game being
+    /// taken up again.
+    | Play of Model<'Move, 'State, 'Notice> * View<'Move, 'State, 'Notice> * Sitter list * stamp: string
     | Done of code: int
     /// The player walked back out of this game's front door. Not the same as leaving: there
     /// is a list of games behind it, and that is where they meant to be.
@@ -227,7 +239,7 @@ let private starting game (view: View<_, _, _>) choice =
     match choice with
     | Menu.Deal(sitters, seed) ->
         dealt game (List.length sitters) (clocked seed)
-        |> Result.map (fun model -> Play(model, view, sitters))
+        |> Result.map (fun model -> Play(model, view, sitters, stampNow ()))
     // In whatever colours the player settled on here, which is the same promise the
     // command line's --colour keeps.
     //
@@ -240,7 +252,10 @@ let private starting game (view: View<_, _, _>) choice =
     | Menu.Host(sitters, seed, reach) ->
         Ok(Done(hostFor game view sitters (clocked seed) (reach |> Option.defaultWith Reach.fresh)))
     | Menu.Join(address, code) -> Ok(Done(Client.join game address None code view))
-    | Menu.Replay path -> replayFrom game path |> Result.map (fun model -> Play(model, view, []))
+    | Menu.Replay path ->
+        takeUp game path
+        |> Result.map (fun (model, sitters, stamp) ->
+            Play(model, view, sitters, stamp |> Option.defaultWith stampNow))
     // The rest are screens rather than games. The front door answers every one of them
     // itself, so what is left here is somebody at the seat list asking for one of them from
     // there - which is a fair thing to type and wants an answer rather than a shrug.
@@ -337,19 +352,21 @@ let rec private welcome game (view: View<_, _, _>) behind at said =
 /// Sit down at a game and play it here. The board the player is looking at when they
 /// arrive is drawn by the same code that draws every one after it, because sitting down is
 /// simply the first thing that happens at the table.
-let private play game view sitters model =
+let private play game view sitters stamp model =
     // The machines take their seats before anybody sits down to watch, so that a table where
     // the first move is theirs has already had it made by the time the first board is drawn.
+    // A game taken up again seats them from what its record said, so they come back to the
+    // seats they were playing rather than to whatever the line that opened it happened to say.
     let seated, doing =
-        Solo.opened game (stampNow ()) model
+        Solo.opened game stamp model
         |> Solo.against (machines game sitters model)
 
-    errand game doing
+    errand game sitters doing
 
     let solo, posts = seated |> Solo.watching Keyboard { Notes = true; View = view }
 
     tell posts
-    loop solo |> ignore
+    loop sitters solo |> ignore
     0
 
 /// Act on what a command line asked for.
@@ -358,11 +375,11 @@ let private play game view sitters model =
 /// is one place that knows what opening a game actually involves, and adding a way in means
 /// adding a case rather than another road through `main`.
 let private opening game (view: View<_, _, _>) launch =
-    let orElse sitters outcome =
+    let orElse outcome =
         match outcome with
-        | Ok model ->
+        | Ok(model, sitters, stamp) ->
             printfn "%s" view.Rules
-            play game view sitters model
+            play game view sitters stamp model
         | Error problem ->
             eprintfn "%s" problem
             1
@@ -374,11 +391,19 @@ let private opening game (view: View<_, _, _>) launch =
     // after yours - so what it asks for is a seating said shorter, and it is spelt out into
     // one here. There is one kind of table below this line, and it is the seating.
     match launch with
-    | Launch.Deal(players, seed, rivals) -> orElse (Seating.after players rivals) (dealt game players (clocked seed))
+    | Launch.Deal(players, seed, rivals) ->
+        dealt game players (clocked seed)
+        |> Result.map (fun model -> model, Seating.after players rivals, stampNow ())
+        |> orElse
     | Launch.Serve(players, seed, rivals, reach) -> serveFor game view.Palette (Seating.after players rivals) (clocked seed) reach
     | Launch.Host(players, seed, reach) -> hostFor game view (Seating.hosting players) (clocked seed) reach
     | Launch.Join(address, token, code) -> Client.join game address token code view
-    | Launch.Replay path -> orElse [] (replayFrom game path)
+    // The seating and the file both come out of the record rather than out of the line that
+    // asked for it, which is what makes this taking a game up rather than looking at one.
+    | Launch.Replay path ->
+        takeUp game path
+        |> Result.map (fun (model, sitters, stamp) -> model, sitters, stamp |> Option.defaultWith stampNow)
+        |> orElse
 
 // --- one game, with its types sealed off behind it --------------------------------------
 //
@@ -444,6 +469,6 @@ let chosen (game: Playable<'Move, 'State, 'Notice>) =
             let plain = Playable.plainest AtATerminal (Playable.standard game) game
 
             match welcome game plain behind 0 "" with
-            | Play(model, view, sitters) -> Some(play game view sitters model)
+            | Play(model, view, sitters, stamp) -> Some(play game view sitters stamp model)
             | Done code -> Some code
             | Back -> None }

@@ -431,7 +431,7 @@ module Render =
           "save", "write the record now"
           "help", "every command, at length"
           "resign", "walk away; your units stand and are worn down"
-          "quit", "leave, saving first" ]
+          "quit", "leave; the game is written down and 'replay' takes it up again" ]
 
     let commands =
         verbs
