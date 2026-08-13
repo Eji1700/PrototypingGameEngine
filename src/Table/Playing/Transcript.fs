@@ -75,10 +75,30 @@ module Transcript =
         @ (entry.Told |> List.map (fun notice -> $"#      {Playable.told game notice}"))
         @ [ "" ]
 
+    /// One self-contained piece of the file: what the record opens with, or one entry.
+    ///
+    /// Every piece ends in a line break of its own rather than the pieces being strung
+    /// together with one between them, so that adding to a record is putting bytes after the
+    /// last piece and nothing has to know whether the line above was finished. That is what
+    /// lets the save below add to a file instead of writing it out again.
+    let private piece lines =
+        lines |> List.map (fun line -> line + Environment.NewLine) |> String.concat ""
+
+    /// The record as the pieces it is made of: what it opens with, then one for every move
+    /// that was asked for, oldest first.
+    ///
+    /// A record only ever grows - `Journal.write` puts an entry on the front and nothing ever
+    /// takes one off, undoing included - so the pieces of a game fifty moves in are the pieces
+    /// of it ten moves in with forty more behind them. Which is the whole of why a save can be
+    /// an addition, and is worth saying out loud because it is a promise the engine keeps
+    /// rather than anything this file could enforce.
+    let private pieces game sitters journal =
+        piece (preamble game sitters journal)
+        :: (Journal.entries journal |> List.map (line game >> piece))
+
     /// The whole record as text.
     let write game sitters journal =
-        let body = Journal.entries journal |> List.collect (line game)
-        String.concat Environment.NewLine (preamble game sitters journal @ body)
+        pieces game sitters journal |> String.concat ""
 
     /// Read a record back. Comments and blank lines fall away; what is left is the deal
     /// and the moves.
@@ -165,8 +185,57 @@ module Transcript =
         else
             None
 
+    /// How much of what is being saved is already in the file, matched piece by piece from
+    /// the top: how far the two run together, and what is left over to write.
+    ///
+    /// A file that runs on past where they part - a record of some other game filed under this
+    /// name, one somebody has edited by hand, one left half-written by a machine that stopped -
+    /// agrees for fewer characters than it holds, and that is the signal to write it out again
+    /// from the top rather than put this game's moves on the end of somebody else's.
+    let private shared (existing: string) pieces =
+        let rec walk at rest =
+            match rest with
+            | (piece: string) :: more when
+                at + piece.Length <= existing.Length
+                && String.CompareOrdinal(existing, at, piece, 0, piece.Length) = 0
+                ->
+                walk (at + piece.Length) more
+            | _ -> at, rest
+
+        walk 0 pieces
+
+    /// Put the whole file down in a way that leaves it either wholly the record it was or
+    /// wholly the record it is becoming, and never half of each.
+    ///
+    /// Written beside itself under another name and then moved over the top, because writing
+    /// straight to the file is not one step: a machine that stops in the middle of one leaves
+    /// a record cut off wherever it had got to. And a record cut off is not an unreadable file
+    /// that says so - it is a shorter game that reads perfectly well, which is the kind of
+    /// damage nobody finds until they take the game up again and the last few moves are gone.
+    let private replace path (text: string) =
+        let beside = path + ".writing"
+        File.WriteAllText(beside, text)
+        File.Move(beside, path, true)
+
     let save game stamp sitters journal =
         Directory.CreateDirectory folder |> ignore
         let path = path stamp journal
-        File.WriteAllText(path, write game sitters journal)
+        let pieces = pieces game sitters journal
+
+        let existing =
+            if File.Exists path then File.ReadAllText path else ""
+
+        match shared existing pieces with
+        // The file is this record as far as it goes, so the rest of it goes on the end. This
+        // is the ordinary case - a game saved after every move is a file one entry short of
+        // itself - and it is why a long game no longer costs the whole of itself in writing
+        // every time somebody moves in it. A file that is not there yet is the same case with
+        // nothing agreed and everything left over, which appending creates.
+        | at, rest when at = existing.Length -> File.AppendAllText(path, String.concat "" rest)
+        // They part before the end of the file, so this is not the record that is in it - or
+        // is, with a torn piece after it from a save that did not finish. Either way the file
+        // stops being trusted and the record is written out whole, which is what makes a torn
+        // record heal itself on the next save rather than stay broken.
+        | _ -> replace path (String.concat "" pieces)
+
         path

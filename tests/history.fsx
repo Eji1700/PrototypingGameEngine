@@ -201,4 +201,44 @@ report
     None
     (Transcript.stampOf "logs/somebody-renamed-this.log" 2 42UL)
 
+// --- and the writing of it ---------------------------------------------------------
+//
+// A game at a keyboard is saved after every move, and a record only ever grows, so a save puts
+// down what is new rather than the whole game again. That much no test can see - the file it
+// leaves is the same either way, which is exactly the property that makes adding to it safe.
+//
+// What can be seen, and matters more, is the two cases where the file must not be added to: a
+// record of some other game filed under this name, and a record of this one with a piece torn
+// off the end by a machine that stopped mid-save. Both fail silently if they are got wrong -
+// this game's moves land after somebody else's, or after half a line of its own - and both are
+// answered the same way, by ceasing to trust the file and writing the record down whole.
+
+let private stamp = "test-" + string (Journal.seed walked.Journal)
+
+let private filedAt = Transcript.path stamp walked.Journal
+
+let private savedTo journal =
+    Transcript.save playing stamp seating journal |> ignore
+    System.IO.File.ReadAllText filedAt
+
+// Saved once when the game was three moves old, and again where it stands now - which is what
+// playing at a keyboard does, over and over, to the one file.
+savedTo (playOn 3 (start ())).Journal |> ignore
+
+report "a record saved again is the whole game and not two of them" written (savedTo walked.Journal)
+
+// The whole file goes down beside itself and is moved over the top, so there is a moment when
+// there are two. There is not a moment after.
+report "and nothing is left lying beside it" false (System.IO.File.Exists(filedAt + ".writing"))
+
+System.IO.File.AppendAllText(filedAt, "#   10  turn")
+
+report "a record torn off mid-save is written out whole the next time" written (savedTo walked.Journal)
+
+System.IO.File.WriteAllText(filedAt, "deal 2 42" + System.Environment.NewLine + "negotiate")
+
+report "and a file under this name that is some other game is not added to" written (savedTo walked.Journal)
+
+System.IO.File.Delete filedAt
+
 finish ()
