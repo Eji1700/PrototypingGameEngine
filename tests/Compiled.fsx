@@ -51,9 +51,13 @@
 
 #load "../src/Games/Compile/Rules/Protocols.fs"
 #load "../src/Games/Compile/Rules/Cards.fs"
+#load "../src/Games/Compile/Rules/Effects.fs"
+#load "../src/Games/Compile/Rules/Printed.fs"
 #load "../src/Games/Compile/Rules/Field.fs"
 #load "../src/Games/Compile/Rules/Drafting.fs"
 #load "../src/Games/Compile/Rules/Session.fs"
+#load "../src/Games/Compile/Rules/Events.fs"
+#load "../src/Games/Compile/Rules/Resolving.fs"
 #load "../src/Games/Compile/Rules/Turn.fs"
 #load "../src/Games/Compile/Rules/Words.fs"
 #load "../src/Games/Compile/Rules/Rival.fs"
@@ -66,6 +70,10 @@ open TCModel.Table
 
 /// The game these checks are about.
 let compiled = TCModel.Compile.Offer.playable
+
+/// And the same game with its optional rule in it. Two values out of one function, which is what
+/// makes an optional rule a second `Playable` rather than a third argument to `Deal`.
+let controlled = TCModel.Compile.Offer.withControl
 
 let standard = Playable.standard compiled
 

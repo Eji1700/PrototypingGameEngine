@@ -24,6 +24,7 @@ module Render =
         let field = "The field"
         let players = "Players"
         let hand = "Your hand"
+        let choosing = "Waiting on an answer"
         let commands = "Commands"
         let log = "Log"
 
@@ -37,8 +38,20 @@ module Render =
         let field =
             "A line runs across the table: their stack, the two protocols that meet in the middle of it, and yours. A stack grows away from the line, so the card most recently played is the one nearest whoever played it - furthest up for them, furthest down for you."
 
+        let control =
+            $"The control component: at the start of your turn, leading {Field.LanesForControl} lanes - strictly, a tie is no lead - takes it, out of the middle or off the other player. Holding it costs you something every time you compile or refresh: your {Protocol.Each} protocols have to move first, into a different order. The stacks do not move with them, so a line built patiently for one protocol can end up compiling another."
+
+        let text =
+            "A card played face up does what is printed on it, one command at a time - and between any two of them the table is looked at again, because a command that turned a card face up has put that card's own text in front of whatever was waiting. A command with nothing to point at simply finds nothing to do, and the one after it still happens. A command with one thing to point at does it; with several, the game stops and asks - sometimes of the player whose turn it is not, and then nothing at all moves until they answer."
+
+        let refreshing =
+            $"Nothing is drawn at the end of a turn. 'refresh' puts your whole hand down and takes {Deck.HandSize} up, and it costs the turn - so {Deck.HandSize} cards is {Deck.HandSize} turns of tempo, and the turn you spend getting more is a turn they spend getting closer to {Stack.ToCompile}. With an empty hand it is the only thing left to do. A deck that runs out is shuffled from its own discard."
+
+        let compiling =
+            $"At the start of your turn, every line where you have {Stack.ToCompile} or more and strictly more than they do is compiled: the protocol facing it is turned over and the whole line goes, both players' cards alike. 'ready' beside a stack means it will compile next time that player's turn begins - which is one turn to answer it, and {Placed.FaceDownValue} face down is enough if it makes the scores level. Compile all {Protocol.Each} of your protocols and you win."
+
         let hand =
-            "Say a card and a line to play it - 'fire-3 2'. Cards are written as a protocol, a dash, and the number on the card."
+            $"Say a card and a line to play it - 'fire-3 2'. Face up it is worth the number printed on it and may only go where its protocol is - either player's. Face down - 'fire-3 2 down' - it is worth {Placed.FaceDownValue} and goes anywhere, so a card you cannot use is never a dead card."
 
     let nothingYet = "nothing yet"
 
@@ -53,11 +66,19 @@ module Render =
         let yours = seat = beholder
         let who = Words.seated yours seat
 
-        match session.Stage with
-        | Drafting _ -> $"The draft, pick {Session.picksMade session + 1} of {Draft.Picks} - {who} to choose a protocol"
-        | Arranging -> $"Protocols - {who} to set theirs against the lines"
-        | Playing -> $"Turn {session.Turn} - {who} to play"
-        | Done ending -> $"The game is over: {Words.ending ending}"
+        match Session.asking session, session.Stage with
+        | Some asked, _ ->
+            let whoAsks =
+                match asked.Because with
+                | Some source -> Card.name source.Saying
+                | None -> "The control component"
+
+            $"Turn {session.Turn} - {whoAsks} is waiting on {who}"
+        | None, Drafting _ ->
+            $"The draft, pick {Session.picksMade session + 1} of {Draft.Picks} - {who} to choose a protocol"
+        | None, Arranging -> $"Protocols - {who} to set theirs against the lines"
+        | None, Playing -> $"Turn {session.Turn} - {who} to play"
+        | None, Done ending -> $"The game is over: {Words.ending ending}"
 
     // --- the draft ---------------------------------------------------------------------------
 
@@ -119,22 +140,51 @@ module Render =
 
     // --- the field ---------------------------------------------------------------------------
 
-    let private stack tone cards =
+    /// One stack. `reading` is how a card is put into words for whoever is looking, which is
+    /// the only thing that differs between the two halves of the table: a card face down is a
+    /// two to the player across from it and a card they played to the player who played it.
+    let private stack tone reading cards =
         match cards with
         | [] -> Tile(None, Tone.Quiet, [ Scene.quietly "-" ])
-        | cards -> Tile(None, tone, cards |> List.map (fun card -> Say [ Span.toned tone (Card.name card) ]))
+        | cards -> Tile(None, tone, cards |> List.map (fun card -> Say [ Span.toned tone (reading card) ]))
 
     /// The middle of a line: the two protocols that meet there, theirs above yours, in the
     /// colours of whoever they belong to.
-    let private middle theirs yours theirTone yourTone line =
+    ///
+    /// Theirs is kept back until both are laid out. A card may be played face up against
+    /// *either* protocol on a line, so an order seen before you have chosen your own is worth a
+    /// great deal - which is why they go down face down and turn over together, and why this is
+    /// the one thing on this board drawn differently for the two people reading it.
+    let private middle field (them, theirs) (you, yours) theirTone yourTone shown line =
         let facing side =
             Side.protocolOn line side |> Option.map Protocol.name |> Option.defaultValue "not set"
+
+        let theirFacing =
+            if shown then facing theirs
+            elif List.isEmpty theirs.Order then "not set"
+            else Words.hidden
+
+        // What each stack is worth, beside the protocol it is being played towards, and where
+        // that leaves the line. The one piece of arithmetic in this game, so the board does it
+        // rather than the player - and "ready" is the whole of the warning a stack at ten gives
+        // the player who has to answer it.
+        let against name tone seat side =
+            let standing =
+                if Field.won seat line field then "  ready"
+                elif Side.protocolOn line side |> Option.exists (fun protocol -> Side.hasCompiled protocol side) then
+                    "  done"
+                else
+                    ""
+
+            Say
+                [ Span.toned tone name
+                  Span.quiet $"  {Side.valueOn line side}{standing}" ]
 
         Tile(
             Some $"Line {line}",
             Tone.Quiet,
-            [ Say [ Span.toned theirTone (facing theirs) ]
-              Say [ Span.toned yourTone (facing yours) ] ]
+            [ against theirFacing theirTone them theirs
+              against (facing yours) yourTone you yours ]
         )
 
     /// The table as the reader is sitting at it: the other player's half across from them,
@@ -153,11 +203,21 @@ module Render =
         let theirTone = Tone.Slot(Ink.key them)
         let yourTone = Tone.Slot(Ink.key beholder)
 
+        // Everything is on the table from the moment both orders are turned over, which is the
+        // moment the settling ends.
+        let shown = Session.doing session <> TheProtocols
+
         Walled(
             18,
-            [ Scene.squared (Lines.all |> List.map (fun line -> stack theirTone (Side.stack line theirs)))
-              Scene.squared (Lines.all |> List.map (middle theirs yours theirTone yourTone))
-              Scene.squared (Lines.all |> List.map (fun line -> stack yourTone (Side.stack line yours |> List.rev))) ]
+            [ Scene.squared (Lines.all |> List.map (fun line -> stack theirTone Words.faceless (Side.stack line theirs)))
+              Scene.squared (
+                  Lines.all
+                  |> List.map (middle session.Field (them, theirs) (beholder, yours) theirTone yourTone shown)
+              )
+              Scene.squared (
+                  Lines.all
+                  |> List.map (fun line -> stack yourTone Words.placed (Side.stack line yours |> List.rev))
+              ) ]
         )
 
     // --- who is playing, and what they are holding --------------------------------------------
@@ -191,9 +251,23 @@ module Render =
               Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (Words.seated yours seat)
 
               if dealt then
+                  // The score, first, because it is the only count here that is the game
+                  // rather than the housekeeping.
+                  Scene.cell
+                      (if Set.isEmpty side.Compiled then Tone.Quiet else Tone.Slot(Ink.key seat))
+                      $"compiled {Set.count side.Compiled} of {Protocol.Each}"
+
                   Scene.cell Tone.Quiet $"deck {List.length side.Deck}"
                   Scene.cell Tone.Quiet $"discard {List.length side.Discard}"
                   Scene.cell Tone.Quiet $"hand {List.length side.Hand}"
+
+              // Only in the game that has one, and only beside whoever is holding it - a column
+              // of blanks at a game without the rule would be a screen drawn for a rule it does
+              // not have.
+              if Session.withControl session then
+                  Scene.cell
+                      (Tone.Slot(Ink.key seat))
+                      (if session.Control = HeldBy seat then "control" else "")
               else
                   Scene.cell
                       Tone.Quiet
@@ -204,32 +278,160 @@ module Render =
 
     // --- the hand ----------------------------------------------------------------------------
 
-    /// The reader's own cards, and only ever theirs. Each is a cell carrying the three lines
-    /// it could go to, because a card and a line together are one move and a control has to
-    /// carry the whole of one.
+    /// The reader's own cards, and only ever theirs. Each is a cell carrying every way that card
+    /// could be laid, because a card, a line and a face together are one move and a control has
+    /// to carry the whole of one.
+    ///
+    /// Face up is one button and not three: no protocol is drafted twice, so a card's protocol
+    /// sits on exactly one line and there is exactly one place it can go face up. Face down is
+    /// three, because face down goes anywhere. That asymmetry is the game's, and drawing it is
+    /// most of what makes the choice legible without reading a rule.
     let private hand beholder session =
         let side = Session.side beholder session
         let tone = Tone.Slot(Ink.key beholder)
 
+        let ways card =
+            [ for line in Field.facingLines card session.Field ->
+                  Does($"up {line}", $"play {Card.key card} {line}", Tone.Plainly)
+              for line in Lines.all -> Does($"down {line}", $"play {Card.key card} {line} down", Tone.Quiet) ]
+
+        // Always offered, because refreshing is always an action - and when the hand is empty it
+        // is the only one, which is when a player most needs to be told it exists.
+        let again =
+            Tile(
+                Some "refresh",
+                Tone.Quiet,
+                [ Does($"put {List.length side.Hand} down", "refresh", Tone.Plainly)
+                  Scene.quietly $"take {Deck.HandSize} up"
+                  Scene.quietly "costs the turn" ]
+            )
+
+        // A card with something printed on it is marked rather than quoted: the text does not fit
+        // in a cell this narrow, and `what fire-3` says it at length.
+        let named card =
+            Card.name card + (if Printed.says card then " *" else "")
+
         match side.Hand |> List.sortBy (fun card -> Protocol.name card.Protocol, card.Value) with
-        | [] -> Scene.quietly "nothing in hand"
+        | [] -> Walled(14, [ Scene.squared [ again ] ])
         | cards ->
             Walled(
                 14,
-                cards
-                |> List.chunkBySize 5
-                |> List.map (fun row ->
-                    Scene.squared (
-                        row
-                        |> List.map (fun card ->
-                            Tile(
-                                Some(Card.name card),
-                                tone,
-                                Lines.all
-                                |> List.map (fun line -> Does($"-> {line}", $"play {Card.key card} {line}", Tone.Plainly))
-                            ))
-                    ))
+                (cards |> List.map (fun card -> Tile(Some(named card), tone, ways card))) @ [ again ]
+                |> List.chunkBySize 6
+                |> List.map Scene.squared
             )
+
+    // --- a card waiting on somebody ------------------------------------------------------------
+
+    /// What is being asked, and a control per card that would answer it.
+    ///
+    /// The one screen this game did not have until the pile went in, and the one it most needed:
+    /// a game stopped mid-effect looks exactly like a game that has hung, unless it says what it
+    /// is waiting for and who from.
+    let private question beholder (asked: Question) =
+        let yours = asked.Chooser = beholder
+
+        /// Who is asking: a card, or the rules themselves when the control component has forced
+        /// a rearrangement.
+        let whoAsks =
+            match asked.Because with
+            | Some source -> Card.name source.Saying
+            | None -> "The control component"
+
+        let doing, choices =
+            match asked.Wanting with
+            | ACard(command, targets) ->
+                let doing =
+                    match command with
+                    | Delete _ -> "pick a card to delete"
+                    | Flip _ -> "pick a card to turn over"
+                    | Discard -> "pick a card to discard"
+                    | Return _ -> "pick a card to take back into hand"
+                    | Shift _ -> "pick a card to move"
+                    | Rehome _ -> "pick a card to give back"
+                    | Draw _
+                    | Refreshing'
+                    | May _
+                    | IfYouDo _
+                    | Opposing _ -> "pick a card"
+
+                let choices =
+                    targets
+                    |> List.map (fun target ->
+                        let card = Target.card target
+
+                        let where =
+                            match target with
+                            | OnTable(seat, line, placed) ->
+                                let whose = if seat = beholder then "yours" else "theirs"
+                                let way = if Placed.isFaceUp placed then "face up" else "face down"
+                                $"{whose}, line {line}, {way}"
+                            | InHand(_, _) -> "in hand"
+
+                        Tile(
+                            Some(Card.name card),
+                            (if yours then Tone.Yours else Tone.Quiet),
+                            [ Scene.quietly where
+                              if yours then
+                                  Does("choose", $"choose {Card.key card}", Tone.Plainly) ]
+                        ))
+
+                doing, choices
+
+            | AnOrder offered ->
+                let choices =
+                    offered
+                    |> List.map (fun order ->
+                        let caption = order |> List.map Protocol.name |> String.concat " / "
+                        let typed = order |> List.map Protocol.key |> String.concat " "
+
+                        Tile(
+                            None,
+                            (if yours then Tone.Yours else Tone.Quiet),
+                            [ if yours then
+                                  Does(caption, $"arrange {typed}", Tone.Plainly)
+                              else
+                                  Scene.quietly caption ]
+                        ))
+
+                $"put the {Protocol.Each} protocols in a different order", choices
+
+            | ALine(moving, offered) ->
+                let choices =
+                    offered
+                    |> List.map (fun line ->
+                        Tile(
+                            Some $"Line {line}",
+                            (if yours then Tone.Yours else Tone.Quiet),
+                            [ if yours then
+                                  Does("move it here", $"choose line {line}", Tone.Plainly)
+                              else
+                                  Scene.quietly "" ]
+                        ))
+
+                $"say where {Card.name (Target.card moving)} goes", choices
+
+            | Whether inner ->
+                let choices =
+                    [ "yes", "yes", Tone.Plainly; "no", "no", Tone.Quiet ]
+                    |> List.map (fun (caption, typed, tone) ->
+                        Tile(
+                            None,
+                            (if yours then Tone.Yours else Tone.Quiet),
+                            [ if yours then Does(caption, typed, tone) else Scene.quietly caption ]
+                        ))
+
+                $"say whether to {Words.printing inner}", choices
+
+        let says =
+            if yours then
+                $"{whoAsks} needs you to {doing}."
+            else
+                $"{whoAsks} needs {Words.player asked.Chooser} to {doing}. Nothing else can happen until they do."
+
+        Stack
+            [ Scene.says says
+              Walled(20, choices |> List.chunkBySize 3 |> List.map Scene.squared) ]
 
     // --- what a player may type ----------------------------------------------------------------
 
@@ -238,7 +440,11 @@ module Render =
     let private verbs =
         [ "fire", "draft the Fire protocol (or 'draft fire')"
           "water dark fire", "set your three against lines 1, 2 and 3 (or 'arrange ...')"
-          "fire-3 2", "play the card Fire-3 to line 2 (or 'play fire-3 2')"
+          "fire-3 2", "play Fire-3 face up to line 2 (or 'play fire-3 2')"
+          "fire-3 2 down", $"play it face down instead, for {Placed.FaceDownValue}, on any line"
+          "refresh", $"put your hand down and take {Deck.HandSize} up - instead of playing, not as well as"
+          "fire-3", "answer a card that is waiting on you to pick one (or 'choose fire-3')"
+          "what fire-3", "read what a card says. A '*' on the board means there is something to read"
           "undo, redo", "walk the game back and forward"
           "history", "the record so far"
           "notes", "hide this and every note"
@@ -269,18 +475,32 @@ module Render =
               $"Each protocol has {Card.PerProtocol} cards, so a deck is {Deck.Size}, and {Deck.HandSize} are drawn to open."
               Notes.hand
               ""
+              "REFRESHING"
+              Notes.refreshing
+              ""
+              "WHAT A CARD SAYS"
+              Notes.text
+              ""
+              "COMPILING, AND WINNING"
+              Notes.compiling
+              $"A protocol already compiled compiles again if you win its line again: no nearer winning, the line wiped just the same, and the top card of the other deck comes into your hand. It can be played face down like anything else, or face up on the line its protocol sits on - which is on their side of the board."
+              ""
               "COMMANDS"
               commands ]
 
     // --- the log ------------------------------------------------------------------------------
 
-    /// What the game has said lately, oldest first.
+    /// What the game has said lately, oldest first - and in the words that seat may hear it in.
+    /// One line of this is a secret before the protocols are turned over, so the log is read
+    /// per seat rather than written once, like everything else on this board.
     let wording = Told.inWords Words.said Words.command
 
-    let private log (model: Model<Move, Session, Notice>) =
+    let private heardBy seat = Told.inWords (Words.saidTo seat) Words.command
+
+    let private log beholder (model: Model<Move, Session, Notice>) =
         match model.Log with
         | [] -> [ Scene.quietly nothingYet ]
-        | notices -> notices |> List.rev |> List.map (wording >> Scene.says)
+        | notices -> notices |> List.rev |> List.map (heardBy beholder >> Scene.says)
 
     // --- the whole screen -----------------------------------------------------------------------
 
@@ -291,33 +511,67 @@ module Render =
         let session = Model.state model
 
         let stage =
-            match session.Stage with
-            | Drafting left -> Block(Blocks.draft, [ pool left; Scene.noted notes Notes.draft ])
-            | Arranging -> Block(Blocks.protocols, [ arranging beholder session; Scene.noted notes Notes.arranging ])
-            | Playing
-            | Done _ -> Block(Blocks.hand, [ hand beholder session; Scene.noted notes Notes.hand ])
+            // A card waiting on somebody outranks the stage, because until it is answered
+            // nothing else on this screen is something a player could act on.
+            match Session.asking session, session.Stage with
+            | Some asked, _ -> Block(Blocks.choosing, [ question beholder asked ])
+            | None, Drafting left -> Block(Blocks.draft, [ pool left; Scene.noted notes Notes.draft ])
+            | None, Arranging ->
+                Block(Blocks.protocols, [ arranging beholder session; Scene.noted notes Notes.arranging ])
+            | None, Playing
+            | None, Done _ ->
+                Block(
+                    Blocks.hand,
+                    [ hand beholder session
+                      Scene.noted notes Notes.hand
+                      Scene.noted notes Notes.refreshing
+                      (if Session.withControl session then
+                           Scene.noted notes Notes.control
+                       else
+                           Blank) ]
+                )
 
         let table =
             match session.Stage with
             | Drafting _ -> Blank
             | Arranging
             | Playing
-            | Done _ -> Block(Blocks.field, [ field beholder session; Scene.noted notes Notes.field ])
+            | Done _ ->
+                Block(
+                    Blocks.field,
+                    [ field beholder session
+                      Scene.noted notes Notes.field
+                      Scene.noted notes Notes.compiling ]
+                )
 
         Stack
             [ Heading(heading beholder session)
               table
               Beside [ stage; Block(Blocks.players, [ players beholder session ]) ]
               Block(Blocks.commands, [ Written commands ])
-              Block(Blocks.log, log model) ]
+              Block(Blocks.log, log beholder model) ]
 
     // --- the rest of what a player reads --------------------------------------------------------
 
+    /// What somebody asked for, as much of it as the reader may know.
+    ///
+    /// The record is the whole truth of the game and a player is not owed the whole truth while
+    /// it is still being played. An order laid face down is nobody's business until both are
+    /// turned over - and the record would otherwise hand it straight over, having been careful
+    /// about it everywhere else.
+    let private askedFor beholder session (entry: Entry<Move, Notice>) =
+        match entry.Asked with
+        | Make(Arrange _) when entry.Actor <> beholder && Session.doing session = TheProtocols ->
+            "sets their protocols, face down"
+        | msg -> Words.command msg
+
     let history beholder (model: Model<Move, Session, Notice>) =
+        let session = Model.state model
+
         let entry (entry: Entry<Move, Notice>) =
             [ Scene.cell Tone.Quiet $"{entry.Ordinal}  turn {entry.Turn}"
-              Scene.cell Tone.Plainly $"{Words.player entry.Actor}: {Words.command entry.Asked}"
-              Scene.cell Tone.Plainly (entry.Told |> List.map wording |> String.concat " ") ]
+              Scene.cell Tone.Plainly $"{Words.player entry.Actor}: {askedFor beholder session entry}"
+              Scene.cell Tone.Plainly (entry.Told |> List.map (Told.inWords (Words.saidTo beholder) Words.command) |> String.concat " ") ]
 
         match Journal.entries model.Journal with
         | [] -> Block("The record", [ Scene.quietly nothingYet ])
@@ -331,8 +585,25 @@ module Render =
     /// What is being asked for right now, and why. A game of three stages is the one place
     /// this question has a real answer: the same board takes a protocol at one moment and a
     /// card at the next, and nothing on it says which.
-    let answer _ (model: Model<Move, Session, Notice>) =
+    let answer (asked: string) (model: Model<Move, Session, Notice>) =
         let session = Model.state model
+
+        // A card named is a card asked about. This is what `View.Answer` was put there for, and
+        // it is where card text is read at length - the board marks a card that says something
+        // with a star and leaves the saying to here, because a stack cell is nine characters wide.
+        let aboutACard =
+            Commands.words asked
+            |> List.tryPick (fun word -> Card.byName (word.ToLowerInvariant()))
+
+        match aboutACard with
+        | Some card ->
+            Block(
+                Card.name card,
+                match Words.printed card with
+                | [] -> [ Scene.says $"{Card.name card} has nothing printed on it. It is worth {card.Value} face up and {Placed.FaceDownValue} face down, and that is all it does." ]
+                | said -> said |> List.map Scene.says
+            )
+        | None ->
 
         let said =
             match session.Stage with

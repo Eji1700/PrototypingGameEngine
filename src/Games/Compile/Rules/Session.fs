@@ -4,13 +4,23 @@ open TCModel.Common
 open TCModel.Engine
 
 /// How a game finished.
-///
-/// One way, so far. What a player is trying to *do* has not been said yet, so the only
-/// ending this game knows is somebody putting it down - and saying that plainly is better
-/// than inventing a win nobody asked for.
 type Ending =
+    /// All three of their protocols compiled, which is the whole object of the game.
+    | Won of PlayerId
     /// Somebody walked away, and which seat.
     | Abandoned of PlayerId
+
+/// The control component: whether the optional rule is being played at all, and if it is, where
+/// the component is sitting.
+///
+/// One field answers both questions, which is why it is a type rather than a `bool` and a
+/// `PlayerId option` that could disagree. `NotInPlay` never changes, and the game it describes is
+/// the game without the rule.
+type Control =
+    | NotInPlay
+    /// Nobody has led two lanes yet, so it sits between the players.
+    | InTheMiddle
+    | HeldBy of PlayerId
 
 /// Where in the game it is, and therefore what kind of move may be made.
 ///
@@ -39,6 +49,9 @@ type Doing =
     | TheDraft
     | TheProtocols
     | ThePlay
+    /// Mid-effect: a card has stopped to ask somebody something, and nothing else can happen
+    /// until it is answered.
+    | AChoice
     | Nothing
 
 /// Where the game stands, which is the one thing the engine ever asks about.
@@ -53,6 +66,32 @@ type Session =
       /// how far the draft or the arranging has got, which is what `active` is for.
       ToPlay: PlayerId
       Turn: int
+
+      /// Where the control component is, and whether there is one at all.
+      Control: Control
+
+      /// What is waiting to happen, newest first. Empty almost always, and the whole of what
+      /// "the game is mid-effect" means.
+      Pile: Pending list
+
+      /// Every card face up on the table when the pile was last looked at.
+      ///
+      /// A set of cards rather than of places, because a card *is* a place here: no protocol is
+      /// drafted twice, so all thirty-six cards in a game are distinct and one of them names
+      /// itself. It also survives a stack shifting under it, which an index would not.
+      ///
+      /// What is in here and no longer face up drops out; what is face up and not in here has
+      /// just been turned over, and its text goes on the pile. The difference is the only
+      /// trigger this game has.
+      Revealed: Set<Card>
+
+      /// Whether the command that last finished actually did anything.
+      ///
+      /// The whole of what *"if you do"* reads, and it has to be kept rather than worked out
+      /// because a command that stops to ask has not finished doing anything until the answer
+      /// comes back - which may be several moves later.
+      Did: bool
+
       /// The shuffle, and whatever else is drawn later. It travels in the state so that a
       /// game is a value and a seed is a whole game.
       Rng: Rng }
@@ -73,12 +112,31 @@ module Session =
     /// A fresh game: twelve protocols on the table, both sides empty, and nothing dealt. The
     /// shuffle is not done here - there is nothing to shuffle until the draft says what a
     /// deck is made of.
-    let dealt (seed: uint64) =
+    ///
+    /// Whether the control component is in play is settled here and never again, because it is
+    /// settled by *which game this is*: the two are two `Playable`s built from one function, and
+    /// the flag is baked in where the value is.
+    let dealt control (seed: uint64) =
         { Stage = Drafting Protocol.all
           Field = Field.ofSeats seats
           ToPlay = Seat.at 1
           Turn = 1
+          Control = control
+          Pile = []
+          Revealed = Set.empty
+          Did = false
           Rng = Rng.ofSeed seed }
+
+    let holdsControl seat session = session.Control = HeldBy seat
+
+    /// Whether this is the game with the component in it at all.
+    let withControl session = session.Control <> NotInPlay
+
+    /// What the game is waiting to be told, if it is waiting on anything.
+    let asking session =
+        match session.Pile with
+        | Ask question :: _ -> Some question
+        | _ -> None
 
     let side seat session = Field.side seat session.Field
 
@@ -94,7 +152,16 @@ module Session =
     /// Whose turn it is. Three different questions under one name, which is the point of it
     /// being asked of the game: the draft has an order of its own, the arranging goes round
     /// once, and play alternates.
+    /// Whose turn it is. Four different questions under one name, which is the point of it being
+    /// asked of the game rather than worked out above it: a card that has stopped to ask
+    /// somebody something outranks everything, and the somebody is very often not the player
+    /// whose turn it is. Under that, the draft has an order of its own, the arranging goes round
+    /// once, and play alternates.
     let active session =
+        match asking session with
+        | Some question -> question.Chooser
+        | None ->
+
         match session.Stage with
         | Drafting _ -> Draft.picking (picksMade session) |> Option.defaultValue session.ToPlay
         | Arranging -> arranging session |> Option.defaultValue session.ToPlay
@@ -102,6 +169,10 @@ module Session =
         | Done _ -> session.ToPlay
 
     let doing session =
+        match asking session with
+        | Some _ -> AChoice
+        | None ->
+
         match session.Stage with
         | Drafting _ -> TheDraft
         | Arranging -> TheProtocols
@@ -138,7 +209,8 @@ module Session =
                 (fun (field, rng) seat ->
                     let side = Field.side seat field
                     let deck, rng = Deck.shuffled (Deck.ofProtocols side.Order) rng
-                    Field.withSide seat ({ side with Deck = deck } |> Side.drew Deck.HandSize) field, rng)
+                    let side, rng = Side.drawing Deck.HandSize { side with Deck = deck } rng
+                    Field.withSide seat side field, rng)
                 (session.Field, session.Rng)
 
         { session with

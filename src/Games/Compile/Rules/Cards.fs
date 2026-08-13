@@ -44,6 +44,39 @@ module Card =
             | _ -> None
         | _ -> None
 
+/// Which way up a card was played.
+///
+/// The whole of the second decision a player makes every turn, and the reason a hand is never
+/// dead: a card you cannot use is still worth something anywhere.
+type Face =
+    | FaceUp
+    | FaceDown
+
+/// A card as it lies in a stack.
+///
+/// Face down it is worth two and says nothing, whatever is printed on it - so a 5 spent as a 2
+/// is a real cost, and a 0 played face down is a real gain. The card underneath is still
+/// carried, because it is still that card: it can be turned over later, and what it is then is
+/// not something the table gets to invent.
+type Placed = { Card: Card; Face: Face }
+
+module Placed =
+
+    /// What a card face down is worth, whatever is printed on it.
+    [<Literal>]
+    let FaceDownValue = 2
+
+    let up card = { Card = card; Face = FaceUp }
+
+    let down card = { Card = card; Face = FaceDown }
+
+    let value placed =
+        match placed.Face with
+        | FaceUp -> placed.Card.Value
+        | FaceDown -> FaceDownValue
+
+    let isFaceUp placed = placed.Face = FaceUp
+
 /// A deck: the three drafted protocols' cards, shuffled together.
 module Deck =
 
@@ -51,7 +84,12 @@ module Deck =
     /// that grew a seventh card would grow the deck too.
     let Size = Protocol.Each * Card.PerProtocol
 
-    /// How many are drawn at the start.
+    /// How many are drawn at the start, and how many a hand may hold.
+    ///
+    /// One number, because they are one rule said at two moments: a refresh takes you *to* five,
+    /// and the check cache phase takes you *back to* five when a card has drawn you past it. A
+    /// game where they differed would be a game where refreshing could put you over your own
+    /// limit.
     [<Literal>]
     let HandSize = 5
 

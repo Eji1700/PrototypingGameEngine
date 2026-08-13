@@ -10,7 +10,10 @@ let all =
     [ Play.chosen TCModel.Turncoats.Offer.playable
       Play.chosen TCModel.TicTacToe.Offer.playable
       Play.chosen TCModel.Diplomacy.Offer.playable
-      Play.chosen TCModel.Compile.Offer.playable ]
+      Play.chosen TCModel.Compile.Offer.playable
+      // The same game with its optional rule in it. Two values out of one function, which is
+      // what a game being a *value* rather than a module is for.
+      Play.chosen TCModel.Compile.Offer.withControl ]
 
 /// The one a line that named no game is about. There is always at least one game, so this
 /// is a list that cannot be empty rather than an answer that might not be there.

@@ -45,6 +45,25 @@ module Rival =
     /// would actually take - a machine that guessed and was refused would be asked again, and
     /// again, with the turn never passing and nothing on the screen to say why.
     let plays session rival =
+        // A card waiting on a choice outranks the stage, exactly as it does for a person: until
+        // it is answered there is no other move the rules will take.
+        match Session.asking session with
+        | Some question ->
+            match question.Wanting with
+            | ACard(_, targets) ->
+                let chosen, rng = pick (targets |> List.map Target.card) rival.Rng
+                Some(Choose(TheCard chosen), { rival with Rng = rng })
+            | ALine(_, offered) ->
+                let line, rng = pick offered rival.Rng
+                Some(Choose(TheLine line), { rival with Rng = rng })
+            | AnOrder offered ->
+                let order, rng = pick offered rival.Rng
+                Some(Arrange order, { rival with Rng = rng })
+            | Whether _ ->
+                let said, rng = pick [ Yes; No ] rival.Rng
+                Some(Choose said, { rival with Rng = rng })
+        | None ->
+
         match session.Stage with
         | Done _ -> None
 
@@ -66,11 +85,22 @@ module Rival =
 
         | Playing ->
             match (Session.side session.ToPlay session).Hand with
-            | [] -> None
+            // Nothing in hand is not nothing to do: refreshing is the action, and it is the
+            // only one the rules will take.
+            | [] -> Some(Refresh, rival)
             | hand ->
                 let card, rng = pick hand rival.Rng
-                let line, rng = pick Lines.all rng
-                Some(Play(card, line), { rival with Rng = rng })
+
+                // Every way this card could legally be laid: face up wherever its protocol is,
+                // and face down anywhere. Picked out of what the rules would take rather than
+                // guessed at - a machine whose move was refused would be asked again, and
+                // again, with the turn never passing and nothing on the screen to say why.
+                let ways =
+                    [ for line in Field.facingLines card session.Field -> line, FaceUp
+                      for line in Lines.all -> line, FaceDown ]
+
+                let (line, face), rng = pick ways rng
+                Some(Play(card, line, face), { rival with Rng = rng })
 
     // --- the one on offer -----------------------------------------------------------------
 

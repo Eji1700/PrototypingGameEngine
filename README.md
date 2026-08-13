@@ -14,7 +14,7 @@ README of its own:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 players | Stones on a map, hidden bags, and a game settled twice over. The game this was built for |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
-| [**Compile**](src/Games/Compile/README.md) | 2 | Twelve protocols drafted 1-2-2-1, three lines across the table, and a deck each. Unfinished, on purpose |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. Playable and winnable; the cards are still being written |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
@@ -129,7 +129,7 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 | Stones on a map, hidden bags, and a game settled twice over |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
-| [**Compile**](src/Games/Compile/README.md) | 2 | Twelve protocols drafted 1-2-2-1, three lines across the table, and a deck each. Unfinished, on purpose |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. Playable and winnable; the cards are still being written |
 
 Everything below this line is about the program rather than about any of them.
 

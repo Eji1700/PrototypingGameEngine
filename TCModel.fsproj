@@ -193,11 +193,24 @@
   <ItemGroup Label="Compile - how it is played">
     <Compile Include="src/Games/Compile/Rules/Protocols.fs" />
     <Compile Include="src/Games/Compile/Rules/Cards.fs" />
+    <!-- What a card's rules text is made of, as data rather than as functions - so that the
+         game can check it, print it, and reason about it, none of which it could do to a
+         closure. And what is printed on each of the seventy-two, which is a lookup rather than
+         a field on a card: text is a fact *about* a card, and a card stays a protocol and a
+         number so that it stays cheap to compare and easy to type. -->
+    <Compile Include="src/Games/Compile/Rules/Effects.fs" />
+    <Compile Include="src/Games/Compile/Rules/Printed.fs" />
     <!-- The lines, one side of the table, and both of them together. -->
     <Compile Include="src/Games/Compile/Rules/Field.fs" />
     <!-- Whose pick it is, which is a list of six and nothing else. -->
     <Compile Include="src/Games/Compile/Rules/Drafting.fs" />
     <Compile Include="src/Games/Compile/Rules/Session.fs" />
+    <!-- What the game has to say, above the two things that say it: a move made by a player,
+         and the pile working its way down after one. -->
+    <Compile Include="src/Games/Compile/Rules/Events.fs" />
+    <!-- The pile: what a card's text sets off, one command at a time, with a look at the table
+         between every two of them. -->
+    <Compile Include="src/Games/Compile/Rules/Resolving.fs" />
     <Compile Include="src/Games/Compile/Rules/Turn.fs" />
     <Compile Include="src/Games/Compile/Rules/Words.fs" />
     <Compile Include="src/Games/Compile/Rules/Rival.fs" />

@@ -7,18 +7,22 @@ namespace TCModel.Compile
 /// the one piece of data this game is built out of, which is why `Faults` counts them before
 /// anybody sits down.
 type Protocol =
-    | Fire
-    | Water
-    | Dark
-    | Light
-    | Metal
-    | Gravity
-    | Life
+    | Apathy
+    | Darkness
     | Death
+    | Fire
+    | Gravity
+    | Hate
+    | Life
+    | Light
+    | Love
+    | Metal
+    | Plague
+    | Psychic
     | Speed
     | Spirit
-    | Psychic
-    | Plague
+    | Water
+
 
 module Protocol =
 
@@ -28,25 +32,47 @@ module Protocol =
     [<Literal>]
     let Each = 3
 
-    /// All twelve, in the order they are offered at the draft. There are no duplicates, and
-    /// a draft takes six of them, so half of these are left over in any one game.
+    /// All fifteen, in the order they are offered at the draft - which is alphabetical, because
+    /// nothing else about them has an order and a list somebody has to search should be in the
+    /// one order everybody already knows.
+    ///
+    /// There are no duplicates, and a draft takes six, so nine of these are left over in any one
+    /// game. That the pool is two and a half times what a game uses is what makes the draft a
+    /// real decision rather than a formality.
     let all =
-        [ Fire; Water; Dark; Light; Metal; Gravity; Life; Death; Speed; Spirit; Psychic; Plague ]
+        [ Apathy
+          Darkness
+          Death
+          Fire
+          Gravity
+          Hate
+          Life
+          Light
+          Love
+          Metal
+          Plague
+          Psychic
+          Speed
+          Spirit
+          Water ]
 
     let name =
         function
-        | Fire -> "Fire"
-        | Water -> "Water"
-        | Dark -> "Dark"
-        | Light -> "Light"
-        | Metal -> "Metal"
-        | Gravity -> "Gravity"
-        | Life -> "Life"
+        | Apathy -> "Apathy"
+        | Darkness -> "Darkness"
         | Death -> "Death"
+        | Fire -> "Fire"
+        | Gravity -> "Gravity"
+        | Hate -> "Hate"
+        | Life -> "Life"
+        | Light -> "Light"
+        | Love -> "Love"
+        | Metal -> "Metal"
+        | Plague -> "Plague"
+        | Psychic -> "Psychic"
         | Speed -> "Speed"
         | Spirit -> "Spirit"
-        | Psychic -> "Psychic"
-        | Plague -> "Plague"
+        | Water -> "Water"
 
     /// The word a player types for it, which is its name in lower case. One function rather
     /// than a second table, so a protocol renamed is renamed everywhere at once.
@@ -59,3 +85,14 @@ module Protocol =
     /// Every protocol there is, in the words a player would type - for the sentence a
     /// refusal ends with.
     let names = all |> List.map key |> String.concat ", "
+
+    /// Every order a run of protocols could be put in. Six, for three of them, which is few
+    /// enough to offer whole rather than asking somebody to think of one - and it is the same
+    /// six whether a player is laying them out at the start or being made to move them by the
+    /// control component.
+    let rec orders protocols =
+        match protocols with
+        | [] -> [ [] ]
+        | _ ->
+            protocols
+            |> List.collect (fun one -> orders (protocols |> List.filter ((<>) one)) |> List.map (fun rest -> one :: rest))

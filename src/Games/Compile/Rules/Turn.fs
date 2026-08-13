@@ -5,53 +5,32 @@ open TCModel.Engine
 /// Everything a player may ask this game to do.
 ///
 /// Three of them are three different games - taking a protocol, laying the three of them out
-/// against the lines, putting a card on a stack - and the fourth is the one every game has.
-/// A move made in the wrong stage is refused rather than unreadable: `draft fire` is a fair
-/// thing to type, and being told the draft is over is a better answer than being told nobody
+/// against the lines, putting a card on a stack - and the rest are what a turn is made of. A
+/// move made in the wrong stage is refused rather than unreadable: `draft fire` is a fair thing
+/// to type, and being told the draft is over is a better answer than being told nobody
 /// understood.
 type Move =
     /// Take a protocol at the draft.
     | Take of Protocol
     /// Lay your three out against the lines, first for line one.
     | Arrange of Protocol list
-    /// A card out of your hand, onto one of your stacks.
-    | Play of Card * line: int
+    /// A card out of your hand, onto one of your stacks, which way up.
+    | Play of Card * line: int * Face
+    /// The whole hand away and five fresh ones up - instead of playing, not as well as.
+    | Refresh
+    /// An answer to whatever the game has stopped to ask - a card, or a line. Not an action:
+    /// the turn is already under way, and this is what lets it carry on.
+    | Choose of Chosen
     | Resign
 
-type Happening =
-    | Drafted of PlayerId * Protocol
-    /// All six taken; the protocols are settled and the lines are not.
-    | DraftEnded
-    | Arranged of PlayerId * Protocol list
-    /// Both decks built, shuffled and drawn from.
-    | HandsDealt
-    | Played of PlayerId * Card * line: int
-    | GameEnded of Ending
-
-type Refusal =
-    /// A move for a stage the game is not in, carrying the stage it is in - because what
-    /// helps a player who drafted at the wrong moment is being told what the game is asking
-    /// for now, and only the game knows that.
-    | NotNow of Doing
-    | AlreadyTaken of Protocol
-    | NotDrafted of Protocol
-    | NotThree of said: int
-    | SaidTwice of Protocol
-    | NotInHand of Card
-    | NoSuchLine of said: int
-
-/// What this game has to say, and the whole of it. Nothing about undo and nothing about a
-/// line nobody could read: those are the engine's, and are said once, above, in words that
-/// suit any game.
-type Notice =
-    | Happened of Happening
-    | Refused of Refusal
-
-/// How a turn goes at each of the three stages.
+/// How a turn goes at each of the stages.
 ///
 /// Total, like every game's: `None` for the position means nothing moved and the notices say
 /// why. A refusal is something this game *says*, not something that breaks it, which is what
 /// lets every table above be a fold.
+///
+/// Short, and it should be. What a move sets off is `Resolving`'s, and what a card says is
+/// `Printed`'s; what is here is only which moves the rules will take and when.
 module Turn =
 
     let private walkedAway seat session =
@@ -118,39 +97,103 @@ module Turn =
 
                 let laid = Happened(Arranged(seat, order))
 
-                // The second player to lay theirs out is the one who starts the game: there is
-                // nothing left to settle, so the decks are built and both hands drawn.
+                // The second player to lay theirs out is the one who ends the settling: both are
+                // turned over at once, the decks are built, and both hands are drawn.
+                //
+                // Turned over *at once* is the whole reason the seats come round one at a time
+                // and the game is still the game two people would play across a table. Neither
+                // chose knowing the other's, so which of them was asked first does not matter.
                 match Session.arranging session with
                 | Some _ -> Some session, [ laid ]
-                | None -> Some(Session.dealHands session), [ laid; Happened HandsDealt ]
+                | None ->
+                    let both =
+                        Session.seats
+                        |> List.map (fun seat -> seat, (Session.side seat session).Order)
+
+                    Some(Session.dealHands session), [ laid; Happened(Revealed both); Happened HandsDealt ]
 
         | Drafting _
         | Playing
         | Done _ -> None, [ Refused(NotNow(Session.doing session)) ]
 
-    // --- playing a card ----------------------------------------------------------------------
+    // --- the two actions -----------------------------------------------------------------------
 
-    let private play card line session =
+    /// The whole hand down, five up, and that was the turn.
+    ///
+    /// The second clock of the game. Five cards is five turns of tempo, and the turn spent
+    /// getting five more is a turn the other player spends getting closer to ten - which is what
+    /// makes a hand of cards you cannot use a real problem rather than an inconvenience.
+    let private refresh session =
+        match session.Stage with
+        | Playing ->
+            let seat = session.ToPlay
+
+            // The turn ends at the bottom of the pile, the refreshing sits on that, and - if the
+            // control component is being held - a rearrangement nobody asked for sits on top of
+            // both. Then the pile is settled, and it stops on the rearrangement if there is one.
+            let session, told = session |> Resolving.ending |> Resolving.refreshing seat
+
+            let session, more = Resolving.settle session told
+            Some session, more
+
+        | Drafting _
+        | Arranging
+        | Done _ -> None, [ Refused(NotNow(Session.doing session)) ]
+
+    let private play card line face session =
         match session.Stage with
         | Playing ->
             let seat = session.ToPlay
             let side = Session.side seat session
 
-            if not (Lines.holds line) then
+            // Asked first, because with nothing in hand every card is a card not in hand and
+            // that is the least useful of the true things the game could say.
+            if List.isEmpty side.Hand then
+                None, [ Refused MustRefresh ]
+            elif not (Lines.holds line) then
                 None, [ Refused(NoSuchLine line) ]
             elif not (Side.holds card side) then
                 None, [ Refused(NotInHand card) ]
+            // Face down goes anywhere, which is the whole of what makes a hand of unplayable
+            // cards still a hand. Face up has to meet a protocol.
+            elif face = FaceUp && not (Field.allows card line session.Field) then
+                None, [ Refused(NotFacingThere(card, line, Field.facingLines card session.Field)) ]
             else
-                Some
+                let placed = { Card = card; Face = face }
+
+                // The card leaves the hand at once and lands in its own good time: whatever it is
+                // about to cover has the right to say something first, and until that has been
+                // said the card is in the air. The end of the turn goes on the bottom of the pile
+                // under all of it, so everything the card sets off happens before the turn is
+                // handed on.
+                let session, told =
                     { session with
-                        Field = session.Field |> Field.update seat (Side.played card line)
-                        ToPlay = Session.other seat
-                        Turn = session.Turn + 1 },
-                [ Happened(Played(seat, card, line)) ]
+                        Field =
+                            session.Field
+                            |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) }) }
+                    |> Resolving.ending
+                    |> Resolving.laying seat placed line
+                    |> fun session -> Resolving.settle session []
+
+                Some session, told
 
         | Drafting _
         | Arranging
         | Done _ -> None, [ Refused(NotNow(Session.doing session)) ]
+
+    // --- answering whatever has stopped the game ---------------------------------------------
+    //
+    // Two kinds of question and two words for them, and the second word is one the game already
+    // had: `arrange` lays the protocols out at the start of a game and answers the rearrangement
+    // the control component forces. It is the same thing said at two moments, so it reads the
+    // same, writes the same into a record, and needed nothing new from the parser.
+
+    let private answering move session =
+        match Session.asking session, move with
+        | Some question, Choose chosen -> Resolving.choosing question chosen session
+        | Some question, Arrange order -> Resolving.ordering question order session
+        | Some question, _ -> None, [ Refused(AnswerFirst question.Wanting) ]
+        | None, _ -> None, [ Refused(NotNow(Session.doing session)) ]
 
     /// What the engine asks of a game: a move and where it stands, and the position it left
     /// along with whatever there is to say.
@@ -162,6 +205,14 @@ module Turn =
         | Done _, _ -> None, []
 
         | _, Resign -> walkedAway (Session.active session) session
+
+        // A question on the pile stops everything. Answering it is the only move that carries,
+        // and the refusal says what is being asked - which is the only thing that will move the
+        // game on.
+        | _, move when (Session.asking session).IsSome -> answering move session
+
+        | _, Choose _ -> answering move session
         | _, Take protocol -> take protocol session
         | _, Arrange order -> arrange order session
-        | _, Play(card, line) -> play card line session
+        | _, Play(card, line, face) -> play card line face session
+        | _, Refresh -> refresh session
