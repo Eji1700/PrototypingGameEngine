@@ -9,7 +9,8 @@ module TCModel.Games
 let all =
     [ Play.chosen TCModel.Turncoats.Offer.playable
       Play.chosen TCModel.TicTacToe.Offer.playable
-      Play.chosen TCModel.Diplomacy.Offer.playable ]
+      Play.chosen TCModel.Diplomacy.Offer.playable
+      Play.chosen TCModel.Compile.Offer.playable ]
 
 /// The one a line that named no game is about. There is always at least one game, so this
 /// is a list that cannot be empty rather than an answer that might not be there.

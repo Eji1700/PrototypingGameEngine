@@ -1,4 +1,4 @@
-# TCModel — an engine for turn-based games, and three games in it
+# TCModel — an engine for turn-based games, and four games in it
 
 Answer seven questions about how a game is *played* and fourteen about how it is *read*, and
 you are handed the rest: a history to walk back through, a record that replays, seats and
@@ -14,6 +14,7 @@ README of its own:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 players | Stones on a map, hidden bags, and a game settled twice over. The game this was built for |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Twelve protocols drafted 1-2-2-1, three lines across the table, and a deck each. Unfinished, on purpose |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
@@ -51,6 +52,13 @@ asked for: seven seats, no chance at all, orders written in secret by everybody 
 made of three kinds of phase, and a board no picture can show all of. What those two turned
 up along the way is the most useful thing in this file: [what a second game
 found](#what-a-second-game-found), and [what a third game found](#what-a-third-game-found).
+
+**And a fourth, still being written.** [Compile](src/Games/Compile/README.md) is the first here
+that is a deck rather than a board, and the first whose game is three games in a row: a draft,
+a laying-out of protocols against lines, and then play — with different moves and three
+different senses of whose turn it is. It is in the tree with its win condition deliberately
+unwritten, which makes it the one honest test of the other claim this file makes: that a game
+can be added to, rather than only added, without anything above it moving. Nothing did.
 
 **Using it** — [Running](#running) ·
 [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
@@ -121,6 +129,7 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 | Stones on a map, hidden bags, and a game settled twice over |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Twelve protocols drafted 1-2-2-1, three lines across the table, and a deck each. Unfinished, on purpose |
 
 Everything below this line is about the program rather than about any of them.
 
@@ -1759,16 +1768,20 @@ dotnet fsi tests/diplomacy.fsx  # the third game - the adjudication cases every 
                                 #   rules is judged on, the year and its skipped phases, what
                                 #   one seat may read of another's orders, and a few thousand
                                 #   machine moves played out and replayed from the record
+dotnet fsi tests/compile.fsx    # the fourth game - the draft, the lines, the deal, that a
+                                #   hand is on nobody else's screen, and that eighteen cards
+                                #   stay eighteen wherever they are
 ```
 
-**Three harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
-loaded file by its basename, and all three games have a `Turn.fs` and a `Words.fs` - which
+**Four harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
+loaded file by its basename, and all four games have a `Turn.fs` and a `Words.fs` - which
 compile happily side by side in one project and cannot be loaded into one script. So
 [Checks.fsx](tests/Checks.fsx) keeps score and loads nothing at all, and
-[Whole.fsx](tests/Whole.fsx), [Noughts.fsx](tests/Noughts.fsx) and
-[Europe.fsx](tests/Europe.fsx) each load the same stack in the project's own order with one
-game on the end of it. The thirteen scripts above the last two used to keep a hand-ordered
-`#load` list apiece; they had already drifted, which is the same disease the seams are for.
+[Whole.fsx](tests/Whole.fsx), [Noughts.fsx](tests/Noughts.fsx),
+[Europe.fsx](tests/Europe.fsx) and [Compiled.fsx](tests/Compiled.fsx) each load the same stack
+in the project's own order with one game on the end of it. The thirteen scripts above the last
+three used to keep a hand-ordered `#load` list apiece; they had already drifted, which is the
+same disease the seams are for.
 
 Two more, which want a process rather than a value:
 

@@ -185,6 +185,31 @@
     <Compile Include="src/Games/Diplomacy/Offer.fs" />
   </ItemGroup>
 
+  <!-- The fourth game, and the first one that is not a board at all: a deck each, built out
+       of protocols the players draft between them, and three lines running across the table
+       with a stack of cards growing at each end. What it leans on that none of the others did
+       is the stage - a game of this is a draft, then a laying-out, then play, and the three
+       have different moves and three different senses of whose turn it is. -->
+  <ItemGroup Label="Compile - how it is played">
+    <Compile Include="src/Games/Compile/Rules/Protocols.fs" />
+    <Compile Include="src/Games/Compile/Rules/Cards.fs" />
+    <!-- The lines, one side of the table, and both of them together. -->
+    <Compile Include="src/Games/Compile/Rules/Field.fs" />
+    <!-- Whose pick it is, which is a list of six and nothing else. -->
+    <Compile Include="src/Games/Compile/Rules/Drafting.fs" />
+    <Compile Include="src/Games/Compile/Rules/Session.fs" />
+    <Compile Include="src/Games/Compile/Rules/Turn.fs" />
+    <Compile Include="src/Games/Compile/Rules/Words.fs" />
+    <Compile Include="src/Games/Compile/Rules/Rival.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Compile - how it is read">
+    <Compile Include="src/Games/Compile/Reading/Ink.fs" />
+    <Compile Include="src/Games/Compile/Reading/Parse.fs" />
+    <Compile Include="src/Games/Compile/Reading/Render.fs" />
+    <Compile Include="src/Games/Compile/Offer.fs" />
+  </ItemGroup>
+
   <!-- What opening a game actually involves - dealing one, keeping its record, the menu,
        the two tables and the browser - generic in the game, and ending in the one interface
        that seals a game's types off so that a list can hold more than one. -->
