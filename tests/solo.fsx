@@ -180,15 +180,26 @@ report
     "'quit' asks for it too, and leaves the game where it stands"
     true
     (match errandOf "quit" moved with
-     | Leaving(model, "first") -> not (Playing.isOver model)
+     | Leaving(Some model, "first") -> not (Playing.isOver model)
      | _ -> false)
 
 report
     "so a game put down can be taken up again"
     (Playing.session (Solo.model moved))
     (match errandOf "quit" moved with
-     | Leaving(model, _) -> Playing.session model
+     | Leaving(Some model, _) -> Playing.session model
      | _ -> failwith "quitting wrote nothing down")
+
+// But a sitting that only read the game back has nothing to write, and a record read and put
+// straight down is a record to leave alone. It matters most for the oldest ones: those were
+// written before a seating was part of a record, so writing one out again would restate it in
+// a form nobody asked for, on a file nobody meant to touch.
+report
+    "a game taken up and put straight down again writes nothing"
+    true
+    (match errandOf "quit" sitting with
+     | Leaving(None, "first") -> true
+     | _ -> false)
 
 // The one that would be easy to get wrong, and was worth pulling out of the loop to be able
 // to ask: a restart writes the game it has just cleared away, under the name that game was

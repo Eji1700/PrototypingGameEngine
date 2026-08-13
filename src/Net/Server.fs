@@ -118,7 +118,9 @@ type Aside<'Move, 'State, 'Notice>
                 match doing with
                 | Carrying -> []
                 | Keeping(model, stamp, announce) -> alsoTold model stamp announce
-                | Leaving(model, stamp) -> alsoTold model stamp true
+                | Leaving(Some model, stamp) -> alsoTold model stamp true
+                // A console that only read the game back has nothing to write on its way out.
+                | Leaving(None, _) -> []
 
             posts @ said)
 

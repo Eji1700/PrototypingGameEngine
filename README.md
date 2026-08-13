@@ -218,6 +218,11 @@ record being a game you can carry on with:
   from the name — built in one place and taken apart in the same one — and a record
   that has been renamed is filed afresh instead, on the principle that a file you
   cannot prove is this game's is a file not to write over.
+- **Reading one does not change it.** A record is written on the way out whether or
+  not anybody asked, so once the way out leads back to the file it came from, taking
+  a game up and putting it straight down would rewrite it — which is how the oldest
+  records in `logs/` got quietly restated in a newer form the first time this was
+  tried. A sitting that added nothing to the game writes nothing.
 - **`quit` leaves the game standing.** It used to resign first, so a record said
   how it ended rather than simply stopping. That was right while a record was a
   finished thing to read back; it is wrong once one is a game to take up, because

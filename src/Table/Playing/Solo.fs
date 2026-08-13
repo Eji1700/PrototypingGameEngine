@@ -32,7 +32,12 @@ type Errand<'Move, 'State, 'Notice> =
     /// without saying anything.
     | Keeping of keep: Model<'Move, 'State, 'Notice> * stamp: string * announce: bool
     /// The same, and the player is going.
-    | Leaving of keep: Model<'Move, 'State, 'Notice> * stamp: string
+    ///
+    /// Nothing to write where the game has not moved since this table took it up. Taking a
+    /// record up and putting it straight back down is reading, and reading a game is not a
+    /// reason to write over the file it came out of - which matters most for the records that
+    /// are oldest, since those are the ones written in a form this would quietly restate.
+    | Leaving of keep: Model<'Move, 'State, 'Notice> option * stamp: string
 
 /// A game at one keyboard, with whoever is watching it.
 ///
@@ -64,6 +69,10 @@ type Solo<'Move, 'State, 'Notice> =
         { Game: Playable<'Move, 'State, 'Notice>
           Model: Model<'Move, 'State, 'Notice>
           Stamp: string
+          /// How far the game had got when this table took it up, which is nought for a fresh
+          /// deal and wherever it was left for a game taken up again. What it is for is to
+          /// tell a sitting that added something from one that only looked.
+          Opened: int
           Rivals: (PlayerId * Seated<'Move, 'State>) list
           Watchers: (string * Reading<'Move, 'State, 'Notice>) list }
 
@@ -77,6 +86,7 @@ module Solo =
         { Game = game
           Model = model
           Stamp = stamp
+          Opened = Timeline.movesMade model.Timeline
           Rivals = []
           Watchers = [] }
 
@@ -89,6 +99,12 @@ module Solo =
     let private rules solo = solo.Game.Rules
 
     let private standing solo = Model.state solo.Model
+
+    /// Whether this sitting has put anything into the game, as against having only read it
+    /// back. A record is written out on the way past whether anybody asked or not, and this
+    /// is what keeps that from meaning that reading one changes it.
+    let private added solo =
+        Timeline.movesMade solo.Model.Timeline <> solo.Opened
 
     let isOver solo = (rules solo).Over(standing solo)
 
@@ -296,7 +312,7 @@ module Solo =
         // back. It is not, now: a record is a game to take up again, and a game conceded on
         // the way out of the room is a game nobody can come back to. Conceding is `resign`,
         // which is a move a player makes on purpose and always was.
-        | Ok Leave -> solo, drawAll solo, Leaving(solo.Model, solo.Stamp)
+        | Ok Leave -> solo, drawAll solo, Leaving((if added solo then Some solo.Model else None), solo.Stamp)
         | Ok(Send(Restart _ as msg)) ->
             // The old game's record is closed and kept before the table is cleared, which
             // is why the errand carries that game rather than this one. The machines stay
@@ -308,8 +324,11 @@ module Solo =
                 (answering
                     { solo with
                         Model = Update.update (rules solo) msg solo.Model
-                        Stamp = fresh })
-                (Keeping(closing, solo.Stamp, false))
+                        Stamp = fresh
+                        Opened = 0 })
+                // Nothing to keep where the game being swept away is the one that was taken
+                // up a moment ago and never played.
+                (if added solo then Keeping(closing, solo.Stamp, false) else Carrying)
         | Ok(Send((Undo | Redo) as msg)) ->
             moved
                 (walking

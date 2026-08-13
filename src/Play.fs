@@ -35,7 +35,8 @@ let private errand game sitters doing =
     match doing with
     | Carrying -> ()
     | Keeping(model, stamp, announce) -> write model stamp announce
-    | Leaving(model, stamp) -> if not (Journal.isEmpty model.Journal) then write model stamp true
+    | Leaving(Some model, stamp) -> if not (Journal.isEmpty model.Journal) then write model stamp true
+    | Leaving(None, _) -> ()
 
 /// Say the parts of what the table said that a terminal has to print for itself. A screen is
 /// not one of them: the loop below draws the board afresh each turn, because a terminal
