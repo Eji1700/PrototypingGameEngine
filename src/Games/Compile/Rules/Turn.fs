@@ -154,10 +154,15 @@ module Turn =
                 None, [ Refused(NoSuchLine line) ]
             elif not (Side.holds card side) then
                 None, [ Refused(NotInHand card) ]
+            // What something on the table forbids, asked before what the protocols allow: being
+            // told a line is shut is more use than being told the wrong protocol is on it.
+            elif (Field.barred seat line face session.Field).IsSome then
+                None, [ Refused(Forbidden((Field.barred seat line face session.Field).Value, line)) ]
             // Face down goes anywhere, which is the whole of what makes a hand of unplayable
-            // cards still a hand. Face up has to meet a protocol.
-            elif face = FaceUp && not (Field.allows card line session.Field) then
-                None, [ Refused(NotFacingThere(card, line, Field.facingLines card session.Field)) ]
+            // cards still a hand. Face up has to meet a protocol - unless something of theirs
+            // says it does not.
+            elif face = FaceUp && not (Field.allows seat card line session.Field) then
+                None, [ Refused(NotFacingThere(card, line, Field.facingLines seat card session.Field)) ]
             else
                 let placed = { Card = card; Face = face }
 

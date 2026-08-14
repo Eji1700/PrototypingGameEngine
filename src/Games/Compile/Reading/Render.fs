@@ -178,7 +178,7 @@ module Render =
 
             Say
                 [ Span.toned tone name
-                  Span.quiet $"  {Side.valueOn line side}{standing}" ]
+                  Span.quiet $"  {Field.valueOn seat line field}{standing}" ]
 
         Tile(
             Some $"Line {line}",
@@ -291,7 +291,7 @@ module Render =
         let tone = Tone.Slot(Ink.key beholder)
 
         let ways card =
-            [ for line in Field.facingLines card session.Field ->
+            [ for line in Field.facingLines beholder card session.Field ->
                   Does($"up {line}", $"play {Card.key card} {line}", Tone.Plainly)
               for line in Lines.all -> Does($"down {line}", $"play {Card.key card} {line} down", Tone.Quiet) ]
 
@@ -306,10 +306,10 @@ module Render =
                   Scene.quietly "costs the turn" ]
             )
 
-        // A card with something printed on it is marked rather than quoted: the text does not fit
-        // in a cell this narrow, and `what fire-3` says it at length.
-        let named card =
-            Card.name card + (if Printed.says card then " *" else "")
+        // No marker: **every one of the ninety says something**, so a star on the cards with text
+        // would be a star on all of them. The text does not fit in a cell this narrow either way,
+        // and `what fire-3` says it at length.
+        let named card = Card.name card
 
         match side.Hand |> List.sortBy (fun card -> Protocol.name card.Protocol, card.Value) with
         | [] -> Walled(14, [ Scene.squared [ again ] ])
@@ -348,11 +348,31 @@ module Render =
                     | Discard -> "pick a card to discard"
                     | Return _ -> "pick a card to take back into hand"
                     | Shift _ -> "pick a card to move"
-                    | Rehome _ -> "pick a card to give back"
+                    | Show _ -> "pick a card to reveal"
+                    | PlayFromHand _ -> "pick a card to play"
+                    | Give -> "pick a card to give away"
                     | Draw _
                     | Refreshing'
+                    | FromDeck _
+                    | TakeAtRandom
+                    | StopTheirCompile
+                    | RevealTheirHand
+                    | Swap
+                    | Reveal
+                    | UnderThis _
+                    | Times _
+                    | OneOrMore _
                     | May _
+                    | Every _
+                    | InAChosenLine _
+                    | InAChosenLineOf _
+                    | InEachOtherLine _
+                    | InEachLineHolding _
                     | IfYouDo _
+                    | IfCovering _
+                    | Rearrange _
+                    | TakeTheirTop
+                    | Either _
                     | Opposing _ -> "pick a card"
 
                 let choices =
@@ -378,7 +398,7 @@ module Render =
 
                 doing, choices
 
-            | AnOrder offered ->
+            | AnOrder(_, offered) ->
                 let choices =
                     offered
                     |> List.map (fun order ->
@@ -411,6 +431,21 @@ module Render =
 
                 $"say where {Card.name (Target.card moving)} goes", choices
 
+            | ALineFor(command, offered) ->
+                let choices =
+                    offered
+                    |> List.map (fun line ->
+                        Tile(
+                            Some $"Line {line}",
+                            (if yours then Tone.Yours else Tone.Quiet),
+                            [ if yours then
+                                  Does("here", $"choose line {line}", Tone.Plainly)
+                              else
+                                  Scene.quietly "" ]
+                        ))
+
+                $"say which line to {Words.printing command} in", choices
+
             | Whether inner ->
                 let choices =
                     [ "yes", "yes", Tone.Plainly; "no", "no", Tone.Quiet ]
@@ -422,6 +457,23 @@ module Render =
                         ))
 
                 $"say whether to {Words.printing inner}", choices
+
+            // Both halves are on the buttons rather than "first" and "second", because a player
+            // choosing between two commands should be reading the commands.
+            | OneOf(first, second) ->
+                let choices =
+                    [ Words.printing first, "first"; Words.printing second, "second" ]
+                    |> List.map (fun (caption, typed) ->
+                        Tile(
+                            None,
+                            (if yours then Tone.Yours else Tone.Quiet),
+                            [ if yours then
+                                  Does(caption, typed, Tone.Plainly)
+                              else
+                                  Scene.quietly caption ]
+                        ))
+
+                "say which of the two", choices
 
         let says =
             if yours then
@@ -599,9 +651,7 @@ module Render =
         | Some card ->
             Block(
                 Card.name card,
-                match Words.printed card with
-                | [] -> [ Scene.says $"{Card.name card} has nothing printed on it. It is worth {card.Value} face up and {Placed.FaceDownValue} face down, and that is all it does." ]
-                | said -> said |> List.map Scene.says
+                Words.printed card |> List.map Scene.says
             )
         | None ->
 

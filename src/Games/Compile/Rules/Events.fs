@@ -39,11 +39,18 @@ type Happening =
     /// A card taken off the table by an effect rather than by a compile.
     | Deleted of PlayerId * Placed * line: int
     | Discarded of PlayerId * Card
+    /// A card out of one hand and into the other, chosen by the one giving it.
+    | Gave of PlayerId * Card
+    /// And one out of a hand at random, chosen by nobody - which is why what it was is a secret
+    /// from the player it came from and not from the player it went to.
+    | TookAtRandom of PlayerId * Card
+    /// A card off the top of a deck and straight onto the table, seen by neither player before
+    /// it landed.
+    | PlayedFromDeck of PlayerId * Placed * line: int
     /// A card off the table and back into the hand of whoever it was sitting in front of.
     | Returned of PlayerId * Placed * line: int
     /// A card back to the player whose protocol it belongs to, which is not always the player it
     /// was taken from.
-    | WentHome of PlayerId * Card
     /// A card moved to another line, on the same side of the table.
     | Shifted of PlayerId * Placed * from: int * ``to``: int
     | Drew of PlayerId * int
@@ -58,6 +65,14 @@ type Happening =
     /// had waiting behind an "if you do" is now not going to happen, and the record should show
     /// that it was a choice rather than a failure.
     | Declined of PlayerId
+    /// Somebody stopped from compiling when their turn next begins - the one thing in this game
+    /// that is remembered rather than read off the board.
+    | StoppedCompiling of PlayerId
+    /// A card shown to both players and put back where it was. **Public on purpose** - a reveal
+    /// that only one seat could read would not be a reveal - and it is the one thing in this game
+    /// whose whole effect is that it was said out loud.
+    | Showed of PlayerId * Card
+    | ShowedHand of PlayerId * Card list
 
     // --- the control component ---------------------------------------------------------------
 
@@ -89,6 +104,8 @@ type Refusal =
     /// An empty hand is not a turn to be skipped: refreshing is the action, and it is the only
     /// one left.
     | MustRefresh
+    /// A play something on the table forbids, and which line it was aimed at.
+    | Forbidden of Barred * line: int
     /// A move made while the game is waiting on somebody. Carries what is being asked, because
     /// answering it is the only thing that will move the game on.
     | AnswerFirst of Wanting

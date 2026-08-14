@@ -14,7 +14,7 @@ README of its own:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 players | Stones on a map, hidden bags, and a game settled twice over. The game this was built for |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
-| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. Playable and winnable; the cards are still being written |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule that is a second game |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
@@ -53,12 +53,13 @@ made of three kinds of phase, and a board no picture can show all of. What those
 up along the way is the most useful thing in this file: [what a second game
 found](#what-a-second-game-found), and [what a third game found](#what-a-third-game-found).
 
-**And a fourth, still being written.** [Compile](src/Games/Compile/README.md) is the first here
-that is a deck rather than a board, and the first whose game is three games in a row: a draft,
-a laying-out of protocols against lines, and then play — with different moves and three
-different senses of whose turn it is. It is in the tree with its win condition deliberately
-unwritten, which makes it the one honest test of the other claim this file makes: that a game
-can be added to, rather than only added, without anything above it moving. Nothing did.
+**And a fourth.** [Compile](src/Games/Compile/README.md) is the first here that is a deck rather
+than a board, and the first whose game is three games in a row: a draft, a laying-out of protocols
+against lines, and then play — with different moves and three different senses of whose turn it is.
+It went in a piece at a time over many commits — the table, then the numbers game, then the pile
+that resolves rules text, then ninety cards one shape at a time — which makes it the one honest
+test of the other claim this file makes: that a game can be **added to**, rather than only added,
+without anything above it moving. Nothing did, once.
 
 **Using it** — [Running](#running) ·
 [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
@@ -129,7 +130,7 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 | Stones on a map, hidden bags, and a game settled twice over |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
-| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. Playable and winnable; the cards are still being written |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule that is a second game |
 
 Everything below this line is about the program rather than about any of them.
 

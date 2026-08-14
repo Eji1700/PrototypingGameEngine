@@ -53,14 +53,49 @@ let private drawn view seat model = view.Board true seat model
 let private card protocol value = { Protocol = protocol; Value = value }
 
 // A fixture that lays a card on the table lays a card that *does something*, if that card has
-// anything printed on it - so the checks below use blank ones as scenery on purpose, and say so
+// anything printed on it - so the checks below use quiet ones as scenery on purpose, and say so
 // where it matters. This is checked rather than remembered: get it wrong and the game stops to
 // ask a question in the middle of a check about something else.
-let private blank protocol value =
+//
+// **Quiet is not blank.** A middle box only fires when a card is *shown*, and a fixture lays a
+// card down rather than playing it - so scenery may have one and never says it. What scenery may
+// not have is a standing rule, an end command or an interrupt, because those go on speaking from
+// wherever the fixture put the card. Which is also why this is checked rather than remembered:
+// get it wrong and the game stops to ask a question in the middle of a check about something
+// else.
+let private quiet protocol value =
     let chosen = card protocol value
 
-    if Printed.says chosen then
-        failwith $"{Card.name chosen} has text on it and cannot be scenery"
+    if not (Card.exists chosen) then
+        failwith $"{Card.name chosen} is not a card any protocol has"
+
+    let text = Printed.on chosen
+
+    let heard =
+        List.isEmpty text.Top
+        && List.isEmpty text.Bottom
+        && List.isEmpty text.AtEnd
+        && List.isEmpty text.WhenCovered
+
+    if not heard then
+        failwith $"{Card.name chosen} does more than sit there and cannot be scenery"
+
+    chosen
+
+/// And scenery for a check that turns a card over. Quiet is not enough here: turning a card face
+/// up *shows* it, which is exactly when a middle box speaks - so anything a check means to flip
+/// has to have nothing in that box either.
+///
+/// **This used to ask for a card with no text at all**, and there were plenty. There are none
+/// now: all ninety say something, which is the point at which scenery stops being a card the deck
+/// happens to contain and starts being a card chosen for what it is silent about. The three that
+/// pass are silent in every box that a flip, a cover or a turn could set off, and each one is
+/// still a card the game really has.
+let private mute protocol value =
+    let chosen = quiet protocol value
+
+    if not (List.isEmpty (Printed.on chosen).Shown) then
+        failwith $"{Card.name chosen} speaks when it is turned over and cannot be flipped as scenery"
 
     chosen
 
@@ -89,6 +124,36 @@ report "six cards to a protocol" 6 Card.PerProtocol
 report "eighteen to a deck" 18 Deck.Size
 
 report "ninety cards in all" 90 (Protocol.all |> List.collect Card.inProtocol |> List.distinct |> List.length)
+
+// Six cards apiece, but not the same six. There are **seven** numbers, and every protocol goes
+// without exactly one of them - twelve without the 6, and three that carry a 6 and give up a
+// number lower down to pay for it.
+
+report "seven numbers a card can carry, nought to six" [ 0..6 ] Card.values
+
+report
+    "and every protocol goes without exactly one of them"
+    [ for _ in Protocol.all -> 1 ]
+    (Protocol.all
+     |> List.map (fun protocol ->
+         let has = Card.inProtocol protocol |> List.map (fun card -> card.Value)
+         Card.values |> List.filter (fun value -> not (List.contains value has)) |> List.length))
+
+report
+    "twelve go without the six; the three that have one go without a 3, a 0 and a 4"
+    ([ Gravity, 3; Love, 0; Metal, 4 ], 12)
+    (let missing protocol =
+        let has = Card.inProtocol protocol |> List.map (fun card -> card.Value)
+        Card.values |> List.find (fun value -> not (List.contains value has))
+
+     Protocol.all |> List.filter (fun p -> missing p <> 6) |> List.map (fun p -> p, missing p),
+     Protocol.all |> List.filter (fun p -> missing p = 6) |> List.length)
+
+report
+    "a number a protocol does not have is not a card, and saying it is refused rather than guessed"
+    [ false; false; false; true; true ]
+    ([ "gravity-3"; "love-0"; "metal-4"; "gravity-6"; "fire-5" ]
+     |> List.map (Card.byName >> Option.isSome))
 
 // --- the draft ------------------------------------------------------------------------------
 
@@ -306,7 +371,7 @@ let private firstCard model = handOf one model |> List.head
 /// Where a card may go face up. Exactly one line, at this point in the game - no protocol is
 /// drafted twice, so a card's protocol sits in exactly one place on the table.
 let private faceUp model card =
-    Field.facingLines card (standing model).Field |> List.exactlyOne
+    Field.facingLines one card (standing model).Field |> List.exactlyOne
 
 /// Any other line, for checking that face up will not go there.
 let private elsewhere model card =
@@ -403,7 +468,7 @@ report
      let field = (standing model).Field
 
      handOf one model
-     |> List.filter (fun card -> Field.facingLines card field <> [ faceUp model card ]))
+     |> List.filter (fun card -> Field.facingLines one card field <> [ faceUp model card ]))
 
 report
     "face up, where its protocol is, is taken - and is worth what is printed on it"
@@ -414,7 +479,7 @@ report
      let after = Update.update rules (Make(Play(card, line, FaceUp))) model |> standing
 
      Side.stack line (Session.side one after) = [ Placed.up card ]
-     && Side.valueOn line (Session.side one after) = card.Value)
+     && Field.valueOn one line after.Field = card.Value)
 
 report
     "face up anywhere else is refused, and the refusal says where it could have gone"
@@ -450,7 +515,7 @@ report
 
 report
     "face down is worth two, whatever is printed on it"
-    [ 2; 2; 2; 2; 2; 2 ]
+    [ 2; 2; 2; 2; 2; 2; 2 ]
     (Card.values |> List.map (fun value -> Placed.value (Placed.down { Protocol = Fire; Value = value })))
 
 report
@@ -471,7 +536,7 @@ report
      let first, passed = after 0
      let both = Update.update rules (Make(Play(cards[1], 1, FaceDown))) passed
 
-     Side.valueOn 1 (Session.side one (standing first)), Side.valueOn 1 (Session.side one (standing both)))
+     Field.valueOn one 1 (standing first).Field, Field.valueOn one 1 (standing both).Field)
 
 report
     "a five spent face down is worth two, and the stack says so"
@@ -486,7 +551,7 @@ report
 
      let played face =
          match Turn.asked (Play(five, 1, face)) holding with
-         | Some after, _ -> Side.valueOn 1 (Session.side one after)
+         | Some after, _ -> Field.valueOn one 1 after.Field
          | None, _ -> -1
 
      played FaceUp, played FaceDown)
@@ -631,6 +696,11 @@ report
 /// A game where `seat` has these cards face up on that line. Whose turn it is, is left alone -
 /// setting it here as well would make two of these in a row quietly undo each other, which is
 /// exactly the sort of fixture that passes a check by not running it.
+///
+/// And the board is taken as **already read**: a card these fixtures lay face up has said its
+/// piece, the way one on a real table has. Without that, the first thing the game did with any
+/// of these positions would be to fire the middle box of every card in it - which is a history
+/// rather than a board, and not what a check that says *suppose the table looks like this* means.
 let private poised seat line cards session =
     { session with
         Field =
@@ -638,6 +708,7 @@ let private poised seat line cards session =
             |> Field.update seat (fun side ->
                 { side with
                     Stacks = side.Stacks |> Map.add line (cards |> List.map Placed.up) }) }
+    |> Resolving.asRead
 
 /// `seat` makes an ordinary move that touches nothing these checks are about, handing the turn
 /// to the other player - which is when their compile check runs.
@@ -659,10 +730,10 @@ report
     [ false; false; true; true ]
     (let session = standing (opened 1UL)
 
-     [ [ card Water 5; blank Water 4 ], []                        // nine, and ahead
-       [ card Water 5; blank Water 5 ], [ card Gravity 5; blank Gravity 5 ]  // ten, but level
-       [ card Water 5; blank Water 5 ], [ card Gravity 5; blank Gravity 4 ]  // ten against nine
-       [ card Water 5; blank Water 5; blank Water 1 ], [] ]        // eleven
+     [ [ card Water 5; quiet Water 4 ], []                        // nine, and ahead
+       [ card Water 5; quiet Water 5 ], [ card Gravity 5; quiet Gravity 5 ]  // ten, but level
+       [ card Water 5; quiet Water 5 ], [ card Gravity 5; quiet Gravity 4 ]  // ten against nine
+       [ card Water 5; quiet Water 5; quiet Gravity 1 ], [] ]        // eleven
      |> List.map (fun (mine, theirs) ->
          let field =
              session |> poised one 1 mine |> poised two 1 theirs |> fun s -> s.Field
@@ -672,7 +743,7 @@ report
 report
     "a won line compiles as the turn comes round, without being asked"
     (true, [ Water ])
-    (let session = standing (opened 1UL) |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+    (let session = standing (opened 1UL) |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
      match handedOver session with
      | Some after, _ ->
@@ -683,7 +754,7 @@ report
 report
     "and it says so, naming the protocol and the line"
     true
-    (let session = standing (opened 1UL) |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+    (let session = standing (opened 1UL) |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
      handedOver session
      |> snd
@@ -695,8 +766,8 @@ report
     ((0, 3), (0, 2))
     (let session =
         standing (opened 1UL)
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
-        |> poised two 1 [ blank Gravity 3; blank Gravity 1 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
+        |> poised two 1 [ quiet Gravity 4; quiet Gravity 1 ]
 
      match handedOver session with
      | Some after, _ ->
@@ -712,13 +783,13 @@ report
     [ 4; 0 ]
     (let session =
         standing (opened 1UL)
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
-        |> poised one 2 [ blank Darkness 4 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
+        |> poised one 2 [ quiet Darkness 4 ]
 
      match handedOver session with
      | Some after, _ ->
          let side = Session.side one after
-         [ Side.valueOn 2 side; Side.valueOn 1 side ]
+         [ Field.valueOn one 2 after.Field; Field.valueOn one 1 after.Field ]
      | None, _ -> [])
 
 report
@@ -726,8 +797,8 @@ report
     [ Water, 1; Darkness, 2 ]
     (let session =
         standing (opened 1UL)
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
-        |> poised one 2 [ blank Darkness 5; blank Darkness 5; blank Darkness 2 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
+        |> poised one 2 [ quiet Darkness 5; quiet Darkness 5; quiet Darkness 3 ]
 
      // Read off the notices rather than off the set, which is sorted rather than remembered.
      handedOver session
@@ -749,7 +820,7 @@ report
     (let session =
         standing (opened 1UL)
         |> having one [ Water; Darkness ]
-        |> poised one 3 [ blank Fire 5; blank Fire 5; blank Fire 4 ]
+        |> poised one 3 [ quiet Fire 5; quiet Fire 5; quiet Fire 5 ]
 
      match handedOver session with
      | Some after, _ -> Session.isOver after, Session.ending after
@@ -761,7 +832,7 @@ report
     (let session =
         standing (opened 1UL)
         |> having one [ Water ]
-        |> poised one 3 [ blank Fire 5; blank Fire 5; blank Fire 4 ]
+        |> poised one 3 [ quiet Fire 5; quiet Fire 5; quiet Fire 5 ]
 
      match handedOver session with
      | Some after, _ -> Session.isOver after, Session.ending after
@@ -793,7 +864,7 @@ report
     "five cards face down is ten, and ten with nothing against it is a won line"
     (10, true, two)
     (let session = standing (nearlyTen 1UL)
-     Side.valueOn 1 (Session.side one session), Field.won one 1 session.Field, rules.Active session)
+     Field.valueOn one 1 session.Field, Field.won one 1 session.Field, rules.Active session)
 
 report
     "a line about to compile says so, on both boards"
@@ -823,7 +894,7 @@ report
 let private secondCompile seed =
     standing (opened seed)
     |> having one [ Water ]
-    |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+    |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
 report
     "a second compile takes the top card of the other deck, and is no nearer winning"
@@ -862,10 +933,10 @@ report
 report
     "the line still goes, both sides of it"
     (0, 0)
-    (let session = secondCompile 1UL |> poised two 1 [ blank Gravity 3 ]
+    (let session = secondCompile 1UL |> poised two 1 [ quiet Gravity 4 ]
 
      match handedOver session with
-     | Some after, _ -> Side.valueOn 1 (Session.side one after), Side.valueOn 1 (Session.side two after)
+     | Some after, _ -> Field.valueOn one 1 after.Field, Field.valueOn two 1 after.Field
      | None, _ -> -1, -1)
 
 report
@@ -962,6 +1033,29 @@ let private holding seat wanted session =
                             Hand = [ wanted ]
                             Deck = side.Deck |> List.filter ((<>) wanted) }) }
 
+/// And a seat holding **only** that card, the rest of their hand put back under the deck.
+///
+/// For the checks about a card that *draws*. Five in hand and two drawn is seven, and the check
+/// cache phase then stops the turn to trim - which is the game being right and the check being
+/// about something else, so the hand is emptied first rather than the trimming being worked
+/// around.
+let private onlyHolding seat wanted session =
+    { session with
+        Field =
+            session.Field
+            |> Field.update seat (fun side ->
+                { side with
+                    Hand = [ wanted ]
+                    Deck = (side.Hand |> List.filter ((<>) wanted)) @ (side.Deck |> List.filter ((<>) wanted)) }) }
+
+/// Whatever is lying on a line already, however it is lying.
+let private beneath seat line cards session =
+    { session with
+        Field =
+            session.Field
+            |> Field.update seat (fun side -> { side with Stacks = side.Stacks |> Map.add line cards }) }
+    |> Resolving.asRead
+
 /// Cards lying face down on a line, for something to point at.
 let private lyingDown seat line cards session =
     { session with
@@ -970,11 +1064,12 @@ let private lyingDown seat line cards session =
             |> Field.update seat (fun side ->
                 { side with
                     Stacks = side.Stacks |> Map.add line (cards |> List.map Placed.down) }) }
+    |> Resolving.asRead
 
-let private fireThree = card Fire 3
+let private fireZero = card Fire 0
 
-/// Fire-3 in the first player's hand, and Fire is on line 3 - so it goes face up there.
-let private playFireThree session = Turn.asked (Play(fireThree, 3, FaceUp)) session
+/// Fire-0 in the first player's hand, and Fire is on line 3 - so it goes face up there.
+let private playFireZero session = Turn.asked (Play(fireZero, 3, FaceUp)) session
 
 let private happenings told =
     told
@@ -982,13 +1077,31 @@ let private happenings told =
         | Happened e -> Some e
         | _ -> None)
 
-report
-    "a card with nothing printed on it sets nothing off"
-    []
-    (let session = standing (opened 1UL)
-     let plain' = handOf one (opened 1UL) |> List.find (fun c -> not (Printed.says c))
+/// One command on the pile and nothing else, as though a card standing in line 1 had said it.
+/// For the commands no protocol in this draft actually carries.
+let private running command source session =
+    Resolving.settle
+        { session with
+            Pile =
+                [ Run(
+                      command,
+                      { Owner = one
+                        Saying = source
+                        Line = 1 }
+                  ) ] }
+        []
 
-     Turn.asked (Play(plain', faceUp (opened 1UL) plain', FaceUp)) session
+report
+    "a card played face down sets nothing off, whatever is printed on it"
+    []
+    (// **All ninety say something now**, so there is no such thing as a card that sets nothing
+     // off - only a card lying the way that says nothing. Which is the rule this is really
+     // about, and the one worth checking: a five that would make you discard is a two and silent
+     // the moment it goes down the other way up.
+     let loud = card Fire 5
+     let session = standing (opened 1UL) |> holding one loud
+
+     Turn.asked (Play(loud, elsewhere (opened 1UL) loud, FaceDown)) session
      |> snd
      |> List.filter (function
          | Happened(Played _) -> false
@@ -999,18 +1112,18 @@ report
     [ true; true ]
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some after, told ->
          [ happenings told
            |> List.exists (function
-               | Flipped(_, turned, 1) -> turned.Card = card Water 4 && Placed.isFaceUp turned
+               | Flipped(_, turned, 1) -> turned.Card = card Speed 2 && Placed.isFaceUp turned
                | _ -> false)
            happenings told
            |> List.exists (function
-               | Drew(_, 1) -> true
+               | Drew(_, 2) -> true
                | _ -> false) ]
      | None, _ -> [ false; false ])
 
@@ -1019,10 +1132,10 @@ report
     (true, two)
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4 ]
+        |> onlyHolding one fireZero
+        |> lyingDown one 1 [ mute Speed 2 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some after, told ->
          let order =
              happenings told
@@ -1037,9 +1150,9 @@ report
 report
     "nothing to point at fizzles, and the command after it still runs"
     (true, true)
-    (let session = standing (opened 1UL) |> holding one fireThree
+    (let session = standing (opened 1UL) |> holding one fireZero
 
-     match playFireThree session with
+     match playFireZero session with
      | Some _, told ->
          happenings told
          |> List.exists (function
@@ -1054,22 +1167,22 @@ report
 report
     "and the words for a fizzle name the card that found nothing"
     true
-    (let session = standing (opened 1UL) |> holding one fireThree
+    (let session = standing (opened 1UL) |> holding one fireZero
 
-     playFireThree session
+     playFireZero session
      |> snd
      |> List.map compiled.Says
-     |> List.exists (fun said -> mentions "Fire-3" said && mentions "nothing to do" said))
+     |> List.exists (fun said -> mentions "Fire-0" said && mentions "nothing to do" said))
 
 report
     "more than one target stops the game and asks"
     (true, one, AChoice)
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some after, _ ->
          (Session.asking after).IsSome, Session.active after, Session.doing after
      | None, _ -> false, two, Nothing)
@@ -1079,10 +1192,10 @@ report
     (true, false)
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some after, told ->
          after.ToPlay = one,
          happenings told
@@ -1096,16 +1209,16 @@ report
     true
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some waiting, _ ->
          match Turn.asked Refresh waiting with
          | None, [ Refused(AnswerFirst(ACard(_, targets))) as refusal ] ->
              List.length targets = 2
-             && mentions "Water-4" (compiled.Says refusal)
-             && mentions "Water-5" (compiled.Says refusal)
+             && mentions "Speed-2" (compiled.Says refusal)
+             && mentions "Hate-3" (compiled.Says refusal)
          | _ -> false
      | None, _ -> false)
 
@@ -1114,12 +1227,12 @@ report
     true
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some waiting, _ ->
-         (match Turn.asked (Choose(TheCard(card Darkness 1))) waiting with
+         (match Turn.asked (Choose(TheCard(card Speed 0))) waiting with
           | None, [ Refused(NotOnOffer _) ] -> true
           | _ -> false)
      | None, _ -> false)
@@ -1129,15 +1242,15 @@ report
     (true, true, two)
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> onlyHolding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some waiting, _ ->
-         match Turn.asked (Choose(TheCard(card Water 5))) waiting with
+         match Turn.asked (Choose(TheCard(card Hate 3))) waiting with
          | Some after, told ->
              Side.stack 1 (Session.side one after)
-             |> List.exists (fun placed -> placed.Card = card Water 5 && Placed.isFaceUp placed),
+             |> List.exists (fun placed -> placed.Card = card Hate 3 && Placed.isFaceUp placed),
              happenings told
              |> List.exists (function
                  | Drew _ -> true
@@ -1151,39 +1264,56 @@ report
     true
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some waiting, _ ->
-         match Turn.asked (Choose(TheCard(card Water 5))) waiting with
+         match Turn.asked (Choose(TheCard(card Hate 3))) waiting with
          | Some after, _ ->
              Side.stack 1 (Session.side one after)
-             |> List.exists (fun placed -> placed.Card = card Water 4 && not (Placed.isFaceUp placed))
+             |> List.exists (fun placed -> placed.Card = card Speed 2 && not (Placed.isFaceUp placed))
          | None, _ -> false
      | None, _ -> false)
 
 // The case the pile was really built for: a card that stops the game on the player whose turn
 // it is *not*.
+//
+// Plague-0 is that card - "Your opponent discards 1 card" - and nobody in this draft holds
+// Plague, because none of the six protocols these checks were written around has a command that
+// reaches across the table. So the protocol is put on the first player's line 1 rather than the
+// check being bent to a card that does not exist.
 
-let private waterZero = card Water 0
+let private plagueZero = card Plague 0
+
+/// The first player's line 1, standing for a protocol they did not draft here.
+let private lineOne protocol session =
+    { session with
+        Field =
+            session.Field
+            |> Field.update one (fun side ->
+                { side with
+                    Drafted = protocol :: List.tail side.Drafted
+                    Order = protocol :: List.tail side.Order }) }
+
+let private stopping session =
+    session |> lineOne Plague |> holding one plagueZero
 
 report
     "a card can stop the game on the other player, mid-turn"
     (true, two, one)
-    (let session = standing (opened 1UL) |> holding one waterZero
+    (let session = standing (opened 1UL) |> stopping
 
-     // Water is on line 1 for the first player, so it goes face up there.
-     match Turn.asked (Play(waterZero, 1, FaceUp)) session with
+     match Turn.asked (Play(plagueZero, 1, FaceUp)) session with
      | Some after, _ -> (Session.asking after).IsSome, Session.active after, after.ToPlay
      | None, _ -> false, one, two)
 
 report
     "they choose out of their own hand, and it is their hand that shrinks"
     (4, 5)
-    (let session = standing (opened 1UL) |> holding one waterZero
+    (let session = standing (opened 1UL) |> stopping
 
-     match Turn.asked (Play(waterZero, 1, FaceUp)) session with
+     match Turn.asked (Play(plagueZero, 1, FaceUp)) session with
      | Some waiting, _ ->
          let theirs = (Session.side two waiting).Hand
 
@@ -1195,9 +1325,9 @@ report
 report
     "the turn passes once they have answered, and it passes to them"
     two
-    (let session = standing (opened 1UL) |> holding one waterZero
+    (let session = standing (opened 1UL) |> stopping
 
-     match Turn.asked (Play(waterZero, 1, FaceUp)) session with
+     match Turn.asked (Play(plagueZero, 1, FaceUp)) session with
      | Some waiting, _ ->
          let theirs = (Session.side two waiting).Hand
 
@@ -1209,8 +1339,8 @@ report
 report
     "a choice survives being written down and read back"
     true
-    (match Playable.read compiled (compiled.Write(Make(Choose(TheCard fireThree)))) with
-     | Ok(Send(Make(Choose(TheCard read)))) -> read = fireThree
+    (match Playable.read compiled (compiled.Write(Make(Choose(TheCard fireZero)))) with
+     | Ok(Send(Make(Choose(TheCard read)))) -> read = fireZero
      | _ -> false)
 
 report
@@ -1228,10 +1358,10 @@ report
     (true, true)
     (let session =
         standing (opened 1UL)
-        |> holding one fireThree
-        |> lyingDown one 1 [ blank Water 4; blank Water 5 ]
+        |> holding one fireZero
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
 
-     match playFireThree session with
+     match playFireZero session with
      | Some waiting, _ ->
          // Reached through a real fold, so the board is drawn from a model rather than a
          // doctored session.
@@ -1240,7 +1370,7 @@ report
              |> fun model -> { model with Timeline = Timeline.advance (Make Refresh) waiting model.Timeline }
 
          let screen = drawn plain one model
-         mentions "needs you to pick a card" screen, mentions "Water-4" screen && mentions "Water-5" screen
+         mentions "needs you to pick a card" screen, mentions "Speed-2" screen && mentions "Hate-3" screen
      | None, _ -> false, false)
 
 // --- the other two thirds of a card -----------------------------------------------------------
@@ -1252,18 +1382,19 @@ report
 // point in the rules it touches.
 
 report
-    "ten of the ninety are written, and the rest say nothing"
-    (10, 80)
+    "all ninety of them are written"
+    (90, 0)
     (Printed.written, 90 - Printed.written)
 
 report
-    "a card counts as what its middle command says, and the stack adds up accordingly"
-    (0, 3)
-    (let counts = card Metal 5
-     let session = standing (opened 1UL) |> poised two 2 [ counts; blank Metal 3 ]
-
-     // Metal-5 says it counts as nothing, so a stack of it and a three is worth three.
-     Ruling.worth true (Placed.up counts), Side.valueOn 2 (Session.side two session))
+    "every written card is a card that is really printed, and says exactly what it says"
+    []
+    (// The 5 of every protocol is "You discard 1 card", which is fifteen of the sixty-one - so a
+     // card written by mistake against the wrong slot shows up here rather than in a game.
+     Protocol.all
+     |> List.map (fun protocol -> Printed.on { Protocol = protocol; Value = 5 })
+     |> List.distinct
+     |> List.filter ((<>) (Printed.on (card Fire 5))))
 
 // Which box a standing rule is printed in is the whole of what covering decides. A card played
 // over another covers its middle and bottom and leaves its top showing, so a rule in the top box
@@ -1271,66 +1402,49 @@ report
 
 report
     "a rule in the top box goes on applying after something is played over the card"
-    (3, 4)
-    (let uncovered = standing (opened 1UL) |> poised two 2 [ card Metal 5; blank Metal 3 ]
+    (6, 10)
+    (// Darkness-2 says every face-down card in its stack is worth 4, in its top box.
+     let stacked cards = standing (opened 1UL) |> beneath one 2 cards
+
+     let uncovered = stacked [ Placed.up (card Darkness 2); Placed.down (mute Speed 2) ]
 
      let covered =
-         standing (opened 1UL)
-         |> poised two 2 [ blank Metal 1; card Metal 5; blank Metal 3 ]
+         stacked [ Placed.down (mute Hate 3); Placed.up (card Darkness 2); Placed.down (mute Speed 2) ]
 
-     // Metal-5 says it counts as nothing, in its top box. Covered, it still does - so the pile
-     // is the 1 on top plus nothing plus the 3 underneath.
-     Side.valueOn 2 (Session.side two uncovered), Side.valueOn 2 (Session.side two covered))
+     // Two for the Darkness-2 itself, and four for the card under it. Covered, it still says so -
+     // so the pile is that again plus four for the face-down card that arrived on top, where
+     // three ordinary twos would have come to six.
+     Field.valueOn one 2 uncovered.Field, Field.valueOn one 2 covered.Field)
 
 report
     "a rule in the bottom box stops the moment anything covers the card"
-    (false, true)
-    (let unbreakable = card Light 5
+    (true, false)
+    (// Plague-0 shuts a line to the other player, in its bottom box.
+     let shutWhen cards =
+         let session = standing (opened 1UL) |> beneath two 2 cards
+         Field.barred one 2 FaceUp session.Field |> Option.isSome
 
-     let breakableWhen cards =
-         let session = standing (opened 1UL) |> poised two 3 cards
-         let stack = Side.stack 3 (Session.side two session)
-         let onTop = Stack.uncovered stack = Some(Placed.up unbreakable)
-         Ruling.breakable onTop (Placed.up unbreakable)
-
-     // Light-5 says it cannot be deleted, in its bottom box.
-     breakableWhen [ unbreakable ], breakableWhen [ blank Light 1; unbreakable ])
+     shutWhen [ Placed.up (card Plague 0) ],
+     shutWhen [ Placed.down (mute Speed 2); Placed.up (card Plague 0) ])
 
 report
     "and only while it is face up: a card lying face down says nothing at all"
-    Placed.FaceDownValue
-    (let session = standing (opened 1UL) |> lyingDown two 2 [ card Metal 5 ]
-     Side.valueOn 2 (Session.side two session))
+    (Placed.FaceDownValue * 2, false)
+    (let session = standing (opened 1UL) |> lyingDown one 2 [ card Darkness 2; mute Speed 2 ]
 
-report
-    "a card that cannot be deleted is not a target, so a command pointed only at it finds nothing"
-    (true, true)
-    (let session =
-        standing (opened 1UL)
-        |> holding one (card Fire 3)
-        // Light-5 says it cannot be deleted. Nothing else is face down for the flip to reach.
-        |> poised two 3 [ card Light 5 ]
-
-     match playFireThree session with
-     | Some _, told ->
-         happenings told
-         |> List.exists (function
-             | Fizzled _ -> true
-             | _ -> false),
-         happenings told
-         |> List.exists (function
-             | Drew _ -> true
-             | _ -> false)
-     | None, _ -> false, false)
+     // Face down, Darkness-2 is an ordinary two and says nothing about the card beside it.
+     Field.valueOn one 2 session.Field,
+     Field.barred one 2 FaceUp (standing (opened 1UL) |> lyingDown two 2 [ card Plague 0 ]).Field
+     |> Option.isSome)
 
 report
     "a bottom command fires at the end of its owner's turn, once per turn it survives"
     (true, true)
     (let session =
         standing (opened 1UL)
-        // Light-5 draws a card at the end of its owner's turn. It is the second player's card,
-        // so it fires on the second player's turns and not on the first player's.
-        |> poised two 3 [ card Light 5 ]
+        // Light-1 draws a card at the end of your turn. It is the second player's card, so it
+        // fires on the second player's turns and not on the first player's.
+        |> poised two 3 [ card Light 1 ]
 
      let drewOn seat =
          let played = (Session.side seat { session with ToPlay = seat }).Hand |> List.head
@@ -1343,22 +1457,456 @@ report
 
      drewOn two, not (drewOn one))
 
+// The last two shapes the ninety asked for: a card played out of the **hand** by another card,
+// and the one interrupt that fires on something nobody asked for.
+//
+//   Darkness-3  "Play 1 card face-down in another line."
+//   Speed-0     "Play 1 card."
+//   Speed-2     "When this card would be deleted by compiling: Shift this card, even if this
+//                card is covered."
+
 report
-    "a card can be taken back off the table and into the hand it came from - theirs, not yours"
-    (0, 6, 3)
+    "a card can play a card out of your hand, and it does not cost you the turn"
+    (true, 1, Deck.HandSize - 1)
+    (let session = standing (opened 1UL) |> holding one (card Darkness 3)
+
+     // Darkness-3 stands in line 2 and plays face-down into another line, so there are two lines
+     // on offer and it asks which.
+     match Turn.asked (Play(card Darkness 3, 2, FaceUp)) session with
+     | Some waiting, _ ->
+         match Turn.asked (Choose(TheLine 3)) waiting with
+         | Some next, _ ->
+             let played = (Session.side one next).Hand |> List.head
+
+             match Turn.asked (Choose(TheCard played)) next with
+             | Some after, _ ->
+                 Side.stack 3 (Session.side one after)
+                 |> List.exists (fun placed -> placed.Card = played && not (Placed.isFaceUp placed)),
+                 List.length (Side.stack 3 (Session.side one after)),
+                 // The Darkness-3 and the card it played, both out of a hand of five.
+                 List.length (Session.side one after).Hand + 1
+             | None, _ -> false, -1, -1
+         | None, _ -> false, -1, -1
+     | None, _ -> false, -1, -1)
+
+report
+    "and a play with no face named is a choice between the two, not a third kind of play"
+    (true, true)
+    (let session = standing (opened 1UL) |> holding one (card Speed 0)
+
+     let after, _ =
+         running (Either(PlayFromHand(FaceUp, AnyLine), PlayFromHand(FaceDown, AnyLine))) (card Speed 0) session
+
+     match Session.asking after with
+     | Some { Wanting = OneOf(PlayFromHand(FaceUp, _), PlayFromHand(FaceDown, _)) } -> true, true
+     | _ -> false, false)
+
+report
+    "a card can get itself out of a line about to be compiled, and it is the only thing that can"
+    (true, true)
     (let session =
         standing (opened 1UL)
-        |> holding one (card Water 2)
-        // One card of theirs, so the return has exactly one thing to point at and does not ask.
-        |> poised two 2 [ blank Metal 3 ]
+        // Ten face up on line 1, with a Speed-2 of theirs standing in it. Compiling wipes both
+        // sides of the line - unless something says otherwise first.
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
+        |> poised two 1 [ card Speed 2 ]
 
-     // Water is on line 1 for the first player, so Water-2 goes face up there.
-     match Turn.asked (Play(card Water 2, 1, FaceUp)) session with
+     match handedOver session with
+     | Some waiting, _ ->
+         // It stops the compile in mid-air to ask where it is going.
+         match Session.asking waiting with
+         | Some { Wanting = ALine _ } ->
+             match Turn.asked (Choose(TheLine 2)) waiting with
+             | Some after, _ ->
+                 Side.hasCompiled Water (Session.side one after),
+                 Side.stack 2 (Session.side two after)
+                 |> List.exists (fun placed -> placed.Card = card Speed 2)
+             | None, _ -> false, false
+         | _ -> false, false
+     | None, _ -> false, false)
+
+report
+    "...and lying face down it says nothing, so it goes with the rest of the line"
+    (true, false)
+    (let session =
+        standing (opened 1UL)
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
+        |> lyingDown two 1 [ card Speed 2 ]
+
+     match handedOver session with
      | Some after, _ ->
-         Side.valueOn 2 (Session.side two after),
-         List.length (Session.side two after).Hand,
-         // Back into a hand, not onto a discard: that is what makes it a return.
-         List.length (Session.side two after).Discard + 3
+         Side.hasCompiled Water (Session.side one after),
+         Lines.all
+         |> List.exists (fun line ->
+             Side.stack line (Session.side two after)
+             |> List.exists (fun placed -> placed.Card = card Speed 2))
+     | None, _ -> false, true)
+
+report
+    "and all three print what they do"
+    [ "Play a card from your hand face down in another line."
+      "Either play a card from your hand face up or play a card from your hand face down."
+      "When this card would be deleted by compiling, first: Shift this card to another line." ]
+    ([ card Darkness 3; card Speed 0; card Speed 2 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
+
+// Covering and flipping are the two things that happen to a card where it lies, and one card
+// interrupts both.
+//
+//   Metal-6  "When this card would be covered or flipped: First, delete this card."
+
+report
+    "a card can interrupt being turned over, and the turning then finds it gone"
+    (true, false, false)
+    (let session = standing (opened 1UL) |> poised two 2 [ card Metal 6 ]
+
+     let after, told = running (Flip Select.any) (card Apathy 3) session
+
+     happenings told
+     |> List.exists (function
+         | Deleted(_, gone, 2) -> gone.Card = card Metal 6
+         | _ -> false),
+     // Deleted before the flip, so nothing was ever turned over...
+     happenings told
+     |> List.exists (function
+         | Flipped _ -> true
+         | _ -> false),
+     // ...and it is not on the table either way up.
+     Side.stack 2 (Session.side two after) |> List.isEmpty |> not)
+
+report
+    "and an ordinary card is simply turned over, which is the same machinery saying nothing"
+    (true, true)
+    (let session = standing (opened 1UL) |> lyingDown two 2 [ mute Speed 2 ]
+
+     let after, told = running (Flip Select.any) (card Apathy 3) session
+
+     happenings told
+     |> List.exists (function
+         | Flipped(_, turned, 2) -> turned.Card = mute Speed 2 && Placed.isFaceUp turned
+         | _ -> false),
+     Side.stack 2 (Session.side two after) |> List.forall Placed.isFaceUp)
+
+report
+    "and the card prints both of its interrupts"
+    [ "When this card would be flipped, first: Delete this card."
+      "When this card would be covered, first: Delete this card." ]
+    (Words.printed (card Metal 6))
+
+// Questions about a **line** rather than about a card in one - which is a different question, and
+// the last shape the ninety asked for.
+//
+//   Gravity-1  "Shift 1 card either to or from this line."
+//   Metal-3    "Delete all cards in 1 other line with 8 or more cards."
+//   Life-0     "Play the top card of your deck face-down in each line where you have a card."
+
+report
+    "a shift can be told about both ends at once: out of this line, or into it, and never both"
+    ([ 2; 3 ], [ 1 ])
+    (let offered from =
+        let session =
+            standing (opened 1UL)
+            |> lyingDown one from [ mute Speed 2 ]
+
+        // Gravity-1 stands in line 1. A card already there may go anywhere else; a card anywhere
+        // else may only come here.
+        let after, _ =
+            running (Shift(Select.any, ToOrFromHere)) (card Gravity 1) session
+
+        match Session.asking after with
+        | Some { Wanting = ALine(_, lines) } -> lines
+        | _ ->
+            // One line on offer is taken without asking, so read where the card ended up.
+            Lines.all
+            |> List.filter (fun line -> Side.stack line (Session.side one after) |> List.isEmpty |> not)
+
+     offered 1, offered 3)
+
+report
+    "a line can be picked by how many cards it holds, and a shallow board offers none"
+    (true, false)
+    (let asked deep =
+        let session =
+            standing (opened 1UL)
+            |> lyingDown one 2 (List.replicate deep (mute Speed 2))
+
+        let after, _ =
+            running (InAChosenLineOf(8, Every(Delete(Select.any |> Select.here)))) (card Metal 3) session
+
+        // One line deep enough is taken without asking, so the deletion is the evidence.
+        Side.stack 2 (Session.side one after) |> List.isEmpty
+
+     asked 8, asked 7)
+
+report
+    "and a command can be run in every line its owner is standing in, and nowhere else"
+    ([ 1; 3 ], 2)
+    (let session =
+        standing (opened 1UL)
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 3 [ mute Speed 2 ]
+
+     let after, told =
+         running (InEachLineHolding(FromDeck(FaceDown, ThisLine))) (card Life 0) session
+
+     Lines.all
+     |> List.filter (fun line -> Side.stack line (Session.side one after) |> List.length > 1),
+     happenings told
+     |> List.filter (function
+         | PlayedFromDeck _ -> true
+         | _ -> false)
+     |> List.length)
+
+report
+    "and all three print the question they ask"
+    [ "Draw 2 cards. Shift any card either to or from this line."
+      "Draw a card. Delete every card in this line, in another line of your choosing with 8 or more cards."
+      "Play the top card of your deck face down in this line, in each line where you have a card." ]
+    ([ card Gravity 1; card Metal 3; card Life 0 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
+
+// Two more questions a card can ask, and neither is about what a command did: one is about where
+// the card carrying it is standing, and one is about a phase.
+//
+//   Life-4    "If this card is covering a card, draw 1 card."
+//   Spirit-0  "Refresh. Draw 1 card. Skip your check cache phase."
+
+report
+    "a card can ask whether it is covering something, and a four on bare table is only a four"
+    (true, false)
+    (let drewOn under =
+        let session = standing (opened 1UL) |> beneath one 1 (Placed.up (card Life 4) :: under)
+
+        let _, told = running (IfCovering [ Draw(Just 1) ]) (card Life 4) session
+
+        happenings told
+        |> List.exists (function
+            | Drew _ -> true
+            | _ -> false)
+
+     // A stack is written top first, so the Life-4 is covering whatever follows it - and with
+     // nothing following it, it is a card at the bottom of its own stack covering nothing.
+     drewOn [ Placed.down (mute Speed 2) ], drewOn [])
+
+report
+    "and a card can call the check cache phase off, so a hand over its limit stays over it"
+    (true, false)
+    (let trimmed keeping =
+        let session =
+            standing (opened 1UL)
+            |> beneath one 1 keeping
+            |> fun session ->
+                { session with
+                    Field =
+                        session.Field
+                        |> Field.update one (fun side ->
+                            { side with
+                                Hand = side.Hand @ (side.Deck |> List.truncate 2)
+                                Deck = side.Deck |> List.skip 2 }) }
+
+        let played = (Session.side one session).Hand |> List.head
+
+        match Turn.asked (Play(played, 2, FaceDown)) session with
+        | Some after, _ -> (Session.asking after).IsSome
+        | None, _ -> false
+
+     // Spirit-0 says so in its bottom box, so covering it hands the limit straight back.
+     trimmed [ Placed.down (mute Speed 2); Placed.up (card Spirit 0) ],
+     trimmed [ Placed.up (card Spirit 0) ])
+
+report
+    "and both of them print what they ask"
+    [ "If this card is covering a card, draw a card."
+      "While uncovered: You skip your check cache phase." ]
+    ([ card Life 4; card Spirit 0 ] |> List.map (fun each -> Words.printed each |> List.last))
+
+// And the boxes that listen. Four triggers on things the game already does, and all four are
+// printed in a **top** box - so unlike the start and end boxes they go on listening covered.
+//
+//   Hate-3    "After you delete cards: Draw 1 card."
+//   Plague-1  "After your opponent discards cards: Draw 1 card."
+//   Speed-1   "After you clear cache: Draw 1 card."
+//   Spirit-3  "After you draw cards: You may shift this card, even if this card is covered."
+
+report
+    "a card can listen for what a command just did, and it goes off at once"
+    (true, true)
+    (let session =
+        standing (opened 1UL)
+        // Hate-3 draws a card every time its owner's text deletes one.
+        |> poised one 1 [ card Hate 3 ]
+        |> lyingDown two 2 [ mute Speed 2 ]
+
+     let _, told =
+         running (Delete(Select.any |> Select.theirs)) (card Death 0) session
+
+     happenings told
+     |> List.exists (function
+         | Deleted _ -> true
+         | _ -> false),
+     happenings told
+     |> List.exists (function
+         | Drew(who, 1) -> who = one
+         | _ -> false))
+
+report
+    "and it goes on listening while it is covered, which the start and end boxes do not"
+    (true, true)
+    (let heard under =
+        let session =
+            standing (opened 1UL)
+            |> beneath one 1 under
+            |> lyingDown two 2 [ mute Speed 2 ]
+
+        let _, told = running (Delete(Select.any |> Select.theirs)) (card Death 0) session
+
+        happenings told
+        |> List.exists (function
+            | Drew _ -> true
+            | _ -> false)
+
+     heard [ Placed.up (card Hate 3) ],
+     heard [ Placed.down (mute Hate 3); Placed.up (card Hate 3) ])
+
+report
+    "...but not face down, because a card lying face down says nothing at all"
+    false
+    (let session =
+        standing (opened 1UL)
+        |> lyingDown one 1 [ card Hate 3 ]
+        |> lyingDown two 2 [ mute Speed 2 ]
+
+     let _, told = running (Delete(Select.any |> Select.theirs)) (card Death 0) session
+
+     happenings told
+     |> List.exists (function
+         | Drew _ -> true
+         | _ -> false))
+
+report
+    "a compile is not a deletion anybody did, so nothing hears it"
+    (true, false)
+    (let session =
+        standing (opened 1UL)
+        |> poised one 2 [ card Hate 3 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
+
+     match handedOver session with
+     | Some after, told ->
+         Side.hasCompiled Water (Session.side one after),
+         happenings told
+         |> List.exists (function
+             | Drew _ -> true
+             | _ -> false)
+     | None, _ -> false, true)
+
+report
+    "and one listens for the *other* seat: their discard, your card"
+    (true, false)
+    (let listened seat =
+        let session =
+            standing (opened 1UL)
+            |> poised seat 1 [ card Plague 1 ]
+            // One card in their hand, so the discard has nothing to ask about.
+            |> onlyHolding two (mute Speed 2)
+
+        // The second player discards. A Plague-1 belonging to the first player hears it; one
+        // belonging to the second player is hearing its own side and does not.
+        let _, told = running (Opposing Discard) (card Plague 0) session
+
+        happenings told
+        |> List.exists (function
+            | Drew(who, _) -> who = seat
+            | _ -> false)
+
+     listened one, listened two)
+
+report
+    "and the check cache phase fires one every turn, whether or not there was anything to put down"
+    (true, true)
+    (let session =
+        standing (opened 1UL)
+        // Speed-1 draws a card after the phase. The hand is under its limit, so the phase has
+        // nothing to do - and the trigger is on the phase rather than on the discarding.
+        |> poised two 3 [ card Speed 1 ]
+
+     let played = (Session.side two { session with ToPlay = two }).Hand |> List.head
+
+     let told =
+         Turn.asked (Play(played, 1, FaceDown)) { session with ToPlay = two } |> snd
+
+     happenings told
+     |> List.exists (function
+         | Drew(who, 1) -> who = two
+         | _ -> false),
+     happenings told
+     |> List.exists (function
+         | Discarded _ -> true
+         | _ -> false)
+     |> not)
+
+report
+    "and all four of them print what they listen for"
+    [ "After you delete cards: Draw a card."
+      "After your opponent discards cards: Draw a card."
+      "After you clear cache: Draw a card."
+      "After you draw cards: You may shift this card to another line." ]
+    ([ card Hate 3; card Plague 1; card Speed 1; card Spirit 3 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
+
+// And the box at the other end of a turn. It is the same machinery pointed at a different field,
+// which is the whole of why it went in as one function and two steps - but *when* it fires is not
+// a detail, because a card that changes the board at the top of a turn changes what compiles.
+//
+//   Death-1    "Start: You may draw 1 card. If you do, ..."
+//   Psychic-1  "Start: Flip this card."
+
+report
+    "a start command fires at the top of its owner's turn, and stops it where it stands"
+    (true, one, AChoice)
+    (let session =
+        standing (opened 1UL)
+        // Death-1 offers its owner a card at the start of every turn it survives.
+        |> poised one 1 [ card Death 1 ]
+
+     match handedOver session with
+     | Some after, _ -> (Session.asking after).IsSome, Session.active after, Session.doing after
+     | None, _ -> false, two, Nothing)
+
+report
+    "and it fires before the compile check, so what it changes is what compiles"
+    (false, true)
+    (let session =
+        standing (opened 1UL)
+        // Nine face up, with a Psychic-1 on top that turns itself face down at the start of a
+        // turn - which makes it a two rather than a one, and the line ten.
+        |> poised one 1 [ card Psychic 1; quiet Water 5; quiet Darkness 3 ]
+
+     match handedOver session with
+     | Some after, _ -> Field.won one 1 session.Field, Side.hasCompiled Water (Session.side one after)
+     | None, _ -> true, false)
+
+report
+    "a card can be taken back off the table and into the hand it is sitting in front of"
+    (0, Deck.HandSize, 3)
+    (let session =
+        standing (opened 1UL)
+        |> holding one (card Water 4)
+        // One card of theirs, so the return has exactly one thing to point at and does not ask.
+        |> poised one 2 [ quiet Metal 3 ]
+
+     // Water is on line 1 for the first player, so Water-4 goes face up there. It can point at
+     // itself as well as at the Metal-3, so it asks which.
+     match Turn.asked (Play(card Water 4, 1, FaceUp)) session with
+     | Some waiting, _ ->
+         match Turn.asked (Choose(TheCard(quiet Metal 3))) waiting with
+         | Some after, _ ->
+             Field.valueOn one 2 after.Field,
+             // The Water-4 left the hand, and the Metal-3 came back into it.
+             List.length (Session.side one after).Hand,
+             // Back into a hand, not onto a discard: that is what makes it a return.
+             List.length (Session.side one after).Discard + 3
+         | None, _ -> -1, -1, -1
      | None, _ -> -1, -1, -1)
 
 report
@@ -1366,12 +1914,12 @@ report
     (true, true)
     (let session =
         standing (opened 1UL)
-        |> holding one (card Darkness 1)
-        |> poised one 1 [ blank Water 4 ]
-        |> poised one 3 [ blank Fire 4 ]
+        |> holding one (card Darkness 4)
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 3 [ mute Hate 3 ]
 
-     // Darkness is on line 2 for the first player, so Darkness-1 goes face up there.
-     match Turn.asked (Play(card Darkness 1, 2, FaceUp)) session with
+     // Darkness is on line 2 for the first player, so Darkness-4 goes face up there.
+     match Turn.asked (Play(card Darkness 4, 2, FaceUp)) session with
      | Some waiting, _ ->
          match Session.asking waiting with
          | Some { Wanting = ACard(Shift _, targets) } ->
@@ -1393,61 +1941,120 @@ report
     (0, true)
     (let session =
         standing (opened 1UL)
-        |> holding one (card Darkness 1)
-        |> poised one 1 [ blank Water 4 ]
+        |> holding one (card Darkness 4)
+        |> lyingDown one 1 [ mute Speed 2 ]
 
-     match Turn.asked (Play(card Darkness 1, 2, FaceUp)) session with
-     | Some waiting, _ ->
-         match Turn.asked (Choose(TheCard(blank Water 4))) waiting with
-         | Some next, _ ->
-             match Turn.asked (Choose(TheLine 3)) next with
-             | Some after, _ ->
-                 let side = Session.side one after
+     // One face-down card on the table, so there is nothing to ask about which - it goes straight
+     // to the second question.
+     match Turn.asked (Play(card Darkness 4, 2, FaceUp)) session with
+     | Some next, _ ->
+         match Turn.asked (Choose(TheLine 3)) next with
+         | Some after, _ ->
+             let side = Session.side one after
 
-                 Side.valueOn 1 side,
-                 Side.stack 3 side |> List.exists (fun placed -> placed.Card = blank Water 4)
-             | None, _ -> -1, false
+             Field.valueOn one 1 after.Field,
+             Side.stack 3 side |> List.exists (fun placed -> placed.Card = mute Speed 2)
          | None, _ -> -1, false
      | None, _ -> -1, false)
+
+// ...unless the card says where. Where a card comes from is the selector's business and where it
+// goes is not, so a shift carries both - and one of the two answers is very often printed.
+//
+//   Darkness-4  "Shift 1 face-down card."                              anywhere: it asks
+//   Gravity-4   "Shift 1 face-down card **to this line**."             here: nothing to ask
+//   Light-3     "Shift all face-down cards in this line **to another line**."
+
+report
+    "a shift that says where it goes does not ask - the card already answered"
+    (0, true, false)
+    (let session = standing (opened 1UL) |> lyingDown one 1 [ mute Speed 2 ]
+
+     // Gravity-4, standing in line 3 and pulling towards itself. Gravity is the other player's
+     // protocol here, so the command is put on the pile rather than played.
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Shift(Select.any |> Select.faceDown, ThisLine),
+                           { Owner = one
+                             Saying = card Gravity 4
+                             Line = 3 }
+                       ) ] }
+             []
+
+     Field.valueOn one 1 after.Field,
+     Side.stack 3 (Session.side one after) |> List.exists (fun placed -> placed.Card = mute Speed 2),
+     (Session.asking after).IsSome)
+
+report
+    "and one that says which lines it may not go to still asks, out of what is left"
+    [ 2 ]
+    (let session = standing (opened 1UL) |> lyingDown one 1 [ mute Speed 2 ]
+
+     // Line 3 is where this one is standing, and line 1 is where the card already is - so of the
+     // three lines only one is on offer, and being the only one it is taken without asking.
+     let after, told =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Shift(Select.any |> Select.faceDown, OtherLines),
+                           { Owner = one
+                             Saying = card Light 3
+                             Line = 3 }
+                       ) ] }
+             []
+
+     ignore told
+
+     Lines.all
+     |> List.filter (fun line -> Side.stack line (Session.side one after) |> List.isEmpty |> not))
+
+report
+    "and both of them print the difference"
+    [ "Shift any face-down card to this line."
+      "Shift every face-down card in this line to another line." ]
+    ([ card Gravity 4; card Light 3 ] |> List.map (fun each -> Words.printed each |> List.head))
 
 // Card text is generated from what the card does, which is the whole argument for it being data:
 // a card cannot say one thing and do another, and seventy-two of them cannot drift one at a time.
 
 report
     "what a card says is written from what it does"
-    [ "Flip any face-down card. Draw a card." ]
-    (Words.printed (card Fire 3))
+    [ "Flip any other card. Draw 2 cards." ]
+    (Words.printed (card Fire 0) |> List.take 1)
 
 report
     "including the boxes below it, and which box a line is in is said"
-    [ "While uncovered: This card cannot be deleted."
-      "At the end of your turn, while uncovered: Draw a card." ]
-    (Words.printed (card Light 5))
+    [ "When this card would be covered, first: Draw a card. Flip any other card." ]
+    (Words.printed (card Fire 0) |> List.tail)
 
 report
     "a top-box rule is printed without that warning, because it does not need one"
-    [ "This card counts as 0." ]
-    (Words.printed (card Metal 5))
+    [ "Every face-down card in this stack is worth 4."
+      "You may flip any covered card in this line." ]
+    (Words.printed (card Darkness 2))
 
 report
-    "a card with nothing on it prints nothing"
-    []
-    (Words.printed (blank Water 4))
+    "a card that says one thing prints one line, out of the box it says it in"
+    [ "When this card would be deleted by compiling, first: Shift this card to another line." ]
+    (Words.printed (card Speed 2))
 
 report
     "and asking about a card is answered with what it says"
     (true, true)
-    (let screen = plain.Answer "what fire-3" (opened 1UL)
-     mentions "Flip any face-down card" screen, mentions "Draw a card" screen)
+    (let screen = plain.Answer "what fire-0" (opened 1UL)
+     mentions "Flip any other card" screen, mentions "Draw 2 cards" screen)
 
 report
-    "asking about a blank one says so rather than saying nothing"
+    "and asking about the quietest of them still says something"
     true
-    (plain.Answer "what water-4" (opened 1UL) |> mentions "nothing printed on it")
+    (plain.Answer "what speed-2" (opened 1UL) |> mentions "deleted by compiling")
 
 report
-    "the board marks a card that has something to read, and does not mark one that has not"
-    (true, false)
+    "every one of the ninety says something, which is why the board marks none of them"
+    (90, true)
     (let model = opened 1UL
 
      /// A model standing at a doctored position, so the board can be drawn from it.
@@ -1460,13 +2067,10 @@ report
                  (standing model).Field
                  |> Field.update one (fun side -> { side with Hand = [ card ] }) }
 
-     // Counted rather than looked for: the commands block explains what a star means, and so
-     // contains one - a check for the character alone would pass whatever the hand held.
-     let stars session =
-         (shown session).Split '*' |> Array.length
-
-     stars (holdingOnly (card Fire 3)) > stars (holdingOnly (blank Water 4)),
-     stars (holdingOnly (blank Water 4)) > stars (holdingOnly (card Fire 3)))
+     // A marker that would be on every card is not a marker. This used to be a star beside the
+     // cards with text on them, and it went when the last blank card did.
+     Protocol.all |> List.collect Card.inProtocol |> List.filter Printed.says |> List.length,
+     shown (holdingOnly (card Fire 0)) |> mentions " *" |> not)
 
 report
     "a line answer survives being written down and read back"
@@ -1474,6 +2078,988 @@ report
     (match Playable.read compiled (compiled.Write(Make(Choose(TheLine 2)))) with
      | Ok(Send(Make(Choose(TheLine read)))) -> read = 2
      | _ -> false)
+
+// --- what a card points at ---------------------------------------------------------------------
+//
+// Three ways a selector can be narrowed, and one command that takes all of what is left rather
+// than one of it. Between them they are what most of the remaining cards are written in.
+//
+//   Apathy-1  "Flip all other face-up cards in this line."
+//   Death-4   "Delete a card with a value of 0 or 1."
+//   Hate-2    "Delete your highest value card. Delete your opponent's highest value card."
+
+report
+    "a card can point at what things are worth on the table, not at what is printed on them"
+    (true, false, false)
+    (let session =
+        standing (opened 1UL)
+        |> holding one (card Death 4)
+        // A one, in reach. A five, not. And a five lying face down, which is a two - so in reach
+        // by what it is worth, whatever is printed on it.
+        |> poised two 1 [ quiet Gravity 1 ]
+        |> poised two 2 [ quiet Metal 3 ]
+        |> beneath two 3 [ Placed.down (quiet Light 3) ]
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Delete(Select.any |> Select.worth [ 0; 1 ]),
+                           { Owner = one
+                             Saying = card Death 4
+                             Line = 1 }
+                       ) ] }
+             []
+
+     // Only the one is worth 0 or 1, so it goes without asking. The face-down five is worth two.
+     Side.stack 1 (Session.side two after) |> List.isEmpty,
+     Side.stack 2 (Session.side two after) |> List.isEmpty,
+     Side.stack 3 (Session.side two after) |> List.isEmpty)
+
+report
+    "and at the highest of them, with everything tied for it still in the running"
+    (2, [ 5; 5 ])
+    (let session =
+        standing (opened 1UL)
+        |> poised one 1 [ quiet Water 5 ]
+        |> poised one 2 [ quiet Water 5 ]
+        |> poised one 3 [ quiet Gravity 1 ]
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Delete(Select.any |> Select.yours |> Select.highest),
+                           { Owner = one
+                             Saying = card Hate 2
+                             Line = 1 }
+                       ) ] }
+             []
+
+     match Session.asking after with
+     | Some { Wanting = ACard(_, targets) } ->
+         List.length targets, targets |> List.map (fun t -> (Target.card t).Value) |> List.sort
+     | _ -> -1, [])
+
+report
+    "an 'all' takes every one of them and asks nobody"
+    (0, 1)
+    (let session =
+        standing (opened 1UL)
+        |> holding one (card Apathy 1)
+        |> poised one 2 [ quiet Water 4 ]
+        |> poised one 3 [ quiet Fire 5 ]
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Every(Flip(Select.any |> Select.faceUp |> Select.yours)),
+                           { Owner = one
+                             Saying = card Apathy 1
+                             Line = 2 }
+                       ) ] }
+             []
+
+     // Both turned face down, and nothing was asked.
+     (Side.stack 2 (Session.side one after) @ Side.stack 3 (Session.side one after)
+      |> List.filter Placed.isFaceUp
+      |> List.length),
+     (if (Session.asking after).IsNone then 1 else 0))
+
+report
+    "and 'other' spares the card that said it"
+    true
+    (let session =
+        standing (opened 1UL)
+        |> poised one 2 [ card Apathy 1; quiet Water 4 ]
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Every(Flip(Select.any |> Select.here |> Select.faceUp |> Select.other)),
+                           { Owner = one
+                             Saying = card Apathy 1
+                             Line = 2 }
+                       ) ] }
+             []
+
+     Side.stack 2 (Session.side one after)
+     |> List.exists (fun placed -> placed.Card = card Apathy 1 && Placed.isFaceUp placed))
+
+report
+    "and all three print what they mean"
+    [ "Flip every other face-up card in this line."
+      "Delete any card worth 0 or 1."
+      "Delete your highest-value card. Delete their highest-value card." ]
+    ([ card Apathy 1; card Death 4; card Hate 2 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
+
+// --- a question with no fixed size ----------------------------------------------------------------
+//
+//   Fire-4  "Discard 1 or more cards. Draw the amount discarded plus 1."
+//
+// One forced, then offered again for as long as there is a hand left and the player keeps saying
+// yes - and how many were done is left where the command after it can read it.
+
+report
+    "one is forced, and then it keeps offering until they say no - and the count is what they did"
+    (2, 3)
+    (let session = standing (opened 1UL)
+
+     // Answer every question: which card, and then yes, yes, no.
+     let rec answered model said count =
+        if count > 12 then
+            model, said
+        else
+            match Session.asking model with
+            | Some({ Wanting = ACard(_, targets) } as question) ->
+                match Resolving.choosing question (TheCard(Target.card (List.head targets))) model with
+                | Some next, more -> answered next (said @ more) (count + 1)
+                | None, _ -> model, said
+            | Some({ Wanting = Whether _ } as question) ->
+                // Yes to the first offer, no to the second - so two are discarded in all.
+                let answer = if count < 3 then Yes else No
+
+                match Resolving.choosing question answer model with
+                | Some next, more -> answered next (said @ more) (count + 1)
+                | None, _ -> model, said
+            | _ -> model, said
+
+     let started, told =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           IfYouDo(OneOrMore Discard, [ Draw(HowManyPlus 1) ]),
+                           { Owner = one
+                             Saying = card Fire 4
+                             Line = 1 }
+                       ) ] }
+             []
+
+     let after, said = answered started told 0
+
+     // Two discarded, and then two plus one drawn.
+     said
+     |> List.filter (function
+         | Happened(Discarded _) -> true
+         | _ -> false)
+     |> List.length,
+     said
+     |> List.tryPick (function
+         | Happened(Drew(_, n)) -> Some n
+         | _ -> None)
+     |> Option.defaultValue -1)
+
+report
+    "and an empty hand does none of it - nought is not one or more"
+    (0, 0)
+    (let session = standing (opened 1UL)
+
+     let starved =
+         { session with
+             Field = session.Field |> Field.update one (fun side -> { side with Hand = [] }) }
+
+     let _, told =
+         Resolving.settle
+             { starved with
+                 Pile =
+                     [ Run(
+                           IfYouDo(OneOrMore Discard, [ Draw(HowManyPlus 1) ]),
+                           { Owner = one
+                             Saying = card Fire 4
+                             Line = 1 }
+                       ) ] }
+             []
+
+     told
+     |> List.filter (function
+         | Happened(Discarded _) -> true
+         | _ -> false)
+     |> List.length,
+     told
+     |> List.filter (function
+         | Happened(Drew _) -> true
+         | _ -> false)
+     |> List.length)
+
+report
+    "and the card prints what it does"
+    "Discard a card, one or more times. If you do, draw that many cards plus 1."
+    (Words.printed (card Fire 4) |> List.head)
+
+// --- counting off the board, and arriving underneath ----------------------------------------------
+//
+//   Gravity-0  "For every 2 cards in this line, play the top card of your deck face-down under
+//               this card."
+
+report
+    "a count read off the board, rounded down - and nought times does nothing"
+    [ 0; 0; 1; 2 ]
+    ([ 0; 1; 2; 5 ]
+     |> List.map (fun many ->
+         let session =
+             standing (opened 1UL)
+             |> beneath one 2 (List.replicate many (Placed.down (quiet Water 4)))
+
+         let deck = List.length (Session.side one session).Deck
+
+         let after, _ =
+             Resolving.settle
+                 { session with
+                     Pile =
+                         [ Run(
+                               Times(PerCards(2, Select.any |> Select.here), UnderThis FaceDown),
+                               { Owner = one
+                                 Saying = card Gravity 0
+                                 Line = 2 }
+                           ) ] }
+                 []
+
+         // How many came off the deck: nought, nought, one, two.
+         deck - List.length (Session.side one after).Deck))
+
+report
+    "and a card arriving underneath goes to the bottom, covering nothing"
+    (3, true)
+    (let session =
+        standing (opened 1UL)
+        |> beneath one 2 [ Placed.up (quiet Water 4); Placed.up (quiet Water 5) ]
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           UnderThis FaceDown,
+                           { Owner = one
+                             Saying = card Gravity 0
+                             Line = 2 }
+                       ) ] }
+             []
+
+     let stack = Side.stack 2 (Session.side one after)
+
+     // Three cards, and the new one is last rather than first.
+     List.length stack, (List.last stack).Face = FaceDown && (List.head stack).Card = quiet Water 4)
+
+report
+    "and it prints both halves"
+    "Play the top card of your deck face down under this card, once for every 2 cards in this line."
+    (Words.printed (card Gravity 0) |> List.head)
+
+// --- showing, and swapping ------------------------------------------------------------------------
+//
+//   Light-4   "Your opponent reveals their hand."
+//   Love-4    "Reveal 1 card from your hand. Flip 1 card."
+//   Spirit-4  "Swap the positions of 2 of your protocols."
+//
+// A reveal changes nothing on the table. What it leaves behind is knowledge, and knowledge at
+// this table is the log - which both players read, and which is what a reveal at a real table
+// leaves behind too.
+
+report
+    "a reveal names the card, changes nothing, and is said to both players alike"
+    (true, true, true)
+    (let session = standing (opened 1UL)
+     let held = (Session.side two session).Hand
+
+     let after, told =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           RevealTheirHand,
+                           { Owner = one
+                             Saying = card Light 4
+                             Line = 1 }
+                       ) ] }
+             []
+
+     let said = told |> List.map compiled.Says |> String.concat " "
+
+     // Every card of theirs named, nothing moved, and both seats read the same sentence.
+     held |> List.forall (fun each -> mentions (Card.name each) said),
+     (Session.side two after).Hand = held,
+     told |> List.forall (fun notice -> compiled.SeenBy one notice = compiled.SeenBy two notice))
+
+report
+    "a swap offers only the orders one swap can reach - three of the six, never the current one"
+    (3, false)
+    (let session = standing (opened 1UL)
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Swap,
+                           { Owner = one
+                             Saying = card Spirit 4
+                             Line = 1 }
+                       ) ] }
+             []
+
+     match Session.asking after with
+     | Some { Wanting = AnOrder(_, offered) } -> List.length offered, List.contains [ Water; Darkness; Fire ] offered
+     | _ -> -1, true)
+
+report
+    "and all three print what they mean"
+    [ "Your opponent reveals their hand."
+      "Reveal a card from your hand. Flip any card."
+      "Swap the positions of two of your protocols." ]
+    ([ card Light 4; card Love 4; card Spirit 4 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
+
+// --- looking back at what the last command did ----------------------------------------------------
+//
+//   Light-0  "Flip 1 card. Draw cards equal to that card's value."
+//
+// The first card that reads something other than the board: *that card* is whatever the flip
+// landed on, and what it is worth is read after the flip rather than before.
+
+report
+    "'that card' is the card the command before it landed on, read afterwards"
+    (3, 3)
+    (let drewAfterFlipping under =
+        let session =
+            standing (opened 1UL)
+            |> holding one (card Light 0)
+            // One card to flip, so the flip needs no question.
+            |> beneath two 2 [ under ]
+
+        // Light is nobody's protocol here; the command is asked directly.
+        let after, told =
+            Resolving.settle
+                { session with
+                    Pile =
+                        [ Run(
+                              Flip Select.any,
+                              { Owner = one
+                                Saying = card Light 0
+                                Line = 1 }
+                          )
+                          Run(
+                              Draw WorthOfChosen,
+                              { Owner = one
+                                Saying = card Light 0
+                                Line = 1 }
+                          ) ] }
+                []
+
+        told
+        |> List.tryPick (function
+            | Happened(Drew(_, n)) -> Some n
+            | _ -> None)
+        |> Option.defaultValue -1
+
+     // The **printed** value, either way up - see the note on Light-0 for why, and for the
+     // reading it is not. A four flipped is four whichever direction it was flipped in.
+     drewAfterFlipping (Placed.up (mute Hate 3)), drewAfterFlipping (Placed.down (mute Hate 3)))
+
+report
+    "and it is the card that was chosen, not the one before it"
+    (2, 3)
+    (let drewAfterFlipping under =
+        let session =
+            standing (opened 1UL)
+            |> holding one (card Light 0)
+            |> beneath two 2 [ Placed.down under ]
+
+        let _, told =
+            Resolving.settle
+                { session with
+                    Pile =
+                        [ Run(
+                              Flip Select.any,
+                              { Owner = one
+                                Saying = card Light 0
+                                Line = 1 }
+                          )
+                          Run(
+                              Draw WorthOfChosen,
+                              { Owner = one
+                                Saying = card Light 0
+                                Line = 1 }
+                          ) ] }
+                []
+
+        told
+        |> List.tryPick (function
+            | Happened(Drew(_, n)) -> Some n
+            | _ -> None)
+        |> Option.defaultValue -1
+
+     drewAfterFlipping (mute Speed 2), drewAfterFlipping (mute Hate 3))
+
+report
+    "and nothing chosen draws nothing"
+    0
+    (let session = standing (opened 1UL)
+
+     let _, told =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           Draw WorthOfChosen,
+                           { Owner = one
+                             Saying = card Light 0
+                             Line = 1 }
+                       ) ] }
+             []
+
+     told
+     |> List.tryPick (function
+         | Happened(Drew(_, n)) -> Some n
+         | _ -> None)
+     |> Option.defaultValue -1)
+
+// Reading what was chosen is one thing; **pointing a command at it** is another, and it is the
+// only narrowing a selector has that the table cannot answer.
+//
+//   Gravity-2   "Flip 1 card. Shift that card to this line."
+//   Darkness-1  "Flip 1 of your opponent's cards. You may shift that card."
+
+let private gravityTwo line =
+    [ Run(
+          Flip Select.any,
+          { Owner = one
+            Saying = card Gravity 2
+            Line = line }
+      )
+      Run(
+          Shift(Select.any |> Select.thatCard, ThisLine),
+          { Owner = one
+            Saying = card Gravity 2
+            Line = line }
+      ) ]
+
+report
+    "a command can be pointed at that card, and follows it rather than the board"
+    (true, 0)
+    (let session = standing (opened 1UL) |> lyingDown one 1 [ mute Speed 2 ]
+
+     // One card on the table, so neither half of Gravity-2 has anything to ask: it flips the
+     // Water-2 face up and then drags that same card into line 3.
+     let after, _ = Resolving.settle { session with Pile = gravityTwo 3 } []
+
+     Side.stack 3 (Session.side one after)
+     |> List.exists (fun placed -> placed.Card = mute Speed 2 && Placed.isFaceUp placed),
+     List.length (Side.stack 1 (Session.side one after)))
+
+report
+    "and with nothing chosen it points at nothing at all, however full the table is"
+    true
+    (let session = standing (opened 1UL) |> lyingDown one 1 [ mute Speed 2 ]
+
+     // A card on the table and a shift that would happily take it - but nothing has been chosen,
+     // so "that card" is no card, and the command finds nothing rather than helping itself.
+     let _, told =
+         Resolving.settle
+             { session with
+                 Chose = None
+                 Pile =
+                     [ Run(
+                           Shift(Select.any |> Select.thatCard, ThisLine),
+                           { Owner = one
+                             Saying = card Gravity 2
+                             Line = 3 }
+                       ) ] }
+             []
+
+     happenings told
+     |> List.exists (function
+         | Fizzled _ -> true
+         | _ -> false))
+
+report
+    "and both cards say so in the same two words"
+    [ "Flip any card. Shift that card to this line."
+      "Flip their card. You may shift that card to another line." ]
+    ([ card Gravity 2; card Darkness 1 ] |> List.map (fun each -> Words.printed each |> List.head))
+
+report
+    "and the card prints what it does"
+    "Flip any card. Draw cards equal to that card's value."
+    (Words.printed (card Light 0) |> List.head)
+
+// --- a rule that silences, and one that is remembered ---------------------------------------------
+//
+//   Apathy-2  "Ignore all middle commands of cards in this line."
+//   Metal-1   "Draw 2 cards. Your opponent cannot compile next turn."
+
+report
+    "a silenced line takes every card's voice away, both sides of it"
+    (true, false)
+    (let loud = standing (opened 1UL) |> holding one (card Fire 0)
+     let hushed = loud |> poised two 3 [ card Apathy 2 ]
+
+     // Fire-0 draws two cards. Played into a line their Apathy-2 has silenced, it draws none.
+     let drewIn session =
+         match Turn.asked (Play(card Fire 0, 3, FaceUp)) session with
+         | Some _, told ->
+             told
+             |> List.exists (function
+                 | Happened(Drew _) -> true
+                 | _ -> false)
+         | None, _ -> false
+
+     drewIn loud, drewIn hushed)
+
+report
+    "but the card still lands, and still counts"
+    (2, 2)
+    (let session =
+        standing (opened 1UL)
+        |> holding one (card Fire 0)
+        |> poised one 3 [ quiet Water 2 ]
+        |> poised two 3 [ card Apathy 2 ]
+
+     match Turn.asked (Play(card Fire 0, 3, FaceUp)) session with
+     | Some after, _ ->
+         List.length (Side.stack 3 (Session.side one after)), Field.valueOn one 3 after.Field
+     | None, _ -> -1, -1)
+
+report
+    "a stopped compile is remembered, spent on the turn it was for, and gone after"
+    (Some two, true, None)
+    (let session =
+        standing (opened 1UL)
+        |> poised two 1 [ quiet Gravity 5; quiet Gravity 5 ]
+
+     let stopped = { session with NoCompile = Some two }
+
+     // Their line is at ten and theirs to compile, and they are stopped from doing it.
+     match handedOverBy one stopped with
+     | Some after, _ ->
+         stopped.NoCompile,
+         Set.isEmpty (Session.side two after).Compiled,
+         // Spent by the turn it was for, whether or not it stopped anything.
+         after.NoCompile
+     | None, _ -> None, false, Some one)
+
+report
+    "and without it that same line compiles"
+    false
+    (let session =
+        standing (opened 1UL)
+        |> poised two 1 [ quiet Gravity 5; quiet Gravity 5 ]
+
+     match handedOverBy one session with
+     | Some after, _ -> Set.isEmpty (Session.side two after).Compiled
+     | None, _ -> true)
+
+report
+    "and both print what they mean"
+    [ "The middle commands of cards in this line do nothing."
+      "Draw 2 cards. Your opponent cannot compile next turn." ]
+    ([ card Apathy 2; card Metal 1 ] |> List.map (fun each -> Words.printed each |> List.head))
+
+// --- saying where, rather than saying which ------------------------------------------------------
+//
+//   Death-0  "Delete 1 card from each other line."
+//   Death-2  "Delete all cards in 1 line with values of 1 or 2."
+//
+// Both work by moving the command's source rather than by teaching the selector a new trick: a
+// command run with its source standing in another line reads `here` as that line.
+
+report
+    "'in each other line' runs the command once per line, and not in the one it came from"
+    (1, 0, 0)
+    (let session =
+        standing (opened 1UL)
+        |> poised two 1 [ quiet Metal 3 ]
+        |> poised two 2 [ quiet Metal 3 ]
+        |> poised two 3 [ quiet Light 3 ]
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           InEachOtherLine(Delete(Select.any |> Select.here)),
+                           { Owner = one
+                             Saying = card Death 0
+                             Line = 1 }
+                       ) ] }
+             []
+
+     // Lines two and three swept; line one, where the card was standing, untouched.
+     List.length (Side.stack 1 (Session.side two after)),
+     List.length (Side.stack 2 (Session.side two after)),
+     List.length (Side.stack 3 (Session.side two after)))
+
+report
+    "'in 1 line' asks which, and then runs there and nowhere else"
+    (2, 0)
+    (let session =
+        standing (opened 1UL)
+        |> poised two 1 [ quiet Gravity 1; quiet Light 2 ]
+        |> poised two 2 [ quiet Gravity 1; quiet Light 2 ]
+
+     let asked, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           InAChosenLine(Every(Delete(Select.any |> Select.here |> Select.worth [ 1; 2 ]))),
+                           { Owner = one
+                             Saying = card Death 2
+                             Line = 3 }
+                       ) ] }
+             []
+
+     match Session.asking asked with
+     | Some question ->
+         match Resolving.choosing question (TheLine 2) asked with
+         | Some after, _ ->
+             List.length (Side.stack 1 (Session.side two after)),
+             List.length (Side.stack 2 (Session.side two after))
+         | None, _ -> -1, -1
+     | _ -> -1, -1)
+
+report
+    "and both print where as well as what"
+    [ "Delete any card in this line, in each other line."
+      "Delete every card worth 1 or 2 in this line, in a line of your choosing." ]
+    ([ card Death 0; card Death 2 ] |> List.map (fun each -> Words.printed each |> List.head))
+
+// --- cards that shut a line, and one that opens the board ---------------------------------------
+//
+// The first standing rules asked when somebody tries to *move* rather than when something is
+// counted - a fourth place in the rules an `Ongoing` has to be remembered.
+//
+//   Metal-2    "Your opponent cannot play cards face-down in this line."
+//   Plague-0   "Your opponent cannot play cards in this line."
+//   Psychic-1  "Your opponent can only play cards face-down."
+//   Spirit-1   "You can play cards in any line."
+
+report
+    "a card of theirs can shut a line against you, whichever way up you were playing"
+    (Some NoPlayHere, Some NoPlayHere, None)
+    (let session = standing (opened 1UL) |> poised two 2 [ card Plague 0 ]
+
+     Field.barred one 2 FaceUp session.Field,
+     Field.barred one 2 FaceDown session.Field,
+     // And only the line it is in.
+     Field.barred one 1 FaceUp session.Field)
+
+report
+    "or shut only the face-down half of it"
+    (None, Some NoFaceDownHere)
+    (let session = standing (opened 1UL) |> poised two 2 [ card Metal 2 ]
+     Field.barred one 2 FaceUp session.Field, Field.barred one 2 FaceDown session.Field)
+
+report
+    "or leave them nothing but face down, wherever the card is standing"
+    [ Some OnlyFaceDown; Some OnlyFaceDown; Some OnlyFaceDown ]
+    (let session = standing (opened 1UL) |> poised two 3 [ card Psychic 1 ]
+     Lines.all |> List.map (fun line -> Field.barred one line FaceUp session.Field))
+
+report
+    "and a rule in the bottom box stops when something covers it"
+    (Some NoPlayHere, None)
+    (let shut = standing (opened 1UL) |> poised two 2 [ card Plague 0 ]
+     let covered = standing (opened 1UL) |> poised two 2 [ quiet Plague 3; card Plague 0 ]
+
+     Field.barred one 2 FaceUp shut.Field, Field.barred one 2 FaceUp covered.Field)
+
+report
+    "the refusal says which line and why, and the move does not carry"
+    true
+    (let session =
+        standing (opened 1UL)
+        |> poised two 2 [ card Plague 0 ]
+
+     let card' = handOf one (opened 1UL) |> List.head
+
+     match Turn.asked (Play(card', 2, FaceDown)) session with
+     | None, [ Refused(Forbidden(NoPlayHere, 2)) as refusal ] ->
+         mentions "line 2" (compiled.Says refusal) && mentions "cannot play" (compiled.Says refusal)
+     | _ -> false)
+
+report
+    "and one card opens the whole board: face up anywhere, protocol or no protocol"
+    (false, true)
+    (let plainly = standing (opened 1UL)
+     let opened' = plainly |> poised one 2 [ card Spirit 1 ]
+
+     // A Water card belongs on line 1. Line 3 is Fire's - until Spirit-1 says otherwise.
+     Field.allows one (quiet Water 4) 3 plainly.Field, Field.allows one (quiet Water 4) 3 opened'.Field)
+
+report
+    "and all four print what they mean"
+    [ "Your opponent cannot play cards face down in this line."
+      "While uncovered: Your opponent cannot play cards in this line."
+      "Your opponent can only play cards face down."
+      "You can play cards in any line." ]
+    ([ card Metal 2; card Plague 0; card Psychic 1; card Spirit 1 ]
+     // The restriction is one line of a card that may say more, and on Plague-0 it is the last
+     // rather than the first - which is the whole of what its being in the bottom box means.
+     |> List.map (fun each ->
+         Words.printed each
+         |> List.find (fun said -> said.Contains "play cards")))
+
+// --- cards that come off a deck, and cards that change hands ------------------------------------
+//
+//   Water-1  "Play the top card of your deck face-down in each other line."
+//   Love-3   "Take 1 random card from your opponent's hand. Give 1 card from your hand to your
+//             opponent."
+
+report
+    "a card off the top of a deck lands on the table, and the deck is one lighter"
+    (12, 1, true)
+    (let session = standing (opened 1UL) |> holding one (card Water 1)
+
+     let after, told =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           FromDeck(FaceDown, ThisLine),
+                           { Owner = one
+                             Saying = card Water 1
+                             Line = 2 }
+                       ) ] }
+             []
+
+     let side = Session.side one after
+
+     List.length side.Deck,
+     List.length (Side.stack 2 side),
+     told
+     |> List.exists (function
+         | Happened(PlayedFromDeck _) -> true
+         | _ -> false))
+
+report
+    "and where it goes is asked when the card does not say - but never the line it came from"
+    [ 1; 3 ]
+    (let session = standing (opened 1UL) |> holding one (card Water 1)
+
+     let after, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           FromDeck(FaceDown, OtherLines),
+                           { Owner = one
+                             Saying = card Water 1
+                             Line = 2 }
+                       ) ] }
+             []
+
+     match Session.asking after with
+     | Some { Wanting = ALine(_, offered) } -> offered
+     | _ -> [])
+
+report
+    "a card given goes out of one hand and into the other, and one taken at random comes back"
+    (5, 5, true)
+    (let session = standing (opened 1UL) |> holding one (card Love 3)
+
+     // Take at random needs no answer; the giving does.
+     let asked, _ =
+         Resolving.settle
+             { session with
+                 Pile =
+                     [ Run(
+                           TakeAtRandom,
+                           { Owner = one
+                             Saying = card Love 3
+                             Line = 1 }
+                       )
+                       Run(
+                           Give,
+                           { Owner = one
+                             Saying = card Love 3
+                             Line = 1 }
+                       ) ] }
+             []
+
+     match Session.asking asked with
+     | Some question ->
+         match Resolving.choosing question (TheCard((Session.side one asked).Hand |> List.head)) asked with
+         | Some after, _ ->
+             // One taken and one given, so both hands are the size they started.
+             List.length (Session.side one after).Hand,
+             List.length (Session.side two after).Hand,
+             List.length (Session.side two asked).Hand = Deck.HandSize - 1
+         | None, _ -> -1, -1, false
+     | _ -> -1, -1, false)
+
+report
+    "and the four new cards print what they mean"
+    [ "Play the top card of your deck face down in this line, in each other line."
+      "Take a card at random from your opponent's hand. Give a card from your hand to your opponent."
+      "Draw the top card of your opponent's deck."
+      "When this card would be covered, first: Play the top card of your deck face down in another line." ]
+    ([ card Water 1; card Love 3; card Love 1; card Life 3 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
+
+// Three more ways a card reaches past its own line, and none of them moves a card the ordinary
+// way: one takes off a deck, one shows without touching, and one moves the *protocols*.
+//
+//   Love-1     "Draw the top card of your opponent's deck."
+//   Light-2    "...Reveal 1 face-down card. You may shift or flip that card."
+//   Psychic-2  "Your opponent discards 2 cards. Rearrange their protocols."
+//   Water-2    "Draw 2 cards. Rearrange your protocols."
+
+report
+    "a card can take the top of their deck, and it is theirs no longer"
+    (Deck.HandSize + 1, Deck.Size - Deck.HandSize - 1, true)
+    (let session = standing (opened 1UL)
+     let theirs = (Session.side two session).Deck |> List.head
+     let after, _ = running TakeTheirTop (card Love 1) session
+
+     List.length (Session.side one after).Hand,
+     List.length (Session.side two after).Deck,
+     List.contains theirs (Session.side one after).Hand)
+
+report
+    "and a reveal moves nothing at all, but leaves what it showed for the next command to point at"
+    (true, true, 1)
+    (let session = standing (opened 1UL) |> lyingDown two 2 [ mute Speed 2 ]
+     let after, told = running (Show(Select.any |> Select.faceDown)) (card Light 2) session
+
+     after.Chose = Some(mute Speed 2),
+     happenings told
+     |> List.exists (function
+         | Showed(_, shown') -> shown' = mute Speed 2
+         | _ -> false),
+     // Still lying where it was, still face down.
+     Side.stack 2 (Session.side two after)
+     |> List.filter (Placed.isFaceUp >> not)
+     |> List.length)
+
+report
+    "rearranging is a card's command as well as the component's, and it may leave things as they were"
+    (true, true)
+    (let session = standing (opened 1UL)
+     let after, _ = running (Rearrange Yours) (card Water 2) session
+
+     match Session.asking after with
+     | Some { Wanting = AnOrder(whose, offered) } ->
+         whose = one,
+         // Every order, unlike the component's, which strikes out the one they are in.
+         List.contains [ Water; Darkness; Fire ] offered
+     | _ -> false, false)
+
+report
+    "and a card can make you rearrange theirs - the chooser and the side are two different seats"
+    (true, true, true)
+    (let session = standing (opened 1UL)
+     let asked, _ = running (Rearrange Theirs) (card Psychic 2) session
+
+     match Session.asking asked with
+     | Some({ Wanting = AnOrder(whose, _) } as question) ->
+         whose = two,
+         question.Chooser = one,
+         (match Resolving.ordering question [ Metal; Light; Gravity ] asked with
+          | Some after, _ ->
+              (Session.side two after).Order = [ Metal; Light; Gravity ]
+              && (Session.side one after).Order = [ Water; Darkness; Fire ]
+          | None, _ -> false)
+     | _ -> false, false, false)
+
+// --- what a line is worth ---------------------------------------------------------------------
+//
+// The one number in this game that cannot be worked out from one side of the table. A card in a
+// stack may say what the face-down cards around it are worth, may add to the total outright or
+// per face-down card beside it, and a card in the stack *facing* it may take away from it.
+//
+//   Apathy-0    "Your total value in this line is increased by 1 for each face-down card in it."
+//   Darkness-2  "All face-down cards in this stack have a value of 4."
+//   Metal-0     "Your opponent's total value in this line is reduced by 2."
+
+report
+    "a stack of nothing but cards is still the sum of the cards"
+    9
+    (let session = standing (opened 1UL) |> poised one 1 [ quiet Water 4; quiet Water 5 ]
+     Field.valueOn one 1 session.Field)
+
+report
+    "a card can say what the face-down cards beside it are worth"
+    (4, 6)
+    (// The same two cards, and the only difference is which way up the Darkness-2 is lying. Face
+     // down it says nothing and the five beside it is an ordinary two; face up it says every
+     // face-down card in the stack is worth four.
+     let stacked way =
+         standing (opened 1UL)
+         |> beneath one 1 [ way (card Darkness 2); Placed.down (quiet Water 5) ]
+
+     Field.valueOn one 1 (stacked Placed.down).Field, Field.valueOn one 1 (stacked Placed.up).Field)
+
+report
+    "a card can add to the total for each face-down card beside it"
+    (Placed.FaceDownValue * 2 + 2, 0)
+    (let session =
+        standing (opened 1UL)
+        |> beneath one 1 [ Placed.up (card Apathy 0); Placed.down (quiet Water 4); Placed.down (quiet Water 5) ]
+
+     // Two twos, plus Apathy-0's own nothing, plus one for each of the two face-down cards.
+     Field.valueOn one 1 session.Field, (card Apathy 0).Value)
+
+report
+    "and a card across the table can take away from it - which is why a side cannot answer alone"
+    (9, 7)
+    (let alone = standing (opened 1UL) |> poised one 1 [ quiet Water 4; quiet Water 5 ]
+
+     let opposed =
+         alone |> poised two 1 [ card Metal 0 ]
+
+     Field.valueOn one 1 alone.Field, Field.valueOn one 1 opposed.Field)
+
+report
+    "a total is never less than nothing"
+    0
+    (let session =
+        standing (opened 1UL)
+        |> poised one 1 [ quiet Gravity 1 ]
+        |> poised two 1 [ card Metal 0 ]
+
+     Field.valueOn one 1 session.Field)
+
+report
+    "a modifier stops when the card carrying it stops - Metal-0 says it from its top box"
+    (7, 7)
+    (let uncovered = standing (opened 1UL) |> poised one 1 [ quiet Water 4; quiet Water 5 ]
+
+     let both =
+         uncovered
+         |> poised two 1 [ quiet Gravity 1; card Metal 0 ]
+
+     // Metal-0's rule is in the top box, so covering it changes nothing.
+     Field.valueOn one 1 (uncovered |> poised two 1 [ card Metal 0 ]).Field,
+     Field.valueOn one 1 both.Field)
+
+report
+    "the compile check reads the same number, so a modifier can hold a line back"
+    (true, false)
+    (let winning =
+        standing (opened 1UL)
+        |> poised one 1 [ quiet Water 5; quiet Water 5 ]
+
+     let held = winning |> poised two 1 [ card Metal 0 ]
+
+     // Ten, and then eight - and eight does not compile.
+     Field.won one 1 winning.Field, Field.won one 1 held.Field)
+
+report
+    "and all three print what they mean"
+    [ "Your total in this line is increased by 1 for each face-down card in it."
+      "Every face-down card in this stack is worth 4."
+      "Their total in this line is reduced by 2." ]
+    ([ card Apathy 0; card Darkness 2; card Metal 0 ]
+     |> List.map (fun each -> Words.printed each |> List.head))
 
 // --- an interrupt ----------------------------------------------------------------------------------
 //
@@ -1488,12 +3074,12 @@ report
     (true, 2)
     (let session =
         standing (opened 1UL)
-        |> holding one (blank Water 4)
+        |> holding one (quiet Water 4)
         // Apathy is nobody's protocol here, so this is scenery placed by hand - what matters is
         // that it is the top card of the line about to be played to.
         |> poised one 1 [ card Apathy 2 ]
 
-     match Turn.asked (Play(blank Water 4, 1, FaceUp)) session with
+     match Turn.asked (Play(quiet Water 4, 1, FaceUp)) session with
      | Some after, told ->
          let stack = Side.stack 1 (Session.side one after)
 
@@ -1514,19 +3100,12 @@ report
     (Placed.FaceDownValue + 4)
     (let session =
         standing (opened 1UL)
-        |> holding one (blank Water 4)
+        |> holding one (quiet Water 4)
         |> poised one 1 [ card Apathy 2 ]
 
-     match Turn.asked (Play(blank Water 4, 1, FaceUp)) session with
-     | Some after, _ -> Side.valueOn 1 (Session.side one after)
+     match Turn.asked (Play(quiet Water 4, 1, FaceUp)) session with
+     | Some after, _ -> Field.valueOn one 1 after.Field
      | None, _ -> -1)
-
-/// Whatever is lying on a line already, however it is lying.
-let private beneath seat line cards session =
-    { session with
-        Field =
-            session.Field
-            |> Field.update seat (fun side -> { side with Stacks = side.Stacks |> Map.add line cards }) }
 
 report
     "nothing interrupts an empty line, or a card lying face down"
@@ -1534,9 +3113,9 @@ report
     ([ []; [ Placed.down (card Apathy 2) ] ]
      |> List.map (fun under ->
          let session =
-             standing (opened 1UL) |> holding one (blank Water 4) |> beneath one 1 under
+             standing (opened 1UL) |> holding one (quiet Water 4) |> beneath one 1 under
 
-         match Turn.asked (Play(blank Water 4, 1, FaceUp)) session with
+         match Turn.asked (Play(quiet Water 4, 1, FaceUp)) session with
          | Some _, told ->
              told
              |> List.exists (function
@@ -1549,32 +3128,30 @@ report
     true
     (let session =
         standing (opened 1UL)
-        |> holding one (card Darkness 1)
-        |> poised one 1 [ blank Water 5 ]
+        |> holding one (card Darkness 4)
+        |> lyingDown one 1 [ mute Speed 2 ]
         |> poised one 3 [ card Apathy 2 ]
 
-     // Darkness-1 shifts one of the first player's cards. Darkness is on line 2 for them.
-     match Turn.asked (Play(card Darkness 1, 2, FaceUp)) session with
-     | Some waiting, _ ->
-         match Session.asking waiting with
-         | Some({ Wanting = ACard(Shift _, _) } as question) ->
-             match Resolving.choosing question (TheCard(blank Water 5)) waiting with
-             | Some next, _ ->
-                 match Resolving.choosing (Session.asking next).Value (TheLine 3) next with
-                 | Some after, told ->
-                     told
-                     |> List.exists (function
-                         | Happened(Flipped(_, turned, 3)) -> turned.Card = card Apathy 2
-                         | _ -> false)
-                 | None, _ -> false
+     // Darkness-4 shifts a face-down card, and there is only the one - so it goes straight to
+     // asking where. Darkness is on line 2 for them.
+     match Turn.asked (Play(card Darkness 4, 2, FaceUp)) session with
+     | Some next, _ ->
+         match Session.asking next with
+         | Some({ Wanting = ALine _ } as question) ->
+             match Resolving.choosing question (TheLine 3) next with
+             | Some _, told ->
+                 told
+                 |> List.exists (function
+                     | Happened(Flipped(_, turned, 3)) -> turned.Card = card Apathy 2
+                     | _ -> false)
              | None, _ -> false
          | _ -> false
      | None, _ -> false)
 
 report
     "and the interrupt is printed as one"
-    [ "When this card would be covered, first: Flip any uncovered face-up card in this line." ]
-    (Words.printed (card Apathy 2))
+    "When this card would be covered, first: Flip this card."
+    (Words.printed (card Apathy 2) |> List.last)
 
 // --- you may, and if you do -----------------------------------------------------------------------
 //
@@ -1591,7 +3168,7 @@ report
         standing (opened 1UL)
         |> holding one (card Fire 1)
         // Something to delete, if the delete were ever reached.
-        |> poised two 2 [ blank Metal 3 ]
+        |> poised two 2 [ quiet Metal 3 ]
 
      // An empty hand, so the discard cannot happen - and Fire-1 is played out of it, which is
      // exactly the position the card gets into.
@@ -1615,7 +3192,7 @@ report
     (let session =
         standing (opened 1UL)
         |> holding one (card Fire 1)
-        |> poised two 2 [ blank Metal 3 ]
+        |> poised two 2 [ quiet Metal 3 ]
 
      // Answer every question the card asks, whatever it asks, keeping what it said.
      let rec answered model told count =
@@ -1654,7 +3231,7 @@ report
                  { session with
                      Pile =
                          [ Run(
-                               IfYouDo(May(Draw 1), [ Delete Select.any ]),
+                               IfYouDo(May(Draw(Just 1)), [ Delete Select.any ]),
                                { Owner = one
                                  Saying = card Death 1
                                  Line = 1 }
@@ -1664,7 +3241,7 @@ report
          match Session.asking asked with
          | Some { Wanting = Whether _ } ->
              match Resolving.choosing (Session.asking asked).Value No asked with
-             | Some after, _ -> List.length (Session.side one after).Hand = Deck.HandSize, after.Did
+             | Some after, _ -> List.length (Session.side one after).Hand = Deck.HandSize, after.Done > 0
              | None, _ -> false, true
          | _ -> false, true
      | None, _ -> false, true)
@@ -1679,7 +3256,7 @@ report
              { session with
                  Pile =
                      [ Run(
-                           IfYouDo(May(Draw 1), [ Draw 1 ]),
+                           IfYouDo(May(Draw(Just 1)), [ Draw(Just 1) ]),
                            { Owner = one
                              Saying = card Death 1
                              Line = 1 }
@@ -1688,7 +3265,7 @@ report
 
      match Resolving.choosing (Session.asking asked).Value Yes asked with
      // One drawn by the offer and one by what was waiting behind it.
-     | Some after, _ -> List.length (Session.side one after).Hand = Deck.HandSize + 2, after.Did
+     | Some after, _ -> List.length (Session.side one after).Hand = Deck.HandSize + 2, after.Done > 0
      | None, _ -> false, false)
 
 report
@@ -1721,17 +3298,96 @@ report
 
 report
     "yes and no survive being written down and read back"
-    [ true; true ]
-    ([ Yes; No ]
+    [ true; true; true; true ]
+    ([ Yes; No; TheFirst; TheSecond ]
      |> List.map (fun said ->
          match Playable.read compiled (compiled.Write(Make(Choose said))) with
          | Ok(Send(Make(Choose read))) -> read = said
          | _ -> false))
 
+// And the other shape a card can offer: **which of two**, where a `may` offers *whether*. There is
+// no third answer, so an empty hand does not decline - it takes the half it can.
+//
+//   Spirit-1  "Start: Either discard 1 card or flip this card."
+
+let private eitherOr session =
+    { session with
+        Pile =
+            [ Run(
+                  Either(Discard, Flip(Select.any |> Select.this')),
+                  { Owner = one
+                    Saying = card Spirit 1
+                    Line = 1 }
+              ) ] }
+
+report
+    "either-or asks which of the two, and it is not a yes-or-no"
+    (true, true)
+    (let session = standing (opened 1UL) |> poised one 1 [ card Spirit 1 ]
+
+     let after, _ = Resolving.settle (eitherOr session) []
+
+     match Session.asking after with
+     | Some { Wanting = OneOf(Discard, Flip _) } -> true, Session.active after = one
+     | _ -> false, false)
+
+report
+    "and answering it does that half, with nothing left waiting either way"
+    (true, false)
+    (let session = standing (opened 1UL) |> poised one 1 [ card Spirit 1 ]
+
+     let asked, _ = Resolving.settle (eitherOr session) []
+
+     match Resolving.choosing (Session.asking asked).Value TheSecond asked with
+     | Some after, _ ->
+         Side.stack 1 (Session.side one after)
+         |> List.exists (fun placed -> placed.Card = card Spirit 1 && not (Placed.isFaceUp placed)),
+         (Session.asking after).IsSome
+     | None, _ -> false, true)
+
+report
+    "a half nobody could carry out is not offered at all - the other one simply happens"
+    (false, true)
+    (let session =
+        standing (opened 1UL)
+        |> poised one 1 [ card Spirit 1 ]
+        // Nothing in hand, so there is no discard to be had and no choice to make.
+        |> fun session ->
+            { session with
+                Field = session.Field |> Field.update one (fun side -> { side with Hand = [] }) }
+
+     let after, _ = Resolving.settle (eitherOr session) []
+
+     (Session.asking after).IsSome,
+     Side.stack 1 (Session.side one after)
+     |> List.exists (fun placed -> placed.Card = card Spirit 1 && not (Placed.isFaceUp placed)))
+
+report
+    "and neither of them possible is a fizzle, like any other command with nothing to do"
+    true
+    (let session =
+        standing (opened 1UL)
+        |> fun session ->
+            { session with
+                Field = session.Field |> Field.update one (fun side -> { side with Hand = [] }) }
+
+     // No hand to discard from, and no Spirit-1 on the table to turn over.
+     let _, told = Resolving.settle (eitherOr session) []
+
+     happenings told
+     |> List.exists (function
+         | Fizzled _ -> true
+         | _ -> false))
+
+report
+    "and the card prints both halves"
+    "At the start of your turn, while uncovered: Either discard a card or flip this card."
+    (Words.printed (card Spirit 1) |> List.last)
+
 report
     "and both cards print what they do"
     [ "Discard a card. If you do, delete any card."
-      "You may draw a card. If you do, delete any card, then delete any card in this line." ]
+      "At the start of your turn, while uncovered: You may draw a card. If you do, delete any other card, then delete this card." ]
     ([ card Fire 1; card Death 1 ] |> List.map (fun each -> Words.printed each |> List.head))
 
 // --- the cache, and the phase that checks it ------------------------------------------------------
@@ -1822,28 +3478,29 @@ report
     (false, true)
     (let covered =
         standing (opened 1UL)
-        // Fire-3 face up on line 3 with a blank Fire-1 played over it. Both face up; only the
+        // Fire-0 face up on line 3 with a blank Darkness-3 lying over it. Both face up; only the
         // top one is shown.
-        |> poised one 3 [ blank Fire 0; card Fire 3 ]
+        |> poised one 3 [ mute Hate 3; card Fire 0 ]
 
-     // Settling once takes a record of what is shown - the Fire-1, and not the Fire-3 under it.
-     let quiet, first = Resolving.settle covered []
+     // The board is read as it stands, so neither of them speaks - the Darkness-3 because it has
+     // nothing to say, and the Fire-0 because it is covered.
+     let settled, first = Resolving.settle covered []
 
      // Take the covering card away, and the one underneath is shown for the first time.
      let uncovered =
-         { quiet with
+         { settled with
              Field =
-                 quiet.Field
+                 settled.Field
                  |> Field.update one (fun side ->
                      { side with
-                         Stacks = side.Stacks |> Map.add 3 [ Placed.up (card Fire 3) ] }) }
+                         Stacks = side.Stacks |> Map.add 3 [ Placed.up (card Fire 0) ] }) }
 
      drew first, drew (Resolving.settle uncovered [] |> snd))
 
 report
     "and a card at the bottom of a stack says nothing however face up it is"
     (2, 1)
-    (let session = standing (opened 1UL) |> poised two 2 [ blank Metal 3; blank Metal 4 ]
+    (let session = standing (opened 1UL) |> poised two 2 [ quiet Metal 3; quiet Light 3 ]
      let stack = Side.stack 2 (Session.side two session)
 
      // Two face up, one of them shown.
@@ -1882,7 +3539,7 @@ report
     "without the rule there is no component, and there never is one"
     (NotInPlay, NotInPlay)
     ((standing (opened 1UL)).Control,
-     (match handedOver (standing (opened 1UL) |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]) with
+     (match handedOver (standing (opened 1UL) |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]) with
       | Some after, _ -> after.Control
       | None, _ -> InTheMiddle))
 
@@ -1908,8 +3565,8 @@ report
     (HeldBy one, true)
     (let session =
         standing (openedWith 1UL)
-        |> poised one 1 [ blank Water 1 ]
-        |> poised one 2 [ blank Darkness 2 ]
+        |> poised one 1 [ quiet Gravity 1 ]
+        |> poised one 2 [ quiet Darkness 3 ]
 
      match handedBack session with
      | Some after, told ->
@@ -1922,7 +3579,7 @@ report
 report
     "leading one does not"
     InTheMiddle
-    (let session = standing (openedWith 1UL) |> poised one 1 [ blank Water 1 ]
+    (let session = standing (openedWith 1UL) |> poised one 1 [ quiet Gravity 1 ]
 
      match handedBack session with
      | Some after, _ -> after.Control
@@ -1934,8 +3591,8 @@ report
     (let session =
         standing (openedWith 1UL)
         |> holdingControl two
-        |> poised one 1 [ blank Water 1 ]
-        |> poised one 2 [ blank Darkness 2 ]
+        |> poised one 1 [ quiet Gravity 1 ]
+        |> poised one 2 [ quiet Darkness 3 ]
 
      match handedBack session with
      | Some after, told ->
@@ -1963,7 +3620,7 @@ report
      match Turn.asked Refresh session with
      | Some after, _ ->
          match Session.asking after with
-         | Some { Wanting = AnOrder offered } -> List.length offered, List.contains [ Water; Darkness; Fire ] offered
+         | Some { Wanting = AnOrder(_, offered) } -> List.length offered, List.contains [ Water; Darkness; Fire ] offered
          | _ -> -1, true
      | None, _ -> -1, true)
 
@@ -1978,12 +3635,12 @@ report
 
 report
     "answering moves the protocols and nothing else - the stacks stay exactly where they are"
-    ([ Darkness; Water; Fire ], [ card Water 4 ], [ card Darkness 2 ])
+    ([ Darkness; Water; Fire ], [ card Water 4 ], [ card Darkness 3 ])
     (let session =
         standing (openedWith 1UL)
         |> holdingControl one
-        |> poised one 1 [ blank Water 4 ]
-        |> poised one 2 [ blank Darkness 2 ]
+        |> poised one 1 [ quiet Water 4 ]
+        |> poised one 2 [ quiet Darkness 3 ]
 
      match Turn.asked Refresh session with
      | Some waiting, _ ->
@@ -2030,7 +3687,7 @@ report
     (let session =
         standing (openedWith 1UL)
         |> holdingControl one
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
      match handedBack session with
      | Some after, _ -> (Session.asking after).IsSome, Set.isEmpty (Session.side one after).Compiled |> not
@@ -2042,7 +3699,7 @@ report
     (let session =
         standing (openedWith 1UL)
         |> holdingControl one
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
      match handedBack session with
      | Some waiting, _ ->
@@ -2059,12 +3716,12 @@ report
     (let session =
         standing (openedWith 1UL)
         |> holdingControl one
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
      match handedBack session with
      | Some waiting, _ ->
          match Turn.asked (Arrange [ Darkness; Water; Fire ]) waiting with
-         | Some after, _ -> Side.valueOn 1 (Session.side one after)
+         | Some after, _ -> Field.valueOn one 1 after.Field
          | None, _ -> -1
      | None, _ -> -1)
 
@@ -2073,7 +3730,7 @@ report
     [ Water ]
     (let session =
         standing (openedWith 1UL)
-        |> poised one 1 [ blank Water 5; blank Water 5; blank Water 1 ]
+        |> poised one 1 [ quiet Water 5; quiet Water 5; quiet Gravity 1 ]
 
      match handedBack session with
      | Some after, _ -> Set.toList (Session.side one after).Compiled
@@ -2158,11 +3815,12 @@ let private loadedLine seat line session =
                 { side with
                     Deck = side.Deck |> List.filter (fun c -> not (List.contains c chosen))
                     Stacks = side.Stacks |> Map.add line (chosen |> List.map Placed.up) }) }
+    |> Resolving.asRead
 
 report
     "the loaded line is over ten, so the two checks below are checking something"
     true
-    (Side.valueOn 1 (Session.side one (standing (opened 1UL) |> loadedLine one 1)) >= Stack.ToCompile)
+    (Field.valueOn one 1 (standing (opened 1UL) |> loadedLine one 1).Field >= Stack.ToCompile)
 
 report
     "compiling moves cards without making or losing any"
@@ -2298,7 +3956,7 @@ report
 /// The cap is a runaway guard rather than a length: a game of this takes a few hundred moves
 /// once refreshing is in, and a game that reached the cap would be a stalemate rather than a
 /// slow win - which is a thing worth failing on rather than waiting through.
-let private machineGame seed =
+let private gameBetween skills seed =
     let rec walk model rivals count =
         if count > 4000 then
             model
@@ -2311,7 +3969,9 @@ let private machineGame seed =
                 walk next rivals (count + 1)
 
     let start = dealt seed
-    walk start (compiled.Seating seed [ Some "easy"; Some "easy" ] (standing start)) 0
+    walk start (compiled.Seating seed (skills |> List.map Some) (standing start)) 0
+
+let private machineGame = gameBetween [ "easy"; "easy" ]
 
 report
     "the machine plays a whole game legally, from the draft to somebody winning"
@@ -2362,6 +4022,28 @@ report
      match Update.replay rules Session.Seats 4UL asked with
      | Ok again -> standing again = standing finished
      | Error _ -> false)
+
+// And the one thing the word *medium* is promising. This is the only check here that would still
+// pass if the machine were merely different rather than better, so it is asked the only way it can
+// be honestly asked: a run of whole games, from both seats, counted.
+
+let private wonBy skills seed =
+    match Session.ending (standing (gameBetween skills seed)) with
+    | Some(Won winner) -> Some winner
+    | _ -> None
+
+report
+    "counting beats not counting, and from either seat - which is the whole of what 'medium' says"
+    (true, true)
+    (let deals = [ 4UL .. 15UL ]
+
+     let took skills who =
+         deals |> List.filter (fun seed -> wonBy skills seed = Some who) |> List.length
+
+     // Two thirds of twelve either way round, which is a margin no shuffle explains. The real
+     // figure over two hundred deals is nearer nineteen in twenty; twelve is what a test can
+     // afford to play out.
+     took [ "medium"; "easy" ] one >= 8, took [ "easy"; "medium" ] two >= 8)
 
 // --- the screens --------------------------------------------------------------------------------
 //

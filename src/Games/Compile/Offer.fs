@@ -34,6 +34,14 @@ module Offer =
           if List.distinct Card.values |> List.length <> List.length Card.values then
               yield "the same number printed on two of a protocol's cards"
 
+          // Every protocol has six cards, and every one of them skips exactly one of the seven
+          // numbers - twelve skip the 6, and the three that carry one give up a number lower
+          // down. A protocol that skipped none, or two, would deal a deck of the wrong size.
+          for protocol in Protocol.all do
+              if List.length (Card.inProtocol protocol) <> Card.PerProtocol then
+                  yield
+                      $"{Protocol.name protocol} with {List.length (Card.inProtocol protocol)} cards, where every protocol has {Card.PerProtocol}"
+
           if Lines.Count <> Protocol.Each then
               yield $"{Lines.Count} lines for {Protocol.Each} protocols, where each protocol wants a line of its own"
 
@@ -57,9 +65,12 @@ module Offer =
               yield
                   $"a line compiled at {Stack.ToCompile}, which one card of {List.max Card.values} would reach on its own"
 
-          if Stack.ToCompile > List.sum Card.values then
-              yield
-                  $"a line compiled at {Stack.ToCompile}, which a whole protocol of {List.sum Card.values} could not reach"
+          for protocol in Protocol.all do
+              let whole = Card.inProtocol protocol |> List.sumBy (fun card -> card.Value)
+
+              if Stack.ToCompile > whole then
+                  yield
+                      $"a line compiled at {Stack.ToCompile}, which the whole of {Protocol.name protocol} at {whole} could not reach"
 
           if List.length Draft.order <> Protocol.Each * Session.Seats then
               yield
@@ -93,25 +104,24 @@ module Offer =
           // asked any of this.
           for card in Protocol.all |> List.collect Card.inProtocol do
               let text = Printed.on card
-              let commands = text.Shown @ text.AtEnd @ text.WhenCovered
+              let commands =
+                  text.Shown
+                  @ text.AtStart
+                  @ text.AtEnd
+                  @ text.WhenCovered
+                  @ text.WhenFlipped
+                  @ text.WhenCompiled
+                  @ (text.After |> List.collect snd)
               let rules = text.Top @ text.Bottom
 
               let rec faulty =
                   function
-                  | Draw n when n < 1 -> Some $"draws {n} cards"
+                  | Draw(Just n) when n < 1 -> Some $"draws {n} cards"
                   | Opposing(Opposing _) -> Some "hands a command to the other player twice over"
                   | Opposing inner -> faulty inner
                   | _ -> None
 
               for wrong in commands |> List.choose faulty do
-                  yield $"{Card.name card} {wrong}"
-
-              let amiss =
-                  function
-                  | CountsAs n when n < 0 -> Some $"counts as {n}"
-                  | _ -> None
-
-              for wrong in rules |> List.choose amiss do
                   yield $"{Card.name card} {wrong}"
 
               // A card with the same rule twice is a card somebody typed twice.

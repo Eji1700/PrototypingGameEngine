@@ -1,5 +1,6 @@
 namespace TCModel.Compile
 
+open TCModel.Common
 open TCModel.Engine
 
 /// The pile, and everything that walks down it.
@@ -30,7 +31,13 @@ module Resolving =
 
     /// Every card on the table that a selector points at, from the point of view of whoever is
     /// carrying the command out.
-    let private onTable actor selector (source: Source) field =
+    ///
+    /// The whole game rather than the field, for one narrowing out of ten: *"that card"* is
+    /// whatever the command before this one landed on, which is the only thing a selector asks
+    /// that the table cannot answer.
+    let private onTable actor selector (source: Source) session =
+        let field = session.Field
+
         let picks seat line (placed: Placed) =
             (match selector.Whose with
              | Yours -> seat = actor
@@ -38,55 +45,124 @@ module Resolving =
              | Anyone -> true)
             && (match selector.Where with
                 | ThisLine -> line = source.Line
-                | AnyLine -> true)
+                | OtherLines -> line <> source.Line
+                | AnyLine
+                // A selector never reads this one - it is a rule about a destination - so anywhere.
+                | ToOrFromHere -> true)
             && (match selector.Showing with
                 | Some wanted -> placed.Face = wanted
                 | None -> true)
             && (not selector.Uncovered
                 || Stack.uncovered (Side.stack line (Field.side seat field)) = Some placed)
+            && (not selector.Covered
+                || Stack.uncovered (Side.stack line (Field.side seat field)) <> Some placed)
+            && (not selector.NotThis || placed.Card <> source.Saying)
+            && (not selector.JustThis || placed.Card = source.Saying)
+            && (not selector.WasChosen || Some placed.Card = session.Chose)
+            // What a card is worth *on the table*, so a face-down five is a two - which is the
+            // reading a player would use, and the only one they can see.
+            && (List.isEmpty selector.Worth || List.contains (Placed.value placed) selector.Worth)
 
-        Field.seats field
-        |> List.collect (fun seat ->
-            Lines.all
-            |> List.collect (fun line ->
-                Side.stack line (Field.side seat field)
-                |> List.filter (picks seat line)
-                |> List.map (fun placed -> OnTable(seat, line, placed))))
+        let found =
+            Field.seats field
+            |> List.collect (fun seat ->
+                Lines.all
+                |> List.collect (fun line ->
+                    Side.stack line (Field.side seat field)
+                    |> List.filter (picks seat line)
+                    |> List.map (fun placed -> OnTable(seat, line, placed))))
 
-    /// Whether that card is standing on the table saying it cannot be deleted.
-    let private breakable seat line placed field =
-        Ruling.breakable (Stack.uncovered (Side.stack line (Field.side seat field)) = Some placed) placed
+        // And then narrowed to the best or worst of what is left, if the card asked for that.
+        // Everything tied for it survives, so "your highest" among two fives still asks which.
+        let worth =
+            function
+            | OnTable(_, _, placed) -> Placed.value placed
+            | InHand(_, card) -> card.Value
+
+        match selector.Pick, found with
+        | Whichever, _
+        | _, [] -> found
+        | Highest, found ->
+            let best = found |> List.map worth |> List.max
+            found |> List.filter (fun target -> worth target = best)
+        | Lowest, found ->
+            let worst = found |> List.map worth |> List.min
+            found |> List.filter (fun target -> worth target = worst)
+
+    /// Whether that card may be laid there, that way up - the same two questions `Turn` asks of a
+    /// play, asked of a card that is being played by a *card* rather than as somebody's action.
+    let private mayLay actor card line face field =
+        (Field.barred actor line face field |> Option.isNone)
+        && (face = FaceDown || Field.allows actor card line field)
+
+    /// Which lines a play out of the hand could go to: the ones the command allows, narrowed to
+    /// those something in hand could actually be laid on.
+    let private layable actor face where (source: Source) session =
+        let hand = (Field.side actor session.Field).Hand
+
+        Lines.all
+        |> List.filter (fun line ->
+            (match where with
+             | ThisLine -> line = source.Line
+             | OtherLines -> line <> source.Line
+             | AnyLine
+             | ToOrFromHere -> true)
+            && hand |> List.exists (fun card -> mayLay actor card line face session.Field))
 
     /// What a command may be pointed at, right now. Empty means it has nothing to do.
     ///
     /// This is also where "still valid, checked when it resolves" actually lives: the targets are
     /// worked out at the moment the command comes off the pile, so a card that has left the table
     /// since simply is not among them.
-    let rec private targets actor command source field =
+    let rec private targets actor command source (session: Session) =
+        let field = session.Field
+
         match command with
         | Draw _
         | Refreshing'
         | IfYouDo _
+        | IfCovering _
+        | FromDeck _
+        | TakeAtRandom
+        | InAChosenLine _
+        | InAChosenLineOf _
+        | InEachOtherLine _
+        | InEachLineHolding _
+        | StopTheirCompile
+        | RevealTheirHand
+        | Swap
+        | Rearrange _
+        | TakeTheirTop
+        | UnderThis _
+        | Times _
+        | OneOrMore _
         | Opposing _ -> []
+        // The giver chooses, out of their own hand.
+        | Give
+        | Reveal -> (Field.side actor field).Hand |> List.map (fun card -> InHand(actor, card))
         // What a `may` could be pointed at is what the command inside it could be pointed at,
-        // which is how a card knows not to offer something impossible.
-        | May inner -> targets actor inner source field
+        // which is how a card knows not to offer something impossible. An `every` is the same
+        // question asked for a different reason: what it would reach, rather than what it would
+        // choose between.
+        | May inner
+        | Every inner -> targets actor inner source session
+        // What an "either" could be pointed at is what either half could, which is what makes an
+        // offer of it an offer at all: a choice both halves of which are impossible is no choice.
+        | Either(first, second) -> targets actor first source session @ targets actor second source session
         | Discard -> (Field.side actor field).Hand |> List.map (fun card -> InHand(actor, card))
-        | Delete selector ->
-            // The one place a middle command is asked about besides the value of a stack. A card
-            // that cannot be deleted is not a deletion that fails - it is not a target at all,
-            // so a command pointed only at it finds nothing to do and says so.
-            onTable actor selector source field
-            |> List.filter (function
-                | OnTable(seat, line, placed) -> breakable seat line placed field
-                | InHand _ -> true)
+        // Whatever in hand could be laid somewhere the command allows. With the line already
+        // settled that is one line's worth; before it, it is what makes the play possible at all.
+        | PlayFromHand(face, where) ->
+            let lines = layable actor face where source session
+
+            (Field.side actor field).Hand
+            |> List.filter (fun card -> lines |> List.exists (fun line -> mayLay actor card line face field))
+            |> List.map (fun card -> InHand(actor, card))
+        | Delete selector
         | Flip selector
         | Return selector
-        | Shift selector -> onTable actor selector source field
-        | Rehome selector ->
-            // Only a card sitting somewhere that is not its home has anywhere to be sent.
-            onTable actor selector source field
-            |> List.filter (fun target -> Field.homeOf (Target.card target) field <> Some(Target.owner target))
+        | Show selector
+        | Shift(selector, _) -> onTable actor selector source session
 
     // --- doing one thing to one card ----------------------------------------------------------
 
@@ -101,26 +177,113 @@ module Resolving =
             Stacks = side.Stacks |> Map.add line (Side.stack line side |> List.filter ((<>) placed))
             Discard = placed.Card :: side.Discard }
 
-    /// Carry a command out on the card it was pointed at. Who is doing it is not asked for:
-    /// the target already says whose card it is, and that is the only side that changes.
-    let private carriedOut command target session =
+    /// A card about to be laid on a line.
+    ///
+    /// If whatever is on top of that line has something to say about being covered, it says it
+    /// **first** - and the card then lands on whatever the saying left behind. A card that flips
+    /// itself face down is covered face down; one that deletes itself is not covered at all,
+    /// because by the time the covering card arrives it is not there.
+    ///
+    /// This is the only thing in the game that happens *during* a move, and it is on the pile
+    /// like everything else: the interrupt goes on top of a `Placing` step, so an interrupt that
+    /// stops to ask stops the card in mid-air until it is answered. Which is what an interrupt is.
+    let laying seat placed line session =
+        let interrupting =
+            match Stack.uncovered (Side.stack line (Session.side seat session)) with
+            | Some under when Placed.isFaceUp under ->
+                (Printed.on under.Card).WhenCovered
+                |> List.map (fun command ->
+                    Run(
+                        command,
+                        { Owner = seat
+                          Saying = under.Card
+                          Line = line }
+                    ))
+            | _ -> []
+
+        { session with
+            Pile = interrupting @ (Placing(seat, placed, line) :: session.Pile) }
+
+    /// A card off the line it is on and onto another - laid there the same way a play is, so a
+    /// card shifted onto something with an interrupt sets that interrupt off too. Covering is
+    /// covering, however the card got there.
+    ///
+    /// Shared because a shift arrives here two ways: with the line answered, and with the line
+    /// printed on the card and nothing to answer.
+    let private moving seat placed from line session =
+        let session =
+            { session with
+                Field =
+                    session.Field
+                    |> Field.update seat (fun side ->
+                        { side with
+                            Stacks = side.Stacks |> Map.add from (Side.stack from side |> List.filter ((<>) placed)) }) }
+
+        laying seat placed line session, [ Happened(Shifted(seat, placed, from, line)) ]
+
+    /// Carry a command out on the card it was pointed at. Whose card it is is not asked for - the
+    /// target already says - and the source is here only because a shift may be told where to go
+    /// in terms of the line the card saying it stands in.
+    let private carriedOut (source: Source) command target session =
         match command, target with
+        // Held back, the way a card about to be covered is: if this one has something to say about
+        // being turned over it says it first, and the turning then finds whatever the saying left
+        // behind - which on the one card that does this is nothing at all, because it deleted
+        // itself. Covering and flipping are the two things that happen to a card where it lies,
+        // and a card may interrupt either.
         | Flip _, OnTable(seat, line, placed) ->
-            let turned =
-                { placed with
-                    Face =
-                        match placed.Face with
-                        | FaceUp -> FaceDown
-                        | FaceDown -> FaceUp }
+            let interrupting =
+                (Printed.on placed.Card).WhenFlipped
+                |> List.map (fun command ->
+                    Run(
+                        command,
+                        { Owner = seat
+                          Saying = placed.Card
+                          Line = line }
+                    ))
 
             { session with
-                Field = session.Field |> Field.update seat (replacing line placed (fun _ -> turned)) },
-            [ Happened(Flipped(seat, turned, line)) ]
+                Pile = interrupting @ (Turning(seat, placed, line) :: session.Pile) },
+            []
 
         | Delete _, OnTable(seat, line, placed) ->
             { session with
                 Field = session.Field |> Field.update seat (removing line placed) },
             [ Happened(Deleted(seat, placed, line)) ]
+
+        // Out of one hand and into the other. The only command that puts a card somewhere its
+        // owner cannot see it and its holder can.
+        // Shown, and put straight back. The card does not move, which is why this is the only
+        // command whose whole effect is the sentence it produces.
+        | Reveal, InHand(seat, card) -> session, [ Happened(Showed(seat, card)) ]
+
+        // A card on the table shown to both players and left exactly where it was lying. It is the
+        // only command that changes nothing at all, and it still counts as having been done -
+        // because what it leaves behind is what the rest of the sentence points at.
+        | Show _, OnTable(seat, _, placed) -> session, [ Happened(Showed(seat, placed.Card)) ]
+
+        // Out of the hand and onto the line the command is standing in - laid the same way a play
+        // is, interrupt and all, because it is a play. What it is not is the turn's action.
+        | PlayFromHand(face, _), InHand(seat, card) ->
+            let placed = { Card = card; Face = face }
+
+            let session =
+                { session with
+                    Field =
+                        session.Field
+                        |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) }) }
+
+            laying seat placed source.Line session, []
+
+        | Give, InHand(seat, card) ->
+            let them = Session.other seat
+
+            { session with
+                Field =
+                    session.Field
+                    |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) })
+                    |> Field.update them (fun side -> { side with Hand = side.Hand @ [ card ] }) },
+            [ Happened(Gave(seat, card)) ]
 
         | Discard, InHand(seat, card) ->
             { session with
@@ -142,34 +305,35 @@ module Resolving =
                             Hand = side.Hand @ [ placed.Card ] }) },
             [ Happened(Returned(seat, placed, line)) ]
 
-        // Home is worked out from the card rather than remembered, so this needs nothing to have
-        // been kept along the way.
-        | Rehome _, OnTable(seat, line, placed) ->
-            match Field.homeOf placed.Card session.Field with
-            | None -> session, [ Happened(Fizzled(seat, placed.Card)) ]
-            | Some home ->
+
+        // A shift is the one command that can ask twice. Which card is settled by now; where it
+        // goes is a second question - unless the card said where, in which case there is nothing
+        // to ask and it simply goes.
+        | Shift(_, where), OnTable(seat, line, placed) ->
+            let allowed =
+                Lines.all
+                |> List.filter ((<>) line)
+                |> List.filter (fun other ->
+                    match where with
+                    | AnyLine -> true
+                    | ThisLine -> other = source.Line
+                    | OtherLines -> other <> source.Line
+                    // Out of this line to anywhere, or in from anywhere to here - and never both,
+                    // because a card already in this line cannot be shifted into it.
+                    | ToOrFromHere -> line = source.Line || other = source.Line)
+
+            match allowed with
+            | [] -> session, [ Happened(Fizzled(seat, placed.Card)) ]
+            | [ only ] -> moving seat placed line only session
+            | many ->
                 { session with
-                    Field =
-                        session.Field
-                        |> Field.update seat (fun side ->
-                            { side with
-                                Stacks = side.Stacks |> Map.add line (Side.stack line side |> List.filter ((<>) placed)) })
-                        |> Field.update home (fun side -> { side with Hand = side.Hand @ [ placed.Card ] }) },
-                [ Happened(WentHome(home, placed.Card)) ]
-
-        // A shift is the one command that asks twice. Which card is settled; where it goes is
-        // another question, and it goes on the pile like any other.
-        | Shift _, OnTable(seat, line, placed) ->
-            let elsewhere = Lines.all |> List.filter ((<>) line)
-
-            { session with
-                Pile =
-                    Ask
-                        { Chooser = seat
-                          Because = None
-                          Wanting = ALine(OnTable(seat, line, placed), elsewhere) }
-                    :: session.Pile },
-            [ Happened(Asked(seat, placed.Card)) ]
+                    Pile =
+                        Ask
+                            { Chooser = seat
+                              Because = None
+                              Wanting = ALine(OnTable(seat, line, placed), many) }
+                        :: session.Pile },
+                [ Happened(Asked(seat, placed.Card)) ]
 
         // A target and a command that do not belong together cannot be built by anything above,
         // so this is unreachable. Answered rather than argued about.
@@ -193,8 +357,21 @@ module Resolving =
             | Opposing _ -> Session.other source.Owner
             | _ -> source.Owner
 
-        let nothingDone session = { session with Did = false }
-        let doneIt session = { session with Did = true }
+        let nothingDone session = { session with Done = 0; Chose = None }
+        let doneIt session = { session with Done = 1 }
+
+        // What a count comes to, asked when the command carrying it resolves rather than when the
+        // card was written - which is the whole point of "that card".
+        let counting =
+            function
+            | Just n -> n
+            | WorthOfChosen -> session.Chose |> Option.map (fun card -> card.Value) |> Option.defaultValue 0
+            | HowManyPlus n -> session.Done + n
+            | PerCards(each, selector) ->
+                if each <= 0 then
+                    0
+                else
+                    List.length (targets actor (Delete selector) source session) / each
 
         match command with
         | Opposing inner ->
@@ -210,9 +387,147 @@ module Resolving =
                 Pile = Run(first, source) :: Gate(rest, source) :: session.Pile },
             []
 
+        // "...in 1 line" - which line is the question, and the command then runs as though it had
+        // been printed on a card standing there. Nothing about the command changes; its `Source`
+        // moves, and every `here` in it moves with it.
+        | InAChosenLine inner ->
+            { session with
+                Pile =
+                    Ask
+                        { Chooser = actor
+                          Because = Some source
+                          Wanting = ALineFor(inner, Lines.all) }
+                    :: session.Pile },
+            [ Happened(Asked(actor, source.Saying)) ]
+
+        // A card out of the hand, and the **line goes first**. With the line settled the command
+        // is `PlayFromHand(face, ThisLine)`, which falls through to the ordinary asking below -
+        // so the second half of this is the same question every other command asks, and nothing
+        // here has to know about legality twice.
+        | PlayFromHand(face, where) when where <> ThisLine ->
+            match layable actor face where source session with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [ only ] ->
+                { session with
+                    Pile = Run(PlayFromHand(face, ThisLine), { source with Line = only }) :: session.Pile },
+                []
+            | many ->
+                { session with
+                    Pile =
+                        Ask
+                            { Chooser = actor
+                              Because = Some source
+                              Wanting = ALineFor(PlayFromHand(face, ThisLine), many) }
+                        :: session.Pile },
+                [ Happened(Asked(actor, source.Saying)) ]
+
+        // "...in 1 other line with 8 or more cards" - the same question, asked of fewer lines. A
+        // line is counted by what it *holds* on this player's side, not by what it is worth.
+        | InAChosenLineOf(atLeast, inner) ->
+            let deep =
+                Lines.all
+                |> List.filter ((<>) source.Line)
+                |> List.filter (fun line -> List.length (Side.stack line (Session.side actor session)) >= atLeast)
+
+            match deep with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            // One line deep enough is not a choice, and a prompt with one button on it wastes
+            // somebody's time - the same reading every other command here uses.
+            | [ only ] ->
+                { session with
+                    Pile = Run(inner, { source with Line = only }) :: session.Pile },
+                []
+            | many ->
+                { session with
+                    Pile =
+                        Ask
+                            { Chooser = actor
+                              Because = Some source
+                              Wanting = ALineFor(inner, many) }
+                        :: session.Pile },
+                [ Happened(Asked(actor, source.Saying)) ]
+
+        // "...in each line where you have a card" - the command once per line they are standing
+        // in, which is a question about the *line* rather than about anything in it.
+        | InEachLineHolding inner ->
+            let holding =
+                Lines.all
+                |> List.filter (fun line -> Side.stack line (Session.side actor session) |> List.isEmpty |> not)
+
+            match holding with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | lines ->
+                { session with
+                    Pile = (lines |> List.map (fun line -> Run(inner, { source with Line = line }))) @ session.Pile },
+                []
+
+        // "1 or more" - one forced, and then offered again for as long as they keep saying yes.
+        // The tally goes on the step rather than in the session, so nothing else can disturb it.
+        | OneOrMore inner ->
+            { session with
+                Pile = Run(inner, source) :: Repeating(inner, source, 0) :: session.Pile },
+            []
+
+        // "For every 2 cards in this line, ..." - the command that many times over, counted when
+        // it resolves. Nought times is a command that does nothing, which is ordinary rather than
+        // wrong.
+        | Times(wanted, inner) ->
+            match counting wanted with
+            | n when n <= 0 -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | n ->
+                { session with
+                    Pile = List.replicate n (Run(inner, source)) @ session.Pile },
+                []
+
+        // A card off the deck and under everything already in the line: it covers nothing, so it
+        // sets off no interrupt, and it is covered by whatever is there.
+        | UnderThis face ->
+            let taken, side, rng = Side.drawnFrom (Session.side actor session) session.Rng
+
+            match taken with
+            | None -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | Some card ->
+                let placed = { Card = card; Face = face }
+
+                doneIt
+                    { session with
+                        Rng = rng
+                        Field =
+                            session.Field
+                            |> Field.withSide actor side
+                            |> Field.update actor (fun side ->
+                                { side with
+                                    Stacks = side.Stacks |> Map.add source.Line (Side.stack source.Line side @ [ placed ]) }) },
+                [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
+
+        // "...in each other line" - the same trick without the question, once per line.
+        | InEachOtherLine inner ->
+            let each =
+                Lines.all
+                |> List.filter ((<>) source.Line)
+                |> List.map (fun line -> Run(inner, { source with Line = line }))
+
+            { session with Pile = each @ session.Pile }, []
+
+        // "...all cards..." - every one of them, and nobody asked. A command that asks which is
+        // a command with a choice in it, and there is no choice in "all".
+        | Every inner ->
+            match targets actor inner source session with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | many ->
+                let session, said =
+                    many
+                    |> List.fold
+                        (fun (session, said) target ->
+                            let session, more = carriedOut source inner target session
+                            session, said @ more)
+                        (session, [])
+
+                doneIt session, said
+
         // "You may X." Not offered at all if X could not have been done anyway.
         | May inner ->
-            match targets actor inner source session.Field with
+            match targets actor inner source session with
             | [] when (match inner with
                        | Draw _
                        | Refreshing' -> false
@@ -228,15 +543,193 @@ module Resolving =
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
 
-        | Draw count ->
+        // A condition on the board rather than on what a command did. Read where the card saying
+        // it is standing: anything underneath it in that stack, and the rest of the sentence runs.
+        | IfCovering rest ->
+            let stack = Side.stack source.Line (Session.side actor session)
+
+            let covering =
+                stack
+                |> List.tryFindIndex (fun placed -> placed.Card = source.Saying)
+                |> Option.map (fun depth -> depth < List.length stack - 1)
+                |> Option.defaultValue false
+
+            if covering then
+                { session with
+                    Pile = (rest |> List.map (fun command -> Run(command, source))) @ session.Pile },
+                []
+            else
+                nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+
+        // "Either X or Y." Which of the two, and not whether - so a half nobody could carry out
+        // is not on offer, one live half is that half done without a word, and neither is a
+        // fizzle. Asked with the same `targets` a `may` uses, which is what keeps the two
+        // agreeing about what "could be done" means.
+        | Either(first, second) ->
+            let live inner =
+                match inner with
+                | Draw _
+                | Refreshing' -> true
+                | _ -> targets actor inner source session |> List.isEmpty |> not
+
+            match live first, live second with
+            | false, false -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | true, false -> resolve first source session
+            | false, true -> resolve second source session
+            | true, true ->
+                { session with
+                    Pile =
+                        Ask
+                            { Chooser = actor
+                              Because = Some source
+                              Wanting = OneOf(first, second) }
+                        :: session.Pile },
+                [ Happened(Asked(actor, source.Saying)) ]
+
+        | Draw wanted ->
+            let count = counting wanted
             let side, rng = Side.drawing count (Session.side actor session) session.Rng
             let drew = List.length side.Hand - List.length (Session.side actor session).Hand
 
             { session with
                 Field = session.Field |> Field.withSide actor side
                 Rng = rng
-                Did = drew > 0 },
+                Done = drew },
             [ Happened(Drew(actor, drew)) ]
+
+        // A card off the top of a deck and onto a line. Nobody has seen it, including the player
+        // playing it - which is what makes it different from every other way a card arrives.
+        | FromDeck(face, where) ->
+            let taken, side, rng = Side.drawnFrom (Session.side actor session) session.Rng
+
+            match taken with
+            | None -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | Some card ->
+                let session =
+                    { session with
+                        Field = session.Field |> Field.withSide actor side
+                        Rng = rng
+                        Done = 1 }
+
+                let placed = { Card = card; Face = face }
+
+                match where with
+                | ThisLine
+                | ToOrFromHere -> laying actor placed source.Line session, [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
+                | AnyLine
+                | OtherLines ->
+                    let offered =
+                        match where with
+                        | OtherLines -> Lines.all |> List.filter ((<>) source.Line)
+                        | _ -> Lines.all
+
+                    // Where it goes is a choice, and the card is in the air until it is made -
+                    // the same shape a shift has, and the same one used to land it.
+                    { session with
+                        Pile =
+                            Ask
+                                { Chooser = actor
+                                  Because = Some source
+                                  Wanting = ALine(OnTable(actor, source.Line, placed), offered) }
+                            :: session.Pile },
+                    [ Happened(Asked(actor, source.Saying)) ]
+
+        // The only place the generator is asked for anything after the deal, and the reason it
+        // is: a card taken at random is a card neither player chose.
+        | TakeAtRandom ->
+            let them = Session.other actor
+
+            match (Session.side them session).Hand with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | hand ->
+                let which, rng = Rng.intBelow (List.length hand) session.Rng
+                let card = List.item which hand
+
+                doneIt
+                    { session with
+                        Field =
+                            session.Field
+                            |> Field.update them (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) })
+                            |> Field.update actor (fun side -> { side with Hand = side.Hand @ [ card ] })
+                        Rng = rng },
+                [ Happened(TookAtRandom(actor, card)) ]
+
+        // Everything about a reveal is that it was said out loud, so the whole of it is a notice
+        // and nothing at all changes on the table.
+        | RevealTheirHand ->
+            let them = Session.other actor
+
+            match (Session.side them session).Hand with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | hand -> doneIt session, [ Happened(ShowedHand(them, hand)) ]
+
+        // The second compile's steal, said by a card instead. Their deck is shuffled from their
+        // discard first if it has run out, and a player with nothing anywhere is taken nothing
+        // from - which is the same three sentences `compileLine` needs and the same code.
+        | TakeTheirTop ->
+            let them = Session.other actor
+            let taken, theirs, rng = Side.drawnFrom (Session.side them session) session.Rng
+
+            match taken with
+            | None -> nothingDone { session with Rng = rng }, [ Happened(TookNothing actor) ]
+            | Some card ->
+                doneIt
+                    { session with
+                        Field =
+                            session.Field
+                            |> Field.withSide them theirs
+                            |> Field.update actor (Side.took card)
+                        Rng = rng
+                        Chose = Some card },
+                [ Happened(Took(actor, card)) ]
+
+        // Three of the six orders, and never the one they are in: a swap moves exactly two.
+        | Swap ->
+            let order = (Session.side actor session).Order
+
+            let swapped =
+                Protocol.orders order
+                |> List.filter (fun each ->
+                    List.zip each order |> List.filter (fun (a, b) -> a <> b) |> List.length = 2)
+
+            match swapped with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | offered ->
+                { session with
+                    Pile =
+                        Ask
+                            { Chooser = actor
+                              Because = Some source
+                              Wanting = AnOrder(actor, offered) }
+                        :: session.Pile },
+                [ Happened(Asked(actor, source.Saying)) ]
+
+        // A rearrangement a card asked for, rather than the one the component forces. Every order
+        // is on offer including the one they are already in - the component says *a different
+        // order*, and these cards say *rearrange*.
+        | Rearrange whose ->
+            let side =
+                match whose with
+                | Theirs -> Session.other actor
+                | Yours
+                | Anyone -> actor
+
+            match Protocol.orders (Session.side side session).Order with
+            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | offered ->
+                { session with
+                    Pile =
+                        Ask
+                            { Chooser = actor
+                              Because = Some source
+                              Wanting = AnOrder(side, offered) }
+                        :: session.Pile },
+                [ Happened(Asked(actor, source.Saying)) ]
+
+        // Remembered rather than asked of the board, because the card that said it will be gone
+        // long before the turn it is about.
+        | StopTheirCompile ->
+            doneIt { session with NoCompile = Some(Session.other actor) }, [ Happened(StoppedCompiling(Session.other actor)) ]
 
         | Refreshing' ->
             let side, rng = Side.refreshed (Session.side actor session) session.Rng
@@ -248,16 +741,19 @@ module Resolving =
             [ Happened(Refreshed(actor, 0, List.length side.Hand)) ]
 
         | Discard
+        | Give
+        | Reveal
         | Delete _
         | Flip _
         | Return _
-        | Shift _
-        | Rehome _ ->
-            match targets actor command source session.Field with
+        | Show _
+        | PlayFromHand _
+        | Shift _ ->
+            match targets actor command source session with
             | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
             | [ only ] ->
-                let session, said = carriedOut command only session
-                doneIt session, said
+                let session, said = carriedOut source command only session
+                doneIt { session with Chose = Some(Target.card only) }, said
             | many ->
                 { session with
                     Pile =
@@ -364,7 +860,82 @@ module Resolving =
         Ask
             { Chooser = seat
               Because = None
-              Wanting = AnOrder(Protocol.orders order |> List.filter ((<>) order)) }
+              Wanting = AnOrder(seat, Protocol.orders order |> List.filter ((<>) order)) }
+
+    /// Everything a seat has listening for that trigger, as steps to push.
+    ///
+    /// **Covered or not.** All four triggers are printed in top boxes, so a card goes on listening
+    /// with something built over it - which is what *"even if this card is covered"* on Spirit-3
+    /// says out loud, and the one place where being covered does not shut a card up.
+    let private listening trigger seat session =
+        Lines.all
+        |> List.collect (fun line ->
+            Side.stack line (Session.side seat session)
+            |> List.filter Placed.isFaceUp
+            |> List.collect (fun placed ->
+                (Printed.on placed.Card).After
+                |> List.filter (fst >> (=) trigger)
+                |> List.collect snd
+                |> List.map (fun command ->
+                    Run(
+                        command,
+                        { Owner = seat
+                          Saying = placed.Card
+                          Line = line }
+                    ))))
+
+    /// What a command just did, read back off what it *said* - and whoever was listening for it.
+    ///
+    /// One place rather than a hook at every effect, because the notices are already the honest
+    /// record of what happened: a deletion that was refused or fizzled did not report one, so
+    /// nothing hears it. The only thing the notices cannot say is *who* deleted - `Deleted` names
+    /// the side the card was sitting in - so the actor is worked out the same way `resolve` works
+    /// it out, from the command and its source.
+    let private heard actor said session =
+        let happened =
+            said
+            |> List.choose (function
+                | Happened event -> Some event
+                | _ -> None)
+
+        [ if happened |> List.exists (function
+              | Drew(who, n) -> who = actor && n > 0
+              | _ -> false) then
+              yield! listening YouDraw actor session
+
+          if happened |> List.exists (function
+              | Deleted _ -> true
+              | _ -> false) then
+              yield! listening YouDelete actor session
+
+          for who in Session.seats do
+              if happened |> List.exists (function
+                  | Discarded(seat, _) -> seat = who
+                  | _ -> false) then
+                  yield! listening TheyDiscard (Session.other who) session ]
+
+    /// One of the two timed boxes, read off everything the player to move has standing face up
+    /// and uncovered, in line order.
+    ///
+    /// The start box and the end box differ in nothing but *when*, so they are one function and
+    /// two steps rather than two functions that would have to be kept saying the same thing.
+    let private timed box session =
+        let seat = session.ToPlay
+        let side = Session.side seat session
+
+        Lines.all
+        |> List.collect (fun line ->
+            match Stack.uncovered (Side.stack line side) with
+            | Some placed when Placed.isFaceUp placed ->
+                box (Printed.on placed.Card)
+                |> List.map (fun command ->
+                    Run(
+                        command,
+                        { Owner = seat
+                          Saying = placed.Card
+                          Line = line }
+                    ))
+            | _ -> [])
 
     /// What a turn begins with: the component, and then whatever has been won - with a
     /// rearrangement wedged in between if the two coincide.
@@ -376,13 +947,20 @@ module Resolving =
         let seat = session.ToPlay
         let session, told = takingControl seat session
 
+        // Stopped from compiling, and the stopping is spent by being used. It is cleared here
+        // whether or not there was anything to compile, because it was for *this* turn and this
+        // turn is the one beginning.
+        if session.NoCompile = Some seat then
+            { session with NoCompile = None }, told
+        else
+
         match Field.winning seat session.Field with
         | [] -> session, told
         | lines when Session.holdsControl seat session ->
             { session with
-                Pile = rearranging seat session :: Compiling lines :: session.Pile },
+                Pile = rearranging seat session :: Escaping lines :: Compiling lines :: session.Pile },
             told @ [ Happened(MustRearrange seat) ]
-        | lines -> { session with Pile = Compiling lines :: session.Pile }, told
+        | lines -> { session with Pile = Escaping lines :: Compiling lines :: session.Pile }, told
 
     // --- the look at the table --------------------------------------------------------------
 
@@ -418,6 +996,18 @@ module Resolving =
 
         fresh, { session with Revealed = now }
 
+    /// A position taken as already read: everything lying face up and uncovered counted as
+    /// *shown* rather than newly shown.
+    ///
+    /// The difference between a board and a history. A card face up on the table has said its
+    /// piece; only a card that has *just* become face up says it again. So a position put
+    /// together card by card - by a check, or by anything else that describes a table rather
+    /// than plays to it - has to say which of those it means, and this is the one that means the
+    /// board is what it is.
+    let asRead session =
+        { session with
+            Revealed = shownNow session.Field |> List.map (fun (_, _, card) -> card) |> Set.ofList }
+
     // --- the loop ------------------------------------------------------------------------------
 
     /// Run the pile down until it is empty or the top of it is a question.
@@ -437,6 +1027,10 @@ module Resolving =
             let pushed =
                 fresh
                 |> List.sortBy (fun (seat, line, _) -> PlayerId.value seat, line)
+                // A silenced line takes every card's voice away. The card is still shown, still
+                // counts, and says nothing - so it goes into the record of what is shown just the
+                // same, and simply puts nothing on the pile.
+                |> List.filter (fun (_, line, _) -> not (Field.silenced line session.Field))
                 |> List.collect (fun (seat, line, card) ->
                     (Printed.on card).Shown
                     |> List.map (fun command ->
@@ -458,13 +1052,29 @@ module Resolving =
 
         | Run(command, source) :: rest ->
             let session, said = resolve command source { session with Pile = rest }
+
+            // The actor, worked out the same way `resolve` works it out - and then whatever on
+            // the board was listening for what just happened goes on top, in front of the rest
+            // of the card's own text. Which is the reading a table would use: a draw that sets
+            // something off sets it off *now*, not after the sentence finishes.
+            let actor =
+                match command with
+                | Opposing _ -> Session.other source.Owner
+                | _ -> source.Owner
+
+            let session =
+                { session with
+                    Pile = heard actor said session @ session.Pile }
+
             walk (fuel - 1) session (told @ said)
 
+        // The start commands go on top of the rest of the beginning, so they resolve before the
+        // control component is taken and before anything is compiled.
         | EndTurn :: rest ->
             walk
                 (fuel - 1)
                 { session with
-                    Pile = BeginTurn :: rest
+                    Pile = Opening :: BeginTurn :: rest
                     ToPlay = Session.other session.ToPlay
                     Turn = session.Turn + 1 }
                 told
@@ -482,13 +1092,60 @@ module Resolving =
                     Field = session.Field |> Field.update seat (Side.played placed line) }
                 (told @ [ Happened(Played(seat, placed, line)) ])
 
+        // And the card turns over, on whatever the interrupt above it left behind. A card that
+        // deleted itself is not there to be turned, which is "still valid, checked when it
+        // resolves" doing the work: the flip finds nothing and nothing is said about it.
+        | Turning(seat, placed, line) :: rest ->
+            let stack = Side.stack line (Session.side seat session)
+
+            if not (List.contains placed stack) then
+                walk (fuel - 1) { session with Pile = rest } told
+            else
+
+            let turned =
+                { placed with
+                    Face =
+                        match placed.Face with
+                        | FaceUp -> FaceDown
+                        | FaceDown -> FaceUp }
+
+            walk
+                (fuel - 1)
+                { session with
+                    Pile = rest
+                    Field = session.Field |> Field.update seat (replacing line placed (fun _ -> turned)) }
+                (told @ [ Happened(Flipped(seat, turned, line)) ])
+
         // The tail of an "if you do", and the whole of what that phrase means: it runs if the
         // command it was waiting under did something, and is thrown away if it did not.
         | Gate(rest, source) :: tail ->
-            if session.Did then
+            if session.Done > 0 then
                 walk (fuel - 1) { session with Pile = (rest |> List.map (fun command -> Run(command, source))) @ tail } told
             else
                 walk (fuel - 1) { session with Pile = tail } (told @ [ Happened(Fizzled(source.Owner, source.Saying)) ])
+
+        // Whatever is standing in those lines and has something to say about being wiped says it
+        // now, before the sweeping. Its own step rather than part of `compiling`, so a card that
+        // stops to ask stops the compile in mid-air - and so this cannot fire twice.
+        | Escaping lines :: rest ->
+            let saying =
+                Field.seats session.Field
+                |> List.collect (fun seat ->
+                    lines
+                    |> List.collect (fun line ->
+                        Side.stack line (Field.side seat session.Field)
+                        |> List.filter Placed.isFaceUp
+                        |> List.collect (fun placed ->
+                            (Printed.on placed.Card).WhenCompiled
+                            |> List.map (fun command ->
+                                Run(
+                                    command,
+                                    { Owner = seat
+                                      Saying = placed.Card
+                                      Line = line }
+                                )))))
+
+            walk (fuel - 1) { session with Pile = saying @ rest } told
 
         | Compiling lines :: rest ->
             let session, said = compiling lines { session with Pile = rest }
@@ -516,10 +1173,18 @@ module Resolving =
         // hand of six asks once instead of asking for a list of one.
         | Trimming :: rest ->
             let seat = session.ToPlay
-            let over = List.length (Session.side seat session).Hand - Deck.HandSize
+
+            let over =
+                if Field.skipsCache seat session.Field then
+                    0
+                else
+                    List.length (Session.side seat session).Hand - Deck.HandSize
 
             if over <= 0 then
-                walk (fuel - 1) { session with Pile = rest } told
+                // The phase is over - which happens every turn, whether or not there was anything
+                // to put down. So this is the one trigger that fires on a *phase* rather than on
+                // something a command reported.
+                walk (fuel - 1) { session with Pile = listening YouClearCache seat session @ rest } told
             else
                 let discarding =
                     Run(
@@ -532,60 +1197,38 @@ module Resolving =
                 // The step goes back on underneath, so a hand of seven comes round twice.
                 walk (fuel - 1) { session with Pile = discarding :: Trimming :: rest } told
 
-        // The end of a turn: everything this player has face up and uncovered says its bottom
-        // command, in line order. On the pile like anything else, so a bottom command that stops
-        // to ask stops the turn from ending - which is the behaviour a table would expect and
-        // would have been a special case anywhere else.
-        | Closing :: rest ->
-            let seat = session.ToPlay
-            let side = Session.side seat session
+        // Another one? Asked for as long as the last attempt did something and there is anything
+        // left to do it to. Saying no is a nothing-done, which is what stops it.
+        | Repeating(inner, source, tally) :: rest ->
+            if session.Done = 0 then
+                walk (fuel - 1) { session with Pile = rest; Done = tally } told
+            else
+                let tally = tally + 1
 
-            let pushed =
-                Lines.all
-                |> List.collect (fun line ->
-                    match Stack.uncovered (Side.stack line side) with
-                    | Some placed when Placed.isFaceUp placed ->
-                        (Printed.on placed.Card).AtEnd
-                        |> List.map (fun command ->
-                            Run(
-                                command,
-                                { Owner = seat
-                                  Saying = placed.Card
-                                  Line = line }
-                            ))
-                    | _ -> [])
+                match targets source.Owner inner source session with
+                | [] -> walk (fuel - 1) { session with Pile = rest; Done = tally } told
+                | _ ->
+                    walk
+                        (fuel - 1)
+                        { session with
+                            Pile =
+                                Ask
+                                    { Chooser = source.Owner
+                                      Because = Some source
+                                      Wanting = Whether inner }
+                                :: Repeating(inner, source, tally) :: rest }
+                        told
 
-            walk (fuel - 1) { session with Pile = pushed @ rest } told
+        // Either end of a turn: everything this player has face up and uncovered says that box,
+        // in line order. On the pile like anything else, so one of them that stops to ask stops
+        // the turn where it stands - which is the behaviour a table would expect and would have
+        // been a special case anywhere else.
+        | Opening :: rest -> walk (fuel - 1) { session with Pile = timed _.AtStart session @ rest } told
+
+        | Closing :: rest -> walk (fuel - 1) { session with Pile = timed _.AtEnd session @ rest } told
 
     /// Settle whatever is waiting, and say what happened.
     let settle session told = walk Runaway session told
-
-    /// A card about to be laid on a line.
-    ///
-    /// If whatever is on top of that line has something to say about being covered, it says it
-    /// **first** - and the card then lands on whatever the saying left behind. A card that flips
-    /// itself face down is covered face down; one that deletes itself is not covered at all,
-    /// because by the time the covering card arrives it is not there.
-    ///
-    /// This is the only thing in the game that happens *during* a move, and it is on the pile
-    /// like everything else: the interrupt goes on top of a `Placing` step, so an interrupt that
-    /// stops to ask stops the card in mid-air until it is answered. Which is what an interrupt is.
-    let laying seat placed line session =
-        let interrupting =
-            match Stack.uncovered (Side.stack line (Session.side seat session)) with
-            | Some under when Placed.isFaceUp under ->
-                (Printed.on under.Card).WhenCovered
-                |> List.map (fun command ->
-                    Run(
-                        command,
-                        { Owner = seat
-                          Saying = under.Card
-                          Line = line }
-                    ))
-            | _ -> []
-
-        { session with
-            Pile = interrupting @ (Placing(seat, placed, line) :: session.Pile) }
 
     /// Put an action's housekeeping at the bottom of the pile: the cache is checked, the end
     /// commands fire, and then the turn is handed on - after everything that action set off has
@@ -629,8 +1272,8 @@ module Resolving =
             match targets |> List.tryFind (fun target -> Target.card target = card) with
             | None -> None, [ Refused(NotOnOffer question.Wanting) ]
             | Some target ->
-                let session, said = carriedOut command target (without session)
-                carryOn { session with Did = true } said
+                let session, said = carriedOut question.Because.Value command target (without session)
+                carryOn { session with Done = 1; Chose = Some(Target.card target) } said
 
         // "You may." Saying no is an answer like any other, and it is the answer that leaves
         // whatever was waiting on it with nothing to do.
@@ -638,31 +1281,38 @@ module Resolving =
             let session, said = resolve inner question.Because.Value (without session)
             carryOn session said
 
-        | Whether _, No -> carryOn { without session with Did = false } [ Happened(Declined question.Chooser) ]
+        | Whether _, No -> carryOn { without session with Done = 0 } [ Happened(Declined question.Chooser) ]
+
+        // Which of two, and either way something happens - so unlike a `no` there is nothing here
+        // that leaves what was waiting behind it with nothing to do.
+        | OneOf(first, _), TheFirst
+        | OneOf(_, first), TheSecond ->
+            let session, said = resolve first question.Because.Value (without session)
+            carryOn session said
 
         | ALine(OnTable(seat, from, placed), offered), TheLine line when List.contains line offered ->
-            // Off the line it was on, and then laid on the new one the same way a play is - so a
-            // card shifted onto something with an interrupt sets that interrupt off too. Covering
-            // is covering, however the card got there.
-            let session =
-                { without session with
-                    Field =
-                        session.Field
-                        |> Field.update seat (fun side ->
-                            { side with
-                                Stacks = side.Stacks |> Map.add from (Side.stack from side |> List.filter ((<>) placed)) }) }
+            let session, said = moving seat placed from line (without session)
+            carryOn session said
 
-            carryOn (laying seat placed line session) [ Happened(Shifted(seat, placed, from, line)) ]
+        // A line picked for a command rather than for a card: the command goes back on the pile
+        // with its source standing in the line that was chosen.
+        | ALineFor(command, offered), TheLine line when List.contains line offered ->
+            let session = without session
+
+            carryOn
+                { session with
+                    Pile = Run(command, { question.Because.Value with Line = line }) :: session.Pile }
+                []
 
         | _ -> None, [ Refused(NotOnOffer question.Wanting) ]
 
     /// An order named as the answer to the rearrangement the control component forced.
     let ordering question order session =
         match question.Wanting with
-        | AnOrder offered when List.contains order offered ->
+        | AnOrder(whose, offered) when List.contains order offered ->
             let session =
                 { without session with
-                    Field = session.Field |> Field.update question.Chooser (Side.arranged order) }
+                    Field = session.Field |> Field.update whose (Side.arranged order) }
 
-            carryOn session [ Happened(Rearranged(question.Chooser, order)) ]
+            carryOn session [ Happened(Rearranged(whose, order)) ]
         | _ -> None, [ Refused(NotOnOffer question.Wanting) ]

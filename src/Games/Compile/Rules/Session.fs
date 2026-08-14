@@ -85,12 +85,28 @@ type Session =
       /// trigger this game has.
       Revealed: Set<Card>
 
-      /// Whether the command that last finished actually did anything.
+      /// Who may not compile when their turn next begins.
       ///
-      /// The whole of what *"if you do"* reads, and it has to be kept rather than worked out
-      /// because a command that stops to ask has not finished doing anything until the answer
-      /// comes back - which may be several moves later.
-      Did: bool
+      /// The one thing in this game that is **remembered** rather than asked of the board. Every
+      /// other standing rule is a card lying face up somewhere, and stops the moment that card is
+      /// covered, flipped or deleted; this one was said once and outlives the card that said it,
+      /// so there is nowhere to read it from but here.
+      NoCompile: PlayerId option
+
+      /// The card the command that last finished landed on, which is what *"that card"* means.
+      ///
+      /// Kept beside `Did` and for the same reason: a command that stopped to ask has not landed
+      /// on anything until the answer comes back, and the command reading it may be several moves
+      /// away by then.
+      Chose: Card option
+
+      /// How many things the command that last finished actually did.
+      ///
+      /// A number rather than a yes: *"if you do"* reads whether it is more than nought, and
+      /// *"the amount discarded"* reads the number itself. It has to be kept rather than worked
+      /// out, because a command that stops to ask has not finished doing anything until the
+      /// answer comes back - which may be several moves later.
+      Done: int
 
       /// The shuffle, and whatever else is drawn later. It travels in the state so that a
       /// game is a value and a seed is a whole game.
@@ -124,7 +140,9 @@ module Session =
           Control = control
           Pile = []
           Revealed = Set.empty
-          Did = false
+          NoCompile = None
+          Chose = None
+          Done = 0
           Rng = Rng.ofSeed seed }
 
     let holdsControl seat session = session.Control = HeldBy seat

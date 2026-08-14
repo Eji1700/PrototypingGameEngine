@@ -5,15 +5,20 @@ decks, the hands, and a card going onto a stack. This is the design for everythi
 what a card is worth, what ends a turn, how a protocol is compiled, how a game is won, what the
 control component does, and how the ninety cards' text actually resolves.
 
-It is a design rather than a diff. Nothing here is written yet, and writing it down first is worth
-it for two things in particular: the [resolution pile](#3-resolving-rules-text), which is the whole
-technical core and is easy to get subtly wrong, and [control](#4-control), which turns out to make
+**It was a design before it was a diff, and all of it is built now.** It has been kept in the tense
+it was written in rather than tidied into the past, because what is worth reading here is the
+*reasoning* — the rulings that turned out to matter, the shapes the ninety cards asked for, and the
+things this document had wrong until the cards arrived. Each row and each section says where it
+landed.
+
+The two that were hardest to get right were the [resolution pile](#3-resolving-rules-text), which is
+the whole technical core and is easy to get subtly wrong, and [control](#4-control), which makes
 compiling non-atomic and is the reason this document exists in this shape rather than the last one.
 
-**The order it should be built in** is [at the bottom](#8-seven-steps). The first three steps give
-a complete, winnable game with no card text at all — which is not a staging convenience, because
-the numbers game underneath Compile is a real game, and having it playable is what makes the
-effects testable.
+**The order it was built in** is [at the bottom](#8-seven-steps). The first three steps give a
+complete, winnable game with no card text at all — which was not a staging convenience, because the
+numbers game underneath Compile is a real game, and having it playable is what made the effects
+testable.
 
 ---
 
@@ -30,8 +35,8 @@ A turn is four beats, and only one of them is a free choice:
 
 ### Values, and the ten
 
-Every card has a value, 0 to 5. A stack's value is the sum of the cards in it. A line is a contest
-between two stacks facing each other across the table.
+Every card has a value, 0 to 6, and a protocol has six of the seven. A stack's value is the sum of
+the cards in it. A line is a contest between two stacks facing each other across the table.
 
 **You compile a line when, at the start of your turn, your stack in it is 10 or more *and* strictly
 more than theirs.** Compiling flips the protocol facing that line to its compiled side and **deletes
@@ -62,11 +67,11 @@ built in that lane, and it takes a card out of their deck and puts it in your ha
 attrition. Do it often enough and they are reshuffling a thinner deck while you are holding cards
 they were counting on.
 
-**This is the rule that breaks the conservation invariant**, and it is worth saying loudly because
-[the tests currently assert the opposite](../../../tests/compile.fsx): today it is *eighteen cards
-each, wherever they are*. Once a card can cross the table it becomes **thirty-six in total, each in
-exactly one place**, and the per-player count is a thing that drifts on purpose. That test has to be
-restated at the same commit as this rule, not after it.
+**This is the rule that broke the conservation invariant**, and it was worth saying loudly because
+[the tests asserted the opposite](../../../tests/compile.fsx): *eighteen cards each, wherever they
+are*. Once a card can cross the table it becomes **thirty-six in total, each in exactly one place**,
+and the per-player count is a thing that drifts on purpose. That test was restated in the same
+commit as this rule and not after it, which is the only way a restated invariant is worth anything.
 
 It also means **a hand can hold a card of a protocol nobody at this table drafted for you** — so
 nothing may check a card in hand against `Side.Order`.
@@ -89,11 +94,12 @@ move — `Field.homeOf card` is a search of two `Order`s and it is total, becaus
 in play if somebody drafted its protocol. That last sentence is a `Faults`-shaped invariant and
 should be checked as one.
 
-So "give it back" is one command that moves a card from wherever it is to its **home** player's
-zone, and it needs no bookkeeping to have been kept along the way:
+So "give it back" needs no bookkeeping to have been kept along the way. **And in the end it needed
+no command either** — reading the ninety turned up no card that says *return this to whoever owns
+it*, and two that say *give 1 card from your hand to your opponent*:
 
 ```fsharp
-| Rehome of Selector * To      // To = Hand | Deck | Discard
+| Give        // Love-1 and Love-3, and the only way a card crosses back
 ```
 
 Worth writing down because the obvious modelling — an `Owner` field on every card — is wrong twice
@@ -428,36 +434,39 @@ set derived from the easy cards will not survive them.
 
 ### A card is one line
 
-Combinators over the selector, so the text reads aloud:
+Combinators over the selector, so the text reads aloud. All six of Fire, as they came out:
 
 ```fsharp
-module Fire =
-    let cards =
-        [ card 0 |> top [ flip anyCard; draw 1 ]
-          card 1 |> top [ delete (theirs |> uncovered) ]
-          card 2 |> middle [ CountsAs 4 ]
-          card 3 |> top [ opposing (discard 1) ] |> bottom [ draw 1 ]
-          card 4 |> top [ oneOf [ [ draw 2 ]; [ delete anyCard ] ] ]
-          card 5 |> middle [ CannotBeDeleted ] ]
+let private fireZero =                                    // "Flip 1 other card. Draw 2 cards."
+    { shown [ Flip(Select.any |> Select.other); Draw(Just 2) ] with
+        WhenCovered = [ Draw(Just 1); Flip(Select.any |> Select.other) ] }
+
+let private fireOne = shown [ IfYouDo(Discard, [ Delete Select.any ]) ]
+let private fireTwo = shown [ IfYouDo(Discard, [ Return Select.any ]) ]
+let private fireThree = atEnd [ IfYouDo(May Discard, [ Flip Select.any ]) ]
+let private fireFour = shown [ IfYouDo(OneOrMore Discard, [ Draw(HowManyPlus 1) ]) ]
+let private theFive = shown [ Discard ]                   // and the 5 of every protocol
 ```
 
 where the selector is a record with a default and one combinator per field:
 
 ```fsharp
-let anyCard = { Whose = Anyone; Where = AnyLine; Face = None; Uncovered = false; Count = 1 }
-let theirs = { anyCard with Whose = Theirs }
-let uncovered s = { s with Uncovered = true }
-let inThisLine s = { s with Where = ThisLine }
-let faceDown s = { s with Face = Some FaceDown }
+let any = { Whose = Anyone; Where = AnyLine; Showing = None; Uncovered = false; Covered = false
+            Worth = []; NotThis = false; JustThis = false; Pick = Whichever }
+
+let theirs selector = { selector with Whose = Theirs }
+let uncovered selector = { selector with Uncovered = true }
+let here selector = { selector with Where = ThisLine }
+let faceDown selector = { selector with Showing = Some FaceDown }
 ```
 
-so `theirs |> uncovered |> inThisLine` is a phrase rather than a record literal. One file per
-protocol, six lines each — `Cards/Fire.fs` and eleven siblings — because twelve files of six are
-reviewable and one file of ninety is not.
+so `any |> theirs |> uncovered |> here` is a phrase rather than a record literal. The plan was one
+file per protocol, six lines each — and one file with a section per protocol is what it turned out
+to want, because half the sections are four lines and the sixth of every protocol is the same card.
 
 ### What `Faults` should hold the pen on
 
-- every protocol has exactly six cards, valued 0 through 5, none twice
+- every protocol has exactly six cards, none of them twice, going without exactly one of the seven numbers
 - no selector asks for more cards than a line can hold
 - every `OneOf` has at least two branches, and no branch is empty
 - a card of value 0 has some text (a 0 with nothing on it is a card nobody would ever play)
@@ -623,31 +632,40 @@ rearrangement, because `BeginTurn` works out every won line, pushes a single `As
 `Compiling` step holding all of them.
 
 **Step 6a is in — the machinery of a card, all three thirds of it.** `Ongoing` and the `Ruling`
-that asks it, `Text.Middle` and `Text.Bottom`, a `Closing` step for the end of a turn, four more
-commands (`Return`, `Shift`, `Rehome`, `Refreshing'`), and `Words.printed`, which writes a card's
-text *out of what the card does*. Four things worth recording:
+that asks it, `Text.Middle` and `Text.Bottom`, a `Closing` step for the end of a turn, three more
+commands (`Return`, `Shift`, `Refreshing'`), and `Words.printed`, which writes a card's text *out
+of what the card does*. Four things worth recording:
 
-- **The generator is the proof, not the convenience.** `Words.printed (card Fire 3)` is
-  `"Flip any face-down card. Draw a card."` — generated. A card cannot say one thing and do
+- **The generator is the proof, not the convenience.** `Words.printed (card Fire 0)` is
+  `"Flip any other card. Draw 2 cards."` — generated. A card cannot say one thing and do
   another, ninety of them cannot drift one at a time, and all three views get the wording
   free. That was the argument for data over functions and it is now load-bearing rather than
   asserted.
 - **`Shift` is the command that asks twice**, and it needed a third `Wanting` — `ALine` — plus
   widening `Move.Choose` from a card to a `Chosen`. That is the shape the design should have had
   from the start; retrofitting it after seventy cards had been typed in would have been miserable.
-- **`Rehome` needs no bookkeeping.** *Home* is derived — `Field.homeOf` searches the two drafted
-  lists — so giving back a card taken by a second compile works without anything having been kept.
+- **Home needs no bookkeeping.** *Home* is derived — `Field.homeOf` searches the two drafted
+  lists — so a card taken by a second compile is simply *held* by whoever took it, and `Give` is
+  what hands it back. An `Owner` field would have been wrong twice over.
 - **The middle command is the expensive third, and the expense is small but scattered.** An
-  `Ongoing` has to be *asked* wherever it bites: `Stack.value` for `CountsAs`, and the target list
-  of `Delete` for `Unbreakable`. `Ruling` is where the asking is written down, and anything added
-  to `Ongoing` has to find its own place to be asked from — which is the one part of this design
-  that does not scale for free.
+  `Ongoing` has to be *asked* wherever it bites: `Field.valueOn` for `FaceDownWorth`, `Field.barred`
+  for the four restrictions. Anything added to `Ongoing` has to find its own place to be asked
+  from — which is the one part of this design that does not scale for free.
 
-**And a test-design finding worth keeping.** Giving cards text broke two control checks, because
-the fixtures were laying cards on the table that now *do something* — a `Darkness-1` placed as scenery
-stopped the game to ask a question in the middle of a check about the control component. The fix
-is a `blank` helper that refuses any card with text on it, so scenery is scenery by construction
-rather than by memory. Every fixture below uses it.
+**And a test-design finding worth keeping**, in three parts, each found the hard way when the real
+ninety arrived and the scenery started talking:
+
+- **Scenery has to be scenery by construction.** A fixture that lays a card on the table lays a
+  card that *does something*. `quiet` refuses any card with a standing rule, an end command or an
+  interrupt; `mute` refuses any card with text at all, and is what a check that turns a card over
+  has to use — because turning a card face up is exactly when a middle box speaks.
+- **A board is not a history.** These fixtures assert a position, and the game's one trigger is
+  *becoming* face up — so without saying so, the first thing the game did with any hand-built
+  position was fire the middle box of every card in it. `Resolving.asRead` is the sentence
+  *this table has already been read*, and every fixture that lays a card down now ends with it.
+- **A card that draws needs a hand with room in it.** Five in hand and two drawn is seven, and the
+  check cache phase then stops the turn to trim — the game being right, in the middle of a check
+  about something else. `onlyHolding` empties the hand first rather than working around it.
 
 ---
 
@@ -669,13 +687,14 @@ step.
 
 ## 9. What the ninety cards turned out to need
 
-[Cards.js](Cards.js) arrived with all of it: **fifteen protocols, six cards each, ninety in
-total.** The protocol list is in the tree now — `Dark` was `Darkness`, and `Apathy`, `Hate` and
-`Love` were missing. That part was mechanical.
+A `Cards.js` arrived with all of it: **fifteen protocols, six cards each, ninety in total.** The
+protocol list is in the tree now — `Dark` was `Darkness`, and `Apathy`, `Hate` and `Love` were
+missing. That part was mechanical.
 
-The text was not. Reading it settles two things this document had wrong, and turns up a great
-deal the command language cannot say yet. **None of the ninety is written in, deliberately** —
-writing them against a language that cannot express them would be worse than not writing them.
+The text was not. Reading it settles two things this document had wrong, and turned up a great
+deal the command language could not say. **Nothing was written in against a language that could
+not express it** — so the fourteen rows below went in first, each one carrying the real card that
+demanded it, and the rest of the ninety follow as transcription.
 
 ### The three boxes are two visibility zones
 
@@ -743,36 +762,73 @@ type Text = (When * Ability) list
 
 That is a bigger change than it looks, because seven of those eleven are **triggers on things the
 game already does** — drawing, deleting, discarding, covering. Each one needs a place in the rules
-to fire from, the way `CountsAs` needed `Stack.value`. The pile can carry them; what has to be
+to fire from, the way `FaceDownWorth` needed `Field.valueOn`. The pile can carry them; what has to be
 built is the hooks.
 
-### What the language cannot say yet
+**Nine of the eleven are in**, and the four `After you ...` ones went in as **one hook rather than
+four**. The pile already produces an honest record of what a command did — a deletion that fizzled
+reported none — so instead of a call-out at every effect, `walk` reads the notices the `Run` just
+returned and asks the board who was listening. The only thing the notices cannot say is *who*
+deleted, because `Deleted` names the side the card was sitting in; the actor is worked out from the
+command and its source, exactly the way `resolve` works it out.
 
-Every one of these appears in the ninety, and none of it is expressible today:
+All four are printed in **top** boxes, so they go on listening with something built over them —
+which is what *"even if this card is covered"* on Spirit-3 says out loud, and the one place in the
+game where being covered does not shut a card up.
+
+`AtStart` is worth a line of its own too, because *when* it fires is
+not a detail. It is `AtEnd`'s mirror — one function reading a different field of `Text`, and two
+steps, `Opening` and `Closing` — but it goes **first in the turn**, ahead of the control component
+and ahead of compiling. A card that deletes at the top of a turn changes what the lines are worth,
+which changes who is leading two of them, which changes what compiles. Written the other way round
+it would have been a plausible-looking card that silently played a turn late.
+
+### What the language could not say
+
+Every one of these appears in the ninety, and none of it was expressible when this list was
+written. **Every row is built**, and the list is kept because what it records is which real card
+demanded each shape — a language grown card by card rather than guessed at up front:
 
 | what a card says | example | what it needs |
 | --- | --- | --- |
 | ~~**optional**~~ **built** | *"You may flip 1 of your face-up covered cards"* | `May`, and a yes-or-no question — 13 cards |
 | ~~**conditional follow-up**~~ **built** | *"Discard 1 card. **If you do**, delete 1 card"* | `IfYouDo`, `Session.Did` and a `Gate` step — 7 cards |
-| **back-reference** | *"Flip 1 card. Shift **that card** to this line"* | a command pointing at what the last one chose |
-| **computed counts** | *"Draw cards equal to that card's value"*, *"the amount discarded plus 1"* | a count that is an expression, not a number |
-| **open-ended input** | *"Discard **1 or more** cards"* | a question with no fixed size |
-| **repetition** | *"**For every 2 cards** in this line, play the top card of your deck"* | a loop over a count read off the board |
-| **superlatives** | *"Delete your **highest value** card"*, *"the lowest value covered card"* | ordering a selector, not just filtering it |
-| **value predicates** | *"Delete a card **with a value of 0 or 1**"* | a selector that reads value |
-| **whole-line targets** | *"Delete **all** cards in 1 line with values of 1 or 2"*, *"1 card from **each other** line"* | selectors that pick a *line* and then everything in it |
-| **deck plays** | *"play the top card of your deck face-down"*, *"**your opponent** plays the top card of their deck"* | a play that comes off a deck rather than a hand |
-| **value modifiers** | *"your total in this line is increased by 1 for each face-down card"*, *"reduced by 2"*, *"all face-down cards in this stack have a value of 4"* | `Stack.value` consulting the whole field, not one card |
-| **restrictions** | *"Your opponent cannot play cards face-down in this line"*, *"You can play cards in any line"*, *"Ignore all middle commands in this line"* | the legality of a *move* consulting the board — a hook in `Turn`, not in `Resolving` |
-| **stopping a compile** | *"Your opponent cannot compile next turn"* | a standing rule that outlives the turn it was made on |
-| **under, not on** | *"play the top card of your deck face-down **under** this card"* | a stack that can be inserted into rather than pushed onto |
+| ~~**back-reference**~~ **built** | *"Flip 1 card. Draw cards equal to **that card`s** value"* | `Session.Chose`, the sibling of `Did` |
+| ~~**computed counts**~~ **built** | *"Draw cards equal to that card`s value"*, *"the amount discarded plus 1"* | `Count`, which reads `Chose` for one and the `Repeating` tally for the other |
+| ~~**open-ended input**~~ **built** | *"Discard 1 or more cards. Draw the amount discarded plus 1."* | `OneOrMore` and a `Repeating` step, and `Did: bool` became `Done: int` |
+| ~~**repetition**~~ **built** | *"For every 2 cards in this line, ..."* | `Times of Count * Command`, with `PerCards` counting off the board |
+| ~~**superlatives**~~ **built** | *"Delete your **highest value** card"* | `Pick` on the selector: narrows to the extreme, ties survive |
+| ~~**value predicates**~~ **built** | *"Delete a card **with a value of 0 or 1**"* | `Worth` on the selector - and it reads what a card is worth *on the table* |
+| ~~**whole-line targets**~~ **built** | *"Delete all cards in 1 line"*, *"1 card from each other line"* | `InAChosenLine` and `InEachOtherLine`, which move the command`s source rather than teach the selector a trick |
+| ~~**a named destination**~~ **built** | *"Shift 1 face-down card **to this line**"* | `Shift of Selector * Where` — the selector says where a card comes *from* and the `Where` says where it goes, and a shift that says where asks nothing |
+| ~~**pointing at that card**~~ **built** | *"Flip 1 card. Shift **that card** to this line"* | `Select.thatCard`, the one narrowing a selector has that the table cannot answer — so `onTable` reads the game rather than the field |
+| ~~**either/or**~~ **built** | *"Either discard 1 card **or** flip this card"* | `Either`, a `OneOf` question and two answers of its own. Not `May`: there is no third answer, and a half nobody could carry out is not offered rather than declined |
+| ~~**a card asking about itself**~~ **built** | *"**If this card is covering a card**, draw 1 card"* | `IfCovering` — a condition on the board rather than on what a command did, which is what makes it a different thing from `IfYouDo` |
+| ~~**a rule a phase asks**~~ **built** | *"Skip your check cache phase"* | `SkipsCacheCheck`, the fifth place a standing rule has to be asked from — and the first that is a *phase* rather than a value or a move |
+| ~~**a shift with both ends said**~~ **built** | *"Shift 1 card **either to or from** this line"* | `ToOrFromHere` — the only `Where` that is a rule about the two ends together, so which half applies is settled by where the card you point at happens to be |
+| ~~**a question about a line**~~ **built** | *"1 other line **with 8 or more cards**"*, *"each line **where you have a card**"* | `InAChosenLineOf` and `InEachLineHolding`. Every earlier line command took *all* the lines or *all but this one*; these two ask something about a line before pointing a command into it — and Metal-3 is the only card that counts what a line **holds** rather than what it is worth |
+| ~~**deck plays**~~ **built** | *"play the top card of your deck face-down in another line"* | `FromDeck`, which lands through the same `laying` a play does |
+| ~~**value modifiers**~~ **built** | all three of them | `Field.valueOn seat line field`, and `Side.valueOn` **deleted** so nothing can ask the half-question |
+| ~~**restrictions**~~ **mostly built** | *"Your opponent cannot play cards face-down in this line"*, *"You can play cards in any line"* | `Field.barred`, asked by `Turn` and by the machine. *"Ignore all middle commands"* is not built |
+| ~~**stopping a compile**~~ **built** | *"Your opponent cannot compile next turn"* | `Session.NoCompile` - the only thing in the game **remembered** rather than read off the board |
+| ~~**under, not on**~~ **built** | *"...face-down **under** this card"* | `UnderThis` - the only way a card arrives at the bottom, covering nothing |
+| ~~**playing out of the hand**~~ **built** | *"Play 1 card face-down in another line"*, *"Play 1 card"* | `PlayFromHand`, which asks the **line first** so the second half is the ordinary legality question. *"Play 1 card"* with no face named is `Either` of the two |
+| ~~**interrupting a flip**~~ **built** | *"When this card would be covered **or flipped**"* | `Turning`, the twin of `Placing` - so covering and flipping are the pair they always were, and a card may speak before either |
+| ~~**deleted by compiling**~~ **built** | *"When this card would be deleted by compiling: shift this card"* | an `Escaping` step ahead of `Compiling`, which is the one interrupt that fires on something **no card asked for** |
 
-And four keywords with no command: **reveal** (4 cards), **give** (2), **take** (1), **swap** (1).
+And four keywords that wanted a command of their own, all four now written: **reveal** (4 cards),
+**give** (2), **take** (1), **swap** (1). Three more turned up in the reading and went in the same
+way — **rearrange**, which needed `AnOrder` to learn *whose* protocols move because Psychic-2 makes
+you reorder *theirs*; **draw the top card of their deck**, which is the second compile's steal said
+by a card; and **reveal a card on the table**, which changes nothing and is worth having anyway
+because it sets what the rest of the sentence points at.
 
-The good news is what does *not* change: the pile, the look-again, `Session.active`, the two
-questions and the answering all carry every one of these. What grows is the vocabulary and the
-number of places a standing rule has to be asked from — which is the cost this document already
-named as the expensive one, now with a number on it.
+The good news is what did *not* change: the pile, the look-again and `Session.active` carried every
+one of these. The **questions** did grow — `ALine`, `ALineFor`, `Whether` and now `OneOf`, and two
+more answers with it — but each one arrived as a case rather than as a mechanism, and the walk down
+the pile never learned about any of them. What grew is the vocabulary and the
+number of places a standing rule is asked from — which is the cost this document named as the
+expensive one, and it came in at the price quoted.
 
 ### The cache
 
@@ -797,10 +853,13 @@ round; it is one line if it is the other.
 
 **All four are answered and built** — [the cache is the hand](#the-cache), [the boxes are
 visibility zones](#the-three-boxes-are-two-visibility-zones), `You may` / `If you do` below, and
-[the interrupt](#the-interrupt). Ten of the ninety are in, and every one of them is a real card
-rather than a placeholder.
+[the interrupt](#the-interrupt). **All ninety are in**, and every one of them says what the real
+card says.
 
-What is left is the language, not the rulings.
+**And `Cards.js` is gone**, in the commit that got there. It was the source all ninety were
+transcribed from, and it stayed exactly as long as it held cards that existed nowhere else here.
+Two copies of the same ninety cards are two things that can disagree, and only one of them is the
+one the game plays.
 
 ### You may, and if you do
 
@@ -851,9 +910,156 @@ knowing that.
 `Resolving.laying` is what both the play and the second half of a shift go through — which was one
 line at each call site, and would have been a rule quietly missing from one of them otherwise.
 
-Everything now goes in protocol by protocol, hardest first — the order to build in is [the table
-above](#what-the-language-cannot-say-yet), roughly top to bottom, because each row is a thing
-several cards want and none of them is a card.
+### What a line is worth
+
+*Built, and it was the expensive row exactly as advertised.*
+
+`Stack.value cards` could answer what a stack came to by looking at the cards in it. It cannot any
+more: a card in the stack may say what the face-down cards around it are worth, may add to the
+total outright or once per face-down card beside it, and **a card in the stack facing it across
+the table may take away from it.**
+
+So the question moved up a layer to `Field.valueOn seat line field` — and **`Side.valueOn` was
+deleted rather than left alone**, which is the part worth recording. Leaving it would have left a
+function that answers the same question wrongly, sitting exactly where somebody would find it. The
+compiler then listed every caller: the compile check, the control check, the board, and the tests.
+Four places, all of them shallow, and none of them could have been found by reading.
+
+The floor at nothing is an assumption. *"Reduced by 2"* can take a stack below zero and no card
+asks what that would mean, so a total is never less than nothing.
+
+### Cards off a deck, and cards that change hands
+
+*Built.* `FromDeck` plays the top card of a deck onto a line — **a card neither player has seen**,
+which is what makes it different from every other way a card arrives. Where it goes is a question
+when the card does not say, and it lands through the same `laying` a play does, so it sets off any
+interrupt waiting under it.
+
+`Give` and `TakeAtRandom` are the pair on one card, and the joke of that card is the asymmetry:
+taken at random and given by choice. `TakeAtRandom` is also the only thing in the game that asks
+the generator for anything after the deal, which is exactly why it is *random* rather than chosen.
+
+**Love-1 is the card worth looking at**, because every piece of it was built for something else:
+
+```fsharp
+{ blank with AtEnd = [ IfYouDo(May Give, [ Draw 2 ]) ] }
+```
+
+The end-of-turn box, the offer, the condition behind it, and the giving — four separate pieces of
+machinery, and the card is one line. That is the test [this file exists to
+pass](Rules/Printed.fs), and it is the first card that passes it without anything being added.
+
+### Cards that shut a line
+
+*Built.* Four cards say what the other player may not do — *"cannot play cards in this line"*,
+*"cannot play face-down in this line"*, *"can only play face-down"* — and one says what its own
+player **may**: *"You can play cards in any line."*
+
+These are the first standing rules asked when somebody tries to **move** rather than when something
+is counted, which is the fourth place in the rules an `Ongoing` has to be remembered. `Field.barred`
+answers it, and it is asked *before* the protocol check, because being told a line is shut is more
+use than being told the wrong protocol is on it.
+
+**And the machine broke, which was the useful part.** The rival builds its move out of what it
+believes is legal; it did not know about `barred`, so it picked shut lines, was refused, and the
+game stalled — precisely what the comment in its own code warns about. The fix is that the rival's
+list of moves is now filtered through the same `Field.barred` a person's move is checked against.
+
+That is worth stating as a rule of this codebase: **a legality test that only `Turn` consults is
+half a test.** Anything that chooses a move has to be able to ask the same question, and the answer
+has to come from the same place — which is why `barred` returns a `Barred` rather than a refusal,
+because a refusal is what a *player* is told and this is what the *field* answers.
+
+### Saying where, rather than saying which
+
+*Built, and it is the cheapest row in the table.* *"Delete all cards in 1 line"* and *"delete 1
+card from each other line"* look like they want selectors that pick a line and then everything in
+it. They do not. **They move the command's `Source`.**
+
+A command already carries where it is being said from, because `ThisLine` needs it. So running a
+command with its source standing in another line makes every `here` in it mean *that* line, and
+nothing about the command or the selector changes at all:
+
+```fsharp
+| InEachOtherLine inner ->
+    Lines.all
+    |> List.filter ((<>) source.Line)
+    |> List.map (fun line -> Run(inner, { source with Line = line }))
+```
+
+`InAChosenLine` is the same with a question in front of it. Water-1 got shorter as a side effect —
+*"play the top card of your deck face-down in each other line"* was two `FromDeck` commands and is
+now one, said once and run twice.
+
+### The rule that subtracts, and the one that is remembered
+
+*Both built, and they are the two odd ones out.*
+
+**`Silence`** — *"Ignore all middle commands of cards in this line"* — is the only rule in the game
+that **takes something away**. Everything else adds: a value, a restriction, a trigger. This takes
+every card in the line its voice, both sides of it, while leaving them standing and counting
+exactly as before. It is asked from the one place a card's text is set off, and nowhere else,
+because a silence is about what a card *says* rather than what it is worth or whether it can be
+deleted.
+
+**`Session.NoCompile`** — *"Your opponent cannot compile next turn"* — is the only thing in this
+game that has to be **remembered**. Every other standing rule is a card lying face up somewhere and
+stops the moment that card is covered, flipped or deleted; this one outlives the card that said it,
+so there is nowhere to read it from but the session. It is spent by the turn it was for, whether or
+not there was anything to stop.
+
+That contrast is worth keeping, because it is the only exception to a rule this design has held
+everywhere else: **the board is the state.** Nine rules out of ten need no memory because the card
+saying them is sitting there to be read.
+
+### A question with no fixed size
+
+*Built, and it was the last row.* *"Discard 1 or more cards"* is the only question in the game that
+does not know how big it is: one discard is forced, and then it is offered again for as long as
+there is a hand left and the player keeps saying yes.
+
+**And it is why what the game remembers about the last command is a number rather than a yes.**
+`Did: bool` became `Done: int` — *"if you do"* reads whether it is more than nought, and *"the
+amount discarded"* reads the number itself. One field doing both jobs, because they are the same
+question asked to different precision.
+
+The tally rides on the `Repeating` step rather than in the session, so nothing that happens in
+between can disturb it — a discard that asks which card sets `Done` to one and the step adds it up.
+And the card wraps the whole thing in an *if you do*, so an empty hand does none of it: **nought is
+not one or more.**
+
+### What is left
+
+**Every row is built, and all ninety cards are written.** The last two shapes the ninety asked for
+were Speed-2`s trigger on being deleted by compiling — the one interrupt that fires on something no
+card asked for — and playing a card out of the **hand** as an effect rather than as the turn`s
+action, which Darkness-3 and Speed-0 wanted.
+
+And the last of all of it was **Metal-6**`s *"covered **or** flipped"*, which turned covering and
+flipping into the pair they always were: two things that happen to a card where it lies, each held
+back on the pile so the card can speak first. `Placing` got a twin, `Turning`, and every flip in
+the game now goes through it.
+
+**And reading the real ninety cost seven cards their text.** An earlier draft of this file carried
+invented ones, written to exercise machinery before the data arrived — a card that counts as
+nothing, a card nothing may delete, a command that sends a card home. None of the three is printed
+on any of the ninety, so all three came out along with the cards that carried them, and the real
+cards that *do* say those things moved into their slots. That is the cost of writing cards before
+you have the cards, and it is worth the note: **vocabulary with no card behind it is a rule this
+game does not have, and it reads exactly like one it does.**
+
+**The last of the fourteen shapes was the open-ended one:**
+
+> **Fire-4:** *"Discard 1 or more cards. Draw the amount discarded plus 1."*
+> **Plague-2:** *"Discard 1 or more cards. Your opponent discards the amount discarded plus 1."*
+
+Two halves, and both are in. *"One or more"* is `OneOrMore`, which runs its command once and then
+leaves a `Repeating` step behind to keep asking *another?* until the answer is no or there is
+nothing left to answer with. *"The amount discarded"* is `HowManyPlus`, which reads the tally the
+`Repeating` step leaves in `Done` — and that is the change that turned `Did: bool` into
+`Done: int`, with `> 0` meaning what `Did` used to mean, across `Gate` and every `doneIt`.
+
+Everything else goes in protocol by protocol.
 
 **The arranging is now simultaneous and hidden, and that one is built** — the protocols go down
 face down and turn over together, kept back in the log, on the board and in the record. It was the
@@ -862,7 +1068,7 @@ this list. Everything else here waits for step 4.
 
 Settled by what you have said, and written in above: **compiling is mandatory**; **compiling an
 already-compiled protocol takes the top card of their deck**; **a stolen card is yours until an
-effect gives it back**, which is `Rehome` and needs no `Owner` field; **face-up may go on either
+effect gives it back**, which is `Give` and needs no `Owner` field; **face-up may go on either
 protocol facing a line, for every card**; **rearranging moves the protocol cards only, and the
 stacks stay where they are**; **flipping a card face-up fires its text**, which makes becoming
 face-up the only trigger in the game; and **a card's text is a list of commands rather than one

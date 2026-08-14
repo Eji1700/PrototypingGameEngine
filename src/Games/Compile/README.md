@@ -7,22 +7,22 @@ of them took. The fourth of the games here, and the engine it runs on is
 
 ```powershell
 dotnet run -- compile play 2
-dotnet run -- compile play 2 --rival easy   # the seat opposite, played by the program
+dotnet run -- compile play 2 --rival medium # the seat opposite, played by the program
+dotnet run -- compile play 2 --rival easy   # ...or by a machine that only plays legally
 dotnet run -- compile serve 2               # the same table in a browser, with buttons
 
 dotnet run -- compile-control play 2        # the same game, with the optional rule in it
 ```
 
-**This game is unfinished, on purpose.** What is here is the table: the draft, the protocols
-against the lines, the decks, the hands, and a card going onto a stack. What a card *does*, what
-a player is trying to do with one, and how a game is won have not been written yet - so there
-is no win condition in the code and there is no invented one either. See [What is not
-here](#what-is-not-here), which is the honest list.
+**The game is whole.** The draft, the protocols against the lines, the decks and the hands; the
+values and the ten, compiling, refreshing, the check cache phase, and winning; the optional control
+component; and **all ninety cards, every one saying the whole of what the real card says**. What is
+left is [one thing](#what-is-not-here), and it is not a rule.
 
-**The design for the rest of it is [DESIGN.md](DESIGN.md)** - the values and the ten, face-down
-play, compiling, refresh, the control component, how a card's rules text resolves, and the seven
-steps it should be built in. The first three of those steps give a game that can be won without a
-single card effect written, which is the point of that order.
+**[DESIGN.md](DESIGN.md) is how it got here** - the resolution pile, the fourteen shapes the ninety
+cards asked the command language for, and the order it was built in. It is worth reading for the
+rulings rather than for the plan: every one of them is now a line of code, and the document says
+which line and why.
 
 ## Playing
 
@@ -126,7 +126,7 @@ text in front of whatever was still waiting.
 
 ```
 A CARD IS ASKING
-  Fire-3 asks you to pick a card to turn over.
+  Fire-0 asks you to pick a card to turn over.
             Water-3          |          Metal-0
    yours, line 1, face down  | theirs, line 2, face down
             choose           |          choose
@@ -141,25 +141,30 @@ A card has **three** commands, by where they sit on it:
 
 | | when | what it is |
 | --- | --- | --- |
-| **top** | the moment it becomes face up | a one-off: delete, flip, draw, shift |
-| **middle** | continuously, while it is face up and uncovered | a rule change: *this counts as 0*, *this cannot be deleted* |
-| **bottom** | at the end of your turn, while it is face up and uncovered | a one-off that keeps happening |
+| **top** | while it is face up, **covered or not** | a standing rule, or a trigger that listens |
+| **middle** | the moment it becomes *shown* - played face up, flipped face up, or uncovered again | a one-off: delete, flip, draw, shift |
+| **bottom** | while it is face up and **uncovered** | a standing rule, and the start and end of your turn |
+
+Which box a line sits in is the whole of what covering decides: the same sentence in the top box
+survives being built on and in the bottom box does not.
 
 **A card's text is written out of what the card does**, rather than typed beside it - so a card
-cannot say one thing and do another. `what fire-3` reads it at length, and a `*` on the board
-means there is something to read.
+cannot say one thing and do another, and ninety of them cannot drift one at a time. `what fire-0`
+reads it at length.
 
 ```
-> what fire-3
-  Flip any face-down card. Draw a card.
+> what fire-0
+FIRE-0
+  Flip any other card. Draw 2 cards.
+  When this card would be covered, first: Draw a card. Flip any other card.
 
-> what water-3
-  Water-3 has nothing printed on it. It is worth 3 face up and 2 face down.
+> what speed-2
+SPEED-2
+  When this card would be deleted by compiling, first: Shift this card to another line.
 ```
 
-**Seven cards carry text so far, and they are placeholders.** [The rest are
-blank](#what-is-not-here), on purpose: the machinery that resolves them went in first, and the
-seven were chosen to exercise every shape it has rather than because they are right.
+**All ninety carry text**, which is why the board marks none of them: a star beside the cards with
+something to read would be a star beside all of them.
 
 **Compiling.** At the start of your turn, every line where your stack is **10 or more and
 strictly more than theirs** is compiled - and it is not optional. The protocol facing that line
@@ -220,7 +225,8 @@ actually looks like from where the reader is sitting.
 - Fifteen protocols, no duplicates, drafted 1-2-2-1 - three each.
 - Three lines, one per protocol drafted. Each player chooses which of theirs faces which line,
   face down, and both orders are turned over at once.
-- A deck is 18 cards: three protocols of six, valued 0 to 5. Five are drawn to open.
+- A deck is 18 cards: three protocols of six. Card values run 0 to 6, and every protocol goes
+  without exactly one of the seven. Five are drawn to open.
 - A turn is one action: play a card, or refresh. Then the turn passes.
 - A card is played from hand onto one of that player's three stacks, face up or face down.
 - Refreshing puts the whole hand in the discard and draws five. It costs the turn, and with an
@@ -267,29 +273,59 @@ laying them out together.
 Everything else is on the table. The draft is announced, because a protocol taken is taken from
 both of them, and every stack is face up in front of everybody.
 
+## The seat opposite
+
+Two machines, and they differ by something a player can see.
+
+| | what it does |
+| --- | --- |
+| `easy` | drafts, arranges and plays at random - a seat filled, not an opponent |
+| `medium` | counts |
+
+**What `medium` counts** is the arithmetic the board already shows you, and nothing else:
+
+- **at the draft**, the protocol worth the most - the six cards it brings add up to something, and
+  that is the one thing about a protocol you can judge without reading ninety cards. Which is why
+  Love, Gravity and Metal go first: [they carry a 6](#the-files);
+- **at a play**, every card in hand against every legal place for it, at once - a machine that
+  picked a card first and a place for it second could only ever find the best place for an
+  arbitrary card;
+- **and what it is spending**: a five face down is three thrown away, so the 0s go down and the 5s
+  go up. A line it can take to ten and ahead outweighs everything else, because that line compiles
+  the moment its turn comes round.
+
+**What it does not do is read the cards.** It will play a Metal-1 as a one without noticing that
+the card would also stop you compiling. That is the whole distance between `medium` and a `hard`
+worth the name, and it is ninety cards wide.
+
+Ties are broken by the generator rather than by list order, which matters more than it sounds: a
+machine that always took the first of an equal set would draft the same three protocols every game
+and play the same line every turn.
+
 ## What is not here
 
 Written down rather than left to be discovered:
 
-- **What a card does.** A card is a protocol and a number. [Cards.fs](Rules/Cards.fs) is where
-  an effect goes, and it is one field on one record - the six numbers are the placeholder,
-  and they are deliberately the whole of it.
-- **Sixty-five of the ninety cards** - and the seven that are written are placeholders that
-  should be assumed wrong. [Printed.fs](Rules/Printed.fs) is the lookup they hang off and says
-  which seven and why: between them they exercise a command that asks its own player, one that
-  stops the game on the other, one that asks twice, a standing rule, an end-of-turn command, and
-  a card given back to whoever drafted it.
+- **A machine that reads the cards.** `medium` counts and does not read: it knows what a line is
+  worth, what it takes to compile one, and what a card is worth face up against face down - and
+  nothing at all about what any of the ninety *do*. So it will happily play a Metal-1 as a one when
+  the card would also stop you compiling. That is the next machine, and it is a real one: a `hard`
+  worth the name has to weigh card text, which means weighing ninety cards.
 
-  **This is the one thing left that cannot be worked out** - a card's rules text is data, and
-  [DESIGN.md](DESIGN.md#what-step-6b-needs-from-you) says what would make writing it quick.
-- **A machine worth playing.** There is one, it is legal, and it is random - but it does now
-  play games out to a win, which is what makes writing a better one possible: there is finally
-  something to be better *at*, and a baseline to be better than.
+  **It is the only gap left.** Every rule is in, and all ninety cards say the whole of what they
+  are printed to say.
 
-**A game is playable and winnable as it stands.** Two machines at `easy` finish every deal they
-are given, both seats win their share, and the record replays to the same position - which is
-the whole of the game underneath the cards, and the thing all ninety of them will be
-written against.
+**A game is playable and winnable as it stands**, cards and all. Two machines finish every deal
+they are given and the record replays to the same position - and **`medium` beats `easy` about
+nineteen times in twenty from either seat**, which is the only honest way to ask whether a word
+like that means anything.
+
+**Two `medium` machines are not even, though**, and it is worth writing down: the first seat takes
+about two thirds. A machine that counts and does not read plays this as a pure race to ten, and in
+a pure race the player who moves first arrives first - so the figure is at least as much a fact
+about *that machine* as about the game. The 1-2-2-1 draft balances the **draft**; nothing in the
+rules balances the turn order, and a person redresses it with card text. It would be worth
+measuring again against a machine that reads the cards.
 
 **The invariant the tests hold to had to be restated, and this is where.** It used to be
 *eighteen cards each, wherever they are* - deck plus hand plus discard plus everything on the
@@ -309,7 +345,7 @@ and nothing from the table layer; `Reading` is how it is read.
 | [Protocols.fs](Rules/Protocols.fs) | The fifteen, and the words for them |
 | [Cards.fs](Rules/Cards.fs) | A card, which way up it lies and what that makes it worth, and a deck shuffled out of three protocols |
 | [Effects.fs](Rules/Effects.fs) | What rules text is made of - as data rather than functions - and what the pile is a list of |
-| [Printed.fs](Rules/Printed.fs) | What is on each of the ninety. Two of them, so far |
+| [Printed.fs](Rules/Printed.fs) | What is on each of the ninety - all of them, and this file is the only copy |
 | [Field.fs](Rules/Field.fs) | The lines, what a stack is worth, one player's half of the table, and the question no one half can answer: where a card may go face up |
 | [Drafting.fs](Rules/Drafting.fs) | Whose pick it is, which is a list of six and nothing else |
 | [Session.fs](Rules/Session.fs) | The stages, the pile, and whose turn it is - which the pile answers first |
@@ -317,11 +353,37 @@ and nothing from the table layer; `Reading` is how it is read.
 | [Resolving.fs](Rules/Resolving.fs) | The pile: one command at a time, with a look at the table between every two |
 | [Turn.fs](Rules/Turn.fs) | `Move`, and which moves the rules will take, when |
 | [Words.fs](Rules/Words.fs) | Every string a player reads |
-| [Rival.fs](Rules/Rival.fs) | A seat played by the program, through all three stages |
+| [Rival.fs](Rules/Rival.fs) | Two seats the program can play: one at random, and one that counts |
 | [Ink.fs](Reading/Ink.fs) | Two colours: one per side of the table |
 | [Parse.fs](Reading/Parse.fs) | Three verbs, each with a short form |
 | [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), which `Readers` then draws three ways |
 | [Offer.fs](Offer.fs) | Both seams filled in - **twice**, out of one function: the game, and the game with the control component |
+
+**There used to be a fifteenth file**, and its going is worth a line. `Cards.js` was the ninety
+cards as they are really printed - not F#, not built, and the source everything in
+[Printed.fs](Rules/Printed.fs) was transcribed from. It stayed while it was the only copy of cards
+that had not been typed in yet, and it went in the commit that took the count to ninety. Two copies
+of the same ninety cards are two things that can disagree, and only one of them is the one the game
+plays.
+
+**Six cards apiece, and not the same six.** There are **seven** numbers a card can carry, and every
+protocol goes without exactly one of them. Twelve go without the 6 and run 0 to 5. Three carry a 6
+and give up a number lower down to pay for it:
+
+| | has | goes without | and the six says |
+| --- | --- | --- | --- |
+| **Gravity** | 0, 1, 2, 4, 5, **6** | 3 | *"Your opponent plays the top card of their deck face-down in this line."* |
+| **Love** | 1, 2, 3, 4, 5, **6** | 0 | *"Your opponent draws 2 cards."* |
+| **Metal** | 0, 1, 2, 3, 5, **6** | 4 | *"When this card would be covered or flipped: First, delete this card."* |
+
+So [Cards.fs](Rules/Cards.fs) states the rule as **which number a protocol is missing** rather than
+as a list of what it has - `Card.without`, one line and three exceptions. That is worth more than a
+card list, because `gravity-3` is then not a card: a player who types it is told so rather than
+handed something nobody's deck contains, and `Faults` can say whether every protocol still comes to
+six.
+
+A six is most of a compile on its own, which is why all three of them hand something to the
+opponent or refuse to be built on.
 
 **What this game leant on that the others did not** is the stage. A game of this is three games
 in a row - a draft, a laying-out, then play - with different moves and three different senses

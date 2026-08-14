@@ -12,21 +12,36 @@ type Card = { Protocol: Protocol; Value: int }
 
 module Card =
 
-    /// The numbers on a protocol's six cards.
-    ///
-    /// This is the one thing about a card that is not yet the game's own: what each card
-    /// *does* is written on it, and none of that has been said yet. Six numbers is what a
-    /// deck needs to be dealt, shuffled, held and played, and it is deliberately the whole of
-    /// what is here - so that adding an effect is adding a field to this file rather than
-    /// unpicking one.
-    let values = [ 0..5 ]
+    /// The seven numbers a card can carry.
+    let values = [ 0..6 ]
 
-    /// How many cards a protocol has.
-    let PerProtocol = List.length values
+    /// The one of the seven each protocol goes without.
+    ///
+    /// **Every protocol has six cards, and every protocol skips exactly one number.** Twelve of
+    /// the fifteen skip the 6 and run 0 to 5. Three of them carry a 6 instead and give up a
+    /// number lower down to pay for it - which is why this is a rule about what a protocol is
+    /// missing rather than a list of what it has.
+    ///
+    /// It matters more than a card list would: `Gravity-3` is not a card, and a player who types
+    /// it should be told so rather than handed a card that is not in anybody's deck.
+    let private without =
+        function
+        | Gravity -> 3
+        | Love -> 0
+        | Metal -> 4
+        | _ -> 6
 
     /// A protocol's six, lowest first.
     let inProtocol protocol =
-        values |> List.map (fun value -> { Protocol = protocol; Value = value })
+        values
+        |> List.filter ((<>) (without protocol))
+        |> List.map (fun value -> { Protocol = protocol; Value = value })
+
+    /// How many cards a protocol has - six, whichever six they are.
+    let PerProtocol = List.length values - 1
+
+    /// Whether that number is printed in that protocol at all.
+    let exists card = card.Value <> without card.Protocol && List.contains card.Value values
 
     /// What a card is called, which is also what a player types for it.
     let name card = $"{Protocol.name card.Protocol}-{card.Value}"
@@ -40,7 +55,8 @@ module Card =
         match word.Split '-' with
         | [| said; number |] ->
             match Protocol.byName said, System.Int32.TryParse number with
-            | Some protocol, (true, value) when List.contains value values -> Some { Protocol = protocol; Value = value }
+            | Some protocol, (true, value) when exists { Protocol = protocol; Value = value } ->
+                Some { Protocol = protocol; Value = value }
             | _ -> None
         | _ -> None
 

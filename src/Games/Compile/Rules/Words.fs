@@ -74,42 +74,135 @@ module Words =
             | Theirs -> "their"
             | Anyone -> "any"
 
+        let best =
+            match selector.Pick with
+            | Whichever -> ""
+            | Highest -> " highest-value"
+            | Lowest -> " lowest-value"
+
         let way =
             match selector.Showing with
             | Some FaceUp -> " face-up"
             | Some FaceDown -> " face-down"
             | None -> ""
 
-        let covered = if selector.Uncovered then " uncovered" else ""
+        let lying =
+            match selector.Uncovered, selector.Covered with
+            | true, _ -> " uncovered"
+            | _, true -> " covered"
+            | _ -> ""
+
+        let notThis = if selector.NotThis then " other" else ""
+
+        let worth =
+            match selector.Worth with
+            | [] -> ""
+            | [ only ] -> $" worth {only}"
+            | many ->
+                let said = many |> List.map string
+                " worth " + String.concat ", " (List.truncate (List.length said - 1) said) + " or " + List.last said
 
         let where =
             match selector.Where with
             | ThisLine -> " in this line"
-            | AnyLine -> ""
+            | OtherLines -> " in another line"
+            | AnyLine
+            | ToOrFromHere -> ""
 
-        $"{whose}{covered}{way} card{where}"
+        // "This card" and "that card" are whole phrases and take none of the rest of it: a card
+        // that said "flip your uncovered this card" would be reading the record out rather than
+        // reading the card.
+        if selector.JustThis then "this card"
+        elif selector.WasChosen then "that card"
+        else $"{whose}{best}{notThis}{lying}{way} card{worth}{where}"
 
     let rec printing =
         function
-        | Draw 1 -> "draw a card"
-        | Draw n -> $"draw {n} cards"
+        | Draw(Just 1) -> "draw a card"
+        | Draw(Just n) -> $"draw {n} cards"
+        | Draw WorthOfChosen -> "draw cards equal to that card's value"
+        | Draw(HowManyPlus n) -> $"draw that many cards plus {n}"
+        | Draw(PerCards(each, _)) -> $"draw a card for every {each} cards in this line"
         | Discard -> "discard a card"
         | Delete selector -> $"delete {pointing selector}"
         | Flip selector -> $"flip {pointing selector}"
         | Return selector -> $"return {pointing selector} to hand"
-        | Shift selector -> $"shift {pointing selector} to another line"
-        | Rehome selector -> $"give {pointing selector} back to whoever drafted it"
+        | Shift(selector, ThisLine) -> $"shift {pointing selector} to this line"
+        | Shift(selector, ToOrFromHere) -> $"shift {pointing selector} either to or from this line"
+        | Shift(selector, _) -> $"shift {pointing selector} to another line"
         | Refreshing' -> "refresh"
+        | Give -> "give a card from your hand to your opponent"
+        | TakeAtRandom -> "take a card at random from your opponent's hand"
+        | StopTheirCompile -> "your opponent cannot compile next turn"
+        | Reveal -> "reveal a card from your hand"
+        | RevealTheirHand -> "your opponent reveals their hand"
+        | Swap -> "swap the positions of two of your protocols"
+        | Rearrange Theirs -> "rearrange their protocols"
+        | Rearrange _ -> "rearrange your protocols"
+        | TakeTheirTop -> "draw the top card of your opponent's deck"
+        | Show selector -> $"reveal {pointing selector}"
+        | OneOrMore inner -> (printing inner) + ", one or more times"
+        | UnderThis FaceDown -> "play the top card of your deck face down under this card"
+        | UnderThis FaceUp -> "play the top card of your deck face up under this card"
+        | Times(Just n, inner) -> $"{printing inner}, {n} times over"
+        | Times(PerCards(each, _), inner) -> $"{printing inner}, once for every {each} cards in this line"
+        | Times(_, inner) -> $"{printing inner}, once for each"
+        | FromDeck(face, where) ->
+            let way =
+                match face with
+                | FaceUp -> "face up"
+                | FaceDown -> "face down"
+
+            let into =
+                match where with
+                | ThisLine
+                | ToOrFromHere -> " in this line"
+                | OtherLines -> " in another line"
+                | AnyLine -> ""
+
+            $"play the top card of your deck {way}{into}"
+        | PlayFromHand(face, where) ->
+            let way =
+                match face with
+                | FaceUp -> "face up"
+                | FaceDown -> "face down"
+
+            let into =
+                match where with
+                | ThisLine
+                | ToOrFromHere -> " in this line"
+                | OtherLines -> " in another line"
+                | AnyLine -> ""
+
+            $"play a card from your hand {way}{into}"
         | May inner -> $"you may {printing inner}"
+        // "delete any card" becomes "delete every card", which is the one place the words for a
+        // command are not simply the words for what is inside it.
+        | InAChosenLine inner -> (printing inner) + ", in a line of your choosing"
+        | InEachOtherLine inner -> (printing inner) + ", in each other line"
+        | InEachLineHolding inner -> (printing inner) + ", in each line where you have a card"
+        | InAChosenLineOf(atLeast, inner) ->
+            (printing inner) + $", in another line of your choosing with {atLeast} or more cards"
+        | Every inner -> (printing inner).Replace(" any ", " every ").Replace(" your ", " every ").Replace(" their ", " every ")
         | IfYouDo(first, rest) ->
             let after = rest |> List.map printing |> String.concat ", then "
             $"{printing first}. If you do, {after}"
+        | IfCovering rest -> "if this card is covering a card, " + (rest |> List.map printing |> String.concat ", then ")
+        | Either(first, second) -> $"either {printing first} or {printing second}"
         | Opposing inner -> $"your opponent: {printing inner}"
 
     let ongoing =
         function
-        | CountsAs n -> $"this card counts as {n}"
-        | Unbreakable -> "this card cannot be deleted"
+        | FaceDownWorth n -> $"every face-down card in this stack is worth {n}"
+        | LinePlus n -> $"your total in this line is increased by {n}"
+        | LinePlusPerFaceDown n -> $"your total in this line is increased by {n} for each face-down card in it"
+        | TheirLineMinus n -> $"their total in this line is reduced by {n}"
+        | TheyCannotPlayHere -> "your opponent cannot play cards in this line"
+        | TheyCannotPlayFaceDownHere -> "your opponent cannot play cards face down in this line"
+        | TheyMustPlayFaceDown -> "your opponent can only play cards face down"
+        | YouMayPlayAnywhere -> "you can play cards in any line"
+        | SkipsCacheCheck -> "you skip your check cache phase"
+        | Silence -> "the middle commands of cards in this line do nothing"
 
     /// The commands run together into one printed line. Each command is written in the lower case
     /// it reads in the middle of a sentence, so the capital goes on here rather than in ten
@@ -133,16 +226,40 @@ module Words =
     let printed card =
         let text = Printed.on card
 
+        let listening =
+            function
+            | YouDraw -> "After you draw cards"
+            | YouDelete -> "After you delete cards"
+            | TheyDiscard -> "After your opponent discards cards"
+            | YouClearCache -> "After you clear cache"
+
         [ text.Top |> List.map ongoing |> sentence
+          for trigger, commands in text.After do
+              commands
+              |> List.map printing
+              |> sentence
+              |> Option.map (fun said -> $"{listening trigger}: " + said)
           text.Shown |> List.map printing |> sentence
           text.Bottom
           |> List.map ongoing
           |> sentence
           |> Option.map (fun said -> "While uncovered: " + said)
+          text.AtStart
+          |> List.map printing
+          |> sentence
+          |> Option.map (fun said -> "At the start of your turn, while uncovered: " + said)
           text.AtEnd
           |> List.map printing
           |> sentence
           |> Option.map (fun said -> "At the end of your turn, while uncovered: " + said)
+          text.WhenFlipped
+          |> List.map printing
+          |> sentence
+          |> Option.map (fun said -> "When this card would be flipped, first: " + said)
+          text.WhenCompiled
+          |> List.map printing
+          |> sentence
+          |> Option.map (fun said -> "When this card would be deleted by compiling, first: " + said)
           text.WhenCovered
           |> List.map printing
           |> sentence
@@ -185,13 +302,21 @@ module Words =
             $"{player who}'s {card turned.Card} on {line where} is turned {way}."
         | Deleted(who, gone, where) -> $"{card gone.Card} is deleted from {player who}'s {line where}."
         | Discarded(who, gone) -> $"{player who} discards {card gone}."
+        | Gave(who, given) -> $"{player who} gives {card given} away."
+        | TookAtRandom(who, taken) -> $"{player who} takes {card taken} at random from the other hand."
+        | PlayedFromDeck(who, played, where) ->
+            $"{player who} plays {card played.Card} off the top of their own deck to {line where}."
         | Returned(who, back, where) -> $"{card back.Card} goes back to {player who}'s hand from {line where}."
-        | WentHome(home, back) -> $"{card back} goes back to {player home}, whose protocol it is."
         | Shifted(who, moved, from, into) -> $"{player who} shifts {card moved.Card} from {line from} to {line into}."
         | Drew(who, count) -> if count = 1 then $"{player who} draws a card." else $"{player who} draws {count}."
         | Fizzled(_, saying) -> $"{card saying} finds nothing to do."
         | Asked(who, saying) -> $"{card saying} asks {player who} to choose."
         | Declined who -> $"{player who} says no, so nothing waiting on that happens."
+        | StoppedCompiling who -> $"{player who} cannot compile when their turn next begins."
+        | Showed(who, shown) -> $"{player who} shows {card shown} and puts it back."
+        | ShowedHand(who, hand) ->
+            let said = hand |> List.map Card.name |> String.concat ", "
+            $"{player who} shows their hand: {said}."
         | TookControl(who, from) ->
             match from with
             | Some was -> $"{player who} leads {Field.LanesForControl} lanes and takes the control component from {player was}."
@@ -221,7 +346,7 @@ module Words =
     let wanting =
         function
         | ACard(_, targets) -> $"say one of: {choices (targets |> List.map Target.card)}"
-        | AnOrder offered ->
+        | AnOrder(_, offered) ->
             let said =
                 offered
                 |> List.map (fun each -> each |> List.map Protocol.key |> String.concat " ")
@@ -229,7 +354,9 @@ module Words =
 
             $"say your {Protocol.Each} in a different order - {said}"
         | ALine(moving, offered) -> $"say where {card (Target.card moving)} goes - {lines offered}"
-        | Whether inner -> $"say 'yes' or 'no' - {printing inner}"
+        | Whether inner -> $"say yes or no - {printing inner}"
+        | ALineFor(_, offered) -> $"say which line - {lines offered}"
+        | OneOf(first, second) -> $"say first or second - {printing first}, or {printing second}"
 
     let rejection =
         function
@@ -250,6 +377,14 @@ module Words =
         | AnswerFirst asked ->
             $"The game is waiting on an answer, and nothing else can happen until it comes: {wanting asked}."
         | NotOnOffer asked -> $"That is not one of the things being offered: {wanting asked}."
+        | Forbidden(why, where) ->
+            let said =
+                match why with
+                | NoPlayHere -> "a card of theirs says you cannot play there at all"
+                | NoFaceDownHere -> "a card of theirs says you cannot play face down there"
+                | OnlyFaceDown -> "a card of theirs says you can only play face down"
+
+            $"You cannot play to {line where}: {said}."
         | MustRefresh ->
             $"Your hand is empty, so refreshing is the only thing left to do this turn - say 'refresh', and {Deck.HandSize} come up."
 
@@ -269,6 +404,8 @@ module Words =
         | Make(Choose(TheLine line)) -> $"choose line {line}"
         | Make(Choose Yes) -> "yes"
         | Make(Choose No) -> "no"
+        | Make(Choose TheFirst) -> "first"
+        | Make(Choose TheSecond) -> "second"
         | Make Resign -> "resign"
         | Undo -> "undo"
         | Redo -> "redo"

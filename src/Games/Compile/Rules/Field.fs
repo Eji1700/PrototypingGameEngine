@@ -55,22 +55,17 @@ type Side =
 /// sentence in the top box survives being covered and in the bottom box does not.
 module Ruling =
 
-    let private live uncovered placed =
+    /// What a card is saying, right now, from where it is lying.
+    let saying uncovered placed =
         if Placed.isFaceUp placed then
             Printed.ongoing uncovered placed.Card
         else
             []
 
-    /// What a card is worth, after whatever it says about itself.
-    let worth uncovered placed =
-        live uncovered placed
-        |> List.tryPick (function
-            | CountsAs n -> Some n
-            | _ -> None)
-        |> Option.defaultValue (Placed.value placed)
+    let private live = saying
 
-    let breakable uncovered placed =
-        live uncovered placed |> List.contains Unbreakable |> not
+    let silences uncovered placed =
+        live uncovered placed |> List.contains Silence
 
 module Stack =
 
@@ -83,11 +78,10 @@ module Stack =
     /// The top card, which is the only one whose text is in play.
     let uncovered cards = List.tryHead cards
 
-    /// What a stack is worth - which is not simply the sum of the cards in it, because a card may
-    /// have something to say about what *it* is worth. A covered card can still say it, if it is
-    /// printed in the top box.
-    let value cards =
-        cards |> List.mapi (fun depth placed -> Ruling.worth (depth = 0) placed) |> List.sum
+    /// What a stack is worth on its own - the sum of the cards in it, with a face-down card
+    /// counting two. What a stack is worth *in a line* is `Field.valueOn`, which is a different
+    /// number as soon as anything on either side of the table has an opinion about it.
+    let value cards = cards |> List.sumBy Placed.value
 
 module Side =
 
@@ -172,8 +166,11 @@ module Side =
             Hand = side.Hand |> List.filter ((<>) placed.Card)
             Stacks = side.Stacks |> Map.add line (placed :: stack line side) }
 
-    /// What this player's stack on that line is worth.
-    let valueOn line side = stack line side |> Stack.value
+    /// Every standing rule in play on that line, from every card of this player's lying in it.
+    let rulesOn line side =
+        stack line side
+        |> List.mapi (fun depth placed -> Ruling.saying (depth = 0) placed)
+        |> List.concat
 
     /// Everything on that line, off the table and into this player's discard. Which way up a
     /// card was lying stops mattering the moment it leaves: a discard is cards.
@@ -247,26 +244,123 @@ module Field =
         seats field
         |> List.choose (fun seat -> Side.protocolOn line (side seat field))
 
+    /// Every standing rule this player has in play on that line, and every one the other player
+    /// has. Two questions asked so often below that they are worth naming.
+    let private mine seat line field = Side.rulesOn line (side seat field)
+
+    let private across seat line field =
+        seats field
+        |> List.filter ((<>) seat)
+        |> List.collect (fun other -> Side.rulesOn line (side other field))
+
+    /// Whether this player skips the check cache phase - asked of every line they have, because a
+    /// rule saying *"skip your check cache phase"* is about the player rather than about the line
+    /// the card carrying it happens to be standing in.
+    let skipsCache seat field =
+        Lines.all |> List.exists (fun each -> mine seat each field |> List.contains SkipsCacheCheck)
+
     /// Whether a card may be played face up there.
-    let allows card line field =
+    ///
+    /// Its protocol has to be one of the two facing that line - unless something of this player's
+    /// says otherwise, which is the one card in the game that opens a door rather than shutting
+    /// one. Asked of any of their lines, because a rule in one line saying "you can play cards in
+    /// any line" is about the player rather than about the line it is printed in.
+    let allows seat card line field =
         protocolsOn line field |> List.contains card.Protocol
+        || Lines.all
+           |> List.exists (fun each -> mine seat each field |> List.contains YouMayPlayAnywhere)
 
     /// The lines a card may be played face up on. At most one, because no protocol is drafted
     /// twice - but said as a list, because "none" is a real answer and the sentence a refusal
     /// wants is built out of it.
-    let facingLines card field =
-        Lines.all |> List.filter (fun line -> allows card line field)
+    let facingLines seat card field =
+        Lines.all |> List.filter (fun line -> allows seat card line field)
+
+    /// What a card on the table forbids, if anything, about laying that card there that way up.
+    ///
+    /// The first standing rules asked from outside the value of a stack, and the reason they are
+    /// here rather than in `Turn`: whether a move is legal is a fact about the field, and a
+    /// question the machine has to be able to ask before it chooses as readily as a person has to
+    /// be able to ask it after.
+    let barred seat line face field =
+        let theirs = across seat line field
+
+        // "Can only play cards face-down" is about the player rather than about one line, so it
+        // counts wherever the card carrying it is standing.
+        let anywhere =
+            seats field
+            |> List.filter ((<>) seat)
+            |> List.collect (fun other -> Lines.all |> List.collect (fun each -> Side.rulesOn each (side other field)))
+
+        if List.contains TheyCannotPlayHere theirs then Some NoPlayHere
+        elif face = FaceDown && List.contains TheyCannotPlayFaceDownHere theirs then Some NoFaceDownHere
+        elif face = FaceUp && List.contains TheyMustPlayFaceDown anywhere then Some OnlyFaceDown
+        else None
 
     /// Whose protocol a card belongs to, which is not the same as who is holding it.
     ///
     /// Derived rather than stored, and it can be: protocols are settled at the draft and never
-    /// move, so a card names its own home. That is why a card taken off somebody's deck needs no
-    /// bookkeeping to be given back - and why an `Owner` field on every card would have been
-    /// wrong twice over, duplicating what the zone already says and making two states that are
-    /// the same position compare unequal.
+    /// move, so a card names its own home. Which is why an `Owner` field on every card would have
+    /// been wrong twice over - duplicating what the zone already says, and making two states that
+    /// are the same position compare unequal. A card taken off somebody's deck is simply *held*
+    /// by whoever took it, and `Give` is what hands it back.
     let homeOf card field =
         seats field
         |> List.tryFind (fun seat -> List.contains card.Protocol (side seat field).Drafted)
+
+    // --- what a line is worth -----------------------------------------------------------------
+
+    /// What one player's stack on a line comes to.
+    ///
+    /// **Not the sum of the cards in it**, and this is the one number in the game that cannot be
+    /// worked out from one side of the table. A card in the stack may say what the face-down
+    /// cards around it are worth; it may add to the total outright, or add for each face-down
+    /// card beside it; and a card in the stack *facing* it may take away from it. So this is
+    /// asked of the field, and `Side` has no answer to it at all — which is deliberate, because a
+    /// `Side.valueOn` that quietly ignored the other half of the line is exactly the bug this
+    /// shape makes impossible.
+    let valueOn seat line field =
+        let mine = Side.stack line (side seat field)
+        let ours = Side.rulesOn line (side seat field)
+
+        let across =
+            seats field
+            |> List.filter ((<>) seat)
+            |> List.collect (fun other -> Side.rulesOn line (side other field))
+
+        // A stack may say what the cards lying face down in it are worth. The first such rule
+        // wins; a stack with two of them is a card built wrong, and `Faults` says so.
+        let faceDown =
+            ours
+            |> List.tryPick (function
+                | FaceDownWorth n -> Some n
+                | _ -> None)
+
+        let counted =
+            mine
+            |> List.sumBy (fun placed ->
+                match placed.Face, faceDown with
+                | FaceDown, Some n -> n
+                | _ -> Placed.value placed)
+
+        let faceDownCards = mine |> List.filter (Placed.isFaceUp >> not) |> List.length
+
+        let added =
+            ours
+            |> List.sumBy (function
+                | LinePlus n -> n
+                | LinePlusPerFaceDown n -> n * faceDownCards
+                | _ -> 0)
+
+        let taken =
+            across
+            |> List.sumBy (function
+                | TheirLineMinus n -> n
+                | _ -> 0)
+
+        // Floored at nothing. A stack worth less than nothing is not a thing a table can show,
+        // and no card asks for one - which makes this an assumption rather than a rule.
+        max 0 (counted + added - taken)
 
     // --- which lines have been won ----------------------------------------------------------
 
@@ -274,7 +368,7 @@ module Field =
     let opposing seat line field =
         match seats field |> List.filter ((<>) seat) with
         | [] -> 0
-        | others -> others |> List.map (fun other -> Side.valueOn line (side other field)) |> List.max
+        | others -> others |> List.map (fun other -> valueOn other line field) |> List.max
 
     /// Whether that line is won: ten or more, and strictly more than the other side.
     ///
@@ -282,7 +376,7 @@ module Field =
     /// into a lane you have already lost worth doing - two points against a stack of eleven
     /// does nothing, but two points against a stack of ten holds it for another turn.
     let won seat line field =
-        let mine = Side.valueOn line (side seat field)
+        let mine = valueOn seat line field
         mine >= Stack.ToCompile && mine > opposing seat line field
 
     /// Every line this player has won, in line order.
@@ -297,7 +391,20 @@ module Field =
 
     /// Leading a line is not winning it: no ten is needed, and a tie is still not a lead.
     let leads seat line field =
-        Side.valueOn line (side seat field) > opposing seat line field
+        valueOn seat line field > opposing seat line field
 
     let leading seat field =
         Lines.all |> List.filter (fun line -> leads seat line field) |> List.length
+
+    /// Whether anything standing in that line has taken every card's voice away.
+    ///
+    /// Asked by the one place a card's text is set off - the look-again in `Resolving` - and by
+    /// nothing else, because a silence is about what a card *says* rather than about what it is
+    /// worth or whether it can be deleted. Both sides of the line count: a card of theirs can
+    /// silence yours.
+    let silenced line field =
+        seats field
+        |> List.exists (fun seat ->
+            Side.stack line (side seat field)
+            |> List.mapi (fun depth placed -> Ruling.silences (depth = 0) placed)
+            |> List.exists id)

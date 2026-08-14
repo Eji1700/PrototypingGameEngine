@@ -35,7 +35,11 @@ module Parse =
 
     let private playing card line face =
         match Card.byName card, Commands.tryInt line with
-        | None, _ -> Error $"'{card}' is not a card. They are written like 'fire-3': a protocol, a dash, and a number from 0 to {List.length Card.values - 1}."
+        // Not every number is in every protocol - each one goes without one of the seven - so this
+        // is a refusal a correctly typed name can earn, and the wording has to leave room for it.
+        | None, _ ->
+            Error
+                $"'{card}' is not a card. They are written like 'fire-3': a protocol, a dash, and one of the {Card.PerProtocol} numbers that protocol has, out of {List.min Card.values} to {List.max Card.values}."
         | _, None -> Error $"'{line}' is not a line. They are numbered 1 to {Lines.Count}."
         | Some card, Some line -> Ok(Send(Make(Play(card, line, face))))
 
@@ -75,6 +79,13 @@ module Parse =
         | [ "y" ] -> Ok(Send(Make(Choose Yes)))
         | [ "no" ]
         | [ "n" ] -> Ok(Send(Make(Choose No)))
+
+        // And which of two, for a card that offers a choice rather than an offer. Two words
+        // rather than yes and no, because "either discard or flip" has no yes in it.
+        | [ "first" ]
+        | [ "1st" ] -> Ok(Send(Make(Choose TheFirst)))
+        | [ "second" ]
+        | [ "2nd" ] -> Ok(Send(Make(Choose TheSecond)))
 
         | [ "choose"; "line"; n ]
         | [ "pick"; "line"; n ] -> choosingLine n
