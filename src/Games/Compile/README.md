@@ -7,8 +7,8 @@ of them took. The fourth of the games here, and the engine it runs on is
 
 ```powershell
 dotnet run -- compile play 2
-dotnet run -- compile play 2 --rival medium # the seat opposite, played by the program
-dotnet run -- compile play 2 --rival easy   # ...or by a machine that only plays legally
+dotnet run -- compile play 2 --rival deep   # the seat opposite, played by the program
+dotnet run -- compile play 2 --rival easy   # ...or by one that only plays legally
 dotnet run -- compile serve 2               # the same table in a browser, with buttons
 
 dotnet run -- compile-control play 2        # the same game, with the optional rule in it
@@ -275,12 +275,15 @@ both of them, and every stack is face up in front of everybody.
 
 ## The seat opposite
 
-Two machines, and they differ by something a player can see.
+Four machines, and each differs from the last by something a player can see. Three is what the
+other games here carry; the fourth is only here because it can show what it is worth.
 
-| | what it does |
-| --- | --- |
-| `easy` | drafts, arranges and plays at random - a seat filled, not an opponent |
-| `medium` | counts |
+| | what it does | against the one below |
+| --- | --- | --- |
+| `easy` | drafts, arranges and plays at random - a seat filled, not an opponent | |
+| `medium` | counts | 99 games in 100 |
+| `hard` | counts, and reads the cards | about 3 in 5 |
+| `deep` | plays the move out and looks at the board it leaves | about 7 in 10 |
 
 **What `medium` counts** is the arithmetic the board already shows you, and nothing else:
 
@@ -294,9 +297,33 @@ Two machines, and they differ by something a player can see.
   go up. A line it can take to ten and ahead outweighs everything else, because that line compiles
   the moment its turn comes round.
 
-**What it does not do is read the cards.** It will play a Metal-1 as a one without noticing that
-the card would also stop you compiling. That is the whole distance between `medium` and a `hard`
-worth the name, and it is ninety cards wide.
+**What `hard` adds is reading**, and it reads *structurally* rather than out of a table of ninety
+cards. Card text is data, so the machine walks the same `Command` tree that the screen prints and
+`Faults` checks: a draw is worth about three, a card of theirs off the table about five, a turn
+where they cannot compile about eight, and a command handed to the opponent is the same number with
+its sign turned over. **A card written tomorrow is weighed tomorrow**, without anybody editing the
+machine.
+
+Two things it learned by measurement rather than by argument, and both are in the code:
+
+- **it does not draft on text.** Adding the weights at the draft made it markedly *worse* - value
+  totals are already a sharp signal, and the weights are too coarse to improve on them without
+  drowning them. They earn their keep at a play, where the choice is between cards already in hand.
+- **weighing the yes-or-no questions changed nothing measurable**, because saying yes was already
+  right nearly every time. It is kept because it is the *reason* rather than the guess.
+
+**What `deep` does is stop guessing.** It weighs no card at all: for every legal move it plays that
+move out on a copy of the game - answering its own questions along the way exactly as it would
+answer them for real - and scores the board it is left with. A draw shows up as cards in hand, a
+delete as their line dropping, and a card whose text fizzles as nothing, which is what it was.
+
+It stops at anything the **other** seat has to answer, which is the honest place to stop: what they
+will say is their business, and a machine that guessed for them would be reading a hand it cannot
+see. And it looks exactly one move ahead, because everything past that is guesswork of a different
+kind - their hand is hidden, half the table is face down, and every draw is a shuffle.
+
+It keeps `medium`'s arithmetic as a tie-break. Two moves that leave the same board are still not
+equal: one of them may have spent a five to get there.
 
 Ties are broken by the generator rather than by list order, which matters more than it sounds: a
 machine that always took the first of an equal set would draft the same three protocols every game
@@ -306,26 +333,32 @@ and play the same line every turn.
 
 Written down rather than left to be discovered:
 
-- **A machine that reads the cards.** `medium` counts and does not read: it knows what a line is
-  worth, what it takes to compile one, and what a card is worth face up against face down - and
-  nothing at all about what any of the ninety *do*. So it will happily play a Metal-1 as a one when
-  the card would also stop you compiling. That is the next machine, and it is a real one: a `hard`
-  worth the name has to weigh card text, which means weighing ninety cards.
+- **A machine that looks at more than one move.** `deep` plays its own move out and stops - it does
+  not ask what the answer to it would be, so it cannot see that a line it leaves at nine invites a
+  compile at eleven. Going further means guessing at a hidden hand, a face-down table and a
+  shuffled deck, which is a different kind of machine and a real piece of work.
 
-  **It is the only gap left.** Every rule is in, and all ninety cards say the whole of what they
-  are printed to say.
+  **Nothing else is missing.** Every rule is in, all ninety cards say the whole of what they are
+  printed to say, and every machine here is measurably better than the one below it.
 
 **A game is playable and winnable as it stands**, cards and all. Two machines finish every deal
-they are given and the record replays to the same position - and **`medium` beats `easy` about
-nineteen times in twenty from either seat**, which is the only honest way to ask whether a word
-like that means anything.
+they are given - **two thousand four hundred of them without one unfinished** - and the record
+replays to the same position. And every rung of the machine is measurably above the last, from
+either seat, which is the only honest way to ask whether words like that mean anything.
 
-**Two `medium` machines are not even, though**, and it is worth writing down: the first seat takes
-about two thirds. A machine that counts and does not read plays this as a pure race to ten, and in
-a pure race the player who moves first arrives first - so the figure is at least as much a fact
-about *that machine* as about the game. The 1-2-2-1 draft balances the **draft**; nothing in the
-rules balances the turn order, and a person redresses it with card text. It would be worth
-measuring again against a machine that reads the cards.
+That first figure is a scar as much as a boast. Playing the machines against each other is what
+turned up **the one endless game this codebase has had**: a shift used to lift a card off its line
+in one step and lay it down in the next, and the pile looks at the table between every two steps -
+so for one look the card was nowhere. It came back a card the game had never seen, its middle box
+fired, and Gravity-1, which can point its own shift at itself, did that for ever. The fix is that
+a card leaves and lands in the **same step**, and [the regression is
+checked](../../../tests/compile.fsx) by name.
+
+**Two machines of the same skill are not even, though**, and it is worth writing down: the first
+seat takes about five games in eight, and it makes no difference whether they count or read. A
+machine that plays this as a race to ten arrives first if it moves first - so the figure is at
+least as much a fact about *these machines* as about the game. The 1-2-2-1 draft balances the
+**draft**; nothing in the rules balances the turn order, and a person redresses it with card text.
 
 **The invariant the tests hold to had to be restated, and this is where.** It used to be
 *eighteen cards each, wherever they are* - deck plus hand plus discard plus everything on the
@@ -353,7 +386,7 @@ and nothing from the table layer; `Reading` is how it is read.
 | [Resolving.fs](Rules/Resolving.fs) | The pile: one command at a time, with a look at the table between every two |
 | [Turn.fs](Rules/Turn.fs) | `Move`, and which moves the rules will take, when |
 | [Words.fs](Rules/Words.fs) | Every string a player reads |
-| [Rival.fs](Rules/Rival.fs) | Two seats the program can play: one at random, and one that counts |
+| [Rival.fs](Rules/Rival.fs) | Four seats the program can play, each measurably above the last: random, counting, reading, and playing the move out |
 | [Ink.fs](Reading/Ink.fs) | Two colours: one per side of the table |
 | [Parse.fs](Reading/Parse.fs) | Three verbs, each with a short form |
 | [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), which `Readers` then draws three ways |

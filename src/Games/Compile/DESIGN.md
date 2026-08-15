@@ -910,6 +910,23 @@ knowing that.
 `Resolving.laying` is what both the play and the second half of a shift go through — which was one
 line at each call site, and would have been a rule quietly missing from one of them otherwise.
 
+**A card in the air is fine; a card *nowhere* is not** — and that distinction cost this codebase
+its only endless game. A shift originally lifted the card off its line **and then** pushed the
+`Placing` step, so between those two the card was on no line at all. The pile looks at the table
+between every two steps, and the look in that gap dropped the card from `Revealed`. It came back a
+card the game had never seen, its middle box fired, and **Gravity-1** — *"shift 1 card either to or
+from this line"*, whose selector can point at itself — shifted itself, spoke, shifted itself, for
+ever. Two machines left to play each other never finished a deal.
+
+The fix is that a card **leaves and lands in the same step**: `Placing` carries where it came from.
+A play still puts a card in the air out of a *hand*, which is right — a hand is not the table, and
+nothing looks at it. It is only the table that has to stay whole between two looks.
+
+Worth recording as a finding rather than a bug fix, because the shape of it will recur: **any
+question the pile asks between two halves of one movement is asked of a board mid-move.** The look
+between steps is what makes the whole design work, and it is exactly why a movement must never be
+two steps.
+
 ### What a line is worth
 
 *Built, and it was the expensive row exactly as advertised.*

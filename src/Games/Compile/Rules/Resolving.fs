@@ -187,7 +187,9 @@ module Resolving =
     /// This is the only thing in the game that happens *during* a move, and it is on the pile
     /// like everything else: the interrupt goes on top of a `Placing` step, so an interrupt that
     /// stops to ask stops the card in mid-air until it is answered. Which is what an interrupt is.
-    let laying seat placed line session =
+    /// `from` is the line it is coming off, for a card already on the table - and it travels with
+    /// the step rather than being done first, which the `Placing` case explains.
+    let laying seat placed line from session =
         let interrupting =
             match Stack.uncovered (Side.stack line (Session.side seat session)) with
             | Some under when Placed.isFaceUp under ->
@@ -202,7 +204,7 @@ module Resolving =
             | _ -> []
 
         { session with
-            Pile = interrupting @ (Placing(seat, placed, line) :: session.Pile) }
+            Pile = interrupting @ (Placing(seat, placed, line, from) :: session.Pile) }
 
     /// A card off the line it is on and onto another - laid there the same way a play is, so a
     /// card shifted onto something with an interrupt sets that interrupt off too. Covering is
@@ -211,15 +213,7 @@ module Resolving =
     /// Shared because a shift arrives here two ways: with the line answered, and with the line
     /// printed on the card and nothing to answer.
     let private moving seat placed from line session =
-        let session =
-            { session with
-                Field =
-                    session.Field
-                    |> Field.update seat (fun side ->
-                        { side with
-                            Stacks = side.Stacks |> Map.add from (Side.stack from side |> List.filter ((<>) placed)) }) }
-
-        laying seat placed line session, [ Happened(Shifted(seat, placed, from, line)) ]
+        laying seat placed line (Some from) session, [ Happened(Shifted(seat, placed, from, line)) ]
 
     /// Carry a command out on the card it was pointed at. Whose card it is is not asked for - the
     /// target already says - and the source is here only because a shift may be told where to go
@@ -273,7 +267,7 @@ module Resolving =
                         session.Field
                         |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) }) }
 
-            laying seat placed source.Line session, []
+            laying seat placed source.Line None session, []
 
         | Give, InHand(seat, card) ->
             let them = Session.other seat
@@ -615,7 +609,7 @@ module Resolving =
 
                 match where with
                 | ThisLine
-                | ToOrFromHere -> laying actor placed source.Line session, [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
+                | ToOrFromHere -> laying actor placed source.Line None session, [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
                 | AnyLine
                 | OtherLines ->
                     let offered =
@@ -1084,13 +1078,25 @@ module Resolving =
             walk (fuel - 1) session (told @ said)
 
         // The card lands, on whatever the interrupt above it left behind.
-        | Placing(seat, placed, line) :: rest ->
+        // The card lands - and if it was already on the table, it leaves where it was **in the
+        // same step**. Which matters more than it sounds: the pile looks at the table between
+        // every two steps, so a card lifted in one step and laid in the next would be *off* the
+        // table for one of those looks. It would come back a card the game had never seen, its
+        // middle box would fire again, and a card that shifts itself would do that for ever.
+        | Placing(seat, placed, line, from) :: rest ->
+            let lifted side =
+                match from with
+                | Some was ->
+                    { side with
+                        Stacks = side.Stacks |> Map.add was (Side.stack was side |> List.filter ((<>) placed)) }
+                | None -> side
+
             walk
                 (fuel - 1)
                 { session with
                     Pile = rest
-                    Field = session.Field |> Field.update seat (Side.played placed line) }
-                (told @ [ Happened(Played(seat, placed, line)) ])
+                    Field = session.Field |> Field.update seat (lifted >> Side.played placed line) }
+                (told @ [ if from.IsNone then Happened(Played(seat, placed, line)) ])
 
         // And the card turns over, on whatever the interrupt above it left behind. A card that
         // deleted itself is not there to be turned, which is "still valid, checked when it

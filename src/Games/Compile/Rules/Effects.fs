@@ -499,7 +499,7 @@ type Pending =
     | Trimming
     /// A card laid on a line, held back until whatever it is about to cover has had its say.
     /// The one step that is a *move* half-finished, which is what an interrupt is.
-    | Placing of PlayerId * Placed * line: int
+    | Placing of PlayerId * Placed * line: int * from: int option
     /// The tail of an *"if you do"*, waiting under the command it depends on. It runs if that
     /// command did something and is thrown away if it did not - which is the pile doing the
     /// waiting again, because whether a command did anything is not known until it has finished

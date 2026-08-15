@@ -10,6 +10,7 @@
 //   dotnet fsi tests/compile.fsx
 
 #load "Compiled.fsx"
+open TCModel.Common
 
 open TCModel.Engine
 open TCModel.Table
@@ -3153,6 +3154,39 @@ report
     "When this card would be covered, first: Flip this card."
     (Words.printed (card Apathy 2) |> List.last)
 
+// And the other half of what a shift is: a card that moves has **not** been played again.
+//
+// This one is a scar. A shift used to lift the card off its line in one step and lay it down in
+// the next, and the pile looks at the table between every two steps - so for one look the card was
+// nowhere. It came back a card the game had never seen, its middle box fired, and Gravity-1, which
+// can point its own shift at itself, did that until the fuel ran out. Two machines left to play
+// each other never finished a game.
+
+report
+    "a card that shifts does not read as newly shown, however far it goes"
+    (true, false)
+    (let session =
+        standing (opened 1UL)
+        // Gravity-1 draws 2 cards when it is shown. It is standing face up already, so it has
+        // been shown - and moving it is not being shown again.
+        |> poised one 1 [ card Gravity 1 ]
+
+     let after, told =
+         running (Shift(Select.any |> Select.this', AnyLine)) (card Gravity 1) session
+
+     match Session.asking after with
+     | Some question ->
+         match Resolving.choosing question (TheLine 2) after with
+         | Some moved, said ->
+             Side.stack 2 (Session.side one moved)
+             |> List.exists (fun placed -> placed.Card = card Gravity 1),
+             happenings (told @ said)
+             |> List.exists (function
+                 | Drew _ -> true
+                 | _ -> false)
+         | None, _ -> false, true
+     | None -> false, true)
+
 // --- you may, and if you do -----------------------------------------------------------------------
 //
 // Two real cards, and they are the first two in from the ninety. Both are here for what they
@@ -4044,6 +4078,72 @@ report
      // figure over two hundred deals is nearer nineteen in twenty; twelve is what a test can
      // afford to play out.
      took [ "medium"; "easy" ] one >= 8, took [ "easy"; "medium" ] two >= 8)
+
+report
+    "and reading beats counting against the same machine that only counts"
+    (true, true)
+    (let deals = [ 4UL .. 15UL ]
+
+     let took skills who =
+         deals |> List.filter (fun seed -> wonBy skills seed = Some who) |> List.length
+
+     took [ "hard"; "easy" ] one >= 8, took [ "easy"; "hard" ] two >= 8)
+
+report
+    "and looking a move ahead beats reading, from the seat that has to come from behind"
+    (true, true)
+    (let deals = [ 4UL .. 15UL ]
+
+     let took skills who =
+         deals |> List.filter (fun seed -> wonBy skills seed = Some who) |> List.length
+
+     // Ten of twelve going first, half of them going second - where two of the same machine split
+     // about eight to four. Over four hundred deals `deep` takes seven games in ten from `hard`.
+     took [ "deep"; "hard" ] one >= 8, took [ "hard"; "deep" ] two >= 5)
+
+// **`hard` against `medium` is not asserted here, and that is deliberate.** Over four hundred
+// deals from both seats it takes about three games in five; over the two dozen a test can afford
+// that margin is indistinguishable from a shuffle, and a check that cannot tell the two apart is
+// a check that would pass if the machine stopped reading altogether. `deep` is asserted because
+// its margin is wide enough to survive a dozen deals - which is the only reason.
+//
+// So what is held to for `hard` is the *behaviour* that makes the difference - which is exact, and
+// says in one position what a thousand games say slowly.
+
+report
+    "the machine that reads takes the card that does more; the one that counts takes the bigger number"
+    ("Water-4", "Water-3")
+    (let posed =
+        // Two Water cards in hand, both legal face up on line 1. The 4 is worth more; the 3 says
+        // *"return all cards with a value of 2 in 1 line"*, which is worth more than one point.
+        let session = standing (opened 1UL)
+
+        { session with
+            Field =
+                session.Field
+                |> Field.update one (fun side -> { side with Hand = [ card Water 3; card Water 4 ] }) }
+
+     let plays skill =
+         match Rival.plays posed { Skill = skill; Rng = Rng.ofSeed 7UL } with
+         | Some(Play(chosen, 1, FaceUp), _) -> Card.name chosen
+         | _ -> "nothing"
+
+     plays Rival.medium, plays Rival.hard)
+
+report
+    "and no machine, however much it reads or looks, is ever left with nothing it will play"
+    [ true; true; true; true ]
+    (let posed hand =
+        let session = standing (opened 1UL)
+
+        { session with
+            Field = session.Field |> Field.update one (fun side -> { side with Hand = hand }) }
+
+     Rival.all
+     |> List.map (fun skill ->
+         match Rival.plays (posed [ card Water 5 ]) { Skill = skill; Rng = Rng.ofSeed 7UL } with
+         | Some(Play _, _) -> true
+         | _ -> false))
 
 // --- the screens --------------------------------------------------------------------------------
 //

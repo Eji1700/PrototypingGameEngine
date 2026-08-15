@@ -177,7 +177,7 @@ module Turn =
                             session.Field
                             |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) }) }
                     |> Resolving.ending
-                    |> Resolving.laying seat placed line
+                    |> Resolving.laying seat placed line None
                     |> fun session -> Resolving.settle session []
 
                 Some session, told
