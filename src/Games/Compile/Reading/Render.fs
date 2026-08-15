@@ -44,6 +44,9 @@ module Render =
         let text =
             "A card played face up does what is printed on it, one command at a time - and between any two of them the table is looked at again, because a command that turned a card face up has put that card's own text in front of whatever was waiting. A command with nothing to point at simply finds nothing to do, and the one after it still happens. A command with one thing to point at does it; with several, the game stops and asks - sometimes of the player whose turn it is not, and then nothing at all moves until they answer."
 
+        let boxes =
+            "Every card is drawn as its three boxes, empty ones and all. The top box is a standing rule and whatever the card is listening for; the middle is what fires when the card is turned face up, or uncovered again; the bottom is a standing rule too. Playing a card over another covers its middle and its bottom and leaves its top showing - so a covered card is drawn with two empty boxes, and those two are exactly what it has stopped saying. A card lying face down has no boxes drawn at all: it says nothing, whatever is printed on it."
+
         let refreshing =
             $"Nothing is drawn at the end of a turn. 'refresh' puts your whole hand down and takes {Deck.HandSize} up, and it costs the turn - so {Deck.HandSize} cards is {Deck.HandSize} turns of tempo, and the turn you spend getting more is a turn they spend getting closer to {Stack.ToCompile}. With an empty hand it is the only thing left to do. A deck that runs out is shuffled from its own discard."
 
@@ -55,29 +58,58 @@ module Render =
 
     let nothingYet = "nothing yet"
 
-    /// How much room a card's text is given, and how wide a cell holding one asks to be.
-    ///
-    /// The one measurement on this screen, because everything on it is a card: a stack in the
-    /// field and a card in hand are the same thing printed in two places, and a board where
-    /// they were two different widths would be two boards. The text is broken to `Room` here
-    /// rather than left to whatever is drawing it - a reader that lays a screen out by counting
-    /// characters gives a cell the width of its widest line, and one long sentence would push
-    /// every column on the board out to the width of that sentence.
-    [<Literal>]
-    let private Room = 26
+    // --- how wide a card is ------------------------------------------------------------------
+    //
+    // The measurements on this screen, and there are only these, because everything on it is a
+    // card: a stack in the field and a card in hand are the same thing drawn in two places, and
+    // a board where they were two different widths would be two boards.
+    //
+    // A card asks for `Across`, and its text is broken to `Room` - which is `Across` less the
+    // walls and the padding of the *two* boxes a line of it can end up inside, because a card in
+    // hand is a named tile holding three named tiles and a card on the table is only the three.
+    // `Room` is the deeper of the two, so both fit and neither is broken twice.
+    //
+    // The breaking is done here rather than left to whatever is drawing it, because a reader that
+    // lays a screen out by counting characters gives a cell the width of its widest line - and one
+    // long sentence would push every column on the board out to the width of that sentence.
 
     [<Literal>]
     let private Across = 28
+
+    [<Literal>]
+    let private Room = 20
 
     /// How many cards stand side by side. Three, because there are three lines and the hand
     /// reads better under a field it lines up with.
     [<Literal>]
     let private PerRow = 3
 
-    /// A card's text as lines that will fit a cell, quietly - it is what the card says rather
+    /// A card's text as lines that will fit a box, quietly - it is what the card says rather
     /// than something the game is saying now.
     let private inSmall said =
         said |> List.collect (Scene.wrap Room) |> List.map Scene.quietly
+
+    /// The three boxes printed on a card, **drawn whether or not there is anything in them**.
+    ///
+    /// An empty box is not nothing. A card played over another covers its middle and its bottom
+    /// and leaves its top showing, so which box a line is in is the difference between a rule
+    /// that survives being built on and one that does not - and a card drawn with the empty
+    /// boxes left out is a card whose one line could be any of the three. Drawn empty, a covered
+    /// card shows the two boxes a cover has silenced as the two boxes they are.
+    ///
+    /// Three tiles rather than a grid of three rows, and the reason is the reader rather than
+    /// the game: a grid gives every cell a line of air above and below it, which is what makes a
+    /// board of glyphs look like a board and what makes three boxes of prose look like a card
+    /// with nine blank lines in it. A named tile is a box that costs its own two walls and
+    /// nothing else, and the name is worth having anyway - it is the whole of what tells a
+    /// player which of the three an empty one is.
+    let private boxed (top, middle, bottom) =
+        [ "top", top; "middle", middle; "bottom", bottom ]
+        |> List.map (fun (which, said) ->
+            // A space rather than nothing in an empty one. A box has to have something in it to
+            // be a box at all: a reader handed nothing draws a wall round nothing, which comes
+            // out as two corners and no name.
+            Tile(Some which, Tone.Quiet, (if List.isEmpty said then [ Scene.quietly " " ] else inSmall said)))
 
     // --- the heading -------------------------------------------------------------------------
 
@@ -179,27 +211,16 @@ module Render =
         match cards with
         | [] -> Tile(None, Tone.Quiet, [ Scene.quietly "-" ])
         | cards ->
-            let printed =
-                cards
-                |> List.mapi (fun depth placed -> reading placed, Words.saying (depth = 0) placed)
+            // A card face down is drawn as its back: a name and no boxes at all. It says nothing
+            // from any of them, and three empty boxes under it would be three boxes a player
+            // could take for a card that had been silenced rather than one lying face down.
+            let drawn depth placed =
+                [ Say [ Span.toned tone (reading placed) ]
+                  if Placed.isFaceUp placed then
+                      yield! boxed (Words.saying (depth = 0) placed) ]
 
-            let laid = if newestLast then List.rev printed else printed
-
-            // A blank line between two cards where either of them is talking, and none at all
-            // where the stack is a plain list of names. Without it a card's text reads as
-            // though it belonged to whichever name it happens to sit under - which in a pile is
-            // the card above, and is the one card it never belongs to.
-            Tile(
-                None,
-                tone,
-                laid
-                |> List.mapi (fun depth (name, said) ->
-                    [ if depth > 0 && not (List.isEmpty said && List.isEmpty (snd laid[depth - 1])) then
-                          Scene.quietly " "
-                      Say [ Span.toned tone name ]
-                      yield! inSmall said ])
-                |> List.concat
-            )
+            let laid = cards |> List.mapi drawn
+            (if newestLast then List.rev laid else laid) |> List.concat |> fun body -> Tile(None, tone, body)
 
     /// The middle of a line: the two protocols that meet there, theirs above yours, in the
     /// colours of whoever they belong to.
@@ -350,10 +371,16 @@ module Render =
         let side = Session.side beholder session
         let tone = Tone.Slot(Ink.key beholder)
 
+        // "up 2" and "down 1" were what these used to be captioned, and under a card that now
+        // carries its own printed text they read as another line of it - a card that said "up 2,
+        // down 1, down 2, down 3" and meant nothing by it. So each of them says the verb: what
+        // is printed on a card is the only thing on the card that is not an instruction to the
+        // person reading it, and the difference has to be visible without colour.
         let ways card =
             [ for line in Field.facingLines beholder card session.Field ->
-                  Does($"up {line}", $"play {Card.key card} {line}", Tone.Plainly)
-              for line in Lines.all -> Does($"down {line}", $"play {Card.key card} {line} down", Tone.Quiet) ]
+                  Does($"play face up {line}", $"play {Card.key card} {line}", Tone.Plainly)
+              for line in Lines.all ->
+                  Does($"play face down {line}", $"play {Card.key card} {line} down", Tone.Quiet) ]
 
         // Always offered, because refreshing is always an action - and when the hand is empty it
         // is the only one, which is when a player most needs to be told it exists.
@@ -371,7 +398,7 @@ module Render =
         // `what fire-3` still says it at length, and now it says the same thing twice rather
         // than being the only place to find it.
         let card' card =
-            Tile(Some(Card.name card), tone, inSmall (Words.printed card) @ [ Scene.quietly " " ] @ ways card)
+            Tile(Some(Card.name card), tone, boxed (Words.boxes card) @ ways card)
 
         match side.Hand |> List.sortBy (fun card -> Protocol.name card.Protocol, card.Value) with
         | [] -> Walled(Across, [ Scene.squared [ again ] ])
@@ -595,6 +622,7 @@ module Render =
               ""
               "WHAT A CARD SAYS"
               Notes.text
+              Notes.boxes
               ""
               "COMPILING, AND WINNING"
               Notes.compiling
@@ -656,6 +684,7 @@ module Render =
                     Blocks.field,
                     [ field beholder session
                       Scene.noted margins Notes.field
+                      Scene.noted margins Notes.boxes
                       Scene.noted margins Notes.compiling ]
                 )
 
@@ -718,11 +747,11 @@ module Render =
             |> List.tryPick (fun word -> Card.byName (word.ToLowerInvariant()))
 
         match aboutACard with
-        | Some card ->
-            Block(
-                Card.name card,
-                Words.printed card |> List.map Scene.says
-            )
+        // Drawn as the card, boxes and all, rather than as three sentences in a row. It is the
+        // same three boxes the board draws, so a card looked up here and the same card lying on
+        // the table are recognisably one thing - and which box a line is in is half of what
+        // somebody asking about a card is asking.
+        | Some card -> Block(Card.name card, boxed (Words.boxes card))
         | None ->
 
         let said =
@@ -746,15 +775,23 @@ module Render =
 
     // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that: a cell here is a card, with its
-    /// name and what is printed under it, so it wants far more room than a board of squares
-    /// would ask for - and the writing wants to start at the left edge every line rather than
-    /// be centred like a mark in a square, because it is a paragraph and not a glyph.
+    /// This game's own rules of drawing, and no more than that.
+    ///
+    /// A cell here is a card - its name, its three boxes and every way it could be laid - so it
+    /// wants far more room than a board of squares would ask for, it fills from the top rather
+    /// than sitting in the middle, and its writing starts at the left edge of every line because
+    /// it is a paragraph and not a glyph.
+    ///
+    /// The last line is the one that is not a preference. A cell of a board is square by default,
+    /// which is right for the card and wrong for the three boxes inside it: a box has whatever
+    /// height its text needs, and a box holding nothing is a thin empty one rather than a square
+    /// of blank space the size of a card.
     let private sheet =
         """
 .grid { --cell: 15rem; }
-.grid .tile { align-items: stretch; }
+.grid .tile { align-items: stretch; justify-content: flex-start; }
 .grid .tile .said { text-align: left; }
+.grid .tile .tile { min-height: 0; min-width: 0; }
 """
 
     let shell =

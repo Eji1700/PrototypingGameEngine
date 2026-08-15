@@ -592,10 +592,20 @@ module Readers =
             | Walled(across, rows) -> [ grid paint palette room across rows ]
             | Tile(title, tone, body) ->
                 match title with
-                | Some _ -> [ walled palette tone title (stacked paint palette room body) false ]
+                // `wide` rather than `false`, and it is what a cell inside a grid is handed.
+                // Spectre draws a panel to the width of what is in it unless it is told to
+                // expand, and it drops a header that will not fit inside that width without
+                // saying so - so a tile called `Water-2` holding the words "in hand" came out
+                // as a box with no name on it at all. What a cell is called is not something a
+                // reader gets to leave out, so a tile fills the room it was given, and passes
+                // that on to whatever is inside it: a tile within a tile is a box within a box,
+                // and the inner one has the same reason to keep its name.
+                | Some _ -> [ walled palette tone title (spread paint palette room wide body) wide ]
                 // A cell with nothing to call it is drawn without walls of its own: it is
-                // already sitting inside a grid, and a wall inside a wall is two walls.
-                | None -> [ stacked paint palette room body ]
+                // already sitting inside a grid, and a wall inside a wall is two walls. It
+                // passes the room on all the same - a nameless tile is not a narrower place to
+                // stand, it is no box at all.
+                | None -> [ spread paint palette room wide body ]
             // Only ever reached by a patch drawn on its own, outside the map it belongs to.
             | Patch(_, _, body) -> [ stacked paint palette room body ]
             // A terminal cannot make a letter bigger, so what it can do instead is make it
@@ -605,8 +615,10 @@ module Readers =
             | Big text -> [ markup (Tint.wrap "bold" (span paint palette text)) ]
             | Does(caption, _, tone) -> [ markup (span paint palette { Text = caption; Tone = tone }) ]
 
-        and private stacked paint palette room parts =
-            Spectre.Console.Rows(parts |> List.collect (render paint palette room false)) :> IRenderable
+        and private spread paint palette room wide parts =
+            Spectre.Console.Rows(parts |> List.collect (render paint palette room wide)) :> IRenderable
+
+        and private stacked paint palette room parts = spread paint palette room false parts
 
         and private grid paint palette room across rows =
             let inner = max across 5
@@ -618,7 +630,7 @@ module Readers =
             // A space rather than nothing, because nothing is what Spectre folds away: an
             // empty markup renders no segment at all and the room asked for never arrives.
             let roomy cell =
-                Spectre.Console.Rows([ markup " " ] @ render paint palette inner false cell @ [ markup " " ])
+                Spectre.Console.Rows([ markup " " ] @ render paint palette inner true cell @ [ markup " " ])
                 :> IRenderable
 
             let walls (row: Course) =

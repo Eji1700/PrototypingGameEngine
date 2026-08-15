@@ -53,14 +53,17 @@ cards carry six different numbers, so no two cards in a deck are the same card, 
 is naming a card rather than a place in a hand. That matters: `fire-3` is still `fire-3` after
 the hand beside it has changed.
 
-**Every card on the screen says what it does.** A card in hand carries the whole of what is
-printed on it, and a card on the table carries exactly as much of it as that card is still
-allowed to say: nothing at all face down, its top box alone once something is played over it,
-and the lot while it is face up and uncovered. That is not the board's opinion about what is
-worth showing - it is [the same three cases the rules
-make](Rules/Words.fs), read off the same `Text` that makes them, so a card cannot be printed
-saying something it is no longer doing. `what fire-3` is still the place to read the whole of a
-card, including the half a cover has silenced and every card not on the table at all.
+**Every card on the screen is drawn as its three boxes**, empty ones and all - because which box
+a rule is in is the rule that matters most here. A card played over another covers its middle and
+its bottom and leaves its top showing, so a covered card is drawn with two empty boxes, and those
+two are exactly what it has stopped saying. A card lying face down is drawn as its name and no
+boxes at all: it says nothing, whatever is printed on it.
+
+That grouping is [the same one the rules make](Rules/Words.fs), off the same `Text` that makes
+them, rather than the board's own opinion about what is worth showing - so **the top box is
+exactly what a cover cannot silence**, which is a sentence the tests hold the game to. `what
+fire-3` draws the same three boxes, and is still the place to read a card that is nowhere near
+the table.
 
 ## How a game goes
 

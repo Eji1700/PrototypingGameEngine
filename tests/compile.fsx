@@ -47,11 +47,36 @@ let private handOf seat model = (Session.side seat (standing model)).Hand
 
 let private mentions (needle: string) (text: string) = text.Contains needle
 
+/// The same words with the lines put back together.
+///
+/// A card's text is broken to the width of the box it is printed in before any reader sees it,
+/// so a check looking for the sentence it was written as has to undo that first - and is then
+/// asking about the words rather than about where they happened to break.
+let private flowing (text: string) =
+    text.Split([| ' '; '\t'; '\r'; '\n' |], System.StringSplitOptions.RemoveEmptyEntries)
+    |> String.concat " "
+
+let private reads (needle: string) (text: string) = mentions (flowing needle) (flowing text)
+
 /// The board as one seat reads it. Up here rather than beside the screens below, because what
 /// one seat may see of another is checked from the moment the protocols go down.
 let private drawn view seat model = view.Board Margins.all seat model
 
 let private card protocol value = { Protocol = protocol; Value = value }
+
+/// Which of a card's three boxes a line is printed in.
+///
+/// Worth asking directly, because it is the one thing about a line of card text that changes
+/// what the game does with it: the top box goes on applying with something built over the card
+/// and the other two do not. It used to be asked by looking for a *"While uncovered:"* on the
+/// front of the sentence, which was the box saying which box it was in - and the boxes say that
+/// themselves now.
+let private printedIn card said =
+    let top, middle, bottom = Words.boxes card
+
+    [ "top", top; "middle", middle; "bottom", bottom ]
+    |> List.tryPick (fun (which, box) -> if List.contains said box then Some which else None)
+    |> Option.defaultValue "no box at all"
 
 // A fixture that lays a card on the table lays a card that *does something*, if that card has
 // anything printed on it - so the checks below use quiet ones as scenery on purpose, and say so
@@ -1716,10 +1741,13 @@ report
      trimmed [ Placed.up (card Spirit 0) ])
 
 report
-    "and both of them print what they ask"
-    [ "If this card is covering a card, draw a card."
-      "While uncovered: You skip your check cache phase." ]
-    ([ card Life 4; card Spirit 0 ] |> List.map (fun each -> Words.printed each |> List.last))
+    "and both of them print what they ask, in the box that says how long it holds"
+    [ "If this card is covering a card, draw a card.", "middle"
+      "You skip your check cache phase.", "bottom" ]
+    ([ card Life 4; card Spirit 0 ]
+     |> List.map (fun each ->
+         let said = Words.printed each |> List.last
+         said, printedIn each said))
 
 // And the boxes that listen. Four triggers on things the game already does, and all four are
 // printed in a **top** box - so unlike the start and end boxes they go on listening covered.
@@ -2046,12 +2074,12 @@ report
     "and asking about a card is answered with what it says"
     (true, true)
     (let screen = plain.Answer "what fire-0" (opened 1UL)
-     mentions "Flip any other card" screen, mentions "Draw 2 cards" screen)
+     reads "Flip any other card" screen, reads "Draw 2 cards" screen)
 
 report
     "and asking about the quietest of them still says something"
     true
-    (plain.Answer "what speed-2" (opened 1UL) |> mentions "deleted by compiling")
+    (plain.Answer "what speed-2" (opened 1UL) |> reads "deleted by compiling")
 
 report
     "every one of the ninety says something, which is why the board marks none of them"
@@ -2797,17 +2825,20 @@ report
      Field.allows one (quiet Water 4) 3 plainly.Field, Field.allows one (quiet Water 4) 3 opened'.Field)
 
 report
-    "and all four print what they mean"
-    [ "Your opponent cannot play cards face down in this line."
-      "While uncovered: Your opponent cannot play cards in this line."
-      "Your opponent can only play cards face down."
-      "You can play cards in any line." ]
+    "and all four print what they mean, and where"
+    [ "Your opponent cannot play cards face down in this line.", "top"
+      "Your opponent cannot play cards in this line.", "bottom"
+      "Your opponent can only play cards face down.", "top"
+      "You can play cards in any line.", "top" ]
     ([ card Metal 2; card Plague 0; card Psychic 1; card Spirit 1 ]
-     // The restriction is one line of a card that may say more, and on Plague-0 it is the last
-     // rather than the first - which is the whole of what its being in the bottom box means.
+     // The restriction is one line of a card that may say more, and on Plague-0 it is in the
+     // bottom box - which is the whole of the difference between a line you have shut and a line
+     // you have shut until somebody builds on it.
      |> List.map (fun each ->
-         Words.printed each
-         |> List.find (fun said -> said.Contains "play cards")))
+         let said =
+             Words.printed each |> List.find (fun said -> said.Contains "play cards")
+
+         said, printedIn each said))
 
 // --- cards that come off a deck, and cards that change hands ------------------------------------
 //
@@ -3415,13 +3446,13 @@ report
 
 report
     "and the card prints both halves"
-    "At the start of your turn, while uncovered: Either discard a card or flip this card."
+    "At the start of your turn: Either discard a card or flip this card."
     (Words.printed (card Spirit 1) |> List.last)
 
 report
     "and both cards print what they do"
     [ "Discard a card. If you do, delete any card."
-      "At the start of your turn, while uncovered: You may draw a card. If you do, delete any other card, then delete this card." ]
+      "At the start of your turn: You may draw a card. If you do, delete any other card, then delete this card." ]
     ([ card Fire 1; card Death 1 ] |> List.map (fun each -> Words.printed each |> List.head))
 
 // --- the cache, and the phase that checks it ------------------------------------------------------
@@ -4276,10 +4307,6 @@ report
 /// text. The cell is what says where one piece of writing ends and the next begins, so the
 /// cell is what this joins.
 let rec private wording scene : string list =
-    let flowing (text: string) =
-        text.Split([| ' '; '\t'; '\r'; '\n' |], System.StringSplitOptions.RemoveEmptyEntries)
-        |> String.concat " "
-
     match scene with
     | Blank -> []
     | Say line -> [ Scene.plainText line ]
@@ -4297,14 +4324,50 @@ let rec private wording scene : string list =
     | Aligned rows -> rows |> List.map (List.map Scene.plainText >> String.concat " ")
     | Big span -> [ span.Text ]
 
-/// The board as one seat reads it, in words - drawn from a position posed by hand, laid onto
-/// the timeline of a real game so that there is a model to draw from.
-let private shownAt seat session =
-    let model = opened 1UL
+/// Every cell name on a described screen, in the order they are drawn.
+let rec private named scene : string list =
+    match scene with
+    | Tile(title, _, body) -> Option.toList title @ (body |> List.collect named)
+    | Block(_, body)
+    | Stack body
+    | Beside body
+    | Patch(_, _, body) -> body |> List.collect named
+    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect named)
+    | Blank
+    | Say _
+    | Note _
+    | Written _
+    | Heading _
+    | Does _
+    | Aligned _
+    | Big _ -> []
 
+/// One named part of a described screen, on its own - so a check about the table is not
+/// answered by something in the hand that happens to say the same thing.
+let rec private blockOf title scene =
+    match scene with
+    | Block(name, body) when name = title -> Some(Block(name, body))
+    | Block(_, body)
+    | Stack body
+    | Beside body -> body |> List.tryPick (blockOf title)
+    | _ -> None
+
+/// The board as one seat reads it, described - drawn from a position posed by hand, laid onto
+/// the timeline of a real game so that there is a model to draw from.
+let private boardAt seat session =
+    let model = opened 1UL
     Render.board Margins.all seat { model with Timeline = Timeline.advance (Make Refresh) session model.Timeline }
-    |> wording
-    |> String.concat "\n"
+
+let private shownAt seat session =
+    boardAt seat session |> wording |> String.concat "\n"
+
+/// The names of the boxes drawn in the field, and nothing else - three to a face-up card.
+let private boxesOn seat session =
+    boardAt seat session
+    |> blockOf Render.Blocks.field
+    |> Option.get
+    |> named
+    |> List.filter (fun name -> List.contains name [ "top"; "middle"; "bottom" ])
 
 /// **Plague-1** is the card these are asked of, because it is printed in two boxes at once:
 /// *"After your opponent discards cards: draw a card"* in the top, which no covering card can
@@ -4364,5 +4427,75 @@ report
      handOf one model
      |> List.filter (fun held -> not (List.contains held (handOf two model)))
      |> List.exists (fun held -> mentions (Card.name held) screen))
+
+// --- and the three boxes it says it in ------------------------------------------------------------
+//
+// A card is three printed boxes, and which one a rule is in is the difference between a rule that
+// survives being built on and one that does not. So all three are drawn, empty ones and all: an
+// empty box is what says *this card has nothing to say once it is covered*, and a card drawn with
+// its empty boxes left out is a card whose one line could be any of the three.
+
+report
+    "a card face up is drawn as three boxes, and one that uses a single box still has three"
+    [ "top"; "middle"; "bottom" ]
+    // Water-5 is a five, and every five in the deck says one thing out of its middle box.
+    (boxesOn one (standing (opened 1UL) |> poised one 1 [ card Water 5 ]))
+
+report
+    "and a card face down is drawn as no boxes at all, having nothing to say out of any of them"
+    []
+    (boxesOn one (standing (opened 1UL) |> lyingDown one 1 [ card Water 5 ]))
+
+report
+    "a covered card still has its three, and the two a cover silenced are the two drawn empty"
+    ([ "top"; "middle"; "bottom"; "top"; "middle"; "bottom" ], true, false)
+    (let session = standing (opened 1UL) |> poised one 1 [ quiet Water 4; card Plague 1 ]
+     let screen = shownAt one session
+     boxesOn one session, mentions inTheTop screen, mentions inTheMiddle screen)
+
+report
+    "and every one of the ninety is drawn the same way, whatever is printed on it"
+    []
+    (Protocol.all
+     |> List.collect Card.inProtocol
+     |> List.filter (fun each ->
+         boxesOn one (standing (opened 1UL) |> poised one 1 [ each ]) <> [ "top"; "middle"; "bottom" ]))
+
+// --- and a cell keeps its name, however little is written in it ------------------------------------
+//
+// A question offering a card draws a cell named for the card and holding the two words "in hand".
+// That came out at the colour terminal as a box with no name on it: Spectre draws a panel to the
+// width of what is in it unless it is told to expand, and drops a header that will not fit inside
+// that width without saying so. The reader fills the cell it was given now - checked here rather
+// than there because it takes a real screen with a real question on it to notice.
+
+report
+    "every view names the cards a question is offering, however little else is in the cell"
+    true
+    (let session =
+        standing (opened 1UL)
+        |> onlyHolding one (card Fire 4)
+        |> fun session ->
+            { session with
+                Field =
+                    session.Field
+                    |> Field.update one (fun side ->
+                        { side with
+                            Hand = [ card Fire 4; card Water 2; card Water 3 ] }) }
+
+     let model = opened 1UL
+
+     let asked =
+         Update.update
+             rules
+             (Make(Play(card Fire 4, 3, FaceUp)))
+             { model with Timeline = Timeline.advance (Make Refresh) session model.Timeline }
+
+     // Fire-4 has stopped to ask which card to discard, and the two it is offering are in hand.
+     Session.asking (standing asked) |> Option.isSome
+     && (Playable.offered AtATerminal standard compiled
+         |> List.forall (fun view ->
+             let screen = view.Board Margins.all one asked
+             mentions (Card.name (card Water 2)) screen && mentions (Card.name (card Water 3)) screen)))
 
 finish ()

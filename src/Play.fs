@@ -18,46 +18,63 @@ let private stampNow () =
 [<Literal>]
 let private Keyboard = "keyboard"
 
-/// Do what a typed line asked of the world.
+/// Do what a typed line asked of the world, and hand back whatever there is to say about it.
 ///
 /// Writing a file is the whole of what that ever is. `Solo` decides *whether* - including
 /// the awkward case where a restart has to write the game it just swept away rather than
 /// the one in hand - and this does it, which is the only reason there is a `Program.fs`
 /// between a keyboard and a fold.
+///
+/// Handed back rather than printed, for the reason the loop below gives: anything said before
+/// the board is drawn is said off the top of the screen.
 let private errand game sitters doing =
     let write model stamp announce =
         if announce then
             let path = Transcript.save game stamp sitters model.Journal
-            printfn "Record saved to %s" (Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
-        elif not (Journal.isEmpty model.Journal) then
-            Transcript.save game stamp sitters model.Journal |> ignore
+            [ $"Record saved to {Path.GetRelativePath(Directory.GetCurrentDirectory(), path)}" ]
+        else
+            if not (Journal.isEmpty model.Journal) then
+                Transcript.save game stamp sitters model.Journal |> ignore
+
+            []
 
     match doing with
-    | Carrying -> ()
+    | Carrying -> []
     | Keeping(model, stamp, announce) -> write model stamp announce
-    | Leaving(Some model, stamp) -> if not (Journal.isEmpty model.Journal) then write model stamp true
-    | Leaving(None, _) -> ()
+    | Leaving(Some model, stamp) -> if Journal.isEmpty model.Journal then [] else write model stamp true
+    | Leaving(None, _) -> []
 
-/// Say the parts of what the table said that a terminal has to print for itself. A screen is
-/// not one of them: the loop below draws the board afresh each turn, because a terminal
-/// cannot patch one in place the way a page can.
+/// The parts of what the table said that a terminal has to show for itself. A screen is not
+/// one of them: the loop below draws the board afresh each turn, because a terminal cannot
+/// patch one in place the way a page can.
 ///
-/// The bell is answered the same way a joined table answers it, and for the same reason -
-/// but at one keyboard it never rings, because the only console at the table is the one that
-/// just typed something and a table never nudges the player who spoke.
+/// Handed back rather than printed, and that is the whole of the fix for a thing that had been
+/// wrong since there was a loop at all: a refusal, a page of help or a whole record was printed
+/// where it happened, and then the board was drawn *under* it - so the longer the answer, the
+/// further off the top of the screen it went, and `help` at a game with a board this tall
+/// scrolled itself away entirely. It goes below the board now, where the eye already is because
+/// the prompt is the next line down.
+///
+/// The bell is not one of those: it is rung here rather than carried, because a bell is not
+/// something to read in order. At one keyboard it never rings anyway - the only console at the
+/// table is the one that just typed something, and a table never nudges the player who spoke.
 let private tell posts =
     for post in posts do
+        if post.Say = Nudged then printf "\a"
+
+    posts
+    |> List.choose (fun post ->
         match post.Say with
         | Told text
         | TurnedAway text
-        // Never said at this table - there are no seats here to get up from, and putting
-        // the game down ends the loop below rather than being reported to it. Printed
-        // anyway, because a sentence addressed to the person at the keyboard is a sentence
-        // to show them whatever came to say it.
-        | GotUp text -> printf "%s" (text + Environment.NewLine)
-        | Nudged -> printf "\a"
+        // Never said at this table - there are no seats here to get up from, and putting the
+        // game down ends the loop below rather than being reported to it. Shown anyway,
+        // because a sentence addressed to the person at the keyboard is a sentence to show
+        // them whatever came to say it.
+        | GotUp text -> Some text
+        | Nudged
         | Screen _
-        | Seated _ -> ()
+        | Seated _ -> None)
 
 /// Fold what is typed here into the game. Once it is over the loop stays open, so the
 /// record can be read and walked back through before the table is cleared.
@@ -68,20 +85,28 @@ let private tell posts =
 ///
 /// Which game it is, is the table's rather than this loop's: `Solo` carries it, and nothing
 /// between here and the file being written has to be told.
-let rec private loop sitters solo =
+let rec private loop sitters said solo =
+    let show lines =
+        for line in lines do
+            printf "%s" (line + Environment.NewLine)
+
     Solo.board Keyboard solo |> Option.iter (printf "%s")
+    // What the last line came to, under the board rather than over it. A refusal or a page of
+    // help printed where it happened is a refusal the board then scrolls off the screen.
+    show said
     printf "%s" (if Solo.isOver solo then "(over) > " else "> ")
 
     let heard line =
         let next, posts, doing = Solo.said (stampNow ()) Keyboard line solo
-
-        tell posts
-        errand (Solo.game solo) sitters doing
+        let answered = tell posts @ errand (Solo.game solo) sitters doing
 
         match doing with
-        | Leaving _ -> Solo.model next
+        // Nothing more will be drawn, so this is the last chance to say where the record went.
+        | Leaving _ ->
+            show answered
+            Solo.model next
         | Carrying
-        | Keeping _ -> loop sitters next
+        | Keeping _ -> loop sitters answered next
 
     match Console.ReadLine() with
     // Nothing more coming. The same as saying so, and answered the same way, so that a
@@ -147,7 +172,9 @@ let private serveFor game palette reach (model, sitters, stamp) =
         Solo.opened game stamp model
         |> Solo.against (machines game sitters model)
 
-    errand game sitters doing
+    // Nobody at a keyboard here, so there is nowhere to put what it has to say - a browser is
+    // told where its record went by the page rather than by this process's console.
+    errand game sitters doing |> ignore
     Server.serve reach palette solo stampNow keep
 
 /// Open a table for players at their own machines. Nothing comes back: the table waits
@@ -361,12 +388,13 @@ let private play game view sitters stamp model =
         Solo.opened game stamp model
         |> Solo.against (machines game sitters model)
 
-    errand game sitters doing
+    let kept = errand game sitters doing
 
     let solo, posts = seated |> Solo.watching Keyboard { Margins = Margins.all; View = view }
 
-    tell posts
-    loop sitters solo |> ignore
+    // Under the first board, the same as everything after it - which for the one line said here,
+    // who the machine is, is the only place it would ever be read.
+    loop sitters (kept @ tell posts) solo |> ignore
     0
 
 /// Act on what a command line asked for.

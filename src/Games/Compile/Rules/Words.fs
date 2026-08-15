@@ -218,12 +218,25 @@ module Words =
         | [] -> None
         | said -> Some(said |> List.map (fun one -> capital one + ".") |> String.concat " ")
 
-    /// A card as it is printed, box by box, top to bottom - and only the boxes it uses.
+    /// A card as it is printed: the top box, the middle box and the bottom box, in that order,
+    /// each of them possibly empty.
     ///
-    /// Which box a line is in is worth saying, because it is the difference between a rule that
-    /// survives being built on and one that does not. So the bottom two are marked and the top
-    /// one is not, which is the way round that leaves the common case unadorned.
-    let private sayings (text: Text) =
+    /// **Which box a rule is in is the rule that matters most at this game.** A card played over
+    /// another one covers its middle and its bottom and leaves its top showing, so the same
+    /// sentence is a rule that survives being built on or one that does not, depending on
+    /// nothing but where it is printed. That is why they are handed back separately rather than
+    /// run together: a board that draws all three, empty ones and all, says which half of a card
+    /// a cover has taken away by leaving a box a player can see is empty.
+    ///
+    /// The grouping is the one the **rules** make rather than the one a printed card's
+    /// typography makes, and the two part company in exactly one place: all four triggers go on
+    /// listening from under another card, so they are top-box things here however they read.
+    /// `Ruling.saying` splits the standing rules the same way and `Resolving` splits the
+    /// triggers the same way, so *the top box is exactly what a cover cannot silence* - which is
+    /// a sentence a check can hold this to, and typography is not.
+    let boxes card =
+        let text = Printed.on card
+
         let listening =
             function
             | YouDraw -> "After you draw cards"
@@ -231,66 +244,62 @@ module Words =
             | TheyDiscard -> "After your opponent discards cards"
             | YouClearCache -> "After you clear cache"
 
-        [ text.Top |> List.map ongoing |> sentence
-          for trigger, commands in text.After do
-              commands
+        let top =
+            [ text.Top |> List.map ongoing |> sentence
+              for trigger, commands in text.After do
+                  commands
+                  |> List.map printing
+                  |> sentence
+                  |> Option.map (fun said -> $"{listening trigger}: " + said)
+              text.WhenFlipped
               |> List.map printing
               |> sentence
-              |> Option.map (fun said -> $"{listening trigger}: " + said)
-          text.Shown |> List.map printing |> sentence
-          text.Bottom
-          |> List.map ongoing
-          |> sentence
-          |> Option.map (fun said -> "While uncovered: " + said)
-          text.AtStart
-          |> List.map printing
-          |> sentence
-          |> Option.map (fun said -> "At the start of your turn, while uncovered: " + said)
-          text.AtEnd
-          |> List.map printing
-          |> sentence
-          |> Option.map (fun said -> "At the end of your turn, while uncovered: " + said)
-          text.WhenFlipped
-          |> List.map printing
-          |> sentence
-          |> Option.map (fun said -> "When this card would be flipped, first: " + said)
-          text.WhenCompiled
-          |> List.map printing
-          |> sentence
-          |> Option.map (fun said -> "When this card would be deleted by compiling, first: " + said)
-          text.WhenCovered
-          |> List.map printing
-          |> sentence
-          |> Option.map (fun said -> "When this card would be covered, first: " + said) ]
-        |> List.choose id
+              |> Option.map (fun said -> "When this card would be flipped, first: " + said)
+              text.WhenCompiled
+              |> List.map printing
+              |> sentence
+              |> Option.map (fun said -> "When this card would be deleted by compiling, first: " + said) ]
 
-    let printed card = sayings (Printed.on card)
+        let middle = [ text.Shown |> List.map printing |> sentence ]
 
-    /// What a card lying on the table is still saying, from where it lies.
+        let bottom =
+            [ text.Bottom |> List.map ongoing |> sentence
+              text.AtStart
+              |> List.map printing
+              |> sentence
+              |> Option.map (fun said -> "At the start of your turn: " + said)
+              text.AtEnd
+              |> List.map printing
+              |> sentence
+              |> Option.map (fun said -> "At the end of your turn: " + said)
+              text.WhenCovered
+              |> List.map printing
+              |> sentence
+              |> Option.map (fun said -> "When this card would be covered, first: " + said) ]
+
+        List.choose id top, List.choose id middle, List.choose id bottom
+
+    /// The whole of a card, run together - for reading one at length rather than for drawing it.
+    let printed card =
+        let top, middle, bottom = boxes card
+        top @ middle @ bottom
+
+    /// The same three boxes, with as much taken out of each as this card has been silenced.
     ///
-    /// **Face down it says nothing at all**, whatever is printed on it - so a board that
-    /// printed the text of a face-down card would be handing over the one thing at this game
-    /// that is worth something precisely because nobody can read it. Face up and **covered**,
-    /// it says its top box and no more: the standing rule, and the four triggers that go on
-    /// listening from under another card. Uncovered, it says the lot.
+    /// **Face down it says nothing from any of them**, whatever is printed on it - so a board
+    /// that printed the text of a face-down card would be handing over the one thing at this
+    /// game that is worth something precisely because nobody can read it. Face up and
+    /// **covered**, its middle and bottom are empty and its top is untouched. Uncovered, it says
+    /// the lot.
     ///
-    /// Which is not a screen's opinion about what to print. It is the same three cases the
-    /// rules themselves make, read off the same `Text` that makes them - `Ruling.saying` asks
-    /// it of the standing rules and `Resolving` asks it of the triggers. A board that decided
-    /// for itself which half of a card to show would be a fourth answer to a settled question,
-    /// and the one nobody would think to check.
+    /// Which is not a screen's opinion about what to print. It is the same three cases the rules
+    /// themselves make, off the same `Text` that makes them.
     let saying uncovered placed =
-        let text = Printed.on placed.Card
-
-        if not (Placed.isFaceUp placed) then []
-        elif uncovered then sayings text
+        if not (Placed.isFaceUp placed) then
+            [], [], []
         else
-            sayings
-                { Printed.blank with
-                    Top = text.Top
-                    After = text.After
-                    WhenFlipped = text.WhenFlipped
-                    WhenCompiled = text.WhenCompiled }
+            let top, middle, bottom = boxes placed.Card
+            if uncovered then top, middle, bottom else top, [], []
 
     let event =
         function
