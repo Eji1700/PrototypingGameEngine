@@ -223,9 +223,7 @@ module Words =
     /// Which box a line is in is worth saying, because it is the difference between a rule that
     /// survives being built on and one that does not. So the bottom two are marked and the top
     /// one is not, which is the way round that leaves the common case unadorned.
-    let printed card =
-        let text = Printed.on card
-
+    let private sayings (text: Text) =
         let listening =
             function
             | YouDraw -> "After you draw cards"
@@ -265,6 +263,34 @@ module Words =
           |> sentence
           |> Option.map (fun said -> "When this card would be covered, first: " + said) ]
         |> List.choose id
+
+    let printed card = sayings (Printed.on card)
+
+    /// What a card lying on the table is still saying, from where it lies.
+    ///
+    /// **Face down it says nothing at all**, whatever is printed on it - so a board that
+    /// printed the text of a face-down card would be handing over the one thing at this game
+    /// that is worth something precisely because nobody can read it. Face up and **covered**,
+    /// it says its top box and no more: the standing rule, and the four triggers that go on
+    /// listening from under another card. Uncovered, it says the lot.
+    ///
+    /// Which is not a screen's opinion about what to print. It is the same three cases the
+    /// rules themselves make, read off the same `Text` that makes them - `Ruling.saying` asks
+    /// it of the standing rules and `Resolving` asks it of the triggers. A board that decided
+    /// for itself which half of a card to show would be a fourth answer to a settled question,
+    /// and the one nobody would think to check.
+    let saying uncovered placed =
+        let text = Printed.on placed.Card
+
+        if not (Placed.isFaceUp placed) then []
+        elif uncovered then sayings text
+        else
+            sayings
+                { Printed.blank with
+                    Top = text.Top
+                    After = text.After
+                    WhenFlipped = text.WhenFlipped
+                    WhenCompiled = text.WhenCompiled }
 
     let event =
         function

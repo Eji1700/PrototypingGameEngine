@@ -16,6 +16,11 @@ type Command<'Move> =
     /// Show or hide the notes that explain the board. Saying neither turns them
     /// whichever way they are not.
     | Notes of showing: bool option
+    /// The same for the box that lists what can be typed. Its own word rather than riding
+    /// along with the notes, because the two go stale at different times: the writing under a
+    /// board explains a rule and is done with once the rule is known, while the list of verbs
+    /// is a reminder of spelling that a player may well want long after.
+    | Listing of showing: bool option
     /// Read the game a different way. Only the name is taken here: which views there
     /// are is a question for whatever is doing the showing, not for the parser.
     | Looking of view: string
@@ -103,6 +108,11 @@ module Commands =
         | [ "notes"; "on" ] -> Some(Ok(Notes(Some true)))
         | [ "notes"; "off" ] -> Some(Ok(Notes(Some false)))
         | "notes" :: _ -> Some(Error "Say 'notes' to turn them the other way, or 'notes on' or 'notes off'.")
+        | [ "commands" ] -> Some(Ok(Listing None))
+        | [ "commands"; "on" ] -> Some(Ok(Listing(Some true)))
+        | [ "commands"; "off" ] -> Some(Ok(Listing(Some false)))
+        | "commands" :: _ ->
+            Some(Error "Say 'commands' to turn the box the other way, or 'commands on' or 'commands off'.")
         | [ "view"; name ] -> Some(Ok(Looking name))
         | "view" :: _ -> Some(Error "Say 'view <name>' to change how the board is drawn.")
         | [ "undo" ]

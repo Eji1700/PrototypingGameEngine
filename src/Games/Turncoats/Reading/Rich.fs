@@ -304,7 +304,8 @@ module Rich =
 
     // --- the whole screen ------------------------------------------------------------------
 
-    let board palette notes (beholder: Player) model =
+    let board palette (margins: Margins) (beholder: Player) model =
+        let notes = margins.Notes
         let game = Playing.game model
         let active = Game.active game
 
@@ -343,7 +344,7 @@ module Rich =
                 []
 
         let commands =
-            if notes then
+            if margins.Commands then
                 [ wide Render.Blocks.commands (plainly palette (Render.commands @ [ ""; "  " + Render.shorthand ])) ]
             else
                 []

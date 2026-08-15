@@ -49,7 +49,7 @@ let private mentions (needle: string) (text: string) = text.Contains needle
 
 /// The board as one seat reads it. Up here rather than beside the screens below, because what
 /// one seat may see of another is checked from the moment the protocols go down.
-let private drawn view seat model = view.Board true seat model
+let private drawn view seat model = view.Board Margins.all seat model
 
 let private card protocol value = { Protocol = protocol; Value = value }
 
@@ -4227,13 +4227,13 @@ report
      let after = Update.update rules (Make(Play(card, 3, FaceUp))) model
 
      Playable.offered AtATerminal standard compiled
-     |> List.forall (fun view -> mentions (Card.name card) (view.Board true one after)))
+     |> List.forall (fun view -> mentions (Card.name card) (view.Board Margins.all one after)))
 
 report
     "the page carries no control the game would not take"
     []
     (let model = opened 1UL
-     let page = asPage.Board true one model
+     let page = asPage.Board Margins.all one model
 
      // Every `data-on-click` on the page types a line; each of them has to be a line this
      // game can read back into a move.
@@ -4248,12 +4248,121 @@ report
 report
     "the draft offers a button for every protocol still on the table"
     true
-    (let page = asPage.Board true one (dealt 1UL)
+    (let page = asPage.Board Margins.all one (dealt 1UL)
      Protocol.all |> List.forall (fun protocol -> mentions (Protocol.name protocol) page))
 
 report
     "both seats take a colour, and they are not the same one"
     (2, 2)
     (List.length compiled.Slots, compiled.Slots |> List.map (fun slot -> slot.Standard) |> List.distinct |> List.length)
+
+// --- and what every card of them says ------------------------------------------------------------
+//
+// A hand of five coloured names is a hand you have to have memorised to play from, and a table of
+// them is a board you cannot read: the whole choice at this game is between the number on a card
+// and the words under it, and only one of the two used to be on the screen.
+//
+// What a card on the table says is **not** the whole of what is printed on it. It is exactly what
+// that card is still allowed to say from where it is lying, which is a thing the rules already
+// answer - so these check the board against the rule rather than against a screen.
+
+/// Everything a described screen says, cell by cell, with the lines inside one cell put back
+/// together into a run of words.
+///
+/// Asked of the description rather than of any one screen, because a card's text is broken to
+/// the width of the cell holding it before any reader sees it - and a reader that lays a grid
+/// out by counting characters writes line one of every cell in the row before line two of any
+/// of them, so the sentence a player reads down a column is not a sentence anywhere in the
+/// text. The cell is what says where one piece of writing ends and the next begins, so the
+/// cell is what this joins.
+let rec private wording scene : string list =
+    let flowing (text: string) =
+        text.Split([| ' '; '\t'; '\r'; '\n' |], System.StringSplitOptions.RemoveEmptyEntries)
+        |> String.concat " "
+
+    match scene with
+    | Blank -> []
+    | Say line -> [ Scene.plainText line ]
+    | Note text
+    | Written text
+    | Heading text -> [ text ]
+    | Does(caption, _, _) -> [ caption ]
+    | Block(_, body)
+    | Stack body
+    | Beside body -> body |> List.collect wording
+    | Patch(_, _, body) -> body |> List.collect wording
+    | Tile(title, _, body) ->
+        Option.toList title @ [ body |> List.collect wording |> String.concat " " |> flowing ]
+    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect wording)
+    | Aligned rows -> rows |> List.map (List.map Scene.plainText >> String.concat " ")
+    | Big span -> [ span.Text ]
+
+/// The board as one seat reads it, in words - drawn from a position posed by hand, laid onto
+/// the timeline of a real game so that there is a model to draw from.
+let private shownAt seat session =
+    let model = opened 1UL
+
+    Render.board Margins.all seat { model with Timeline = Timeline.advance (Make Refresh) session model.Timeline }
+    |> wording
+    |> String.concat "\n"
+
+/// **Plague-1** is the card these are asked of, because it is printed in two boxes at once:
+/// *"After your opponent discards cards: draw a card"* in the top, which no covering card can
+/// silence, and *"your opponent: discard a card"* in the middle, which any of them can.
+let private inTheTop = "After your opponent discards cards"
+
+let private inTheMiddle = "Your opponent: discard a card"
+
+report
+    "a card face up on its own says everything printed on it"
+    (true, true)
+    (let screen = shownAt one (standing (opened 1UL) |> poised one 1 [ card Plague 1 ])
+     mentions inTheTop screen, mentions inTheMiddle screen)
+
+report
+    "and once something is played over it, only what a cover cannot silence"
+    (true, false)
+    (let screen =
+        shownAt one (standing (opened 1UL) |> poised one 1 [ quiet Water 4; card Plague 1 ])
+
+     mentions inTheTop screen, mentions inTheMiddle screen)
+
+report
+    "a card face down says nothing at all, to the player holding it or to anybody else"
+    [ false; false ]
+    (let session =
+        standing (opened 1UL)
+        |> lyingDown one 1 [ card Plague 1 ]
+        |> onlyHolding one (card Water 4)
+
+     [ one; two ]
+     |> List.map (fun seat ->
+         let screen = shownAt seat session
+         mentions inTheTop screen || mentions inTheMiddle screen))
+
+report
+    "what a card says is on the board of whoever is looking, theirs as well as yours"
+    true
+    (let screen = shownAt two (standing (opened 1UL) |> poised one 1 [ card Plague 1 ])
+     mentions inTheMiddle screen)
+
+report
+    "a card in hand says what it does, so a hand can be played from without being memorised"
+    true
+    (let model = opened 1UL
+     let screen = Render.board Margins.all one model |> wording |> String.concat "\n"
+
+     handOf one model
+     |> List.forall (fun held -> Words.printed held |> List.forall (fun said -> mentions said screen)))
+
+report
+    "and only the reader's own hand does - what the other is holding is still nobody's business"
+    false
+    (let model = opened 1UL
+     let screen = drawn plain two model
+
+     handOf one model
+     |> List.filter (fun held -> not (List.contains held (handOf two model)))
+     |> List.exists (fun held -> mentions (Card.name held) screen))
 
 finish ()

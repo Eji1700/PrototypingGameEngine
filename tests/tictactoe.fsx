@@ -199,6 +199,7 @@ let private reads typed =
     | Ok(Send msg) -> Ok(Words.command msg)
     | Ok Help -> Ok "help"
     | Ok(Notes wanted) -> Ok $"notes {wanted}"
+    | Ok(Listing wanted) -> Ok $"commands {wanted}"
     | Ok(Looking name) -> Ok $"view {name}"
     | Ok(Asking question) -> Ok $"asking {question}"
     | Ok Recount -> Ok "history"
@@ -239,7 +240,7 @@ report
 
 let private view = Playable.plainest AtATerminal (Playable.standard noughts) noughts
 
-let private board = view.Board true (Seat.at 1) walked
+let private board = view.Board Margins.all (Seat.at 1) walked
 
 report "the board is drawn with the marks on it" true (board |> mentions "X | O | X")
 
@@ -251,7 +252,7 @@ report "and marks the seat belonging to whoever is reading" true (board |> menti
 
 report "the other seat is not marked as theirs" false (board |> mentions "O (you)")
 
-report "the notes can be turned off" false (view.Board false (Seat.at 1) walked |> mentions Render.Notes.winning)
+report "the notes can be turned off" false (view.Board Margins.none (Seat.at 1) walked |> mentions Render.Notes.winning)
 
 report "what the game said is on the screen" true (board |> mentions "X takes square 3.")
 
@@ -336,7 +337,7 @@ let private arriving =
         Yours = false } ]
 
 for view in views do
-    let drawn = seen (view.Board true (Seat.at 1) walked)
+    let drawn = seen (view.Board Margins.all (Seat.at 1) walked)
 
     report $"the {view.Name} view says whose turn it is" true (drawn |> mentions "Turn 4")
 
@@ -361,7 +362,7 @@ for view in views do
     report
         $"and the {view.Name} view's notes can be turned off"
         false
-        (seen (view.Board false (Seat.at 1) walked) |> mentions Render.Notes.winning)
+        (seen (view.Board Margins.none (Seat.at 1) walked) |> mentions Render.Notes.winning)
 
     report
         $"the {view.Name} view answers a table still filling up"
@@ -382,8 +383,8 @@ for view in views do
 let private page = Page.page noughts.Page standard
 
 let private fragments =
-    [ "board", Page.Screen, asPage.Board true (Seat.at 1) walked
-      "board with the notes off", Page.Screen, asPage.Board false (Seat.at 1) walked
+    [ "board", Page.Screen, asPage.Board Margins.all (Seat.at 1) walked
+      "board with the notes off", Page.Screen, asPage.Board Margins.none (Seat.at 1) walked
       "waiting", Page.Screen, asPage.Waiting arriving
       "a line the game said", Page.Told, asPage.Says "It is O's turn."
       "the record", Page.Told, asPage.History (Seat.at 1) walked
@@ -440,8 +441,8 @@ report "the game's own stylesheet reaches the page" true (page |> mentions "--ce
 
 report
     "and the board itself is the same board whatever the colours"
-    (asPage.Board true (Seat.at 1) walked)
-    ((Playable.plainest InABrowser crossesAreTeal noughts).Board true (Seat.at 1) walked)
+    (asPage.Board Margins.all (Seat.at 1) walked)
+    ((Playable.plainest InABrowser crossesAreTeal noughts).Board Margins.all (Seat.at 1) walked)
 
 /// What a control on the page would send. The address is written into the markup escaped
 /// twice over - once for the client's own language and once for HTML - so it comes back the
@@ -451,7 +452,7 @@ let private posted (markup: string) =
     |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
     |> List.ofSeq
 
-let private buttons = posted (asPage.Board true (Seat.at 1) walked)
+let private buttons = posted (asPage.Board Margins.all (Seat.at 1) walked)
 
 report "the board has a button for every square nobody has taken" [ "4"; "5"; "6"; "7"; "8"; "9" ] buttons
 
@@ -488,7 +489,7 @@ let rec private controls scene =
     | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect controls)
     | _ -> []
 
-let private described = controls (Render.board true (Seat.at 1) walked)
+let private described = controls (Render.board Margins.all (Seat.at 1) walked)
 
 // The one thing a `Does` is for. A control carries the line it would type, so what a player
 // at a terminal is told to type and what a browser posts when the same control is clicked are
@@ -501,7 +502,7 @@ report "and the page's buttons are exactly the controls the game described" (des
 report
     "and the terminal is told to type the very same lines"
     true
-    (described |> List.forall (fun (caption, _) -> plain.Board true (Seat.at 1) walked |> mentions caption))
+    (described |> List.forall (fun (caption, _) -> plain.Board Margins.all (Seat.at 1) walked |> mentions caption))
 
 // A note is the game's decision and not a reader's, so it is off in the description before it
 // is off on any screen - which is what makes turning it off in one place enough.
@@ -519,9 +520,9 @@ let rec private notes scene =
 report
     "the notes the game explains its board with"
     [ Render.Notes.board; Render.Notes.winning ]
-    (notes (Render.board true (Seat.at 1) walked))
+    (notes (Render.board Margins.all (Seat.at 1) walked))
 
-report "and not one of them survives turning them off" [] (notes (Render.board false (Seat.at 1) walked))
+report "and not one of them survives turning them off" [] (notes (Render.board Margins.none (Seat.at 1) walked))
 
 // --- the seat the program plays --------------------------------------------------------------
 //

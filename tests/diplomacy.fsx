@@ -258,7 +258,7 @@ let private wallsAcross =
 /// The lines of the drawn map with the writing on them - bars and letters, and none of the
 /// dashes the line between two rows is made of.
 let private drawnRows =
-    (plain.Board true (Power.seatOf Austria) dealt).Replace("\r\n", "\n").Split '\n'
+    (plain.Board Margins.all (Power.seatOf Austria) dealt).Replace("\r\n", "\n").Split '\n'
     |> List.ofArray
     |> List.filter (fun line -> line.Contains "|" && not (line.Contains "-") && not (line.Contains "+"))
 
@@ -275,7 +275,7 @@ report
 
 let private rich = diplomacy.Views standard |> List.find (fun view -> view.Name = "rich")
 
-let private painted = rich.Board true (Power.seatOf Austria) dealt
+let private painted = rich.Board Margins.all (Power.seatOf Austria) dealt
 
 /// What a slot comes out as at a terminal, asked of the very machinery that paints with it
 /// rather than written down here a second time.
@@ -299,7 +299,7 @@ report
 let private seas, lands =
     Atlas.all |> List.partition (fun province -> Atlas.terrainOf province.Id = Sea)
 
-let private drawnPlainly = plain.Board true (Power.seatOf Austria) dealt
+let private drawnPlainly = plain.Board Margins.all (Power.seatOf Austria) dealt
 
 let private marked (province: Province) =
     drawnPlainly.Contains $"~{Atlas.code province.Id}~"
@@ -799,7 +799,7 @@ for view in diplomacy.Views standard do
             report
                 $"the {view.Name} board is drawn for {diplomacy.Seat seat} at a {kind}"
                 true
-                (String.length (view.Board true seat model) > 200)
+                (String.length (view.Board Margins.all seat model) > 200)
 
 report
     "the board answers what a piece in Vienna can reach"
@@ -828,8 +828,8 @@ let private parses (markup: string) =
         false
 
 for name, markup in
-    [ "board", asPage.Board true (Power.seatOf Austria) drawn
-      "board at the opening", asPage.Board true (Power.seatOf Austria) dealt
+    [ "board", asPage.Board Margins.all (Power.seatOf Austria) drawn
+      "board at the opening", asPage.Board Margins.all (Power.seatOf Austria) dealt
       "record", asPage.History (Power.seatOf Austria) drawn
       "rules", asPage.Rules
       "answer", asPage.Answer "borders vie" drawn ] do
@@ -843,7 +843,7 @@ let private posted (markup: string) =
     |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
     |> List.ofSeq
 
-let private buttons = posted (asPage.Board true (Power.seatOf Austria) dealt)
+let private buttons = posted (asPage.Board Margins.all (Power.seatOf Austria) dealt)
 
 // This is the page's whole bargain with the parser, and at this game it is worth a great deal
 // more than at one of nine squares: a board at the opening carries better than a dozen controls,

@@ -120,7 +120,7 @@ dotnet run -- --help           # every command; --help works on each of them too
 **Every command above belongs to the engine and not to any game**, which is why they are the
 same three lines whichever one is being played: `play`, `serve`, `host`, `join`, `replay`,
 `--seed`, `--rival`, `--view`, `--colour`, and at the prompt `undo`, `redo`, `history`,
-`save`, `notes`, `view`, `restart`, `help` and `quit`. Each game adds the words for its own
+`save`, `notes`, `commands`, `view`, `restart`, `help` and `quit`. Each game adds the words for its own
 moves and nothing else, and each has a `help` of its own for them.
 
 Those words, and the rules they are for, are in each game's own README:
@@ -252,13 +252,20 @@ type View =
       Describe: string
       Shown:   Shown                               // what has to be reading it
       Palette: Palette                             // the colours it was built with
-      Board:   bool -> Player -> Model -> string   // the whole board, for one player
+      Board:   Margins -> Player -> Model -> string // the whole board, for one player
       History: Player -> Model -> string           // the record of play so far
       Ruling:  RegionId -> Model -> string         // why a region is ruled as it is
       Rules:   string                              // the rules and the commands
       Says:    string -> string                    // one line, with no board to go with it
       Waiting: Waiting list -> string }            // a table still filling up
 ```
+
+`Margins` is what the person reading wants round the game itself - the writing that explains
+the board, and the box that lists what can be typed - and it is a record rather than two
+booleans in a row because two booleans in a row get passed the wrong way round exactly once
+and then never look wrong again. Neither is part of the game, so both stay out of the model
+and out of the record, and at a table over a network each person has their own. `notes` and
+`commands` are the two words that turn them.
 
 | view | shown | |
 | --- | --- | --- |

@@ -540,7 +540,7 @@ module Server =
         guarded app game standing reach
 
         let sitting: Browser.Sitting<_, _, _> =
-            { Watching = fun console view -> aside.Change(Solo.watching console { Notes = true; View = view })
+            { Watching = fun console view -> aside.Change(Solo.watching console { Margins = Margins.all; View = view })
               Said = fun console line -> aside.Said(console, line)
               Gone = fun console -> aside.Change(Solo.gone console)
               Deliver = fun posts -> posts |> List.iter (Browser.send pages) }

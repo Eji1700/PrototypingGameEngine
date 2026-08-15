@@ -318,7 +318,8 @@ module Render =
           ("b r 8", "battle in 8 with a Red one"), ("return g", "hand a Green one back")
           ("m g 8 5 2", "march 2 Green from 8 into 5"), ("undo, redo", "walk the game back")
           ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
-          ("notes", "hide this and every note"), ("save", "write the record now")
+          ("notes", "hide every note"), ("commands", "hide this box")
+          ("view <name>", "draw the board another way"), ("save", "write the record now")
           ("help", "every command, at length"), ("quit", "leave; 'replay' takes the game up again") ]
         |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) -> sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
 
@@ -442,15 +443,15 @@ module Render =
         | [] -> nothingYet
         | entries -> String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + recordStanding model ])
 
-    /// Render the whole game as a block of text for one player to read. `notes` says
-    /// whether the writing that explains the board comes with it: turned off, what is
-    /// left is the position and nothing else, for a player who already knows how to
-    /// read it.
+    /// Render the whole game as a block of text for one player to read. `margins` says how
+    /// much of the writing round the board comes with it: turned off, what is left is the
+    /// position and nothing else, for a player who already knows how to read it.
     ///
     /// `beholder` is whose screen this is. Around one keyboard that is always the
     /// player to act; over a network it is one of several, each being drawn a board of
     /// their own from the same game.
-    let model notes (beholder: Player) model =
+    let model (margins: Margins) (beholder: Player) model =
+        let notes = margins.Notes
         let sb = StringBuilder()
         let game = Playing.game model
         let active = Game.active game
@@ -520,9 +521,11 @@ module Render =
         | InPlay _ -> ()
         | Finished _ -> block sb Blocks.result (result game)
 
-        // The commands go with the notes: a player who has turned them off has turned
-        // this off too, and `help` still says all of it.
-        if notes then block sb Blocks.commands (commands @ [ ""; "  " + shorthand ])
+        // Its own word rather than riding on the notes, which is how this used to work: the
+        // writing under a board is done with once the rule is known, and a list of verbs is
+        // spelling somebody may want long after. `help` still says all of it either way.
+        if margins.Commands then
+            block sb Blocks.commands (commands @ [ ""; "  " + shorthand ])
 
         block sb Blocks.log (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 
@@ -571,8 +574,8 @@ module Render =
               ""
               "Other commands:"
               "  rule <region>             show the working behind who rules a region"
-              "  notes [on|off]            show or hide the writing that explains the board,"
-              "                            and the list of commands that goes with it"
+              "  notes [on|off]            show or hide the writing that explains the board"
+              "  commands [on|off]         show or hide the box listing what can be typed"
               "  restart [seed]            deal a fresh game to the same players"
               $"  players <n> [seed]        deal a fresh game to n players ({Table.MinPlayers}-{Table.MaxPlayers})"
               "  help                      show this list"

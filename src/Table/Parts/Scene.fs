@@ -1,5 +1,26 @@
 namespace TCModel.Table
 
+/// What a player wants in the margins: the writing that explains the board, and the box that
+/// lists what can be typed.
+///
+/// Neither is the game. Both are scaffolding for somebody who has not played before, and both
+/// are dead space to somebody who has - which is the whole argument for their being here at
+/// all rather than settled once by whoever wrote the screen. They are how a game is *read*, so
+/// they stay out of the model and out of the record, and each person at a table has their own.
+///
+/// One record rather than two flags threaded side by side, because two booleans in a row is a
+/// thing that gets passed the wrong way round exactly once and then never again looks wrong.
+type Margins = { Notes: bool; Commands: bool }
+
+module Margins =
+
+    /// Everything, which is what somebody who has said nothing about it gets. A player who has
+    /// not asked to be told less is a player who has not read it yet.
+    let all = { Notes = true; Commands = true }
+
+    /// The board and nothing round it.
+    let none = { Notes = false; Commands = false }
+
 /// What a screen is made of, before anybody has decided what it looks like.
 ///
 /// A `View` is every screen a player reads, and it takes the model rather than somebody
@@ -145,8 +166,17 @@ module Scene =
     let quietly text = Say [ Span.quiet text ]
 
     /// A note, or nothing, which is the only thing the notes flag ever decides. Written here
-    /// so that a game says `noted notes text` once per note instead of every reader asking.
-    let noted notes text = if notes then Note text else Blank
+    /// so that a game says `noted margins text` once per note instead of every reader asking.
+    let noted (margins: Margins) text = if margins.Notes then Note text else Blank
+
+    /// The block that lists what a player may type, or nothing at all.
+    ///
+    /// Here rather than in each game for the same reason `noted` is: three games build this
+    /// block out of the same two pieces - a title and a table of verbs already laid out - and
+    /// a fourth turns it off in three places of its own. What a game decides is what is *in*
+    /// it; whether it is on the screen is the reader's, and is decided once.
+    let listing (margins: Margins) title text =
+        if margins.Commands then Block(title, [ Written text ]) else Blank
 
     /// A line's words, with the tones dropped. For a reader that draws no colour, and for
     /// working out how wide a thing is.

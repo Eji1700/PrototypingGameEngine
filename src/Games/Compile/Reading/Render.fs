@@ -55,6 +55,30 @@ module Render =
 
     let nothingYet = "nothing yet"
 
+    /// How much room a card's text is given, and how wide a cell holding one asks to be.
+    ///
+    /// The one measurement on this screen, because everything on it is a card: a stack in the
+    /// field and a card in hand are the same thing printed in two places, and a board where
+    /// they were two different widths would be two boards. The text is broken to `Room` here
+    /// rather than left to whatever is drawing it - a reader that lays a screen out by counting
+    /// characters gives a cell the width of its widest line, and one long sentence would push
+    /// every column on the board out to the width of that sentence.
+    [<Literal>]
+    let private Room = 26
+
+    [<Literal>]
+    let private Across = 28
+
+    /// How many cards stand side by side. Three, because there are three lines and the hand
+    /// reads better under a field it lines up with.
+    [<Literal>]
+    let private PerRow = 3
+
+    /// A card's text as lines that will fit a cell, quietly - it is what the card says rather
+    /// than something the game is saying now.
+    let private inSmall said =
+        said |> List.collect (Scene.wrap Room) |> List.map Scene.quietly
+
     // --- the heading -------------------------------------------------------------------------
 
     /// Whose turn it is and what they are being asked for, or how it ended. Every screen opens
@@ -140,13 +164,42 @@ module Render =
 
     // --- the field ---------------------------------------------------------------------------
 
-    /// One stack. `reading` is how a card is put into words for whoever is looking, which is
-    /// the only thing that differs between the two halves of the table: a card face down is a
-    /// two to the player across from it and a card they played to the player who played it.
-    let private stack tone reading cards =
+    /// One stack, with everything in it saying as much as it is still allowed to say.
+    ///
+    /// `reading` is how a card is put into words for whoever is looking, which is the only
+    /// thing that differs between the two halves of the table: a card face down is a two to the
+    /// player across from it and a card they played to the player who played it.
+    ///
+    /// `newestLast` is which way up the pile is drawn, and it has to be settled here rather
+    /// than by whoever asks, because a stack is held newest first and that is what says which
+    /// card is uncovered. A caller that reversed the list before handing it over would be
+    /// handing over a pile whose top card is at the wrong end, and every card in it would then
+    /// be printed with the wrong half of its text.
+    let private stack tone reading newestLast cards =
         match cards with
         | [] -> Tile(None, Tone.Quiet, [ Scene.quietly "-" ])
-        | cards -> Tile(None, tone, cards |> List.map (fun card -> Say [ Span.toned tone (reading card) ]))
+        | cards ->
+            let printed =
+                cards
+                |> List.mapi (fun depth placed -> reading placed, Words.saying (depth = 0) placed)
+
+            let laid = if newestLast then List.rev printed else printed
+
+            // A blank line between two cards where either of them is talking, and none at all
+            // where the stack is a plain list of names. Without it a card's text reads as
+            // though it belonged to whichever name it happens to sit under - which in a pile is
+            // the card above, and is the one card it never belongs to.
+            Tile(
+                None,
+                tone,
+                laid
+                |> List.mapi (fun depth (name, said) ->
+                    [ if depth > 0 && not (List.isEmpty said && List.isEmpty (snd laid[depth - 1])) then
+                          Scene.quietly " "
+                      Say [ Span.toned tone name ]
+                      yield! inSmall said ])
+                |> List.concat
+            )
 
     /// The middle of a line: the two protocols that meet there, theirs above yours, in the
     /// colours of whoever they belong to.
@@ -208,15 +261,18 @@ module Render =
         let shown = Session.doing session <> TheProtocols
 
         Walled(
-            18,
-            [ Scene.squared (Lines.all |> List.map (fun line -> stack theirTone Words.faceless (Side.stack line theirs)))
+            Across,
+            [ Scene.squared (
+                  Lines.all
+                  |> List.map (fun line -> stack theirTone Words.faceless false (Side.stack line theirs))
+              )
               Scene.squared (
                   Lines.all
                   |> List.map (middle session.Field (them, theirs) (beholder, yours) theirTone yourTone shown)
               )
               Scene.squared (
                   Lines.all
-                  |> List.map (fun line -> stack yourTone Words.placed (Side.stack line yours |> List.rev))
+                  |> List.map (fun line -> stack yourTone Words.placed true (Side.stack line yours))
               ) ]
         )
 
@@ -286,6 +342,10 @@ module Render =
     /// sits on exactly one line and there is exactly one place it can go face up. Face down is
     /// three, because face down goes anywhere. That asymmetry is the game's, and drawing it is
     /// most of what makes the choice legible without reading a rule.
+    ///
+    /// And each of them says what it does. A hand drawn as five coloured names was a hand a
+    /// player had to have memorised to play from - the whole choice at this game is between the
+    /// number on a card and the words under it, and one of the two was not on the screen.
     let private hand beholder session =
         let side = Session.side beholder session
         let tone = Tone.Slot(Ink.key beholder)
@@ -306,18 +366,20 @@ module Render =
                   Scene.quietly "costs the turn" ]
             )
 
-        // No marker: **every one of the ninety says something**, so a star on the cards with text
-        // would be a star on all of them. The text does not fit in a cell this narrow either way,
-        // and `what fire-3` says it at length.
-        let named card = Card.name card
+        // No marker on the cards that say something: **every one of the ninety does**, so a star
+        // would be a star on all of them. What is printed is under the name instead, whole -
+        // `what fire-3` still says it at length, and now it says the same thing twice rather
+        // than being the only place to find it.
+        let card' card =
+            Tile(Some(Card.name card), tone, inSmall (Words.printed card) @ [ Scene.quietly " " ] @ ways card)
 
         match side.Hand |> List.sortBy (fun card -> Protocol.name card.Protocol, card.Value) with
-        | [] -> Walled(14, [ Scene.squared [ again ] ])
+        | [] -> Walled(Across, [ Scene.squared [ again ] ])
         | cards ->
             Walled(
-                14,
-                (cards |> List.map (fun card -> Tile(Some(named card), tone, ways card))) @ [ again ]
-                |> List.chunkBySize 6
+                Across,
+                (cards |> List.map card') @ [ again ]
+                |> List.chunkBySize PerRow
                 |> List.map Scene.squared
             )
 
@@ -496,10 +558,11 @@ module Render =
           "fire-3 2 down", $"play it face down instead, for {Placed.FaceDownValue}, on any line"
           "refresh", $"put your hand down and take {Deck.HandSize} up - instead of playing, not as well as"
           "fire-3", "answer a card that is waiting on you to pick one (or 'choose fire-3')"
-          "what fire-3", "read what a card says. A '*' on the board means there is something to read"
+          "what fire-3", "read what a card says, whether or not it is anywhere near the table"
           "undo, redo", "walk the game back and forward"
           "history", "the record so far"
-          "notes", "hide this and every note"
+          "notes", "hide the writing that explains the board"
+          "commands", "hide this box"
           "view <name>", "draw the field another way"
           "save", "write the record now"
           "help", "every command, at length"
@@ -559,7 +622,7 @@ module Render =
     /// One screen, and which parts of it there are depends on the stage: a draft has no field
     /// worth drawing and a hand nobody has been dealt, and a screen padded out with empty
     /// blocks is a screen that has to be read past.
-    let board notes beholder (model: Model<Move, Session, Notice>) =
+    let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
         let stage =
@@ -567,18 +630,18 @@ module Render =
             // nothing else on this screen is something a player could act on.
             match Session.asking session, session.Stage with
             | Some asked, _ -> Block(Blocks.choosing, [ question beholder asked ])
-            | None, Drafting left -> Block(Blocks.draft, [ pool left; Scene.noted notes Notes.draft ])
+            | None, Drafting left -> Block(Blocks.draft, [ pool left; Scene.noted margins Notes.draft ])
             | None, Arranging ->
-                Block(Blocks.protocols, [ arranging beholder session; Scene.noted notes Notes.arranging ])
+                Block(Blocks.protocols, [ arranging beholder session; Scene.noted margins Notes.arranging ])
             | None, Playing
             | None, Done _ ->
                 Block(
                     Blocks.hand,
                     [ hand beholder session
-                      Scene.noted notes Notes.hand
-                      Scene.noted notes Notes.refreshing
+                      Scene.noted margins Notes.hand
+                      Scene.noted margins Notes.refreshing
                       (if Session.withControl session then
-                           Scene.noted notes Notes.control
+                           Scene.noted margins Notes.control
                        else
                            Blank) ]
                 )
@@ -592,15 +655,21 @@ module Render =
                 Block(
                     Blocks.field,
                     [ field beholder session
-                      Scene.noted notes Notes.field
-                      Scene.noted notes Notes.compiling ]
+                      Scene.noted margins Notes.field
+                      Scene.noted margins Notes.compiling ]
                 )
 
+        // The two seats used to stand beside the stage, and they were the wrong two things to
+        // put side by side: the stage is the widest block on the screen now that a card says
+        // what it does, so half the room went to five short counts and every one of them came
+        // out broken over two lines. They are counts rather than a choice, so they go under the
+        // thing being chosen from and get the whole width to say themselves in one line each.
         Stack
             [ Heading(heading beholder session)
               table
-              Beside [ stage; Block(Blocks.players, [ players beholder session ]) ]
-              Block(Blocks.commands, [ Written commands ])
+              stage
+              Block(Blocks.players, [ players beholder session ])
+              Scene.listing margins Blocks.commands commands
               Block(Blocks.log, log beholder model) ]
 
     // --- the rest of what a player reads --------------------------------------------------------
@@ -640,9 +709,10 @@ module Render =
     let answer (asked: string) (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
-        // A card named is a card asked about. This is what `View.Answer` was put there for, and
-        // it is where card text is read at length - the board marks a card that says something
-        // with a star and leaves the saying to here, because a stack cell is nine characters wide.
+        // A card named is a card asked about. This is what `View.Answer` was put there for. The
+        // board prints what a card says where the card is lying, but only as much of it as that
+        // card is still allowed to say - so this stays the one place to read the whole of one,
+        // including the half a covering card has silenced and every card not on the table at all.
         let aboutACard =
             Commands.words asked
             |> List.tryPick (fun word -> Card.byName (word.ToLowerInvariant()))
@@ -676,12 +746,15 @@ module Render =
 
     // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that: a stack is a column of card
-    /// names rather than a single glyph, so its cells want to be wider and shorter than a
-    /// board of squares would ask for.
+    /// This game's own rules of drawing, and no more than that: a cell here is a card, with its
+    /// name and what is printed under it, so it wants far more room than a board of squares
+    /// would ask for - and the writing wants to start at the left edge every line rather than
+    /// be centred like a mark in a square, because it is a paragraph and not a glyph.
     let private sheet =
         """
-.grid { --cell: 9rem; }
+.grid { --cell: 15rem; }
+.grid .tile { align-items: stretch; }
+.grid .tile .said { text-align: left; }
 """
 
     let shell =

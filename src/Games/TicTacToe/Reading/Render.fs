@@ -102,7 +102,8 @@ module Render =
         [ "5", "take square 5 (or 'place 5')"
           "undo, redo", "walk the game back and forward"
           "history", "the record so far"
-          "notes", "hide this and every note"
+          "notes", "hide the writing that explains the board"
+          "commands", "hide this box"
           "view <name>", "draw the board another way"
           "save", "write the record now"
           "help", "every command, at length"
@@ -141,7 +142,7 @@ module Render =
 
     // --- the whole screen ---------------------------------------------------------------
 
-    let board notes beholder (model: Model<Move, Session, Notice>) =
+    let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
         Stack
@@ -150,9 +151,9 @@ module Render =
               // it, so they are asked for side by side. A reader with no way to do that
               // stacks them and nothing is lost.
               Beside
-                  [ Block(Blocks.board, [ grid (Session.board session); Scene.noted notes Notes.board ])
-                    Block(Blocks.players, [ players beholder session; Scene.noted notes Notes.winning ]) ]
-              Block(Blocks.commands, [ Written commands ])
+                  [ Block(Blocks.board, [ grid (Session.board session); Scene.noted margins Notes.board ])
+                    Block(Blocks.players, [ players beholder session; Scene.noted margins Notes.winning ]) ]
+              Scene.listing margins Blocks.commands commands
               Block(Blocks.log, log model) ]
 
     // --- the rest of what a player reads --------------------------------------------------

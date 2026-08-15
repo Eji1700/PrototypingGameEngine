@@ -70,7 +70,7 @@ let private drawnBy palette name =
 // A sweep, so a view added later is held to this without anybody remembering to come back.
 for view in views do
     for beholder in seats do
-        let board = seen (view.Board true beholder.Id dealt)
+        let board = seen (view.Board Margins.all beholder.Id dealt)
 
         report $"the {view.Name} view shows {Words.player beholder.Id} their own bag" true (board |> spells beholder)
 
@@ -95,12 +95,12 @@ for view in views do
     report
         $"the {view.Name} view names the drawn stone to the player who drew it"
         true
-        (seen (view.Board true drawer.Id drawn) |> mentions $"drew a {drewColor} stone")
+        (seen (view.Board Margins.all drawer.Id drawn) |> mentions $"drew a {drewColor} stone")
 
     report
         $"the {view.Name} view does not name it to anybody else"
         false
-        (seen (view.Board true other.Id drawn) |> mentions $"drew a {drewColor} stone")
+        (seen (view.Board Margins.all other.Id drawn) |> mentions $"drew a {drewColor} stone")
 
 // --- the notes -----------------------------------------------------------------------------
 //
@@ -130,8 +130,8 @@ let private notes =
       "what is out of sight", Render.Notes.supply ]
 
 for view in views do
-    let shown = unwrapped (view.Board true seats[0].Id dealt)
-    let hidden = unwrapped (view.Board false seats[0].Id dealt)
+    let shown = unwrapped (view.Board Margins.all seats[0].Id dealt)
+    let hidden = unwrapped (view.Board Margins.none seats[0].Id dealt)
 
     for what, note in notes do
         let note = Regex.Replace(note, @"\s+", " ")
@@ -157,7 +157,7 @@ let private blocks =
       Render.Blocks.log ]
 
 for view in views do
-    let board = (seen (view.Board true seats[0].Id dealt)).ToLowerInvariant()
+    let board = (seen (view.Board Margins.all seats[0].Id dealt)).ToLowerInvariant()
 
     for block in blocks do
         report $"the {view.Name} view has a block for {block}" true (board |> mentions (block.ToLowerInvariant()))
@@ -311,19 +311,19 @@ report
 report
     "the rich board is drawn in the palette it is given"
     true
-    ((drawnBy redIsTeal "rich").Board true beholder.Id dealt |> inked 45)
+    ((drawnBy redIsTeal "rich").Board Margins.all beholder.Id dealt |> inked 45)
 
-report "and not in the one it was not" false ((drawnBy redIsTeal "rich").Board true beholder.Id dealt |> inked 196)
+report "and not in the one it was not" false ((drawnBy redIsTeal "rich").Board Margins.all beholder.Id dealt |> inked 196)
 
 report
     "colouring moves not one character of the board"
-    (uncoloured (rich.Board true beholder.Id dealt))
-    (uncoloured ((drawnBy redIsTeal "rich").Board true beholder.Id dealt))
+    (uncoloured (rich.Board Margins.all beholder.Id dealt))
+    (uncoloured ((drawnBy redIsTeal "rich").Board Margins.all beholder.Id dealt))
 
 report
     "the plain view is left plain by any of it"
-    (plain.Board true beholder.Id dealt)
-    ((drawnBy redIsTeal "plain").Board true beholder.Id dealt)
+    (plain.Board Margins.all beholder.Id dealt)
+    ((drawnBy redIsTeal "plain").Board Margins.all beholder.Id dealt)
 
 // A palette crosses a wire as the words a person would have typed, and is read back by the
 // same function that reads them, so there is no second spelling of one to keep in step.

@@ -1,0 +1,49 @@
+# A Compile game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program.
+#
+#   dotnet run -- compile replay <this file>
+
+deal 2 639223639248223472 you you
+
+#   1  turn 1, Player 1
+draft fire
+#      Player 1 drafts Fire.
+
+#   2  turn 2, Player 2
+draft psychic
+#      Player 2 drafts Psychic.
+
+#   3  turn 3, Player 2
+draft plague
+#      Player 2 drafts Plague.
+
+#   4  turn 4, Player 1
+draft darkness
+#      Player 1 drafts Darkness.
+
+#   5  turn 5, Player 1
+draft water
+#      Player 1 drafts Water.
+
+#   6  turn 6, Player 2
+draft gravity
+#      Player 2 drafts Gravity.
+#      The draft is over. Both players now set their 3 protocols against the 3 lines, face down.
+
+#   7  turn 7, Player 1
+arrange fire darkness water
+#      Player 1 sets Fire, Darkness, Water against lines 1 to 3.
+
+#   8  turn 8, Player 2
+arrange psychic plague gravity
+#      Player 2 sets Psychic, Plague, Gravity against lines 1 to 3.
+#      Both are turned over at once - Player 1 has Fire, Darkness, Water; Player 2 has Psychic, Plague, Gravity.
+#      Both decks are shuffled - 18 cards each - and 5 drawn.
+

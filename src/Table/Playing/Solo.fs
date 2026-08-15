@@ -2,15 +2,15 @@ namespace TCModel.Table
 
 open TCModel.Engine
 
-/// How one person is reading the game: whether the board comes with the writing that
-/// explains it, and in what hand it is drawn.
+/// How one person is reading the game: how much of the writing round the board comes with
+/// it, and in what hand it is drawn.
 ///
 /// Neither is part of the game. Both are how it is being read rather than how it is being
 /// played, so they stay out of the model and out of the record - and a fresh deal is still
 /// read the way the player was reading the last one.
 [<NoComparison; NoEquality>]
 type Reading<'Move, 'State, 'Notice> =
-    { Notes: bool
+    { Margins: Margins
       View: View<'Move, 'State, 'Notice> }
 
 /// What a line asked of the world, which a value cannot do for itself.
@@ -178,7 +178,7 @@ module Solo =
     /// hands with the turn. Over a network each console has a seat of its own and this is
     /// the line that differs.
     let private boardFor solo (reading: Reading<_, _, _>) =
-        reading.View.Board reading.Notes (active solo) solo.Model
+        reading.View.Board reading.Margins (active solo) solo.Model
 
     let private screenFor solo (console, reading) =
         { To = console
@@ -298,7 +298,15 @@ module Solo =
         | Ok(Notes wanted) ->
             mine
                 { reading with
-                    Notes = wanted |> Option.defaultValue (not reading.Notes) }
+                    Margins =
+                        { reading.Margins with
+                            Notes = wanted |> Option.defaultValue (not reading.Margins.Notes) } }
+        | Ok(Listing wanted) ->
+            mine
+                { reading with
+                    Margins =
+                        { reading.Margins with
+                            Commands = wanted |> Option.defaultValue (not reading.Margins.Commands) } }
         | Ok(Looking name) ->
             // In whatever colours this console is already reading in, and only among the
             // views it could show: a page cannot be drawn on a terminal.

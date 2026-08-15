@@ -19,7 +19,7 @@ type Occupant =
 /// One place at a networked table: the seat it plays, who is in it, and how that person is
 /// reading the board.
 ///
-/// The notes and the view belong to the seat rather than to the game, because they are how
+/// The margins and the view belong to the seat rather than to the game, because they are how
 /// one player reads and not how the game is played. The board is drawn here at the table -
 /// a view lays the whole screen out and so needs the game to do it - which means two people
 /// at the same table can be sent two boards that look nothing alike, from one position.
@@ -27,7 +27,7 @@ type Occupant =
 type Seat<'Move, 'State, 'Notice> =
     { Player: PlayerId
       Occupant: Occupant
-      Notes: bool
+      Margins: Margins
       View: View<'Move, 'State, 'Notice> }
 
 /// A dealt game with consoles at it.
@@ -67,7 +67,7 @@ module Lobby =
             |> List.map (fun player ->
                 { Player = player
                   Occupant = (if rivals |> List.exists (fst >> (=) player) then Played else Empty)
-                  Notes = true
+                  Margins = Margins.all
                   View = plain }) }
 
     let model lobby = lobby.Model
@@ -147,7 +147,7 @@ module Lobby =
     let private screenFor lobby (console, seat) =
         let text =
             if not (everyoneHere lobby) then waitingAt lobby seat
-            elif stillSeated seat lobby then seat.View.Board seat.Notes seat.Player lobby.Model
+            elif stillSeated seat lobby then seat.View.Board seat.Margins seat.Player lobby.Model
             else seat.View.Says "Your seat is no longer at this table."
 
         { To = console; Say = Screen text }
@@ -337,7 +337,15 @@ module Lobby =
         | Ok(Notes wanted) ->
             mine
                 { seat with
-                    Notes = wanted |> Option.defaultValue (not seat.Notes) }
+                    Margins =
+                        { seat.Margins with
+                            Notes = wanted |> Option.defaultValue (not seat.Margins.Notes) } }
+        | Ok(Listing wanted) ->
+            mine
+                { seat with
+                    Margins =
+                        { seat.Margins with
+                            Commands = wanted |> Option.defaultValue (not seat.Margins.Commands) } }
         | Ok(Looking name) ->
             // In whatever colours this seat is already reading in: a player who set them
             // before sitting down does not lose them by changing how the board is laid out.

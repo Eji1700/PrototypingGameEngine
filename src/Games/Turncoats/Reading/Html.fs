@@ -284,10 +284,11 @@ module Html =
 
     // --- the whole screen ---------------------------------------------------------------
 
-    /// The board, drawn for one player. `notes` says whether the writing that explains it
+    /// The board, drawn for one player. `margins` says how much of the writing round it
     /// comes with it; the controls stay either way, because a player who knows how to read
     /// a board still has to move on it.
-    let board notes (beholder: Player) model =
+    let board (margins: Margins) (beholder: Player) model =
+        let notes = margins.Notes
         let game = Playing.game model
         let active = Game.active game
         let over = Playing.isOver model
@@ -319,7 +320,7 @@ module Html =
                 []
 
         let commands =
-            if notes then
+            if margins.Commands then
                 [ block
                       Render.Blocks.commands
                       [ lines (String.concat Environment.NewLine (Render.commands @ [ ""; "  " + Render.shorthand ])) ] ]

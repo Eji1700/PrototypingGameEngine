@@ -239,7 +239,7 @@ module Render =
     /// screen. In a movement it is every unit and what it has been told; in a retreat it is the
     /// beaten and where they may go; in a winter it is a home centre with room in it or a unit
     /// that has to be given up.
-    let private chores notes beholder play =
+    let private chores margins beholder play =
         let power = Power.atSeat beholder
 
         let written =
@@ -303,7 +303,7 @@ module Render =
                 [ (if List.isEmpty listed then Scene.quietly "nothing on the board" else Aligned listed)
                   laid waiting
                   Does("commit", "commit", Tone.Yours)
-                  Scene.noted notes Notes.orders ]
+                  Scene.noted margins Notes.orders ]
 
         | Falling _ ->
             let beaten = play.Beaten |> List.filter (fun beaten -> beaten.Piece.Power = power)
@@ -426,7 +426,8 @@ module Render =
           "borders vie, where vie", "what a piece there can reach, and what is there"
           "undo, redo", "walk the game back and forward"
           "history", "the record so far"
-          "notes", "hide this and every note"
+          "notes", "hide the writing that explains the board"
+          "commands", "hide this box"
           "view <name>", "draw the board another way"
           "save", "write the record now"
           "help", "every command, at length"
@@ -483,7 +484,7 @@ module Render =
 
     // --- the whole screen ------------------------------------------------------------------------------------
 
-    let board notes beholder (model: Model<Move, Session, Notice>) =
+    let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
         let play = Session.play session
         let position = play.Board
@@ -492,10 +493,10 @@ module Render =
             [ Heading(heading beholder session)
               Beside
                   [ Block(Blocks.powers, [ powers beholder session ])
-                    Block(Blocks.orders, [ chores notes beholder play ]) ]
-              Block(Blocks.board, [ honeycomb position; Scene.noted notes Notes.board; Scene.noted notes Notes.borders ])
+                    Block(Blocks.orders, [ chores margins beholder play ]) ]
+              Block(Blocks.board, [ honeycomb position; Scene.noted margins Notes.board; Scene.noted margins Notes.borders ])
               lastTime play
-              Block(Blocks.commands, [ Written commands ])
+              Scene.listing margins Blocks.commands commands
               Block(Blocks.log, log beholder model) ]
 
     // --- the record ----------------------------------------------------------------------------------------

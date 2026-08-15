@@ -1,0 +1,83 @@
+# A Compile game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program.
+#
+#   dotnet run -- compile replay <this file>
+
+deal 2 639223641236393271 you you
+
+#   1  turn 1, Player 1
+draft life
+#      Player 1 drafts Life.
+
+#   2  turn 2, Player 2
+draft light
+#      Player 2 drafts Light.
+
+#   3  turn 3, Player 2
+draft love
+#      Player 2 drafts Love.
+
+#   4  turn 4, Player 1
+draft fire
+#      Player 1 drafts Fire.
+
+#   5  turn 5, Player 1
+draft water
+#      Player 1 drafts Water.
+
+#   6  turn 6, Player 2
+draft gravity
+#      Player 2 drafts Gravity.
+#      The draft is over. Both players now set their 3 protocols against the 3 lines, face down.
+
+#   7  turn 7, Player 1
+arrange life fire water
+#      Player 1 sets Life, Fire, Water against lines 1 to 3.
+
+#   8  turn 8, Player 2
+arrange light love gravity
+#      Player 2 sets Light, Love, Gravity against lines 1 to 3.
+#      Both are turned over at once - Player 1 has Life, Fire, Water; Player 2 has Light, Love, Gravity.
+#      Both decks are shuffled - 18 cards each - and 5 drawn.
+
+#   9  turn 9, Player 1
+draft fire
+#      That is not what the game is asking for - cards are being played: say a card and a line, like 'fire-3 2'.
+
+#  10  turn 9, Player 1
+play fire-1 2
+#      Fire-1 is not in your hand.
+
+#  11  turn 9, Player 1
+play fire-3 2
+#      Fire-3 is not in your hand.
+
+#  12  turn 9, Player 1
+play fire-2 2
+#      Fire-2 is not in your hand.
+
+#  13  turn 9, Player 1
+play fire-4 2
+#      Player 1 plays Fire-4 to line 2.
+#      Fire-4 asks Player 1 to choose.
+
+#  14  turn 9, Player 1
+choose line 1
+#      That is not one of the things being offered: say one of: Life-4, Water-1, Water-4, Water-5.
+
+#  15  turn 9, Player 1
+choose water-1
+#      Player 1 discards Water-1.
+
+#  16  turn 9, Player 1
+no
+#      Player 1 says no, so nothing waiting on that happens.
+#      Player 1 draws 2.
+

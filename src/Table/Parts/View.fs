@@ -43,9 +43,9 @@ type View<'Move, 'State, 'Notice> =
         /// console joining a table can say what it wants a board drawn in.
         Palette: Palette
 
-        /// The whole board, drawn for one seat. The flag is whether the writing that
-        /// explains the board comes with it.
-        Board: bool -> PlayerId -> Model<'Move, 'State, 'Notice> -> string
+        /// The whole board, drawn for one seat, with as much of the writing round it as the
+        /// person reading has asked to keep.
+        Board: Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> string
 
         /// The record of play so far, as the seat reading it may know it.
         History: PlayerId -> Model<'Move, 'State, 'Notice> -> string

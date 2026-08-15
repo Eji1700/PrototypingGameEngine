@@ -27,7 +27,7 @@ which line and why.
 ## Playing
 
 Every command that is not about protocols or cards - `undo`, `redo`, `history`, `save`,
-`notes`, `view`, `resign`, `restart`, `help`, `quit` - belongs to the engine and is
+`notes`, `commands`, `view`, `resign`, `restart`, `help`, `quit` - belongs to the engine and is
 [documented there](../../../README.md). What this game adds is three verbs, one per stage.
 
 | command | action |
@@ -52,6 +52,15 @@ A card is written as a protocol, a dash and the number on it - `fire-3`. A proto
 cards carry six different numbers, so no two cards in a deck are the same card, and naming one
 is naming a card rather than a place in a hand. That matters: `fire-3` is still `fire-3` after
 the hand beside it has changed.
+
+**Every card on the screen says what it does.** A card in hand carries the whole of what is
+printed on it, and a card on the table carries exactly as much of it as that card is still
+allowed to say: nothing at all face down, its top box alone once something is played over it,
+and the lot while it is face up and uncovered. That is not the board's opinion about what is
+worth showing - it is [the same three cases the rules
+make](Rules/Words.fs), read off the same `Text` that makes them, so a card cannot be printed
+saying something it is no longer doing. `what fire-3` is still the place to read the whole of a
+card, including the half a cover has silenced and every card not on the table at all.
 
 ## How a game goes
 

@@ -28,7 +28,7 @@ open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
-let private reading = { Notes = true; View = plain }
+let private reading = { Margins = Margins.all; View = plain }
 
 /// A game with one person at it, which is the ordinary case.
 let private sitting =
@@ -89,6 +89,43 @@ report
     "but changing how you read is drawn only to you"
     1
     (say "notes off" watched |> fun (_, posts, _) -> screens posts |> List.length)
+
+// The notes and the box listing the commands are two things a player turns off separately,
+// and they used to be one. Both are checked from a typed line rather than from a flag,
+// because a flag nobody can reach is not a thing the game has.
+
+let private drawnAfter lines =
+    lines
+    |> List.fold (fun solo line -> next line solo) sitting
+    |> Solo.board "keyboard"
+    |> Option.get
+
+/// The screen as one run of words. A note is broken to the width of whatever is drawing it,
+/// so a check looking for the sentence it was written as has to put the lines back together
+/// first - and then it is asking about the words rather than about the layout.
+let private flat (text: string) =
+    text.Split([| ' '; '\t'; '\r'; '\n' |], System.StringSplitOptions.RemoveEmptyEntries)
+    |> String.concat " "
+
+let private says (needle: string) (text: string) = (flat text).Contains(flat needle)
+
+let private aCommand = List.head Render.commands
+
+report "the commands are on the board to begin with" true (drawnAfter [] |> says aCommand)
+
+report "'commands' takes them off" false (drawnAfter [ "commands" ] |> says aCommand)
+
+report "and 'commands' again puts them back" true (drawnAfter [ "commands"; "commands" ] |> says aCommand)
+
+report
+    "turning the notes off leaves the commands where they are"
+    true
+    (drawnAfter [ "notes off" ] |> says aCommand)
+
+report
+    "and turning the commands off leaves the notes where they are"
+    true
+    (drawnAfter [ "commands off" ] |> says Render.Notes.landRuled)
 
 // --- being told the turn has come round ------------------------------------------------
 //
@@ -269,7 +306,7 @@ report
 
 let private inABrowser =
     Solo.opened playing "first" dealt
-    |> Solo.watching "page" { Notes = true; View = asPage }
+    |> Solo.watching "page" { Margins = Margins.all; View = asPage }
     |> fst
 
 report

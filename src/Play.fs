@@ -363,7 +363,7 @@ let private play game view sitters stamp model =
 
     errand game sitters doing
 
-    let solo, posts = seated |> Solo.watching Keyboard { Notes = true; View = view }
+    let solo, posts = seated |> Solo.watching Keyboard { Margins = Margins.all; View = view }
 
     tell posts
     loop sitters solo |> ignore

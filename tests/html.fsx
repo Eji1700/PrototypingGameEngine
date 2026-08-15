@@ -54,9 +54,9 @@ let private viewIn palette =
 /// a screen goes to is settled by the fragment itself, because the fragment is the only
 /// thing that knows what kind of screen it is.
 let private screens =
-    [ "board", Page.Screen, view.Board true beholder dealt
-      "board, mid-negotiation", Page.Screen, view.Board true (Game.active (Playing.game owing)).Id owing
-      "board with the notes off", Page.Screen, view.Board false beholder dealt
+    [ "board", Page.Screen, view.Board Margins.all beholder dealt
+      "board, mid-negotiation", Page.Screen, view.Board Margins.all (Game.active (Playing.game owing)).Id owing
+      "board with the notes off", Page.Screen, view.Board Margins.none beholder dealt
       "waiting",
       Page.Screen,
       view.Waiting
@@ -204,7 +204,7 @@ report "and every one of them types a line the game's own parser takes" [] refus
 report
     "a table waiting on a stone offers the move that hands one back"
     true
-    (posted (view.Board true (Game.active (Playing.game owing)).Id owing)
+    (posted (view.Board Margins.all (Game.active (Playing.game owing)).Id owing)
      |> List.exists (fun line -> line.StartsWith "return "))
 
 
@@ -244,7 +244,7 @@ let private allowed =
 let private offered =
     // One board rather than the whole sweep above, which collects from several positions at
     // once: what is being compared here is a position and the buttons drawn from it.
-    posted (view.Board true beholder dealt)
+    posted (view.Board Margins.all beholder dealt)
     |> List.filter (fun line -> line.StartsWith "battle " || line.StartsWith "march ")
 
 report "the board does offer battles and marches at all" true (List.length allowed > 20)
@@ -304,8 +304,8 @@ report "and not in the one it was not" false (pageIn redIsTeal |> mentions (Pale
 
 report
     "the board itself is the same board whatever the colours"
-    (view.Board true beholder dealt)
-    ((viewIn redIsTeal).Board true beholder dealt)
+    (view.Board Margins.all beholder dealt)
+    ((viewIn redIsTeal).Board Margins.all beholder dealt)
 
 report
     "the colours are offered as the same words a console types for them"

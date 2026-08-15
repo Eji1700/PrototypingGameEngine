@@ -767,7 +767,7 @@ module Readers =
     [<NoComparison; NoEquality>]
     type Scenes<'Move, 'State, 'Notice> =
         {
-            Board: bool -> PlayerId -> Model<'Move, 'State, 'Notice> -> Scene
+            Board: Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> Scene
             History: PlayerId -> Model<'Move, 'State, 'Notice> -> Scene
             Answer: string -> Model<'Move, 'State, 'Notice> -> Scene
             Rules: Scene
@@ -800,7 +800,7 @@ module Readers =
             Describe = "plain text, and nothing this terminal has to understand"
             Shown = AtATerminal
             Palette = palette
-            Board = fun notes seat model -> Plain.screen (scenes.Board notes seat model)
+            Board = fun margins seat model -> Plain.screen (scenes.Board margins seat model)
             History = fun seat model -> Plain.screen (scenes.History seat model)
             Answer = fun asked model -> Plain.screen (scenes.Answer asked model)
             Rules = Plain.screen scenes.Rules
@@ -811,7 +811,7 @@ module Readers =
             Describe = "panels, walls and colour, for a terminal that can show them"
             Shown = AtATerminal
             Palette = palette
-            Board = fun notes seat model -> inPanels (scenes.Board notes seat model)
+            Board = fun margins seat model -> inPanels (scenes.Board margins seat model)
             History = fun seat model -> inPanels (scenes.History seat model)
             Answer = fun asked model -> inPanels (scenes.Answer asked model)
             Rules = inPanels scenes.Rules
@@ -825,7 +825,7 @@ module Readers =
             Describe = "a page, for a player reading in a browser"
             Shown = InABrowser
             Palette = palette
-            Board = fun notes seat model -> Pages.screen (scenes.Board notes seat model)
+            Board = fun margins seat model -> Pages.screen (scenes.Board margins seat model)
             History = fun seat model -> Pages.aside (scenes.History seat model)
             Answer = fun asked model -> Pages.aside (scenes.Answer asked model)
             Rules = Pages.aside scenes.Rules
