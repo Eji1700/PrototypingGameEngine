@@ -53,17 +53,26 @@ cards carry six different numbers, so no two cards in a deck are the same card, 
 is naming a card rather than a place in a hand. That matters: `fire-3` is still `fire-3` after
 the hand beside it has changed.
 
-**Every card on the screen is drawn as its three boxes**, empty ones and all - because which box
-a rule is in is the rule that matters most here. A card played over another covers its middle and
-its bottom and leaves its top showing, so a covered card is drawn with two empty boxes, and those
-two are exactly what it has stopped saying. A card lying face down is drawn as its name and no
-boxes at all: it says nothing, whatever is printed on it.
+**A card you can still play on is drawn as its three boxes**, empty ones and all - because which
+box a rule is in is the rule that matters most here. Playing anything on a line, face up or face
+down, covers the middle and the bottom of whatever was there, so a covered card is drawn without
+its boxes: what is left under its name is its top box, and the whole of what it still says. A card
+lying face down says nothing at all, whatever is printed on it.
 
 That grouping is [the same one the rules make](Rules/Words.fs), off the same `Text` that makes
 them, rather than the board's own opinion about what is worth showing - so **the top box is
 exactly what a cover cannot silence**, which is a sentence the tests hold the game to. `what
 fire-3` draws the same three boxes, and is still the place to read a card that is nowhere near
 the table.
+
+**A line the parser cannot place is answered rather than refused.** Which of the three sets of
+verbs above was wanted is a fact about where the game stands, and the parser is handed a line and
+nothing else - so a stray word used to come back *"that is not a protocol"*, which is true on the
+first six moves and beside the point for the rest of the game. It asks the game instead, and the
+answer is what can be typed **now**: the protocols still on the table at the draft, the orders
+your three could go in, the cards a waiting card is offering, or your own hand with the line each
+of them could go face up on. Your own hand and nobody else's - it is the same rule the board
+keeps.
 
 ## How a game goes
 

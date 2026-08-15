@@ -30,7 +30,7 @@ module Render =
 
     module Notes =
         let draft =
-            $"Twelve protocols, no duplicates, and the picks go 1-2-2-1: one to Player 1, two to Player 2, two back to Player 1, one back to Player 2. Say a protocol to take it - 'fire'."
+            $"{List.length Protocol.all} protocols, no duplicates, and the {Draft.Picks} picks go 1-2-2-1: one to Player 1, two to Player 2, two back to Player 1, one back to Player 2. Say a protocol to take it - 'fire'."
 
         let arranging =
             $"Your {Protocol.Each} protocols go against the {Lines.Count} lines, one each, in the order you say them. Both players do it, and the lines they make are read across the table from each other."
@@ -45,7 +45,7 @@ module Render =
             "A card played face up does what is printed on it, one command at a time - and between any two of them the table is looked at again, because a command that turned a card face up has put that card's own text in front of whatever was waiting. A command with nothing to point at simply finds nothing to do, and the one after it still happens. A command with one thing to point at does it; with several, the game stops and asks - sometimes of the player whose turn it is not, and then nothing at all moves until they answer."
 
         let boxes =
-            "Every card is drawn as its three boxes, empty ones and all. The top box is a standing rule and whatever the card is listening for; the middle is what fires when the card is turned face up, or uncovered again; the bottom is a standing rule too. Playing a card over another covers its middle and its bottom and leaves its top showing - so a covered card is drawn with two empty boxes, and those two are exactly what it has stopped saying. A card lying face down has no boxes drawn at all: it says nothing, whatever is printed on it."
+            "A card you can still play on is drawn as its three boxes, empty ones and all: the top is a standing rule and whatever the card is listening for, the middle is what fires when the card is turned face up or uncovered again, and the bottom is a standing rule too. Playing anything on a line - face up or face down, it makes no difference - covers the middle and the bottom of whatever was there, so a covered card is drawn without its boxes and what is left under its name is its top box and the whole of what it still says. A card lying face down says nothing at all, whatever is printed on it."
 
         let refreshing =
             $"Nothing is drawn at the end of a turn. 'refresh' puts your whole hand down and takes {Deck.HandSize} up, and it costs the turn - so {Deck.HandSize} cards is {Deck.HandSize} turns of tempo, and the turn you spend getting more is a turn they spend getting closer to {Stack.ToCompile}. With an empty hand it is the only thing left to do. A deck that runs out is shuffled from its own discard."
@@ -57,6 +57,17 @@ module Render =
             $"Say a card and a line to play it - 'fire-3 2'. Face up it is worth the number printed on it and may only go where its protocol is - either player's. Face down - 'fire-3 2 down' - it is worth {Placed.FaceDownValue} and goes anywhere, so a card you cannot use is never a dead card."
 
     let nothingYet = "nothing yet"
+
+    /// Who is waiting on an answer, in a phrase that will stand at the front of a sentence.
+    ///
+    /// Written once because three screens say it - the heading, the block that offers the
+    /// answers, and the one that says what is being asked - and a game stopped on a question
+    /// nobody can name looks exactly like a game that has hung.
+    let private whoAsks =
+        function
+        | ACardSaying source -> Card.name source.Saying
+        | TheControlComponent -> "The control component"
+        | TheCacheCheck -> "The check cache phase"
 
     // --- how wide a card is ------------------------------------------------------------------
     //
@@ -124,12 +135,7 @@ module Render =
 
         match Session.asking session, session.Stage with
         | Some asked, _ ->
-            let whoAsks =
-                match asked.Because with
-                | Some source -> Card.name source.Saying
-                | None -> "The control component"
-
-            $"Turn {session.Turn} - {whoAsks} is waiting on {who}"
+            $"Turn {session.Turn} - {whoAsks asked.Because} is waiting on {who}"
         | None, Drafting _ ->
             $"The draft, pick {Session.picksMade session + 1} of {Draft.Picks} - {who} to choose a protocol"
         | None, Arranging -> $"Protocols - {who} to set theirs against the lines"
@@ -211,13 +217,24 @@ module Render =
         match cards with
         | [] -> Tile(None, Tone.Quiet, [ Scene.quietly "-" ])
         | cards ->
-            // A card face down is drawn as its back: a name and no boxes at all. It says nothing
-            // from any of them, and three empty boxes under it would be three boxes a player
-            // could take for a card that had been silenced rather than one lying face down.
+            // Only the top card of a stack is drawn as a card. Playing anything on a line - face
+            // up or face down, it makes no difference - covers the middle and the bottom of
+            // whatever was there, so the card underneath has one box left and no choice about
+            // which: everything a covered card still says is its top box, by definition. Three
+            // boxes for it would be one box of writing and two drawn to say *and these are the
+            // two you have already been told about*.
+            //
+            // A card face down is its back: a name, and not even that much. It says nothing out
+            // of any box, which is the one thing at this game worth something exactly because
+            // nobody can read it.
             let drawn depth placed =
+                let top, _, _ = Words.saying (depth = 0) placed
+
                 [ Say [ Span.toned tone (reading placed) ]
-                  if Placed.isFaceUp placed then
-                      yield! boxed (Words.saying (depth = 0) placed) ]
+                  if depth = 0 && Placed.isFaceUp placed then
+                      yield! boxed (Words.saying true placed)
+                  else
+                      yield! inSmall top ]
 
             let laid = cards |> List.mapi drawn
             (if newestLast then List.rev laid else laid) |> List.concat |> fun body -> Tile(None, tone, body)
@@ -371,16 +388,17 @@ module Render =
         let side = Session.side beholder session
         let tone = Tone.Slot(Ink.key beholder)
 
-        // "up 2" and "down 1" were what these used to be captioned, and under a card that now
-        // carries its own printed text they read as another line of it - a card that said "up 2,
-        // down 1, down 2, down 3" and meant nothing by it. So each of them says the verb: what
-        // is printed on a card is the only thing on the card that is not an instruction to the
-        // person reading it, and the difference has to be visible without colour.
+        // Face up only, and it is the only one worth a control. Face down is three more lines on
+        // every card in the hand to say the one thing that is true of every card in the hand -
+        // any of them, on any line, always - so it is said once in the note and once in the
+        // commands, and the card carries what is particular to it.
+        //
+        // Which is also why the caption says the verb. "up 2" was what this used to read, and
+        // under a card that now carries its own printed text it read as another line of it - a
+        // card that said "up 2" and meant nothing by it.
         let ways card =
             [ for line in Field.facingLines beholder card session.Field ->
-                  Does($"play face up {line}", $"play {Card.key card} {line}", Tone.Plainly)
-              for line in Lines.all ->
-                  Does($"play face down {line}", $"play {Card.key card} {line} down", Tone.Quiet) ]
+                  Does($"play face up {line}", $"play {Card.key card} {line}", Tone.Plainly) ]
 
         // Always offered, because refreshing is always an action - and when the hand is empty it
         // is the only one, which is when a player most needs to be told it exists.
@@ -419,13 +437,6 @@ module Render =
     /// is waiting for and who from.
     let private question beholder (asked: Question) =
         let yours = asked.Chooser = beholder
-
-        /// Who is asking: a card, or the rules themselves when the control component has forced
-        /// a rearrangement.
-        let whoAsks =
-            match asked.Because with
-            | Some source -> Card.name source.Saying
-            | None -> "The control component"
 
         let doing, choices =
             match asked.Wanting with
@@ -566,9 +577,9 @@ module Render =
 
         let says =
             if yours then
-                $"{whoAsks} needs you to {doing}."
+                $"{whoAsks asked.Because} needs you to {doing}."
             else
-                $"{whoAsks} needs {Words.player asked.Chooser} to {doing}. Nothing else can happen until they do."
+                $"{whoAsks asked.Because} needs {Words.player asked.Chooser} to {doing}. Nothing else can happen until they do."
 
         Stack
             [ Scene.says says
@@ -732,10 +743,19 @@ module Render =
                   Scene.quietly (heading beholder (Model.state model)) ]
             )
 
-    /// What is being asked for right now, and why. A game of three stages is the one place
-    /// this question has a real answer: the same board takes a protocol at one moment and a
-    /// card at the next, and nothing on it says which.
-    let answer (asked: string) (model: Model<Move, Session, Notice>) =
+    /// What is being asked for right now, and the lines that would answer it.
+    ///
+    /// A game of three stages is the one place this question has a real answer: the same board
+    /// takes a protocol at one moment and a card at the next, and nothing on it says which. So
+    /// this is also **where a line nobody could read is sent**, because *"'nonsense' is not a
+    /// protocol"* is a true sentence that stops being useful after the sixth move of the game -
+    /// and the parser cannot do better, having no idea where the game stands. It answers in
+    /// examples the reader could type as they stand, which is the only kind of help that is
+    /// worth anything at a game whose verbs change three times.
+    ///
+    /// `beholder` is who asked, and it is here because the answer is a hand: whoever typed the
+    /// line gets their own cards and nobody else's, the same rule the board keeps.
+    let answer beholder (asked: string) (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
         // A card named is a card asked about. This is what `View.Answer` was put there for. The
@@ -754,18 +774,81 @@ module Render =
         | Some card -> Block(Card.name card, boxed (Words.boxes card))
         | None ->
 
+        // A line that named nothing the game knows. Worth saying out loud before the rest,
+        // because the rest reads as a lecture if the reader has not been told why they got it -
+        // and worth *not* saying when somebody simply typed 'what' and asked.
+        let puzzled =
+            match Commands.words asked with
+            | []
+            | "what" :: _
+            | "says" :: _ -> []
+            | _ -> [ $"I do not know how to '{asked}'." ]
+
+        let seat = Session.active session
+        let side = Session.side seat session
+        let yours = seat = beholder
+
+        /// Which lines this seat's cards could go face up on, as lines somebody could type.
+        /// The one thing about a hand that is not obvious from reading it: a card's protocol
+        /// may be facing a line on either side of the table, and on some turns neither.
+        /// All of them rather than a sample, because a sample is a list somebody has to check
+        /// against their hand to see what was left out. A hand is five, and every card has at
+        /// most one line its protocol faces - so this is five entries unless a card of theirs
+        /// has opened the board, and then the length of it is the news.
+        let playable =
+            side.Hand
+            |> List.collect (fun card ->
+                Field.facingLines seat card session.Field
+                |> List.map (fun line -> $"'{Card.key card} {line}'"))
+
+        let inPlay =
+            if not yours then
+                // Never another player's cards, whatever they asked. This is the same rule the
+                // board keeps, and the reason this endpoint knows who is asking at all.
+                [ $"{Words.player seat} is to play, and what they are holding is theirs."
+                  Notes.field ]
+            elif List.isEmpty side.Hand then
+                [ $"Your hand is empty, so 'refresh' is the only thing left this turn - put nothing down and take {Deck.HandSize} up." ]
+            else
+                [ $"It is your turn to play a card. In hand: {Words.choices side.Hand}."
+                  (match playable with
+                   | [] ->
+                       $"None of them has its protocol facing a line just now, so they can only go face down - '{Card.key (List.head side.Hand)} 1 down', worth {Placed.FaceDownValue}, on any line."
+                   | lines ->
+                       let up = String.concat ", " lines
+                       $"Face up, where its protocol is: {up}. Face down, on any line, for {Placed.FaceDownValue}: '{Card.key (List.head side.Hand)} 1 down'.")
+                  $"Or 'refresh' - your whole hand down and {Deck.HandSize} up, instead of playing, not as well as." ]
+
         let said =
-            match session.Stage with
-            | Drafting left ->
+            match Session.asking session, session.Stage with
+            // A card waiting on somebody outranks the stage, exactly as it does on the board:
+            // until it is answered there is nothing else anybody could type.
+            | Some question, _ ->
+                [ if question.Chooser = beholder then
+                      $"{whoAsks question.Because} is waiting on you: {Words.wanting question.Wanting}."
+                  else
+                      $"{whoAsks question.Because} is waiting on {Words.player question.Chooser}, and nothing at all moves until they answer." ]
+            | None, Drafting left ->
                 let names = left |> List.map Protocol.key |> String.concat ", "
 
-                [ Notes.draft
-                  $"{Draft.Picks - Session.picksMade session} of the {Draft.Picks} picks are still to come, out of these: {names}." ]
-            | Arranging -> [ Notes.arranging ]
-            | Playing -> [ Notes.field; Notes.hand ]
-            | Done ending -> [ $"Nothing: {Words.ending ending}." ]
+                [ if Session.active session = beholder then
+                      $"It is your pick. Say one of these to take it: {names}."
+                  else
+                      $"It is {Words.player (Session.active session)}'s pick, out of these: {names}."
+                  $"{Draft.Picks - Session.picksMade session} of the {Draft.Picks} picks are still to come."
+                  Notes.draft ]
+            | None, Arranging ->
+                let anOrder = side.Drafted |> List.map Protocol.key |> String.concat " "
 
-        Block("What is being asked", said |> List.map Scene.says)
+                [ if List.isEmpty side.Order && yours then
+                      $"Say your {Protocol.Each} in the order you want them against lines 1 to {Lines.Count} - '{anOrder}', or any other order of the same {Protocol.Each}."
+                  else
+                      "Yours are set. Nothing else happens until both are, and then both are turned over at once."
+                  Notes.arranging ]
+            | None, Playing -> inPlay
+            | None, Done ending -> [ $"Nothing: {Words.ending ending}." ]
+
+        Block("What is being asked", puzzled @ said |> List.map Scene.says)
 
     let rules = Block("The rules", [ Written help ])
 

@@ -51,7 +51,7 @@ module Offer =
     /// A `rule` question, answered by whichever view was asked. The words arrived as they
     /// were typed, so the region is read back here - and a region the board has not got is
     /// said in the same voice the view says everything else in.
-    let private answering says ruling question model =
+    let private answering says ruling _ question model =
         match Parse.asked question with
         | Ok regionId -> ruling regionId model
         | Error problem -> says problem

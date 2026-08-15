@@ -781,7 +781,7 @@ module Readers =
         {
             Board: Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> Scene
             History: PlayerId -> Model<'Move, 'State, 'Notice> -> Scene
-            Answer: string -> Model<'Move, 'State, 'Notice> -> Scene
+            Answer: PlayerId -> string -> Model<'Move, 'State, 'Notice> -> Scene
             Rules: Scene
             Waiting: Waiting list -> Scene
 
@@ -814,7 +814,7 @@ module Readers =
             Palette = palette
             Board = fun margins seat model -> Plain.screen (scenes.Board margins seat model)
             History = fun seat model -> Plain.screen (scenes.History seat model)
-            Answer = fun asked model -> Plain.screen (scenes.Answer asked model)
+            Answer = fun seat asked model -> Plain.screen (scenes.Answer seat asked model)
             Rules = Plain.screen scenes.Rules
             Says = id
             Waiting = fun seats -> Plain.screen (scenes.Waiting seats) }
@@ -825,7 +825,7 @@ module Readers =
             Palette = palette
             Board = fun margins seat model -> inPanels (scenes.Board margins seat model)
             History = fun seat model -> inPanels (scenes.History seat model)
-            Answer = fun asked model -> inPanels (scenes.Answer asked model)
+            Answer = fun seat asked model -> inPanels (scenes.Answer seat asked model)
             Rules = inPanels scenes.Rules
             Says = paint palette
             Waiting = fun seats -> inPanels (scenes.Waiting seats) }
@@ -839,7 +839,7 @@ module Readers =
             Palette = palette
             Board = fun margins seat model -> Pages.screen (scenes.Board margins seat model)
             History = fun seat model -> Pages.aside (scenes.History seat model)
-            Answer = fun asked model -> Pages.aside (scenes.Answer asked model)
+            Answer = fun seat asked model -> Pages.aside (scenes.Answer seat asked model)
             Rules = Pages.aside scenes.Rules
             Says = Page.says
             Waiting = fun seats -> Pages.screen (scenes.Waiting seats) } ]

@@ -1,0 +1,103 @@
+# A Compile game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program.
+#
+#   dotnet run -- compile replay <this file>
+
+deal 2 639223718171400303 you you
+
+#   1  turn 1, Player 1
+draft love
+#      Player 1 drafts Love.
+
+#   2  turn 2, Player 2
+draft metal
+#      Player 2 drafts Metal.
+
+#   3  turn 3, Player 2
+draft life
+#      Player 2 drafts Life.
+
+#   4  turn 4, Player 1
+draft death
+#      Player 1 drafts Death.
+
+#   5  turn 5, Player 1
+draft fire
+#      Player 1 drafts Fire.
+
+#   6  turn 6, Player 2
+draft water
+#      Player 2 drafts Water.
+#      The draft is over. Both players now set their 3 protocols against the 3 lines, face down.
+
+#   7  turn 7, Player 1
+arrange love death fire
+#      Player 1 sets Love, Death, Fire against lines 1 to 3.
+
+#   8  turn 8, Player 2
+arrange metal life water
+#      Player 2 sets Metal, Life, Water against lines 1 to 3.
+#      Both are turned over at once - Player 1 has Love, Death, Fire; Player 2 has Metal, Life, Water.
+#      Both decks are shuffled - 18 cards each - and 5 drawn.
+
+#   9  turn 9, Player 1
+choose fire-4
+#      That is not what the game is asking for - cards are being played: say a card and a line, like 'fire-3 2'.
+
+#  10  turn 9, Player 1
+play fire-4 2
+#      Fire-4 cannot go face up on line 2. Fire is on line 3 - or play it face down anywhere, for 2.
+
+#  11  turn 9, Player 1
+play fire-4 3
+#      Player 1 plays Fire-4 to line 3.
+#      Fire-4 asks Player 1 to choose.
+
+#  12  turn 9, Player 1
+choose love-1
+#      Player 1 discards Love-1.
+
+#  13  turn 9, Player 1
+yes
+#      Fire-4 asks Player 1 to choose.
+
+#  14  turn 9, Player 1
+choose death-2
+#      Player 1 discards Death-2.
+
+#  15  turn 9, Player 1
+no
+#      Player 1 says no, so nothing waiting on that happens.
+#      Player 1 draws 3.
+
+#  16  turn 10, Player 2
+play life-2 2
+#      Player 2 plays Life-2 to line 2.
+#      Player 2 draws a card.
+#      Life-2 finds nothing to do.
+
+#  17  turn 11, Player 1
+play love-6 1
+#      Player 1 plays Love-6 to line 1.
+#      Player 2 draws 2.
+
+#  18  turn 12, Player 2
+play life-3 2
+#      Player 2 plays Life-3 to line 2.
+#      Water-5 asks Player 2 to choose.
+
+#  19  turn 12, Player 2
+choose water-4
+#      Player 2 discards Water-4.
+
+#  20  turn 13, Player 1
+resign
+#      The game is over: Player 1 walked away.
+

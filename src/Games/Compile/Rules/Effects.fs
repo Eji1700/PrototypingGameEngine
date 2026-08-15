@@ -463,11 +463,26 @@ type Chosen =
 /// The chooser is not always the player whose turn it is: "your opponent discards one" stops on
 /// them, and until they answer nothing moves. That is the whole reason `Session.active` has to
 /// ask the pile before it asks the stage.
+/// Who is waiting on an answer.
+///
+/// Almost always a card: its text has stopped part-way through and cannot go on until somebody
+/// chooses. Twice it is not, and both times it is the rules themselves - a rearrangement the
+/// control component forced, and a hand over its limit at the check cache phase.
+///
+/// Named rather than left as an *absent* card, because a screen has to say who is waiting and
+/// "nobody" is not an answer a player can read. It was an absent card, and the two rules-questions
+/// paid for it in opposite ways: the board called the check cache phase by whatever card happened
+/// to be at the top of the hand - *"Water-5 is waiting on Player 1"*, about a card that had said
+/// nothing at all - and called a shift's second question the control component, because absent was
+/// the only thing left for it to mean.
+type Asker =
+    | ACardSaying of Source
+    | TheControlComponent
+    | TheCacheCheck
+
 type Question =
     { Chooser: PlayerId
-      /// The card that is asking, where a card is asking. A rearrangement forced by the control
-      /// component is asked by the rules themselves and has no card to name.
-      Because: Source option
+      Because: Asker
       Wanting: Wanting }
 
 /// What is waiting to happen, newest first.

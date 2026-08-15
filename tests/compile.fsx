@@ -1649,6 +1649,24 @@ report
      offered 1, offered 3)
 
 report
+    "and the second question is the card's, not the rules' - it says where *this* card goes"
+    (Some(card Gravity 1))
+    // A shift asks twice, and the second question used to be built with no card behind it - which
+    // the board reads as the rules asking, and the rules' only question was the rearrangement the
+    // control component forces. So a card asking where to go said "The control component is
+    // waiting on you", which is the same bug as the check cache phase's and the other way up.
+    (let session =
+        standing (opened 1UL)
+        |> lyingDown one 1 [ mute Speed 2 ]
+
+     let after, _ =
+         running (Shift(Select.any, ToOrFromHere)) (card Gravity 1) session
+
+     match Session.asking after with
+     | Some { Because = ACardSaying source } -> Some source.Saying
+     | _ -> None)
+
+report
     "a line can be picked by how many cards it holds, and a shallow board offers none"
     (true, false)
     (let asked deep =
@@ -2073,13 +2091,13 @@ report
 report
     "and asking about a card is answered with what it says"
     (true, true)
-    (let screen = plain.Answer "what fire-0" (opened 1UL)
+    (let screen = plain.Answer one "what fire-0" (opened 1UL)
      reads "Flip any other card" screen, reads "Draw 2 cards" screen)
 
 report
     "and asking about the quietest of them still says something"
     true
-    (plain.Answer "what speed-2" (opened 1UL) |> reads "deleted by compiling")
+    (plain.Answer one "what speed-2" (opened 1UL) |> reads "deleted by compiling")
 
 report
     "every one of the ninety says something, which is why the board marks none of them"
@@ -3493,6 +3511,67 @@ report
      | None, _ -> false, two)
 
 report
+    "and it is the rules asking, not whatever card is at the top of the hand"
+    (Some TheCacheCheck, true)
+    // The step used to go on the pile as an ordinary `Run(Discard, …)`, and a `Run` carries the
+    // card whose text is talking - so it carried whatever happened to be at the head of the hand,
+    // and the board and the record both said *"Water-5 asks Player 1 to choose"* about a card that
+    // had said nothing whatever.
+    (let session = standing (opened 1UL)
+
+     let bulging =
+         { session with
+             Field =
+                 session.Field
+                 |> Field.update one (fun side ->
+                     { side with
+                         Hand = side.Hand @ (side.Deck |> List.truncate 2)
+                         Deck = side.Deck |> List.skip 2 }) }
+
+     let played = (Session.side one bulging).Hand |> List.head
+
+     match Turn.asked (Play(played, 1, FaceDown)) bulging with
+     | Some after, told ->
+         (Session.asking after |> Option.map (fun asked -> asked.Because)),
+         // And it says so in words, without naming a card.
+         told
+         |> List.map compiled.Says
+         |> List.exists (fun said -> mentions "check cache phase" said)
+     | None, _ -> None, false)
+
+report
+    "and every screen names the phase rather than a card, the same as the log does"
+    true
+    (let session = standing (opened 1UL)
+
+     let bulging =
+         { session with
+             Field =
+                 session.Field
+                 |> Field.update one (fun side ->
+                     { side with
+                         Hand = side.Hand @ (side.Deck |> List.truncate 2)
+                         Deck = side.Deck |> List.skip 2 }) }
+
+     let played = (Session.side one bulging).Hand |> List.head
+
+     match Turn.asked (Play(played, 1, FaceDown)) bulging with
+     | Some after, _ ->
+         let model = opened 1UL
+
+         let drawnAt =
+             { model with Timeline = Timeline.advance (Make Refresh) after model.Timeline }
+
+         Playable.offered AtATerminal standard compiled
+         |> List.forall (fun view ->
+             let screen = view.Board Margins.all one drawnAt
+
+             mentions "check cache phase" screen
+             && (Session.side one after).Hand
+                |> List.forall (fun held -> not (mentions $"{Card.name held} is waiting" screen)))
+     | None, _ -> false)
+
+report
     "and answering trims it, one card at a time, until it is down to five"
     (Deck.HandSize, two)
     (let session = standing (opened 1UL)
@@ -3962,11 +4041,33 @@ report
          | Ok(Send a), Ok(Send b) -> a = b
          | _ -> false))
 
+// A word the parser cannot place is handed to the game to answer rather than refused here.
+//
+// It used to be read as a draft pick, so `brimstone` came back *"'brimstone' is not a protocol.
+// There are: ..."* - true on the first six moves of the game and beside the point for the rest of
+// it. Which of this game's three sets of verbs was wanted is a fact about where the game stands,
+// and the parser is handed a line and nothing else.
+
 report
-    "a word that is not a protocol is refused where it was typed"
-    true
+    "a word the parser cannot place is asked about rather than guessed at"
+    (Ok "brimstone")
     (match Playable.read compiled "brimstone" with
-     | Error problem -> mentions "not a protocol" problem
+     | Ok(Asking asked) -> Ok asked
+     | Ok _ -> Error "read as a move"
+     | Error problem -> Error problem)
+
+report
+    "and a protocol named at the draft is still a pick, said the short way"
+    (Ok(Make(Take Fire)))
+    (match Playable.read compiled "fire" with
+     | Ok(Send(Make move)) -> Ok(Make move)
+     | _ -> Error "not a move")
+
+report
+    "but a record with a line like that in it still cannot be read, because only a move may be in one"
+    true
+    (match Transcript.read compiled "deal 2 1 you you\nbrimstone\n" with
+     | Error problem -> mentions "brimstone" problem
      | Ok _ -> false)
 
 report
@@ -4447,9 +4548,23 @@ report
     (boxesOn one (standing (opened 1UL) |> lyingDown one 1 [ card Water 5 ]))
 
 report
-    "a covered card still has its three, and the two a cover silenced are the two drawn empty"
-    ([ "top"; "middle"; "bottom"; "top"; "middle"; "bottom" ], true, false)
+    "a covered card is drawn without its boxes, and what is left is its top and nothing else"
+    ([ "top"; "middle"; "bottom" ], true, false)
+    // One card played over another: three boxes for the one on top and none for the one beneath,
+    // whose middle and bottom the cover has silenced and whose top is the whole of what it says.
     (let session = standing (opened 1UL) |> poised one 1 [ quiet Water 4; card Plague 1 ]
+     let screen = shownAt one session
+     boxesOn one session, mentions inTheTop screen, mentions inTheMiddle screen)
+
+report
+    "and a card played face down covers just the same, being a card played on a line like any other"
+    ([], true, false)
+    // Face down it draws no boxes of its own, and the card under it is covered, so there is not a
+    // box on the line - and the covered card is still saying its top box under its name.
+    (let session =
+        standing (opened 1UL)
+        |> beneath one 1 [ Placed.down (quiet Water 4); Placed.up (card Plague 1) ]
+
      let screen = shownAt one session
      boxesOn one session, mentions inTheTop screen, mentions inTheMiddle screen)
 
@@ -4460,6 +4575,41 @@ report
      |> List.collect Card.inProtocol
      |> List.filter (fun each ->
          boxesOn one (standing (opened 1UL) |> poised one 1 [ each ]) <> [ "top"; "middle"; "bottom" ]))
+
+/// Every control a described screen offers, as the line it would type.
+let rec private typing scene : string list =
+    match scene with
+    | Does(_, line, _) -> [ line ]
+    | Block(_, body)
+    | Stack body
+    | Beside body
+    | Tile(_, _, body)
+    | Patch(_, _, body) -> body |> List.collect typing
+    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect typing)
+    | Blank
+    | Say _
+    | Note _
+    | Written _
+    | Heading _
+    | Aligned _
+    | Big _ -> []
+
+report
+    "the hand offers a control for the one line a card could go face up on, and none for face down"
+    true
+    // Face down is three more lines on every card in the hand to say the one thing true of every
+    // card in the hand - any of them, on any line, always. It is said in the note and in the
+    // commands instead, and the card carries what is particular to it.
+    (let model = opened 1UL
+
+     let offered =
+         Render.board Margins.all one model
+         |> blockOf Render.Blocks.hand
+         |> Option.get
+         |> typing
+
+     not (List.isEmpty offered)
+     && offered |> List.forall (fun line -> line = "refresh" || not (line.EndsWith " down")))
 
 // --- and a cell keeps its name, however little is written in it ------------------------------------
 //
@@ -4497,5 +4647,76 @@ report
          |> List.forall (fun view ->
              let screen = view.Board Margins.all one asked
              mentions (Card.name (card Water 2)) screen && mentions (Card.name (card Water 3)) screen)))
+
+// --- and a line nobody could read ------------------------------------------------------------------
+//
+// It used to be read as a draft pick, so every typo at every stage came back *"'nonsense' is not a
+// protocol. There are: ..."* - true on the first six moves of the game and beside the point for the
+// rest of it. The parser cannot do better: which of this game's three sets of verbs was wanted is a
+// fact about where the game stands, and it is handed a line and nothing else. So it asks the game,
+// and the game answers in lines the reader could type as they stand.
+
+let private asking seat model =
+    plain.Answer seat "nonsense" model
+
+report
+    "a line nobody could read is answered with what is being asked for, and says so"
+    true
+    (asking one (opened 1UL) |> reads "I do not know how to 'nonsense'")
+
+report
+    "at the draft that is the protocols still on the table"
+    true
+    (let screen = asking one (dealt 1UL)
+     Protocol.all |> List.forall (fun protocol -> mentions (Protocol.key protocol) screen))
+
+report
+    "and in play it is your own hand, and the lines each card of it could go face up on"
+    true
+    (let model = opened 1UL
+     let screen = asking one model
+
+     handOf one model
+     |> List.forall (fun held ->
+         mentions (Card.name held) screen
+         && Field.facingLines one held (standing model).Field
+            |> List.forall (fun line -> reads $"'{Card.key held} {line}'" screen)))
+
+report
+    "and never the other player's, whoever it was that asked"
+    false
+    // The same rule the board keeps, and the reason this endpoint knows who is asking at all: the
+    // hand it answers with is the hand of whoever typed the line.
+    (let model = opened 1UL
+     let screen = asking two model
+
+     handOf one model
+     |> List.filter (fun held -> not (List.contains held (handOf two model)))
+     |> List.exists (fun held -> mentions (Card.name held) screen))
+
+report
+    "and a card waiting on somebody outranks the stage, here as on the board"
+    (true, true)
+    (let session =
+        standing (opened 1UL)
+        |> onlyHolding one (card Fire 4)
+        |> fun session ->
+            { session with
+                Field =
+                    session.Field
+                    |> Field.update one (fun side ->
+                        { side with
+                            Hand = [ card Fire 4; card Water 2; card Water 3 ] }) }
+
+     let model = opened 1UL
+
+     let asked =
+         Update.update
+             rules
+             (Make(Play(card Fire 4, 3, FaceUp)))
+             { model with Timeline = Timeline.advance (Make Refresh) session model.Timeline }
+
+     let screen = asking one asked
+     reads "Fire-4 is waiting on you" screen, reads "Water-2" screen)
 
 finish ()

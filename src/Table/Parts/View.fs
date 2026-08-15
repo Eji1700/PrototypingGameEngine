@@ -52,7 +52,11 @@ type View<'Move, 'State, 'Notice> =
 
         /// This game's own question, answered in the words it was asked in. A game with
         /// nothing to explain says so; nothing above here knows what there is to ask.
-        Answer: string -> Model<'Move, 'State, 'Notice> -> string
+        ///
+        /// It takes the seat asking for the same reason `Board` does, and it did not always:
+        /// the answer to *what can I do now* is a hand at a game that deals one, and a hand is
+        /// the one thing on that board a player is not entitled to see two of.
+        Answer: PlayerId -> string -> Model<'Move, 'State, 'Notice> -> string
 
         /// The rules and the commands, at length.
         Rules: string

@@ -261,7 +261,7 @@ report "the record reads back through the view too" true (view.History (Seat.at 
 report
     "and there is an answer for a game with nothing to explain"
     true
-    (view.Answer "anything at all" walked
+    (view.Answer (Seat.at 1) "anything at all" walked
      |> mentions "nothing here that needs working out")
 
 // The record's bargain, held to by the screen: every command the board offers is a line the

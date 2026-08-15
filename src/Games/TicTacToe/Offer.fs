@@ -75,7 +75,7 @@ module Offer =
           // Nothing here is worked out, so there is nothing to ask about. The field is filled
           // rather than left, because a game that answered nothing at all would be a game
           // whose players learn that by being ignored.
-          Answer = fun _ _ -> Render.answer
+          Answer = fun _ _ _ -> Render.answer
           Rules = Render.rules
           Waiting = Render.waiting
           Marking = Ink.marking

@@ -354,7 +354,7 @@ module Lobby =
             match Playable.byName seat.View.Shown seat.View.Palette lobby.Game name with
             | Ok view -> mine { seat with View = view }
             | Error problem -> told problem
-        | Ok(Asking question) -> lobby, just console (Told(seat.View.Answer question lobby.Model))
+        | Ok(Asking question) -> lobby, just console (Told(seat.View.Answer seat.Player question lobby.Model))
         | Ok Recount -> lobby, just console (Told(seat.View.History seat.Player lobby.Model))
         | Ok Keep -> told "The table keeps the record itself, and writes it out after every move."
         | Ok(Send msg) ->

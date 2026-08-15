@@ -110,8 +110,18 @@ module Parse =
         | [ only ] when (Card.byName only).IsSome -> choosing only
         // And a bare number, which can only be an answer: a line on its own is not a move.
         | [ only ] when (Commands.tryInt only).IsSome -> choosingLine only
-        | [ taken ] -> drafting taken
+        | [ only ] when (Protocol.byName only).IsSome -> drafting only
 
-        | _ ->
-            Error
-                $"Say a protocol to draft it - 'fire'. Say your {Protocol.Each} in order to set them against the lines - 'water dark fire'. Say a card and a line to play it - 'fire-3 2', or 'fire-3 2 down' to play it face down for {Placed.FaceDownValue}. 'help' has the rest."
+        // And anything else is handed to the game to answer.
+        //
+        // A lone unreadable word used to be read as a draft pick, so every typo at every stage
+        // came back *"'nonsense' is not a protocol. There are: ..."* - true on the first six
+        // moves of the game and beside the point for the rest of it. The parser cannot do
+        // better than that: it is handed a line and nothing else, and which of this game's
+        // three sets of verbs was wanted is a fact about where the game stands.
+        //
+        // So it stops guessing and asks. `Asking` carries the words as they were typed to the
+        // game's own view, which has the position and answers in lines the reader could type as
+        // they stand - and a record with a line like this in it still cannot be read, because
+        // nothing but a move may be part of one.
+        | _ -> Ok(Asking typed)

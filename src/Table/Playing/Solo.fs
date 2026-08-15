@@ -294,7 +294,7 @@ module Solo =
         | Ok Nothing -> solo, [ screenFor solo (console, reading) ], Carrying
         | Ok Help -> solo, just console (Told reading.View.Rules), Carrying
         | Ok Recount -> solo, just console (Told(reading.View.History beholder solo.Model)), Carrying
-        | Ok(Asking question) -> solo, just console (Told(reading.View.Answer question solo.Model)), Carrying
+        | Ok(Asking question) -> solo, just console (Told(reading.View.Answer beholder question solo.Model)), Carrying
         | Ok(Notes wanted) ->
             mine
                 { reading with

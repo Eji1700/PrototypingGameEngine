@@ -804,15 +804,15 @@ for view in diplomacy.Views standard do
 report
     "the board answers what a piece in Vienna can reach"
     true
-    (let answered = plain.Answer "borders vie" drawn
+    (let answered = plain.Answer (Power.seatOf Austria) "borders vie" drawn
      answered.Contains "Tyrolia" && answered.Contains "Landlocked")
 
 report
     "and what a fleet on the south coast of Spain can"
     true
-    ((plain.Answer "borders spa" drawn).Contains "Gulf of Lyon")
+    ((plain.Answer (Power.seatOf Austria) "borders spa" drawn).Contains "Gulf of Lyon")
 
-report "and what is standing in a province" true ((plain.Answer "where mun" drawn).Contains "Munich")
+report "and what is standing in a province" true ((plain.Answer (Power.seatOf Austria) "where mun" drawn).Contains "Munich")
 
 // A page has to be a page. A browser handed broken markup does not complain - it guesses, draws
 // whatever it made of the mess, and leaves nobody any the wiser - so it is checked here, where
@@ -832,7 +832,7 @@ for name, markup in
       "board at the opening", asPage.Board Margins.all (Power.seatOf Austria) dealt
       "record", asPage.History (Power.seatOf Austria) drawn
       "rules", asPage.Rules
-      "answer", asPage.Answer "borders vie" drawn ] do
+      "answer", asPage.Answer (Power.seatOf Austria) "borders vie" drawn ] do
     report $"the {name} is well-formed markup" true (parses markup)
 
 /// What a control on the page would send. The address is written into the markup escaped twice
@@ -883,7 +883,7 @@ report
     (buttons
      |> List.filter (fun line ->
          match diplomacy.Read line with
-         | Ok(Asking asked) -> (plain.Answer asked dealt).Contains "can reach" |> not
+         | Ok(Asking asked) -> (plain.Answer (Power.seatOf Austria) asked dealt).Contains "can reach" |> not
          | _ -> false))
 
 // --- and the seam itself -------------------------------------------------------------------------------------------

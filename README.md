@@ -254,7 +254,7 @@ type View =
       Palette: Palette                             // the colours it was built with
       Board:   Margins -> Player -> Model -> string // the whole board, for one player
       History: Player -> Model -> string           // the record of play so far
-      Ruling:  RegionId -> Model -> string         // why a region is ruled as it is
+      Answer:  Player -> string -> Model -> string // this game's own question, in the words asked
       Rules:   string                              // the rules and the commands
       Says:    string -> string                    // one line, with no board to go with it
       Waiting: Waiting list -> string }            // a table still filling up

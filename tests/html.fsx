@@ -66,7 +66,7 @@ let private screens =
               Yours = true } ]
       "a line the game said", Page.Told, view.Says "It is Player 2's turn."
       "the record", Page.Told, view.History beholder dealt
-      "the working behind a ruling", Page.Told, view.Answer $"rule {Words.number (List.head Board.regions).Id}" dealt
+      "the working behind a ruling", Page.Told, view.Answer beholder $"rule {Words.number (List.head Board.regions).Id}" dealt
       "the rules", Page.Told, view.Rules ]
 
 // --- markup that is markup --------------------------------------------------------------

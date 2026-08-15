@@ -215,6 +215,21 @@ module Resolving =
     let private moving seat placed from line session =
         laying seat placed line (Some from) session, [ Happened(Shifted(seat, placed, from, line)) ]
 
+    /// A card out of a hand and onto its owner's discard.
+    ///
+    /// Named because two different things do it, and only one of them is a card: a `Discard` on
+    /// somebody's text, and the check cache phase, which is the rules and has no card behind it
+    /// to carry a source for.
+    let private discarded seat card session =
+        { session with
+            Field =
+                session.Field
+                |> Field.update seat (fun side ->
+                    { side with
+                        Hand = side.Hand |> List.filter ((<>) card)
+                        Discard = card :: side.Discard }) },
+        [ Happened(Discarded(seat, card)) ]
+
     /// Carry a command out on the card it was pointed at. Whose card it is is not asked for - the
     /// target already says - and the source is here only because a shift may be told where to go
     /// in terms of the line the card saying it stands in.
@@ -279,15 +294,7 @@ module Resolving =
                     |> Field.update them (fun side -> { side with Hand = side.Hand @ [ card ] }) },
             [ Happened(Gave(seat, card)) ]
 
-        | Discard, InHand(seat, card) ->
-            { session with
-                Field =
-                    session.Field
-                    |> Field.update seat (fun side ->
-                        { side with
-                            Hand = side.Hand |> List.filter ((<>) card)
-                            Discard = card :: side.Discard }) },
-            [ Happened(Discarded(seat, card)) ]
+        | Discard, InHand(seat, card) -> discarded seat card session
 
         | Return _, OnTable(seat, line, placed) ->
             { session with
@@ -324,7 +331,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = seat
-                              Because = None
+                              Because = ACardSaying source
                               Wanting = ALine(OnTable(seat, line, placed), many) }
                         :: session.Pile },
                 [ Happened(Asked(seat, placed.Card)) ]
@@ -389,7 +396,7 @@ module Resolving =
                 Pile =
                     Ask
                         { Chooser = actor
-                          Because = Some source
+                          Because = ACardSaying source
                           Wanting = ALineFor(inner, Lines.all) }
                     :: session.Pile },
             [ Happened(Asked(actor, source.Saying)) ]
@@ -410,7 +417,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = ALineFor(PlayFromHand(face, ThisLine), many) }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -436,7 +443,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = ALineFor(inner, many) }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -532,7 +539,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = Whether inner }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -575,7 +582,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = OneOf(first, second) }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -623,7 +630,7 @@ module Resolving =
                         Pile =
                             Ask
                                 { Chooser = actor
-                                  Because = Some source
+                                  Because = ACardSaying source
                                   Wanting = ALine(OnTable(actor, source.Line, placed), offered) }
                             :: session.Pile },
                     [ Happened(Asked(actor, source.Saying)) ]
@@ -693,7 +700,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = AnOrder(actor, offered) }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -715,7 +722,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = AnOrder(side, offered) }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -753,7 +760,7 @@ module Resolving =
                     Pile =
                         Ask
                             { Chooser = actor
-                              Because = Some source
+                              Because = ACardSaying source
                               Wanting = ACard(command, many) }
                         :: session.Pile },
                 [ Happened(Asked(actor, source.Saying)) ]
@@ -853,7 +860,7 @@ module Resolving =
 
         Ask
             { Chooser = seat
-              Because = None
+              Because = TheControlComponent
               Wanting = AnOrder(seat, Protocol.orders order |> List.filter ((<>) order)) }
 
     /// Everything a seat has listening for that trigger, as steps to push.
@@ -1174,17 +1181,23 @@ module Resolving =
         // back down to it - by the player it belongs to, a card at a time.
         //
         // It is here at all because cards draw: "draw 3 cards" can put a hand at seven, and this
-        // is what takes it back to five. One card per pass rather than a batch, so that each one
-        // is an ordinary `Discard` and goes through the same asking as any other - and so that a
-        // hand of six asks once instead of asking for a list of one.
+        // is what takes it back to five. One card per pass rather than a batch, so that a hand of
+        // seven is two questions rather than one asking for a list.
+        //
+        // **The rules ask, and no card does.** This used to go on the pile as an ordinary
+        // `Run(Discard, …)`, and a `Run` carries the card whose text is talking - so it carried
+        // whatever happened to be at the top of the hand, and the board and the record both said
+        // *"Water-5 asks Player 1 to choose"* about a card that had said nothing whatever. There
+        // is nothing to ask on behalf of here, which is what `TheCacheCheck` says.
         | Trimming :: rest ->
             let seat = session.ToPlay
+            let hand = (Session.side seat session).Hand
 
             let over =
                 if Field.skipsCache seat session.Field then
                     0
                 else
-                    List.length (Session.side seat session).Hand - Deck.HandSize
+                    List.length hand - Deck.HandSize
 
             if over <= 0 then
                 // The phase is over - which happens every turn, whether or not there was anything
@@ -1192,16 +1205,19 @@ module Resolving =
                 // something a command reported.
                 walk (fuel - 1) { session with Pile = listening YouClearCache seat session @ rest } told
             else
-                let discarding =
-                    Run(
-                        Discard,
-                        { Owner = seat
-                          Saying = List.head (Session.side seat session).Hand
-                          Line = 1 }
-                    )
+                // Always a question and never a straight answer: over the limit is six cards or
+                // more, so there are always at least six to choose between. The step goes back on
+                // underneath, so a hand of seven comes round twice.
+                let asking =
+                    Ask
+                        { Chooser = seat
+                          Because = TheCacheCheck
+                          Wanting = ACard(Discard, hand |> List.map (fun card -> InHand(seat, card))) }
 
-                // The step goes back on underneath, so a hand of seven comes round twice.
-                walk (fuel - 1) { session with Pile = discarding :: Trimming :: rest } told
+                walk
+                    (fuel - 1)
+                    { session with Pile = asking :: Trimming :: rest }
+                    (told @ [ Happened(OverTheLimit(seat, over)) ])
 
         // Another one? Asked for as long as the last attempt did something and there is anything
         // left to do it to. Saying no is a nothing-done, which is what stops it.
@@ -1220,7 +1236,7 @@ module Resolving =
                             Pile =
                                 Ask
                                     { Chooser = source.Owner
-                                      Because = Some source
+                                      Because = ACardSaying source
                                       Wanting = Whether inner }
                                 :: Repeating(inner, source, tally) :: rest }
                         told
@@ -1271,6 +1287,18 @@ module Resolving =
 
     let private without session = { session with Pile = List.tail session.Pile }
 
+    /// The card behind a question, where a card is behind it.
+    ///
+    /// Every question that resumes a *command* has one, because a command is something printed on
+    /// a card. The two the rules ask on their own behalf do not resume anything: an order is put
+    /// into effect where it is answered, and a discard the check cache phase asked for points at
+    /// nothing and needs nothing to point with.
+    let private saying question =
+        match question.Because with
+        | ACardSaying source -> Some source
+        | TheControlComponent
+        | TheCacheCheck -> None
+
     /// A card, a line, or a yes or a no, named as the answer to a question that wanted one.
     let choosing question chosen session =
         match question.Wanting, chosen with
@@ -1278,14 +1306,25 @@ module Resolving =
             match targets |> List.tryFind (fun target -> Target.card target = card) with
             | None -> None, [ Refused(NotOnOffer question.Wanting) ]
             | Some target ->
-                let session, said = carriedOut question.Because.Value command target (without session)
+                let session, said =
+                    match saying question, target with
+                    | Some source, _ -> carriedOut source command target (without session)
+                    // The check cache phase, and nothing else reaches here without a card: the
+                    // rules asked for a discard, and a discard is the one command that wants
+                    // neither the card that said it nor the line that card is standing in.
+                    | None, InHand(seat, card) -> discarded seat card (without session)
+                    | None, OnTable _ -> without session, []
+
                 carryOn { session with Done = 1; Chose = Some(Target.card target) } said
 
         // "You may." Saying no is an answer like any other, and it is the answer that leaves
         // whatever was waiting on it with nothing to do.
         | Whether inner, Yes ->
-            let session, said = resolve inner question.Because.Value (without session)
-            carryOn session said
+            match saying question with
+            | None -> None, [ Refused(NotOnOffer question.Wanting) ]
+            | Some source ->
+                let session, said = resolve inner source (without session)
+                carryOn session said
 
         | Whether _, No -> carryOn { without session with Done = 0 } [ Happened(Declined question.Chooser) ]
 
@@ -1293,8 +1332,11 @@ module Resolving =
         // that leaves what was waiting behind it with nothing to do.
         | OneOf(first, _), TheFirst
         | OneOf(_, first), TheSecond ->
-            let session, said = resolve first question.Because.Value (without session)
-            carryOn session said
+            match saying question with
+            | None -> None, [ Refused(NotOnOffer question.Wanting) ]
+            | Some source ->
+                let session, said = resolve first source (without session)
+                carryOn session said
 
         | ALine(OnTable(seat, from, placed), offered), TheLine line when List.contains line offered ->
             let session, said = moving seat placed from line (without session)
@@ -1303,12 +1345,15 @@ module Resolving =
         // A line picked for a command rather than for a card: the command goes back on the pile
         // with its source standing in the line that was chosen.
         | ALineFor(command, offered), TheLine line when List.contains line offered ->
-            let session = without session
+            match saying question with
+            | None -> None, [ Refused(NotOnOffer question.Wanting) ]
+            | Some source ->
+                let session = without session
 
-            carryOn
-                { session with
-                    Pile = Run(command, { question.Because.Value with Line = line }) :: session.Pile }
-                []
+                carryOn
+                    { session with
+                        Pile = Run(command, { source with Line = line }) :: session.Pile }
+                    []
 
         | _ -> None, [ Refused(NotOnOffer question.Wanting) ]
 

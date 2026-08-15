@@ -61,6 +61,9 @@ type Happening =
     /// The game asking somebody to choose, so that a log read afterwards says what was asked as
     /// well as what was answered.
     | Asked of PlayerId * Card
+    /// The same, at the one moment nothing on the table is doing the asking: a hand over the
+    /// limit at the check cache phase, which the rules trim rather than any card.
+    | OverTheLimit of PlayerId * over: int
     /// Somebody said no to something a card offered. Worth saying out loud: whatever the card
     /// had waiting behind an "if you do" is now not going to happen, and the record should show
     /// that it was a choice rather than a failure.

@@ -346,6 +346,9 @@ module Words =
         | Drew(who, count) -> if count = 1 then $"{player who} draws a card." else $"{player who} draws {count}."
         | Fizzled(_, saying) -> $"{card saying} finds nothing to do."
         | Asked(who, saying) -> $"{card saying} asks {player who} to choose."
+        | OverTheLimit(who, over) ->
+            let many = if over = 1 then "a card" else $"{over} cards"
+            $"{player who} is holding more than {Deck.HandSize}, so the check cache phase asks them to put {many} down."
         | Declined who -> $"{player who} says no, so nothing waiting on that happens."
         | StoppedCompiling who -> $"{player who} cannot compile when their turn next begins."
         | Showed(who, shown) -> $"{player who} shows {card shown} and puts it back."
