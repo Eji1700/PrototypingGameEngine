@@ -317,10 +317,22 @@ move out on a copy of the game - answering its own questions along the way exact
 answer them for real - and scores the board it is left with. A draw shows up as cards in hand, a
 delete as their line dropping, and a card whose text fizzles as nothing, which is what it was.
 
-It stops at anything the **other** seat has to answer, which is the honest place to stop: what they
-will say is their business, and a machine that guessed for them would be reading a hand it cannot
-see. And it looks exactly one move ahead, because everything past that is guesswork of a different
-kind - their hand is hidden, half the table is face down, and every draw is a shuffle.
+**How far it looks is further than it sounds.** Resolving a play runs the whole of the rest of the
+turn - the cache check, the end commands, the turn passing - and then the opponent's turn *begins*:
+the component is taken and every line they have won is compiled. So the board `deep` scores is one
+on which the answer to a careless move has already been paid for.
+
+It stops at the first thing the **other** seat has to answer, and at the card they choose to play,
+which is the honest place to stop: what they will do is their business, and a machine that guessed
+for them would be reading a hand it cannot see.
+
+**One thing that stopping costs it was measured and then not fixed.** A card like *"your opponent
+discards 1 card"* halts the search on them, so the board `deep` scores is one on which they have not
+discarded — the best half of the card goes unpaid. Paying for it with `hard`'s estimate at exactly
+that boundary is a natural idea and about fifteen lines; it was written, measured over eight hundred
+deals, and moved the record by six games. On a posed board it did not change so much as which card
+was chosen. So it is not in the tree, and the measurement is [in the
+comment](Rules/Rival.fs) where the next person to have the idea will find it.
 
 It keeps `medium`'s arithmetic as a tie-break. Two moves that leave the same board are still not
 equal: one of them may have spent a five to get there.
@@ -333,10 +345,13 @@ and play the same line every turn.
 
 Written down rather than left to be discovered:
 
-- **A machine that looks at more than one move.** `deep` plays its own move out and stops - it does
-  not ask what the answer to it would be, so it cannot see that a line it leaves at nine invites a
-  compile at eleven. Going further means guessing at a hidden hand, a face-down table and a
-  shuffled deck, which is a different kind of machine and a real piece of work.
+- **A machine that weighs the reply.** `deep` plays its own move out and reads the board that
+  leaves - which already includes the opponent taking the control component and compiling anything
+  they had won, because the simulation runs past the turn boundary. What it does not see is the
+  card they *play* in answer: it can tell that a line of theirs was going to compile, but not that
+  the five in their hand is about to make one that was not. Weighing the reply means guessing at a
+  hidden hand, a face-down table and a shuffled deck, which is a different kind of machine and a
+  real piece of work.
 
   **Nothing else is missing.** Every rule is in, all ninety cards say the whole of what they are
   printed to say, and every machine here is measurably better than the one below it.

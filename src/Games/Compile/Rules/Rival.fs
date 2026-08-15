@@ -246,9 +246,19 @@ module Rival =
     // shows up as their line dropping; a card whose text fizzles shows up as nothing, which is
     // exactly what it was.
     //
-    // One move deep, and no further. Everything past that is guesswork of a different kind: their
-    // hand is hidden, half the table is face down, and every draw is a shuffle - so a machine that
-    // searched two moves would be searching a game it cannot see.
+    // It sees further than "one move" sounds. Resolving a play runs the rest of the turn and then
+    // the opponent's turn *begins* - the component taken, every won line compiled - so the board it
+    // scores is one where the answer to a careless move has already been paid for. What it stops
+    // short of is the card they choose to *play*, and that is where it should stop: their hand is
+    // hidden, half the table is face down, and every draw is a shuffle, so a machine reaching past
+    // it would be searching a game it cannot see.
+    //
+    // **It also stops at the first question they have to answer**, which leaves the best half of a
+    // card like *"your opponent discards 1 card"* unpaid: the board it scores is one on which they
+    // have not discarded yet. Paying for it with `hard`'s estimate at that boundary - search while
+    // searching is sound, weigh where it is not - was written, measured and taken out again: over
+    // eight hundred deals it moved the record by six games, which is inside the noise, and on a
+    // posed board it did not change so much as which card was chosen.
 
     /// How well that seat is standing, in the only terms the game settles anything by.
     let private standingIn seat session =
@@ -455,7 +465,8 @@ module Rival =
                     worthPlaying seat session (card, line, face) + readingPlay seat (card, line, face)
                 else
                     match after seat (Play(card, line, face)) session with
-                    | Some played -> standingIn seat played * 4 + worthPlaying seat session (card, line, face)
+                    | Some played ->
+                        standingIn seat played * 4 + worthPlaying seat session (card, line, face)
                     | None -> System.Int32.MinValue
 
             match best (counting score) ways rival.Rng with
