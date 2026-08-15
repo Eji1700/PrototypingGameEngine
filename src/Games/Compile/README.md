@@ -12,7 +12,19 @@ dotnet run -- compile play 2 --rival easy   # ...or by one that only plays legal
 dotnet run -- compile serve 2               # the same table in a browser, with buttons
 
 dotnet run -- compile-control play 2        # the same game, with the optional rule in it
+
+dotnet run -- compile replay logs/...-compile-2p-seed<n>.log   # one you put down
 ```
+
+**Put it down and come back.** `quit` writes the record and leaves the table exactly as it
+stands — mid-draft, mid-laying-out or mid-play, the stage being part of the game like
+anything else — and `Continue a game` at the menu lists what there is to take up, with the
+same decks in the same order and the machine back opposite at the strength it was playing.
+Conceding is `resign`, which is a different thing said on purpose. The two games are two
+games here as everywhere else: a `compile` record and a `compile-control` record are filed
+under their own names and neither will open the other. All of that is the engine's rather
+than this game's, and is [documented
+there](../../../README.md#taking-it-back-and-writing-it-down).
 
 **The game is whole.** The draft, the protocols against the lines, the decks and the hands; the
 values and the ten, compiling, refreshing, the check cache phase, and winning; the optional control

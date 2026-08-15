@@ -64,6 +64,8 @@ without anything above it moving. Nothing did, once.
 **Using it** — [Running](#running) ·
 [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
 [How the board is shown](#how-the-board-is-shown) ·
+[Kept for next time](#kept-for-next-time) ·
+[Colours of your own](#colours-of-your-own) ·
 [A screen described once](#a-screen-described-once) ·
 [Playing from different machines](#playing-from-different-machines) ·
 [Playing against the program](#playing-against-the-program)
@@ -193,8 +195,11 @@ undo
 ```
 
 ```powershell
-dotnet run -- replay logs/2026-08-02-215823-2p-seed42.log
+dotnet run -- replay logs/2026-08-02-215823-turncoats-2p-seed42.log
 ```
+
+...or `Continue a game` at the menu, which lists what there is to say that about and
+hands back that very line.
 
 Replaying folds the recorded moves over a fresh deal. Since `update` is pure and
 the generator is part of the game, this lands on exactly the state the record was
@@ -211,6 +216,18 @@ rather than closing the window on itself.
 **Which makes it a resume rather than a viewing.** Four things follow from a
 record being a game you can carry on with:
 
+- **It is offered rather than remembered.** `Continue a game` at every game's menu
+  lists the records there are — when each was put down, how many seats, how many
+  moves — and every row on it stands for the `replay <file>` a person would have
+  typed. This worked at every game in the program long before there was a screen
+  for it, and almost nobody found it: it wanted a path typed at a menu that never
+  offered one. A record's name says which game it is for the same reason, so the
+  list can be drawn without opening every file in the folder — and so that handing
+  one to the wrong game is refused in a sentence that names the right one, rather
+  than getting as far as the first move and being told to say a square's number.
+  The name goes in the *stamp*, which is whatever comes before the seats and the
+  seed and which `Transcript.path` never looked inside, so every record written
+  before this still reads back and still goes on being written to.
 - **The machines come back.** The seating is on the deal line, so they take the
   seats they were playing at the strength they were playing them.
 - **It can be taken up any of the three ways in.** `play`, `serve` and `host` all
@@ -309,19 +326,21 @@ gold rather than a fourth hue that could be mistaken for a stone.
 ### Colours a player chooses
 
 Which colour is drawn for what is a **palette** ([Palette.fs](src/Table/Parts/Palette.fs)),
-and `colours` at the menu opens the screen that changes one:
+and `settings` at the menu opens the screen that changes one:
 
 ```
-     1  red     Red   R R   >R          crimson   Red stones, and the regions Red rules
-  -> 2  blue    Blue   B B   >B         teal      Blue stones, and the regions Blue rules
-     3  green   Green   G G   >G        moss      Green stones, and the regions Green rules
-     4  yours   (you)   ->              gold      your own seat, and whose turn it is
-     5  hidden  dead                    slate     what is held back from you, and ground nobody may enter
-     6  reset   put them all back
+     1  drawn                           rich      panels, charts and colour
+  -> 2  red     Red   R R   >R          crimson   Red stones, and the regions Red rules
+     3  blue    Blue   B B   >B         teal      Blue stones, and the regions Blue rules
+     4  green   Green   G G   >G        moss      Green stones, and the regions Green rules
+     5  yours   (you)   ->              gold      your own seat, and whose turn it is
+     6  hidden  dead                    slate     what is held back from you, and ground nobody may enter
+     7  reset   put the colours all back
+     8  save    keep all this, and open that way next time
      0  done    back to the menu
 
-  Left and right walk the one marked -> through the colours, or say 'blue teal' to
-  name one outright.
+  Left and right walk the one marked -> through what it can be, or say 'blue teal' to
+  name a colour outright, or 'view rich' to name a way of drawing.
 ```
 
 Five things take a colour and nineteen colours are on offer, each with a short word of
@@ -361,6 +380,71 @@ because a record is meant to replay for good - the game in
 Adding to the game means adding an endpoint here and answering it in every view.
 That is the trade: a wide seam, but one that cannot be half-implemented without the
 compiler saying so.
+
+### Kept for next time
+
+`save` on that screen writes [settings.txt](src/Table/Parts/Settings.fs) beside the records,
+and every way into a game reads it — the menu, and the command line alike:
+
+```
+view rich
+
+[turncoats]
+view rich
+red lemon
+blue azure
+green moss
+hidden slate
+yours gold
+```
+
+**Every line in it is a line you could type at the screen it belongs to.** `view rich` is
+what the menu takes; `red lemon` is what the settings screen takes; and reading the file
+back is handing those lines to those very readers. So the file cannot come to hold something
+no screen can express, no screen can come to offer something the file cannot hold, and what
+a line *means* is settled in one place rather than two. It is the bargain the record already
+keeps — a record is the moves a player typed — applied one level out, to the answers they
+gave rather than the moves they made. Editing it by hand is reading it back, and a line that
+has gone stale is said out loud at the menu rather than passed over in silence.
+
+The colours are per game and have to be: a game of stones colours three factions and a game
+of nine squares colours two marks, and there is no one list to keep them in. The **view** is
+written twice — once above all the games and once for the game it was saved at — which is
+what makes it a *default* rather than a note about one game. Settle on `rich` at Turncoats
+and the games you have not opened yet open in `rich` too; settle differently at one of them
+and that one keeps its own answer, its own line being read first. A view a game does not
+have falls back to the plainest rather than refusing, because a game you cannot open on
+account of how you once read a different one is not a setting but a trap.
+
+The command line reads the same file through the same function
+([`Playable.opening`](src/Table/Playable.fs)), and that is deliberate: a default that people
+who pick from a list got and people who type did not would be two defaults. What is said on
+the line is the later word — `--colour red=teal` changes that one slot and leaves every other
+as it was left, and `--view plain` overrides for that game without writing anything down.
+
+### Colours of your own
+
+Nineteen colours is what this program was *built* with, not what it can offer. A
+`colours.txt` beside the records says otherwise:
+
+```
+rust     #b7410e     # a new one, on the end of the list
+crimson  #ff2d2d     # brighter than the built-in, and in its place
+no slate             # one I never use
+```
+
+A name already known is restated **in place**, so saying what crimson should have been does
+not shuffle a list somebody has learnt the shape of; a new name goes on the end; `no <name>`
+drops one. Hex rather than a colour name, because the point of the file is the colours this
+program does not have. Names are letters only — a name with a space in it could not be said
+in the two words the settings screen reads.
+
+What a *game* draws itself in is looked up in the built-in catalogue rather than in this
+list, and that separation is load-bearing: Diplomacy says Russia is `violet`, and a player
+who never wants to see violet again has said nothing whatever about Russia. So dropping a
+colour removes it from what you are **offered** and cannot leave a game unable to draw
+itself. Every line the file gets wrong is a sentence at the menu, not a silent shrug — it is
+a file a person writes by hand, and a line of it that quietly did nothing is an evening.
 
 ### A screen described once
 
@@ -1433,7 +1517,8 @@ point: `Parts` does not know there is a seam, and `Playing` is written against i
 | [Showing.fs](src/Table/Parts/Showing.fs) | What a table shows one console, and which console it is for |
 | [Waiting.fs](src/Table/Parts/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
 | [Scene.fs](src/Table/Parts/Scene.fs) | What a screen is made of, before anybody has decided what it looks like |
-| [Palette.fs](src/Table/Parts/Palette.fs) | Which colour is drawn for what, keyed by the words a game says it colours |
+| [Palette.fs](src/Table/Parts/Palette.fs) | Which colour is drawn for what, keyed by the words a game says it colours - and what there is to choose from, which a `colours.txt` may add to |
+| [Settings.fs](src/Table/Parts/Settings.fs) | What somebody settled on last time and gets again this time, written as the lines they would have typed |
 | [Reach.fs](src/Table/Parts/Reach.fs) | How far a table can be reached and what it takes to sit down at one: the port, the word at the door, what it is all wrapped in, and an address as somebody says it |
 | [Keys.fs](src/Table/Parts/Keys.fs) | Screens picked from rather than typed at: the rows, where a person has got to, and what a key press comes to |
 | [Commands.fs](src/Table/Parts/Commands.fs) | The words a person can type at *any* game, read once for all of them |
@@ -1442,11 +1527,11 @@ point: `Parts` does not know there is a seam, and `Playing` is written against i
 | [Tint.fs](src/Table/Parts/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Page.fs](src/Table/Parts/Page.fs) | The browser's shell: the stream, the prompt, the colour form, the door, and the two places a fragment can land. A game brings a stylesheet and a name for the tab |
 | [Screens.fs](src/Table/Parts/Screens.fs) | Driving a screen at a real terminal: clear it, draw it, read a key, hand back a line |
-| [Options.fs](src/Table/Parts/Options.fs) | The colour screen: what is drawn in what, and how a person changes it |
+| [Options.fs](src/Table/Parts/Options.fs) | The settings screen: how the board is drawn, what is drawn in what, and whether to be handed the same answers next time |
 | [Readers.fs](src/Table/Parts/Readers.fs) | The three ways of reading a `Scene` - as text, as Spectre's widgets, as a page - written once for every game there will ever be |
 | [Playable.fs](src/Table/Playable.fs) | **The seam**: everything a game has to say about itself to be read and played here |
 | [Solo.fs](src/Table/Playing/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
-| [Transcript.fs](src/Table/Playing/Transcript.fs) | A journal as a file, and a file back into a journal |
+| [Transcript.fs](src/Table/Playing/Transcript.fs) | A journal as a file, and a file back into a journal - what a record is called, taken apart in the same place it is put together, and every record there is to take up |
 | [Menu.fs](src/Table/Playing/Menu.fs) | The start menu and the seat list: what there is to open, and what a typed line asks for |
 | [Launch.fs](src/Table/Playing/Launch.fs) | The command line, both ways round: the commands and their options, what a typed line comes to, what is refused at the door, and the line the program writes when it has to tell somebody what to type |
 
@@ -1573,9 +1658,9 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Table/Playing/Men
 
   -> 1  New game         how many are playing, and who each of them is
      2  Join a table     sit down at one somebody else is hosting
-     3  Replay a record  a saved game, taken up where it was left
+     3  Continue a game  one you put down, taken up where it was left
      4  How it is drawn  now plain - plain text, and nothing this terminal has to understand
-     5  Colours          which colour is drawn for what
+     5  Settings         how it is drawn, in what colours, and kept for next time
      6  Rules            the rules and the commands, at length
      7  Quit
 
@@ -1585,8 +1670,8 @@ entry point. With no arguments at all, the menu ([Menu.fs](src/Table/Playing/Men
   one, 'serve you medium' to read it in a browser, 'seats you you' to lay it out
   first. The short ways still hold: '3' for a game of three, '3 42' for that same
   game again, 'serve 3', 'host 3', 'vs <skill>...' for easy, medium, hard,
-  'join <address>', 'replay <file>', 'view <plain, rich>', 'colours',
-  'rules', 'quit'.
+  'join <address>', 'continue', 'replay <file>', 'view <plain, rich>',
+  'settings', 'rules', 'quit'.
 ```
 
 ### One question, asked once: who is in each seat

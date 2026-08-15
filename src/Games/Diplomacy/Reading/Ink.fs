@@ -25,10 +25,10 @@ module Ink =
         function
         | Austria -> Palette.crimson
         | England -> Palette.azure
-        | France -> Palette.shades |> List.find (fun shade -> shade.Name = "sky")
+        | France -> Palette.named "sky"
         | Germany -> Palette.bone
         | Italy -> Palette.moss
-        | Russia -> Palette.shades |> List.find (fun shade -> shade.Name = "violet")
+        | Russia -> Palette.named "violet"
         | Turkey -> Palette.gold
 
     let private slot power =
@@ -54,7 +54,7 @@ module Ink =
         { Key = Sea
           Draws = "the open water, and the tildes round the name of a sea"
           Shows = "~nth~  the North Sea"
-          Standard = Palette.shades |> List.find (fun shade -> shade.Name = "teal") }
+          Standard = Palette.named "teal" }
 
     let slots = (Power.all |> List.map slot) @ [ water ]
 

@@ -15,7 +15,19 @@ dotnet run -- turncoats play 3        # or just `dotnet run -- play 3`: a line t
 dotnet run -- turncoats play 3 --seed 42
 dotnet run -- turncoats play 2 --rival medium
 dotnet run -- turncoats serve 3       # the same game, in a browser
+
+dotnet run -- turncoats replay logs/...-turncoats-3p-seed<n>.log    # one you put down
+dotnet run -- turncoats host --from logs/...-turncoats-3p-seed<n>.log
 ```
+
+**Put it down and come back.** `quit` writes the record and leaves the board exactly as it
+stands, and `Continue a game` at the menu lists what there is to take up — with the same
+factions in the same bags and the machine back at the seats it was playing, at the strength
+it was playing them. Conceding is `resign`, which is a different thing said on purpose. It
+need not be taken up the way it was put down either: `--from` works on `play`, `serve` and
+`host` alike, so a game started against two machines here can be reopened as a table your
+friends join. All of that is the engine's rather than this game's, and is [documented
+there](../../../README.md#taking-it-back-and-writing-it-down).
 
 [Playing](#playing) · [Rules as implemented](#rules-as-implemented) · [The map](#the-map) ·
 [The four actions](#the-four-actions) · [Ruling](#ruling) · [Winning](#winning) ·

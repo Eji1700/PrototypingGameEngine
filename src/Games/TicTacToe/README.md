@@ -14,7 +14,16 @@ up](../../../README.md#what-a-second-game-found) is worth more than the game.
 dotnet run -- tictactoe play 2
 dotnet run -- tictactoe play 2 --rival hard    # a machine that cannot be beaten
 dotnet run -- tictactoe serve 2 --rival hard   # nine buttons in a browser
+
+dotnet run -- tictactoe replay logs/...-tictactoe-2p-seed<n>.log   # one you put down
 ```
+
+A game of nine squares is not one anybody puts down for the evening, but it is taken up the
+same way every game here is: `quit` writes the record, `Continue a game` at the menu lists
+them, and the machine comes back to the seat it was playing at the strength it was playing
+it. All of that is the engine's rather than this game's, and is [documented
+there](../../../README.md#taking-it-back-and-writing-it-down) — which is the point of this
+game being here at all.
 
 ## Playing
 

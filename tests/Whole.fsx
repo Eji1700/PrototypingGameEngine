@@ -25,6 +25,7 @@
 #load "../src/Table/Parts/Waiting.fs"
 #load "../src/Table/Parts/Scene.fs"
 #load "../src/Table/Parts/Palette.fs"
+#load "../src/Table/Parts/Settings.fs"
 #load "../src/Table/Parts/Reach.fs"
 #load "../src/Table/Parts/Keys.fs"
 #load "../src/Table/Parts/Commands.fs"

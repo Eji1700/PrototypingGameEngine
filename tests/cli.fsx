@@ -416,6 +416,15 @@ report
 
 let private chosen line = Menu.choose playing standard line
 
+/// The settings screen as the game under test would show it: the ways it can be drawn at a
+/// terminal, and the plainest of them doing the drawing. Both handed in, the same way the
+/// program hands them in - the screen has never met a game and is not about to.
+let private settings palette =
+    let drawn =
+        Playable.offered AtATerminal palette playing |> List.map (fun view -> view.Name)
+
+    Options.screen drawn (List.head drawn) palette
+
 /// A choice as something that can be compared. `Menu.Choice` carries a view, and a view is
 /// a bundle of functions, so the choices cannot be held up against each other whole.
 ///
@@ -598,7 +607,7 @@ report "every row the menu offers stands for a line the menu itself can read" []
 report
     "and the same on the colour screen, where left and right walk a slot through the colours"
     []
-    (unread (Options.choose standard) (Options.screen standard))
+    (unread (Options.choose standard) (settings standard))
 
 // The seat list is not reached by opening a row - it is reached by a line, and comes back as
 // one - so it has to be walked over separately. Every seating there is, at every size the
@@ -691,7 +700,7 @@ report
 report
     "the way back out of a screen is a line too"
     true
-    (match (Options.screen standard).Backs with
+    (match (settings standard).Backs with
      | Some line ->
          match Options.choose standard line with
          | Ok Options.Done -> true
@@ -713,8 +722,11 @@ let private key press =
 let private letter (typed: char) =
     ConsoleKeyInfo(typed, enum<ConsoleKey> 0, false, false, false)
 
-/// A screen, walked over by a run of key presses, and whatever line it gave up.
-let private walking screen keys =
+/// A screen, walked over by a run of key presses from a given row, and whatever line it gave
+/// up. Where the cursor starts matters on a screen whose rows are not all the same kind of
+/// thing - the settings screen opens on the row that says how the board is drawn, and the
+/// colours are under it.
+let private walkingAt at screen keys =
     let rec next standing keys =
         match keys with
         | [] -> None
@@ -723,11 +735,14 @@ let private walking screen keys =
             | Keys.Steering standing -> next standing rest
             | Keys.Answered line -> Some line
 
-    next (Keys.standing screen 0) keys
+    next (Keys.standing screen at) keys
+
+/// The same, from the top, which is where somebody arriving at a screen stands.
+let private walking screen keys = walkingAt 0 screen keys
 
 let private walked keys = walking front keys
 
-report "the number of a row picks it outright" (Some "colours") (walked [ letter '5' ])
+report "the number of a row picks it outright" (Some "settings") (walked [ letter '5' ])
 
 report
     "and a number on the list it opens is the answer to what that list asked"
@@ -923,17 +938,22 @@ report
     true
     ((typed (letter '3') "70000" (Reach.locked "kbd4-9mtx-7rfp")).Contains "is not a port")
 
-// Left and right on the colour screen walk one slot through the nineteen. Nothing is
-// remembered between presses - the line says the whole of the change - so walking the list
-// right round has to come back to the colour it set out from.
+// Left and right on the settings screen walk one row through what it has to choose from.
+// Nothing is remembered between presses - the line says the whole of the change - so walking
+// a list right round has to come back to what it set out from.
 
-let private colours = Options.screen standard
+let private colours = settings standard
+
+/// The first colour is one row down, the screen opening on the row that says how the board
+/// is drawn. Said once here rather than counted at each check below, because it is one fact
+/// about the shape of the screen and not four.
+let [<Literal>] private FirstSlot = 1
 
 let private walkedRight times palette =
     List.replicate times (key ConsoleKey.RightArrow)
     |> List.fold
         (fun palette press ->
-            match walking (Options.screen palette) [ press ] with
+            match walkingAt FirstSlot (settings palette) [ press ] with
             | Some line ->
                 match Options.choose palette line with
                 | Ok(Options.Changed changed) -> changed
@@ -941,18 +961,50 @@ let private walkedRight times palette =
             | None -> palette)
         palette
 
-report "right walks a slot on to the next colour" (Some "red ember") (walking colours [ key ConsoleKey.RightArrow ])
+/// Where a colour stands in the list on offer, and what is that many steps along it.
+///
+/// Read off the list rather than written out, because what there is to choose from is no
+/// longer only what this program was built with - a colours file may have added to it,
+/// restated one of it or dropped one. Which is exactly what these checks are not about: they
+/// are about a row walking one step, and a check that hard-coded the second colour would be
+/// checking what the nineteen happen to be, and would fail on a machine whose owner had said
+/// what colours they like.
+/// A colour standing in nothing on offer starts from the top, which is what the screen does
+/// with one - a slot whose game-given colour a colours file has dropped is still a slot to
+/// walk, and refusing to draw it would be losing a row over a decoration.
+let private along steps =
+    let names = Palette.shades |> List.map (fun shade -> shade.Name)
+
+    let at =
+        names
+        |> List.tryFindIndex (fun name -> name = (Palette.shadeOf "red" standard).Name)
+        |> Option.defaultValue 0
+
+    names[((at + steps) % names.Length + names.Length) % names.Length]
+
+report
+    "right walks a slot on to the next colour"
+    (Some $"red {along 1}")
+    (walkingAt FirstSlot colours [ key ConsoleKey.RightArrow ])
 
 report
     "and left to the one before, which from the first is the last"
-    (Some "red slate")
-    (walking colours [ key ConsoleKey.LeftArrow ])
+    (Some $"red {along -1}")
+    (walkingAt FirstSlot colours [ key ConsoleKey.LeftArrow ])
 
 report
     "walking right round the colours comes back where it started"
-    [ "ember"; "crimson" ]
+    [ along 1; along 0 ]
     [ (Palette.shadeOf "red" (walkedRight 1 standard)).Name
       (Palette.shadeOf "red" (walkedRight (List.length Palette.shades) standard)).Name ]
+
+// And the row above them all walks the ways of drawing the same way, which is the whole of
+// what it is: a view is picked here exactly as a colour is.
+
+report
+    "right walks the top row on to the next way of drawing"
+    (Some "view rich")
+    (walking colours [ key ConsoleKey.RightArrow ])
 
 // Where the cursor was left comes back with the line, because the screen is built again from
 // the palette every time one changes and the cursor has to still be on the slot being walked.

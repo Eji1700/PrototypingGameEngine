@@ -52,6 +52,10 @@
          readers and neither end should have to reach past the other. -->
     <Compile Include="src/Table/Parts/Scene.fs" />
     <Compile Include="src/Table/Parts/Palette.fs" />
+    <!-- What a player settled on last time and gets again this time, which is the palette
+         above and a view by name. After the palette because it is written out of one, and
+         before every screen below because the screens are what settle it. -->
+    <Compile Include="src/Table/Parts/Settings.fs" />
     <!-- How far a table can be reached and what it takes to sit down at one. Above the page
          because the door has a page of its own. -->
     <Compile Include="src/Table/Parts/Reach.fs" />

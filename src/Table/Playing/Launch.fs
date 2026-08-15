@@ -455,8 +455,24 @@ module Launch =
             else
                 Ok rivals)
 
-    /// The colours a command was told to draw in, folded up one at a time.
+    /// Where a command line starts from before a word of it is read: the way this game was
+    /// last left, which for somebody who has never settled on anything is exactly what it
+    /// always was.
+    ///
+    /// Read here as well as at the menu, and through the same function, because they are the
+    /// same question. A default that only people who pick from a list got, and people who type
+    /// did not, would be two defaults - and the one thing a person is sure of about a setting
+    /// is that it applies to them next time, whichever door they came in by.
+    let private settled game =
+        Playable.opening AtATerminal (fst (Settings.load ())) game
+
+    /// The colours a command was told to draw in, folded up one at a time over the ones that
+    /// were settled on. Said on the line and settled on beforehand is not two answers at odds:
+    /// what is typed now is the later word about that slot, and every slot it says nothing
+    /// about stays as it was left.
     let private painted game given =
+        let kept = (fst (settled game)).Palette
+
         given
         |> List.fold
             (fun palette (given: string) ->
@@ -465,16 +481,17 @@ module Launch =
                     match given.Split '=' with
                     | [| slot; colour |] -> Palette.set (slot.ToLowerInvariant()) (colour.ToLowerInvariant()) palette
                     | _ -> Error $"'{given}' is not a colour for something. Say it as 'blue=teal'."))
-            (Ok(Palette.standard game.Slots))
+            (Ok kept)
 
     /// The colours first, then the view built in them, because a view is built in a palette
-    /// and cannot be handed another afterwards.
+    /// and cannot be handed another afterwards. A line that says nothing about how to draw is
+    /// drawn the way it was last left, which is the whole of what a kept view is for.
     let private reading game colours name =
         painted game colours
         |> Result.bind (fun palette ->
             match name with
             | Some name -> Playable.byName AtATerminal palette game name
-            | None -> Ok(Playable.plainest AtATerminal palette game))
+            | None -> Ok(Playable.recoloured palette game (fst (settled game))))
 
     /// How many are playing, said where a person would be told about it rather than after
     /// the deal.

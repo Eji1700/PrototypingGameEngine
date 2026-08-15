@@ -165,6 +165,29 @@ module Playable =
     /// nothing about how they read gets.
     let plainest shown palette game = offered shown palette game |> List.head
 
+    /// The view a game opens in, as the settings were left: drawn the way that was kept, in
+    /// the colours that were kept for this game, and whatever the game itself says wherever
+    /// they say nothing. Anything the settings got wrong comes back beside it, to be said on
+    /// the first screen somebody is shown.
+    ///
+    /// Here rather than at each way in, and that is the point of it: the menu and the command
+    /// line both have to open a game the way it was left, and two answers to that question
+    /// would be two defaults - one for people who type and one for people who pick.
+    ///
+    /// A view the settings name that this game does not have falls back to the plainest rather
+    /// than refusing, which is the right way round for a default. The name may have been kept
+    /// at a different game with different ways of drawing, and a game you cannot open because
+    /// of how you once read another one is not a setting but a trap.
+    let opening shown settings game =
+        let palette, problems = Settings.palette game.Name game.Slots settings
+
+        let view =
+            match Settings.drawn game.Name settings with
+            | Some name -> byName shown palette game name |> Result.defaultValue (plainest shown palette game)
+            | None -> plainest shown palette game
+
+        view, problems
+
     /// The same view, built again in different colours. A view is its endpoints, and those
     /// have the old palette baked into them, so changing colours means asking for the view
     /// afresh rather than putting a new palette on the one in hand.

@@ -40,6 +40,10 @@ module Menu =
         /// about, an address and a word.
         | Join of address: string * code: string option
         | Replay of path: string
+        /// Not a game yet: the saved games there are, so that one of them can be picked
+        /// rather than remembered. Taking a game up again has always worked here; what it
+        /// wanted was a path typed at a screen that never offered one.
+        | Continuing
         /// Show the rules and the commands at length.
         | Rules
         /// Read the game a different way from here on.
@@ -209,6 +213,59 @@ module Menu =
               $"Or type it: 'reaches {Seating.line sitters} via {Reach.line reach}'." ]
           Backs = Some(saying "seats" sitters reach) }
 
+    /// The games there are to take up again, so that one can be picked rather than typed out.
+    ///
+    /// This screen is the whole of what was missing from taking a game up, and none of the
+    /// machinery under it is new: every row hands back `replay <file>`, which is the line that
+    /// has always worked and is the same one printed at the top of every record. So there is
+    /// no second way of resuming a game here - there is the way there always was, and a list
+    /// of what there is to say it about.
+    ///
+    /// The records come in from outside rather than being looked for here, because looking in
+    /// a folder is reading the world and this file does not do that. Which of them are worth
+    /// showing has been settled before they arrive, for the same reason.
+    let continuing (game: Playable<_, _, _>) (records: Transcript.Saved list) : Keys.Screen =
+        let row at (record: Transcript.Saved) =
+            let seats = if record.Players = 1 then "1 seat" else $"{record.Players} seats"
+            let moves = if record.Moves = 1 then "1 move" else $"{record.Moves} moves"
+
+            // A record that does not name its game is one from before the name was part of a
+            // record, and saying so is worth a column: it may be this game's and it may not,
+            // and the only way to find out is to open it.
+            let said =
+                match record.Game with
+                | Some _ -> ""
+                | None -> "  (its name does not say which game)"
+
+            Keys.sends
+                (Keys.nth at)
+                (record.Written.ToString "d MMM HH:mm")
+                (sprintf "%-10s%-12s%s%s" seats moves record.Named said)
+                $"replay {record.Named}"
+
+        { Title = $"Take up a {game.Title} game"
+          Prose =
+            match records with
+            | [] ->
+                [ "There are no saved games here yet."
+                  ""
+                  "Every game writes itself down as it is played, so there will be one the moment you"
+                  "put one down - 'quit' leaves the board exactly as it stands, and this is where it"
+                  "comes back." ]
+            | _ ->
+                [ "Each of these is a game left where it stood. Taking one up puts the same players"
+                  "back in the same seats - the machine at the seats it was playing, and at the"
+                  "strength it was playing them - and it goes on being written to the same file." ]
+          Rows = records |> List.mapi row
+          Note =
+            [ "The most recently put down is first. 'undo' walks a game you take up backwards"
+              "through every state it really passed through, so this is how a game is reviewed as"
+              "well as how it is carried on."
+              ""
+              "Or type it: 'replay <file>', naming any record - including one from somewhere else"
+              $"than the {game.Title} games listed here." ]
+          Backs = Some "back" }
+
     /// The menu is shown in the view it is offering, so a player choosing one can see what
     /// they are choosing before they commit a game to it.
     /// The front door.
@@ -249,9 +306,12 @@ module Menu =
           Rows =
             [ Keys.opens (Keys.nth 0) "New game" "how many are playing, and who each of them is" (counting game)
               Keys.types (Keys.nth 1) "Join a table" "sit down at one somebody else is hosting" "join "
-              Keys.types (Keys.nth 2) "Replay a record" "a saved game, taken up where it was left" "replay "
+              // A row that opens a list rather than one that starts a line, which is the whole
+              // of the difference this made: what it stands for is still `replay <file>`, but
+              // a person who has never read a README now finds out there is such a thing.
+              Keys.sends (Keys.nth 2) "Continue a game" "one you put down, taken up where it was left" "continue"
               drawn
-              Keys.sends (Keys.nth 4) "Colours" "which colour is drawn for what" "colours"
+              Keys.sends (Keys.nth 4) "Settings" "how it is drawn, in what colours, and kept for next time" "settings"
               Keys.sends (Keys.nth 5) "Rules" "the rules and the commands, at length" "rules"
               Keys.sends (Keys.nth 6) "Quit" "" "quit" ]
           Note =
@@ -262,8 +322,12 @@ module Menu =
               $"first. The short ways still hold: '{game.Fewest}' for a game of {game.Fewest},"
               $"'{game.Fewest} 42' for that same game again, 'serve {game.Fewest}',"
               $"'host {game.Fewest}', 'vs <skill>...' for {machines},"
-              $"'join <address> [word]', 'replay <file>', 'view <{Playable.namesFor AtATerminal game}>',"
-              (if behind then "'colours', 'rules', 'back', 'quit'." else "'colours', 'rules', 'quit'.") ]
+              $"'join <address> [word]', 'continue', 'replay <file>',"
+              $"'view <{Playable.namesFor AtATerminal game}>',"
+              (if behind then
+                   "'settings', 'rules', 'back', 'quit'."
+               else
+                   "'settings', 'rules', 'quit'.") ]
           Backs = (if behind then Some "back" else None) }
 
     // --- a typed line ----------------------------------------------------------------------
@@ -362,6 +426,9 @@ module Menu =
             | ("rules" | "help" | "?"), [] -> Ok Rules
             | "replay", [ path ] -> Ok(Replay path)
             | "replay", _ -> Error "Say 'replay <file>', naming one saved record."
+            | ("continue" | "resume" | "saved"), [] -> Ok Continuing
+            | ("continue" | "resume" | "saved"), _ ->
+                Error "Say 'continue' on its own for the list, or 'replay <file>' to name one outright."
             | "seats", words -> opening words |> Result.map Sitting
             | "reaches", words ->
                 opening words
@@ -391,8 +458,12 @@ module Menu =
             | "serve", words -> opening words |> Result.bind (served None)
             | "view", [ name ] -> Playable.byName AtATerminal palette game name |> Result.map Looking
             | "view", _ -> Error $"Say 'view <name>', for one of {Playable.namesFor AtATerminal game}."
-            | ("colours" | "colors" | "options"), [] -> Ok Options
-            | ("colours" | "colors" | "options"), _ -> Error "Say 'colours' on its own; the screen it opens says the rest."
+            // Still the colour words, and they have to be: 'colours' is what this has always
+            // taken, it is in every note and every README, and a screen that grew a second
+            // half is no reason for a line somebody already knows to stop working.
+            | ("settings" | "colours" | "colors" | "options"), [] -> Ok Options
+            | ("settings" | "colours" | "colors" | "options"), _ ->
+                Error "Say 'settings' on its own; the screen it opens says the rest."
             | "join", [ address ] -> Ok(Join(address, None))
             | "join", [ address; code ] -> Ok(Join(address, Some code))
             | "join", _ ->

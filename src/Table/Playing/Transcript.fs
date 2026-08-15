@@ -166,24 +166,75 @@ module Transcript =
     let path stamp journal =
         Path.Combine(folder, sprintf "%s-%dp-seed%d.log" stamp (Journal.players journal) (Journal.seed journal))
 
-    /// The stamp a record is already filed under, read back off its own name.
+    // --- what a record is called ----------------------------------------------------------
+    //
+    // A name is put together in one place and taken apart in the same one, which is the whole
+    // of what makes taking a game up again a continuation rather than a fork.
+    //
+    // The name says which game it is, and it did not always. Two things wanted that. One: a
+    // list of saved games has to say what each of them is, and the sentence at the top of a
+    // record is a fair thing to leave to a person and not a fair thing to read with a program.
+    // Two: handing a record to the wrong game got as far as replaying it and then refused a
+    // move in that game's own words - `tictactoe` handed a game of stones answered "say a
+    // square's number", which is true, unhelpful, and not what was wrong.
+    //
+    // It goes in the *stamp* rather than beside it, and that is what keeps every record
+    // written before this still working. The stamp is whatever comes before the seats and the
+    // seed; `path` never knew what was in it and still does not, so a record filed under the
+    // old shape reads back under the old shape and goes on being written to.
+
+    [<Literal>]
+    let private Clock = "yyyy-MM-dd-HHmmss"
+
+    /// How many parts of a stamp the clock accounts for, which is what tells a game's name
+    /// from the time of day in one. Written from the format above rather than as four, so
+    /// that a clock changed here cannot leave this counting the old one.
+    let private clockParts = Clock.Split('-').Length
+
+    /// The stamp a fresh game is filed under: when it was dealt, and what it is.
+    let stamping (game: string) (at: DateTime) = $"{at.ToString Clock}-{game}"
+
+    /// And the game back out of one. `None` for a record filed before its name was part of
+    /// this, which is not a fault - it is a record from an older day, and the only honest
+    /// thing to say about which game it is, is that the name does not say.
     ///
-    /// This is what makes taking a game up again a continuation rather than a fork: the game
-    /// that comes out of a record goes on writing to the file it came out of, so one game is
-    /// one record however many sittings it took. The name is put together above, so it is
-    /// taken apart here and nowhere else.
+    /// What is left after the clock rather than the next word along, because a game's name
+    /// may have a dash in it - `compile-control` does - and half a name is worse than none.
+    let gameOf (stamp: string) =
+        match stamp.Split '-' with
+        | parts when parts.Length > clockParts -> Some(String.Join("-", parts[clockParts..]))
+        | _ -> None
+
+    /// A record's name taken apart: what it is filed under, how many were playing, and what
+    /// they were dealt from.
     ///
     /// `None` where the name is not one this wrote - a file somebody has renamed or moved -
-    /// and then the game is filed fresh instead. Which is the safe way round: a record that
-    /// cannot be shown to be this game's is a record not to write over.
-    let stampOf (path: string) (players: int) (seed: uint64) =
-        let tail = sprintf "-%dp-seed%d.log" players seed
-        let name = Path.GetFileName path
+    /// and every caller treats that as "cannot be shown to be a record of ours", which is the
+    /// safe way round for all three of the things asked of it.
+    let filed (path: string) =
+        match Path.GetFileNameWithoutExtension(path: string).Split '-' |> List.ofArray |> List.rev with
+        | seed :: seats :: rest when seed.StartsWith "seed" && seats.EndsWith "p" ->
+            match
+                UInt64.TryParse(seed.Substring 4), Int32.TryParse(seats.Substring(0, seats.Length - 1)), List.rev rest
+            with
+            | (true, seed), (true, players), (_ :: _ as stamp) -> Some(String.Join("-", stamp), players, seed)
+            | _ -> None
+        | _ -> None
 
-        if name.Length > tail.Length && name.EndsWith(tail, StringComparison.Ordinal) then
-            Some(name.Substring(0, name.Length - tail.Length))
-        else
-            None
+    /// The stamp a record is already filed under, where its name agrees with what is in it.
+    ///
+    /// This is what makes a resumed game go on writing to the file it came out of, so one game
+    /// is one record however many sittings it took. A name that says a different deal from the
+    /// one inside it is a name this did not write, and then the game is filed fresh instead -
+    /// because a record that cannot be shown to be this game's is a record not to write over.
+    let stampOf (path: string) (players: int) (seed: uint64) =
+        filed path
+        |> Option.bind (fun (stamp, said, dealt) ->
+            if said = players && dealt = seed then Some stamp else None)
+
+    /// Which game a record is, as far as its name says. Both `None`s mean the same thing here
+    /// and are worth keeping apart nowhere: nothing is known, so nothing is claimed.
+    let about path = filed path |> Option.bind (fun (stamp, _, _) -> gameOf stamp)
 
     /// How much of what is being saved is already in the file, matched piece by piece from
     /// the top: how far the two run together, and what is left over to write.
@@ -216,6 +267,77 @@ module Transcript =
         let beside = path + ".writing"
         File.WriteAllText(beside, text)
         File.Move(beside, path, true)
+
+    // --- and every record there is ----------------------------------------------------------
+    //
+    // Taking a game up again has worked at every game in this program since there was a record
+    // to take up, and almost nobody found it: it wanted a path typed at a menu that never
+    // offered one, and the only game whose own README mentioned it was the one long enough to
+    // need it. So the records say what they are, here, and a screen offers them.
+
+    /// One saved record, as much of it as can be told without knowing whose game it is.
+    type Saved =
+        { Path: string
+          /// The same, said the way a person would type it - which is the way it is printed
+          /// when a record is written, and the way a row on a list of them hands it back.
+          Named: string
+          /// The game it says it is. `None` for a record filed before the name said, which is
+          /// worth listing all the same - it is still somebody's game, and the only thing not
+          /// known about it is a thing a person may well know.
+          Game: string option
+          Players: int
+          Seed: uint64
+          /// How many moves are in it, which is the one thing worth knowing about a saved game
+          /// that its name cannot say: whether it is a game or an opening.
+          Moves: int
+          Written: DateTime }
+
+    /// A record read only as far as a list of them needs, which is the deal line, the count of
+    /// what follows it, and what is on the outside of the file.
+    ///
+    /// Not `read` above, and it must not be: that one needs the game whose moves these are, and
+    /// the whole point here is a list drawn before anybody has said which game they mean. What
+    /// a move *is* is nobody's business at this depth - a line that is not a comment is a move,
+    /// and counting them is all that is being asked.
+    let private glance (path: string) =
+        filed path
+        |> Option.map (fun (stamp, players, seed) ->
+            let moves =
+                try
+                    File.ReadAllLines path
+                    |> Array.map (fun line -> line.Trim())
+                    |> Array.filter (fun line -> line <> "" && not (line.StartsWith "#"))
+                    |> Array.length
+                    // The deal opens the record and is not a move, so a file with nothing but
+                    // a deal line in it is a game nobody has moved in rather than a game of one.
+                    |> fun lines -> max 0 (lines - 1)
+                with _ ->
+                    0
+
+            { Path = path
+              Named = Path.GetRelativePath(Directory.GetCurrentDirectory(), path)
+              Game = gameOf stamp
+              Players = players
+              Seed = seed
+              Moves = moves
+              Written = File.GetLastWriteTime path })
+
+    /// Every record there is, the one put down most recently first - which is very nearly
+    /// always the one somebody means.
+    ///
+    /// A folder that is not there is no records rather than a fault: it is what every machine
+    /// this program has never been played on looks like.
+    let saved () =
+        try
+            if Directory.Exists folder then
+                Directory.EnumerateFiles(folder, "*.log")
+                |> Seq.choose glance
+                |> Seq.sortByDescending (fun saved -> saved.Written)
+                |> List.ofSeq
+            else
+                []
+        with _ ->
+            []
 
     let save game stamp sitters journal =
         Directory.CreateDirectory folder |> ignore

@@ -299,8 +299,11 @@ report
 report
     "a colour nobody has is refused, and says what there is"
     true
+    // What there is is read off the list rather than written out here, because a colours file
+    // may have added to it or dropped from it - and what this is checking is that a refusal
+    // says what there is, not what this program happened to be built with.
     (match Palette.set "blue" "beige" standard with
-     | Error problem -> problem |> mentions "'beige' is not a colour I have. There is crimson,"
+     | Error problem -> problem |> mentions $"'beige' is not a colour I have. There is {Palette.names}."
      | Ok _ -> false)
 
 report
@@ -384,6 +387,10 @@ report
 
 let private offering = drawnBy redIsTeal "rich"
 
-report "the colour screen shows what it is offering" true (offering.Says(Keys.draw None (Options.screen redIsTeal)) |> inked 45)
+report
+    "the colour screen shows what it is offering"
+    true
+    (offering.Says(Keys.draw None (Options.screen [ "plain"; "rich" ] "rich" redIsTeal))
+     |> inked 45)
 
 finish ()

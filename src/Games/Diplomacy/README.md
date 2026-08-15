@@ -10,14 +10,15 @@ dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard \
               --rival hard --rival hard --rival hard    # one of you, in a browser
 dotnet run -- diplomacy host 7      # seven of you, at your own machines
 
-dotnet run -- diplomacy replay logs/...-7p-seed<n>.log        # take a saved game up again
-dotnet run -- diplomacy host --from logs/...-7p-seed<n>.log   # ...and let the others join it
+dotnet run -- diplomacy replay logs/...-diplomacy-7p-seed<n>.log        # take a saved game up
+dotnet run -- diplomacy host --from logs/...-diplomacy-7p-seed<n>.log   # ...and let others join
 ```
 
 **A game of this takes a while, so put it down and come back.** `quit` writes the record and
-leaves the board exactly as it stands; `replay` takes it up again, with the same powers played
-by the same machines at the same strength. Conceding is `resign`, which is a different thing
-said on purpose.
+leaves the board exactly as it stands; `Continue a game` at the menu lists what there is to
+take up, and `replay` names one outright. Either way the same powers come back played by the
+same machines at the same strength. Conceding is `resign`, which is a different thing said on
+purpose.
 
 And it need not be taken up the way it was put down. `--from` works on `play`, `serve` and
 `host` alike, so a game you started against six machines at this keyboard can be reopened as a
