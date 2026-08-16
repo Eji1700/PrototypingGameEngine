@@ -43,6 +43,7 @@
 #load "../src/Table/Playing/Launch.fs"
 #load "../src/Net/Protocol.fs"
 #load "../src/Net/Lobby.fs"
+#load "../src/Net/Tables.fs"
 
 #load "../src/Games/Turncoats/Rules/Words.fs"
 #load "../src/Games/Turncoats/Rules/Rival.fs"

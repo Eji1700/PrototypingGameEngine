@@ -139,45 +139,23 @@ let private dealt game players seed = Update.start game.Rules players seed
 /// the game you resume is not the game you put down. And the stamp is the file it came out
 /// of, so it goes on being written to rather than forked into a second record beside the
 /// first.
+/// The same, said out loud. `Transcript.takenUp` does the reading; this is the part that only
+/// makes sense where there is somebody sitting at a screen to be told.
 let private takeUp game path =
-    /// Which game a record says it is, where its name says - and the line to open it with,
-    /// where that is not this one.
-    ///
-    /// Asked before the record is read rather than after, because a record read by the wrong
-    /// game gets a fair way in: the deal line means the same thing at every game there is, and
-    /// what stops it is the first move, refused in that game's own words. Handing `tictactoe` a
-    /// game of stones used to answer "say a square's number, they are numbered 1 to 9" - which
-    /// is true, and no help at all to somebody who has simply named the wrong game.
-    ///
-    /// A record whose name does not say is let through, which is the only honest thing to do
-    /// with it: those were written before a name said, and refusing every one of them would
-    /// make this check cost more than it caught.
-    /// And where to take it instead, for a program that has somewhere to send it. One with a
-    /// list of games in it can name another of them; a game's own executable cannot open a
-    /// record of anything but itself, and says which game it is rather than inventing a line
-    /// that names an executable it has never seen.
+    /// Where to take it instead, for a program that has somewhere to send it. One with a list
+    /// of games in it can name another of them; a game's own executable cannot open a record
+    /// of anything but itself, and says which game it is rather than inventing a line that
+    /// names an executable it has never seen.
     let elsewhere other =
         match Invoked.another other with
         | Some line -> $" Take it up with '{line} replay {path}'."
         | None -> ""
 
-    let ours =
-        match Transcript.about path with
-        | Some other when other <> game.Name -> Error $"'{path}' is a game of {other}, not of {game.Name}.{elsewhere other}"
-        | _ -> Ok()
-
-    if not (File.Exists path) then
-        Error $"There is no record at '{path}'."
-    else
-        ours
-        |> Result.bind (fun () -> Transcript.read game (File.ReadAllText path))
-        |> Result.bind (fun reading ->
-            Update.replay game.Rules reading.Players reading.Seed reading.Moves
-            |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
-            |> Result.map (fun model ->
-                printfn "Took up %d move(s) from %s." (List.length reading.Moves) path
-                printfn "Take them back with 'undo', or read them with 'history'."
-                model, reading.Sitters, Transcript.stampOf path reading.Players reading.Seed))
+    Transcript.takenUp elsewhere game path
+    |> Result.map (fun (model, sitters, stamp, moves) ->
+        printfn "Took up %d move(s) from %s." moves path
+        printfn "Take them back with 'undo', or read them with 'history'."
+        model, sitters, stamp)
 
 /// The machines this seating asks for, seated at the game that was dealt.
 ///

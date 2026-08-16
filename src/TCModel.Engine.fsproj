@@ -104,6 +104,10 @@
     <!-- Before the lobby, and not after it, because it does not know there is one. -->
     <Compile Include="Net/Browser.fs" />
     <Compile Include="Net/Lobby.fs" />
+    <!-- A table as the wire needs one, and where one comes from. Below `Server` and above
+         nothing at all: not a line in here has met a socket, which is what lets the two seams
+         a house is built on be checked by a script rather than by starting a web server. -->
+    <Compile Include="Net/Tables.fs" />
     <Compile Include="Net/Server.fs" />
     <Compile Include="Net/Client.fs" />
   </ItemGroup>

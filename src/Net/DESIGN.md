@@ -39,7 +39,19 @@ at all, because everything crossing that boundary is already a string.
 So the fear that the type-erasure problem returns in full is wrong. What is missing is smaller
 and in two pieces.
 
-### The one new seam: making a table
+### Where those pieces live — **moved**
+
+`Table`, `Held` and `Aside` were in `Server.fs`, above a wall of `Microsoft.AspNetCore` opens,
+and used **none** of it. That put them out of reach of `dotnet fsi`, because `tests/Whole.fsx`
+loads as far as `Lobby.fs` and stops — deliberately, since everything past it wants ASP.NET and
+SignalR.
+
+They are in [Tables.fs](Tables.fs) now, between the lobby and the wire, and nothing in that
+file has met a socket. It is the difference between a seam that gets *checked* and one that
+gets *smoke-tested*: an interface whose only implementation needs a web server running is an
+interface that will be exercised by starting a web server.
+
+### The one new seam: making a table — **done**
 
 `Server.host` takes an **already-dealt model**. Everything about dealing — `game.Rules.Deal`,
 `game.Seating`, the seed — is generic in the game, and a house has to do it on demand, at a
@@ -64,13 +76,29 @@ type Hosting =
 ```
 
 Built by closing over a `Playable`, exactly as `Play.chosen` closes over one — the same trick
-in the same place, for the same reason. It belongs beside `Play.chosen`, which is already the
-file whose job is "seal a game's types off so something can hold it".
+for the same reason, and the fourth time this program plays it: `Rules` seals what a game *is*,
+`Playable` seals how it is read, `Chosen` seals it for a list to hold, and `Hosting` seals it
+for a house to deal from. It lives in `Tables.fs` rather than beside `Play.chosen` for the
+reason just given — `Play.fs` is compiled after the whole of the wire and cannot be loaded into
+a script without it.
 
-Note that `Deals` takes a `Sitter list` rather than a count. `Seating` already models who is a
-person and who is a machine and at what strength, `Menu.seats` is already the screen that asks,
-and both are already generic. **The "open a new table" form is a screen this program has
-written and tested.**
+`Deals` takes a `Sitter list` rather than a count. `Seating` already models who is a person and
+who is a machine and at what strength, `Menu.seats` is already the screen that asks, and both
+are already generic. **The "open a new table" form is a screen this program has written and
+tested**, and how many are playing is the length of the seating rather than a second thing to
+keep in step.
+
+Two things `tests/house.fsx` pinned down while it was being written:
+
+- **A way this game does not have deals the plainest one** rather than refusing — the same
+  answer a settings file already gets for a way that has since been renamed. A house that
+  refused to deal over a stale name would be a house you could lock yourself out of by editing
+  a file.
+- **A resumed table has the game and nobody at it.** The seats are the game's, the moves are
+  the record's, and the players have to come back to them — so it comes back `Filling`, not
+  `Underway`. That is the honest reading of a restarted house: it holds the games, not the
+  people. The machines *do* come back, because which seat one played is written in the record
+  and nowhere else.
 
 ### What `Table` has to learn to say — **done**
 
@@ -186,13 +214,23 @@ that happens to be true.
 
 ## Order of work
 
-1. ~~**`Standing` on `Table`**, snapshot taken under the lock.~~ **Done** — see above and
-   `tests/lobby.fsx`. Small, and it makes everything after it observable.
-2. **`Hosting`**, beside `Play.chosen`, carrying the way of playing per the decision above.
+1. ~~**`Standing` on `Table`**, snapshot taken under the lock.~~ **Done** — `tests/lobby.fsx`.
+2. ~~**`Hosting`**, carrying the way of playing per the decision above.~~ **Done** —
+   `Tables.fs` and `tests/house.fsx`, sixteen checks and not a socket among them.
 3. **The house as a value** — a dictionary of tables and the rules for opening, listing and
    reaping one, pure, with no wire in it. This is why the lobby is testable at all: it is a
-   value that answers with a list of things to say. Write `house.fsx` alongside `lobby.fsx`.
+   value that answers with a list of things to say. It goes in `Tables.fs` or beside it, and
+   its checks go in `house.fsx`, which is already there and already loading nothing heavier
+   than `Lobby`.
 4. **Routing and the page**, last, because by then it is a thin thing over something already
    checked.
 
-Steps 2 and 3 are testable without a socket. That is the point of doing them in that order.
+What step 3 still has to decide, none of which needs a socket to settle:
+
+- **Reaping.** When does a finished table go, and when does one nobody ever sat at? A house
+  that never forgets grows until the process does.
+- **Naming.** Tables need ids that are safe in a URL and mean nothing to guess at. `Reach`
+  already mints words of exactly that shape.
+- **What a house does at startup.** Nothing, or read `logs/` and offer what it finds?
+  `Resumes` makes the second cheap, and it is the difference between a restart being a pause
+  and being a loss.

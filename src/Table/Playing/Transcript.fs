@@ -240,6 +240,51 @@ module Transcript =
     let about path =
         filed path |> Option.bind (fun (stamp, _, _) -> gameOf stamp)
 
+    /// A record off the disk and back into a game: played through move by move to where it was
+    /// left, with the seating it was left with and the file it came out of.
+    ///
+    /// Here rather than at a way in, and that is the change worth writing down. It was written
+    /// once at the keyboard's way in, which was the only thing that had ever needed it - and
+    /// then a house of tables needed exactly the same thing, and a second copy of "what a
+    /// record means" is the one thing this file exists to stop there being.
+    ///
+    /// Nothing is printed. What a person is told about taking a game up is the business of
+    /// whoever is telling them, and a table in a house is telling nobody - so the count of
+    /// moves comes back with the game and the sentence about it is written where there is
+    /// somebody to read it.
+    ///
+    /// `hint` is what to add to the refusal when the record turns out to be some other game's.
+    /// A program with a list of games in it can say which line would open that one; a house
+    /// that plays one game cannot, and hands back a hint of nothing. Asked for rather than
+    /// worked out here, because this file has never heard of a command line.
+    ///
+    /// Which game it is, is asked *before* the record is read rather than after, because a
+    /// record read by the wrong game gets a fair way in: the deal line means the same thing at
+    /// every game there is, and what stops it is the first move, refused in that game's own
+    /// words. Handing `tictactoe` a game of stones used to answer "say a square's number, they
+    /// are numbered 1 to 9" - which is true, and no help at all to somebody who has simply
+    /// named the wrong game.
+    ///
+    /// A record whose name does not say is let through, which is the only honest thing to do
+    /// with it: those were written before a name said, and refusing every one of them would
+    /// make this check cost more than it caught.
+    let takenUp hint game (path: string) =
+        let ours =
+            match about path with
+            | Some other when other <> game.Name -> Error $"'{path}' is a game of {other}, not of {game.Name}.{hint other}"
+            | _ -> Ok()
+
+        if not (File.Exists path) then
+            Error $"There is no record at '{path}'."
+        else
+            ours
+            |> Result.bind (fun () -> read game (File.ReadAllText path))
+            |> Result.bind (fun reading ->
+                Update.replay game.Rules reading.Players reading.Seed reading.Moves
+                |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
+                |> Result.map (fun model ->
+                    model, reading.Sitters, stampOf path reading.Players reading.Seed, List.length reading.Moves))
+
     /// How much of what is being saved is already in the file, matched piece by piece from
     /// the top: how far the two run together, and what is left over to write.
     ///

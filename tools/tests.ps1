@@ -38,7 +38,7 @@ $root = Split-Path -Parent $PSScriptRoot
 # it, then the two that play or generate whole games of their own.
 $scripts = @(
     "ruling", "outcome", "actions", "history", "knowledge"
-    "lobby", "solo", "view", "html", "reach", "cli"
+    "lobby", "house", "solo", "view", "html", "reach", "cli"
     "properties", "rival"
     # The other three games, last, because most of what they check is that everything above
     # them works for a game it was not written for. Diplomacy is the slow one: it plays a few
