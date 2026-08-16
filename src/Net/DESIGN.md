@@ -280,6 +280,37 @@ page cannot read the same screens, so `Sits` is told `shown` rather than left to
 have been read off the console's name, pages having a mark in theirs, but a table that has never
 heard of a browser is worth more than a parameter saved.
 
+### Step 4, as far as it goes — and one thing that does not work
+
+Built: a `house` command, `Server.house`, and a front page that lists the tables and opens
+one. Verified in a real browser by `smoke.ps1`: the front page serves, opening a table lands
+the browser on a table of its own, and the house lists it with the seats it dealt.
+
+**Not working, and known: a browser at a house table never takes a seat.** `/stream` answers
+200 as an event stream and the table it belongs to *is* found from the cookie, but the seat is
+never taken and the page sits on its "Sitting down…" placeholder. The cause is not yet found —
+no exception reaches the host's output, and the same `Browser.stream` handler seats a browser
+correctly at a table served by `serve` or `host`.
+
+Worth recording how nearly this was missed: the first draft of the smoke check asked only
+whether `#screen` had *any* text in it, and the shell ships with `Sitting down…` already in
+that element — so it passed, twice, against a house that was doing nothing. The check that
+caught it was reading the front page from inside the board page and asking how many were
+seated.
+
+Two decisions taken while building it:
+
+- **A browser is at one table, held in a cookie.** The alternative was hanging every address
+  off the table's name, which reaches further than it looks: a board's own buttons carry the
+  address they post to, drawn deep in a game's own markup, so a game would have to be told
+  which table it was being drawn for. A browser was already one console — that is what
+  `consoleOf` settles — so being at two tables was already not a thing.
+- **Browsers only.** A console at a terminal reaches a table through a SignalR hub, and a hub
+  is found by the framework from a type named in a route, so a house wants a hub that resolves
+  which table a connection is for. That is the one piece of this program that has broken
+  silently before. Until it is done a house says nothing about `join`, and `host` is still how
+  a terminal is given a table.
+
 ### What step 4 has left to decide
 
 - **Where the house is made**, and how a game's executable is told to be one. A `house` command

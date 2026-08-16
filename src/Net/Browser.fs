@@ -233,6 +233,28 @@ module Browser =
 
             minted
 
+    /// Which table of a house this browser is reading.
+    ///
+    /// A cookie, like the console itself, and for the same reason: a browser *is* one console
+    /// here - that is what `consoleOf` settles - so a browser is at one table, and being at
+    /// two would mean being two consoles. Which was already true before there was a house to
+    /// make it obvious. A second table wants a second browser, or a private window.
+    ///
+    /// The alternative was hanging every address off the table's name, and that reaches
+    /// further than it looks: a board's own buttons carry the address they post to, drawn deep
+    /// in a game's own markup, and a game would have had to be told which table it was being
+    /// drawn for. A cookie is one line and the game stays none the wiser.
+    [<Literal>]
+    let private AtTable = "tcmodel-table"
+
+    let sitAt (id: string) (ctx: HttpContext) =
+        ctx.Response.Cookies.Append(AtTable, id, kept ctx)
+
+    let tableOf (ctx: HttpContext) =
+        match ctx.Request.Cookies.TryGetValue AtTable with
+        | true, id when id <> "" -> Some id
+        | _ -> None
+
     /// The colours this page asked to be drawn in, in the same words a console sends down
     /// the wire and read by the same function. A colour the table has never heard of is
     /// passed over rather than being a reason to turn anybody away.

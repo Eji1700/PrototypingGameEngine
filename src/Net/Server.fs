@@ -475,3 +475,196 @@ module Server =
 
         app.Run()
         0
+
+    // --- a house of them ----------------------------------------------------------------
+
+    /// How a table of a house is addressed. One place, because the page that links to a table
+    /// and the route that answers for one have to agree and are written twenty lines apart.
+    let private tableAt (id: string) = $"/table/{id}"
+
+    /// A house: several games of this one, listed on a page, dealt as people ask for them.
+    ///
+    /// Browsers only, and that is a limit worth stating rather than leaving to be discovered.
+    /// A console at a terminal reaches a table through a SignalR hub, and a hub is found by
+    /// the framework from a type named in a route - so a house wants a hub that resolves
+    /// *which* table a connection is for, and hub activation is the one piece of this program
+    /// that has already broken silently once. It is worth doing on its own with the wire
+    /// tests watching. Until then a house says nothing about `join`, and `host` is still how
+    /// a terminal is given a table.
+    ///
+    /// What a house does *not* do is add a second way to play. Every board it serves is drawn
+    /// by the same `Browser` handlers a single hosted table uses, against the same `Table`;
+    /// all a house adds is a front door and a name in a cookie.
+    let house (hosting: Hosting) reach filling =
+        let builder = WebApplication.CreateBuilder()
+
+        let drawn: Browser.Drawn =
+            { Shell = hosting.Shell
+              Slots = hosting.Slots
+              Standard = hosting.Standard }
+
+        // Said out in full, because `Argument` has a `House` case for the command line and its
+        // cases are in scope here - the same trap `Launch.written` walks round with `Name`.
+        let home =
+            TCModel.Net.House(hosting, (fun () -> DateTime.Now), Reach.minted, Housekeeping.ordinary)
+
+        let pages = Browser.Pages()
+
+        builder.Logging.ClearProviders() |> ignore
+        listening builder reach
+
+        let app = builder.Build()
+        guarded app drawn reach
+
+        /// The table this browser is reading, if it is reading one that is still here.
+        let theirs (ctx: HttpContext) =
+            Browser.tableOf ctx |> Option.bind home.At
+
+        /// What a page does at a table, which is what a page does at any table: the same four
+        /// functions the one-table host builds, over whichever table this browser is at.
+        let sitting (opened: Opened) : Browser.Sitting =
+            { Watching =
+                fun console view palette ->
+                    opened.Table.Sits(console, Guid.NewGuid().ToString "N", None, InABrowser, view, palette)
+              Said = fun console line -> opened.Table.Said(console, line)
+              Gone = fun console -> opened.Table.Left console
+              Deliver = fun posts -> posts |> List.iter (Browser.send pages) }
+
+        /// A page whose table has gone - swept away, or a link kept from a house that has been
+        /// restarted since. Sent back to the front rather than shown an error: the table is
+        /// not missing, it is over, and what somebody wants next is the list.
+        let elsewhere (ctx: HttpContext) =
+            ctx.Response.Redirect "/"
+            Task.CompletedTask
+
+        let atTheirTable (ctx: HttpContext) doing =
+            match theirs ctx with
+            | Some opened -> doing opened
+            | None -> elsewhere ctx
+
+        app.MapGet(Page.Client, RequestDelegate(fun ctx -> Browser.script ctx))
+        |> ignore
+
+        // The front page, which is a list and a handful of links and nothing else.
+        app.MapGet(
+            "/",
+            RequestDelegate(fun ctx ->
+                let rows =
+                    home.Listed
+                    |> List.map (fun (opened, standing) ->
+                        { Page.Where = tableAt opened.Id
+                          Page.Stage =
+                            match standing.Stage with
+                            | Lobby.Filling -> "waiting"
+                            | Lobby.Underway -> "being played"
+                            | Lobby.Finished -> "finished"
+                          Page.Seats = $"{standing.Sat} of {standing.Places - standing.Machines} seated"
+                          Page.Sitters = String.Join(", ", standing.Sitters)
+                          Page.Spare =
+                            standing.Stage = Lobby.Filling
+                            && standing.Sat < standing.Places - standing.Machines })
+
+                let opening =
+                    [ for players in hosting.Fewest .. hosting.Most -> players, $"/open?players={players}" ]
+
+                ctx.Response.ContentType <- "text/html; charset=utf-8"
+                ctx.Response.WriteAsync(Page.house hosting.Shell hosting.Standard opening rows))
+        )
+        |> ignore
+
+        // Opening one. A link rather than a form, because everything it has to say is one
+        // number - and a link is a thing somebody can send to whoever they are playing.
+        app.MapGet(
+            "/open",
+            RequestDelegate(fun ctx ->
+                let players =
+                    match ctx.Request.Query.TryGetValue "players" with
+                    | true, given when given.Count > 0 ->
+                        match Int32.TryParse(string given[0]) with
+                        | true, many -> many
+                        | _ -> hosting.Fewest
+                    | _ -> hosting.Fewest
+
+                match home.Opens(Seating.here players, None, None) with
+                | Ok opened ->
+                    Browser.sitAt opened.Id ctx
+                    ctx.Response.Redirect(tableAt opened.Id)
+                    Task.CompletedTask
+                // The game refused the size, in its own words. Back to the front, where the
+                // sizes on offer are the ones it would not have refused.
+                | Error _ -> elsewhere ctx)
+        )
+        |> ignore
+
+        // A table. The board itself arrives down the stream like every other board there is;
+        // all this does is remember which table this browser is at and hand over the shell.
+        app.MapGet(
+            tableAt "{id}",
+            RequestDelegate(fun ctx ->
+                match ctx.Request.RouteValues.TryGetValue "id" with
+                | true, id when (home.At(string id)).IsSome ->
+                    Browser.sitAt (string id) ctx
+                    Browser.page drawn ctx
+                | _ -> elsewhere ctx)
+        )
+        |> ignore
+
+        app.MapGet(
+            Page.Stream,
+            RequestDelegate(fun ctx -> atTheirTable ctx (fun opened -> Browser.stream drawn (sitting opened) pages ctx :> Task))
+        )
+        |> ignore
+
+        app.MapPost(
+            Page.Say,
+            RequestDelegate(fun ctx -> atTheirTable ctx (fun opened -> Browser.say (sitting opened) ctx :> Task))
+        )
+        |> ignore
+
+        app.MapPost(Page.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
+        |> ignore
+
+        // Every game in `logs/` offered again, for a house coming back up. Said out loud,
+        // because a house that quietly filled itself with a hundred old games would be a house
+        // nobody could find a game in.
+        if filling then
+            let found =
+                Transcript.saved ()
+                |> List.filter (fun record -> record.Game = Some hosting.Name)
+                |> List.choose (fun record -> home.Resumes record.Path |> Result.toOption)
+
+            printfn "  Took up %d game(s) from logs/." (List.length found)
+
+        // Nothing else calls this, so something has to. A timer rather than a sweep on every
+        // request: what it costs is a walk of a short list, and what it buys is a house that
+        // does not grow while nobody is looking at it.
+        let broom =
+            new Timers.Timer(TimeSpan.FromMinutes(5.0).TotalMilliseconds, AutoReset = true)
+
+        broom.Elapsed.Add(fun _ ->
+            match home.Swept() with
+            | [] -> ()
+            | gone -> printfn "  Swept %d table(s) nobody was at." (List.length gone))
+
+        broom.Start()
+
+        printfn ""
+        printfn "=== A house of %s ===" hosting.Title
+        printfn ""
+        printfn "  Open in a browser:"
+        printfn ""
+
+        for where, who in addresses reach do
+            printfn "    %-44s %s" (Reach.opened reach where) who
+
+        printfn ""
+        printfn "  Whoever opens a table there reads its address out to whoever is playing."
+
+        match Reach.word reach with
+        | Some word -> printfn "  The word at the door is %s." word
+        | None -> printfn "  There is no word at the door."
+
+        printfn ""
+
+        app.Run()
+        0

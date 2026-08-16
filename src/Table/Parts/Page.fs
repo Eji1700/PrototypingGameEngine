@@ -557,3 +557,60 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                                             "Whoever opened this table was shown a word for it. It goes here, or on the end of the address."
                                     ) ] ] ] ]
         )
+
+    /// One table as a house's front page lists it: where it is, how far along it is, and
+    /// whether there is a seat going spare.
+    ///
+    /// Plain strings and a number, because this file has never met a house and should not
+    /// start now. What a stage is called and how a seat count reads are the house's answers;
+    /// what a row looks like is this one's.
+    type Row =
+        { Where: string
+          Stage: string
+          Seats: string
+          Sitters: string
+          Spare: bool }
+
+    /// A house's front page: the tables there are, and the sizes one can be opened at.
+    ///
+    /// No stream and no client script. A house does not change under anybody the way a board
+    /// does - a table opened while you were reading is a table you find by looking again - so
+    /// this is a page that is fetched, read and left, and the whole of its machinery is a
+    /// handful of links.
+    ///
+    /// The board pages it links to are the ones every other way of serving this game already
+    /// draws, which is the point: a house adds a front door and changes nothing behind it.
+    let house shell palette (opening: (int * string) list) (rows: Row list) =
+        let table (row: Row) =
+            Elem.li
+                [ Attr.class' (if row.Spare then "spare" else "taken") ]
+                [ Elem.a [ Attr.href row.Where; Attr.class' "types" ] [ Text.enc (if row.Spare then "sit down" else "look on") ]
+                  Elem.span [] [ Text.enc $"{row.Stage} - {row.Seats}" ]
+                  note row.Sitters ]
+
+        renderHtml (
+            Elem.html
+                [ Attr.lang "en" ]
+                [ Elem.head
+                      []
+                      [ Elem.meta [ Attr.create "charset" "utf-8" ]
+                        Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
+                        Elem.title [] [ Text.enc shell.Title ]
+                        Elem.style [] [ Text.raw (styles shell palette) ] ]
+                  Elem.body
+                      []
+                      [ Elem.main
+                            [ Attr.id Screen ]
+                            [ Elem.h1 [] [ Text.enc shell.Title ]
+                              block
+                                  "Open a table"
+                                  [ Elem.p
+                                        [ Attr.class' "opening" ]
+                                        [ for players, where in opening do
+                                              Elem.a [ Attr.href where; Attr.class' "types" ] [ Text.enc $"for {players}" ] ] ]
+                              block
+                                  "Tables"
+                                  [ match rows with
+                                    | [] -> note "None yet. Open one, and read its address out to whoever is playing."
+                                    | rows -> Elem.ul [ Attr.class' "tables" ] [ for row in rows -> table row ] ] ] ] ]
+        )

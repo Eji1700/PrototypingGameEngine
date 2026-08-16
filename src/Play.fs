@@ -675,6 +675,14 @@ let private opening settled launch =
     | Launch.Serve(start, reach) -> table Here start |> onward (serveFor game view.Palette reach)
     | Launch.Host(start, reach) -> table Elsewhere start |> onward (hostFor game view settled.Rings reach)
     | Launch.Join(address, token, code) -> Client.join game address token code settled.Rings view
+    // A house deals its own tables, so there is no game to open here and nothing to hand it.
+    // Which way each table is played is settled when somebody opens one, not once for the
+    // whole house - that being the point of a house rather than four of them.
+    | Launch.House(reach, filling) ->
+        let hosting =
+            Net.Hosting.of' settled.Ways clockSeed (fun game -> Transcript.stamping game.Name DateTime.Now)
+
+        Server.house hosting reach filling
 
 // --- one game, with its types sealed off behind it --------------------------------------
 //

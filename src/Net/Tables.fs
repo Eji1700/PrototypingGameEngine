@@ -185,6 +185,16 @@ type Hosting =
     abstract Fewest: int
     abstract Most: int
 
+    /// What a page of this game is shelled in, what takes a colour, and the colours nobody
+    /// has changed.
+    ///
+    /// Three pieces of plain data rather than the game they came off, for the reason every
+    /// other member here is plain: a house holds these and has never been told what a move
+    /// is. `Browser` wants exactly this three and is compiled where it cannot be named from.
+    abstract Shell: Shell
+    abstract Slots: Slot list
+    abstract Standard: Palette
+
     /// Every way this game can be played, the plainest first: the name, and a line about it.
     ///
     /// What the "new table" form offers. A game with one way offers a list of one and the form
@@ -256,6 +266,9 @@ module Hosting =
             member _.Title = plainest.Title
             member _.Fewest = plainest.Fewest
             member _.Most = plainest.Most
+            member _.Shell = plainest.Page
+            member _.Slots = plainest.Slots
+            member _.Standard = Playable.standard plainest
             member _.Ways = ways |> List.map (fun way -> way.Name, way.Blurb)
 
             member _.Deals(sitters, seed, way) =

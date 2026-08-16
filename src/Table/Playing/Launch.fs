@@ -39,6 +39,13 @@ type Launch =
     /// Sit down at somebody else's table, resuming a seat if a token says which, and saying
     /// the word at the door if that table has one.
     | Join of address: string * token: string option * code: string option
+    /// Open a house: no game dealt, and a page listing the ones that are.
+    ///
+    /// It says how far it reaches like everything else that opens a port, and it says nothing
+    /// at all about how many are playing - a house deals tables on demand and it is whoever
+    /// opens one who says how big it is. Which is the whole difference between this and
+    /// `host`, and the reason it carries no `Start`.
+    | House of reach: Reach * filling: bool
 
 // --- what can be asked for -----------------------------------------------------------------
 //
@@ -135,6 +142,30 @@ type HostArgs =
             | Behind -> "https is ended by a tunnel or proxy in front of this, which forwards to it"
             | At _ -> "the address to tell players, when it is not this machine's own name"
 
+/// A house takes no players and no seed, because it deals nothing: what it takes is a port,
+/// a door, and whether to look in `logs/` on the way up.
+type HouseArgs =
+    | [<AltCommandLine("-p")>] Port of port: int
+    | Code of code: string
+    | Open
+    | Cert of certificate: string
+    | [<CustomCommandLine("--cert-password")>] CertPassword of password: string
+    | Behind
+    | At of address: string
+    | Fill
+
+    interface IArgParserTemplate with
+        member this.Usage =
+            match this with
+            | Port _ -> "listen on this port rather than the usual one"
+            | Code _ -> "the word players say at the door, rather than one made up here"
+            | Open -> "no word at the door: whoever can reach the address may open a table"
+            | Cert _ -> "hold this certificate and speak https; a .pfx file"
+            | CertPassword _ -> "the password that certificate is locked with"
+            | Behind -> "https is ended by a tunnel or proxy in front of this, which forwards to it"
+            | At _ -> "the address to tell players, when it is not this machine's own name"
+            | Fill -> "take up the games in logs/ on the way up, so a restart is a pause rather than a loss"
+
 type JoinArgs =
     | [<MainCommand; ExactlyOnce>] Address of address: string
     | [<AltCommandLine("-t")>] Token of token: string
@@ -178,6 +209,7 @@ type Argument =
     | [<CliPrefix(CliPrefix.None); First>] Play of ParseResults<PlayArgs>
     | [<CliPrefix(CliPrefix.None); First>] Serve of ParseResults<ServeArgs>
     | [<CliPrefix(CliPrefix.None); First>] Host of ParseResults<HostArgs>
+    | [<CliPrefix(CliPrefix.None); First>] House of ParseResults<HouseArgs>
     | [<CliPrefix(CliPrefix.None); First>] Join of ParseResults<JoinArgs>
     | [<CliPrefix(CliPrefix.None); First>] Replay of ParseResults<ReplayArgs>
 
@@ -187,6 +219,7 @@ type Argument =
             | Play _ -> "deal a game for that many and play it at this keyboard"
             | Serve _ -> "deal a game for that many and play it in a browser"
             | Host _ -> "open a table for that many and wait for them to arrive"
+            | House _ -> "open a house: several games at once, listed on a page, dealt as people ask for them"
             | Join _ -> "sit down at a table someone else is hosting"
             | Replay _ -> "take up a saved game where it was left, against the same players"
 
@@ -297,6 +330,10 @@ module Launch =
         ArgumentParser.Create<ServeArgs>(programName = "tcmodel serve")
 
     let private hosting = ArgumentParser.Create<HostArgs>(programName = "tcmodel host")
+
+    let private housing =
+        ArgumentParser.Create<HouseArgs>(programName = "tcmodel house")
+
     let private joining = ArgumentParser.Create<JoinArgs>(programName = "tcmodel join")
 
     let private replaying =
@@ -372,6 +409,21 @@ module Launch =
                           HostArgs.Behind
                           HostArgs.At
                           reach
+                  )
+              ) ]
+        | Launch.House(reach, filling) ->
+            [ House(
+                  housing.ToParseResults(
+                      reaching
+                          HouseArgs.Port
+                          HouseArgs.Code
+                          HouseArgs.Open
+                          HouseArgs.Cert
+                          HouseArgs.CertPassword
+                          HouseArgs.Behind
+                          HouseArgs.At
+                          reach
+                      @ [ if filling then yield HouseArgs.Fill ]
                   )
               ) ]
         | Launch.Join(address, token, code) ->
@@ -630,6 +682,22 @@ module Launch =
                         (args.TryGetResult HostArgs.At)
 
                 return Launch.Host(start, reach), view
+            // A house draws no board here and reads none: it deals tables for other people
+            // and every board it is ever responsible for is drawn at one of those. So there is
+            // no view to settle, and the plainest one goes back only because something has to.
+            | Some(House args) ->
+                let! reach =
+                    reached
+                        (args.TryGetResult HouseArgs.Port)
+                        (args.TryGetResult HouseArgs.Code)
+                        (args.Contains HouseArgs.Open)
+                        (args.TryGetResult HouseArgs.Cert)
+                        (args.TryGetResult HouseArgs.CertPassword)
+                        (args.Contains HouseArgs.Behind)
+                        (args.TryGetResult HouseArgs.At)
+
+                return
+                    Launch.House(reach, args.Contains HouseArgs.Fill), Playable.plainest InABrowser (Playable.standard game) game
             | Some(Join args) ->
                 let! view = reading game (args.GetResults JoinArgs.Colour) (args.TryGetResult JoinArgs.View)
 
@@ -647,7 +715,7 @@ module Launch =
             | Some(Replay args) ->
                 let! view = reading game (args.GetResults ReplayArgs.Colour) (args.TryGetResult ReplayArgs.View)
                 return Launch.Play(Start.Saved(args.GetResult ReplayArgs.Path)), view
-            | None -> return! Error "That does not say what to open. Say 'play', 'serve', 'host', 'join' or 'replay'."
+            | None -> return! Error "That does not say what to open. Say 'play', 'serve', 'host', 'house', 'join' or 'replay'."
         }
 
     /// Read a command line: the process's own, or one the program wrote earlier and is being
