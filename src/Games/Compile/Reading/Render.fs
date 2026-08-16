@@ -475,26 +475,36 @@ module Render =
                     | Either _
                     | Opposing _ -> "pick a card"
 
+                // **A card in somebody else's hand is not named.** A question can be a hand -
+                // "your opponent discards a card" stops on them and offers everything they are
+                // holding - and this block is drawn to both players, so it used to print the whole
+                // of the other hand on the board of whoever played the card. What the reader is
+                // owed is that there is a question and how big it is, which is exactly what
+                // somebody at a table would see: a hand held up, and no faces.
                 let choices =
                     targets
                     |> List.map (fun target ->
                         let card = Target.card target
 
-                        let where =
-                            match target with
-                            | OnTable(seat, line, placed) ->
-                                let whose = if seat = beholder then "yours" else "theirs"
-                                let way = if Placed.isFaceUp placed then "face up" else "face down"
-                                $"{whose}, line {line}, {way}"
-                            | InHand(_, _) -> "in hand"
+                        match target with
+                        | InHand(whose, _) when whose <> beholder ->
+                            Tile(None, Tone.Quiet, [ Scene.quietly "a card in their hand" ])
+                        | target ->
+                            let where =
+                                match target with
+                                | OnTable(seat, line, placed) ->
+                                    let whose = if seat = beholder then "yours" else "theirs"
+                                    let way = if Placed.isFaceUp placed then "face up" else "face down"
+                                    $"{whose}, line {line}, {way}"
+                                | InHand(_, _) -> "in hand"
 
-                        Tile(
-                            Some(Card.name card),
-                            (if yours then Tone.Yours else Tone.Quiet),
-                            [ Scene.quietly where
-                              if yours then
-                                  Does("choose", $"choose {Card.key card}", Tone.Plainly) ]
-                        ))
+                            Tile(
+                                Some(Card.name card),
+                                (if yours then Tone.Yours else Tone.Quiet),
+                                [ Scene.quietly where
+                                  if yours then
+                                      Does("choose", $"choose {Card.key card}", Tone.Plainly) ]
+                            ))
 
                 doing, choices
 
@@ -597,6 +607,8 @@ module Render =
           "refresh", $"put your hand down and take {Deck.HandSize} up - instead of playing, not as well as"
           "fire-3", "answer a card that is waiting on you to pick one (or 'choose fire-3')"
           "what fire-3", "read what a card says, whether or not it is anywhere near the table"
+          "peek", "read your own cards lying face down ('peek all' for every one you know)"
+          "pile", "what the game still has to do, in the order it will do it"
           "undo, redo", "walk the game back and forward"
           "history", "the record so far"
           "notes", "hide the writing that explains the board"
@@ -743,6 +755,96 @@ module Render =
                   Scene.quietly (heading beholder (Model.state model)) ]
             )
 
+    // --- looking under a card, and into the pile ------------------------------------------------
+
+    /// Every card lying face down that this reader may read, drawn as the card it is.
+    ///
+    /// **Two different pieces of knowledge, and only one of them is a secret.** Your own face-down
+    /// cards you know because you put them there; the board names them already, and this is where
+    /// what is *printed* on them can be read. Theirs you know only where you have already read it:
+    /// a card played face up and turned over since is a card both players have seen, and the game
+    /// remembers that on the card itself - see `Placed.Seen`.
+    ///
+    /// `peek` alone is your own side, which is the everyday question - *what did I put down there
+    /// four turns ago*. `peek all` is everything you are entitled to, which on most boards is the
+    /// same list and now and then is one card longer.
+    let private peeking beholder rest session =
+        let them = Session.other beholder
+
+        let mine yours =
+            [ for seat in (if yours then [ beholder ] else Session.seats) do
+                  for line in Lines.all do
+                      for placed in Side.stack line (Session.side seat session) do
+                          if not (Placed.isFaceUp placed) && Placed.readableBy (seat = beholder) placed then
+                              let whose = if seat = beholder then "yours" else "theirs"
+
+                              Tile(
+                                  Some(Card.name placed.Card),
+                                  Tone.Slot(Ink.key seat),
+                                  Scene.quietly $"{whose}, line {line}" :: boxed (Words.boxes placed.Card)
+                              ) ]
+
+        let across =
+            match rest with
+            | []
+            | [ "mine" ]
+            | [ "yours" ] -> Some false
+            | [ "all" ]
+            | [ "table" ] -> Some true
+            | _ -> None
+
+        match across with
+        | None ->
+            Block(
+                "Peek",
+                [ Scene.says "Say 'peek' to read your own cards lying face down, or 'peek all' to read every face-down card on the table you already know." ]
+            )
+        | Some everywhere ->
+            let found = mine (not everywhere)
+
+            let nothing =
+                if everywhere then
+                    $"There is nothing face down on the table you know the face of. {Words.player them}'s cards are theirs until one of them has been face up here."
+                else
+                    "You have nothing lying face down."
+
+            Block(
+                (if everywhere then "Peek - the whole table" else "Peek - your own"),
+                [ if List.isEmpty found then
+                      Scene.quietly nothing
+                  else
+                      Walled(Across, found |> List.chunkBySize PerRow |> List.map Scene.squared) ]
+            )
+
+    /// What the game still has to do, in the order it will do it.
+    ///
+    /// The pile is the one thing about this game that is entirely real and entirely invisible: a
+    /// card that says *"delete a card. If you do, draw a card"* stops on the deletion, and the
+    /// question a player is staring at means something different depending on whether the draw is
+    /// still behind it. Everything on the board is the position; this is what is about to happen
+    /// to it.
+    ///
+    /// In resolution order, which is the order the list is already in - a pile is newest first,
+    /// and newest first *is* next first.
+    let private piling beholder session =
+        match session.Pile with
+        | [] -> Block("The pile", [ Scene.quietly "nothing waiting - the game is not in the middle of anything" ])
+        | pile ->
+            Block(
+                "The pile",
+                [ Scene.says "What is still to happen, in the order it will happen."
+                  Aligned(
+                      pile
+                      |> List.mapi (fun step waiting ->
+                          [ Scene.cell Tone.Quiet $"{step + 1}."
+                            Scene.cell
+                                (match waiting with
+                                 | Ask _ -> Tone.Yours
+                                 | _ -> Tone.Plainly)
+                                (Words.waiting beholder waiting) ])
+                  ) ]
+            )
+
     /// What is being asked for right now, and the lines that would answer it.
     ///
     /// A game of three stages is the one place this question has a real answer: the same board
@@ -757,6 +859,11 @@ module Render =
     /// line gets their own cards and nobody else's, the same rule the board keeps.
     let answer beholder (asked: string) (model: Model<Move, Session, Notice>) =
         let session = Model.state model
+
+        match Commands.words asked |> List.map (fun word -> word.ToLowerInvariant()) with
+        | "peek" :: rest -> peeking beholder rest session
+        | "pile" :: _ -> piling beholder session
+        | _ ->
 
         // A card named is a card asked about. This is what `View.Answer` was put there for. The
         // board prints what a card says where the card is lying, but only as much of it as that

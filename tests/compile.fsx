@@ -4719,4 +4719,205 @@ report
      let screen = asking one asked
      reads "Fire-4 is waiting on you" screen, reads "Water-2" screen)
 
+// --- what a player is entitled to know ---------------------------------------------------------
+//
+// A card face down says nothing and is worth two, and that is the whole of what it is to the player
+// across the table - *usually*. Two of them are not secrets at all: your own, because you put them
+// there, and one of theirs that has been face up here and has since been turned over, because you
+// read it when it was. `peek` is where a player looks that up rather than being made to remember,
+// and it is memory rather than a new right: it says nothing the reader was not already told once.
+//
+// The knowing rides on the `Placed`, which is exactly how long it lasts. A card returned to hand,
+// discarded, deleted or swept away leaves its `Placed` behind and the knowing goes with it.
+
+/// A board with one of each: something of yours face down, something of theirs that was face up
+/// and has been turned over, and something of theirs that has only ever been face down.
+let private posed =
+    standing (opened 1UL)
+    |> beneath one 1 [ Placed.down (card Water 4) ]
+    |> beneath two 2 [ Placed.turned (Placed.up (card Metal 2)); Placed.down (card Gravity 5) ]
+
+let private peeked seat rest =
+    let model = opened 1UL
+
+    plain.Answer seat rest { model with Timeline = Timeline.advance (Make Refresh) posed model.Timeline }
+
+report
+    "a card you played face down is one you may read, and what is printed on it comes with it"
+    (true, true)
+    (let screen = peeked one "peek"
+     mentions (Card.name (card Water 4)) screen, reads "Return your card to hand" screen)
+
+report
+    "and 'peek' alone is your own side - it says nothing about the other half of the table"
+    (false, false)
+    (let screen = peeked one "peek"
+     mentions (Card.name (card Metal 2)) screen, mentions (Card.name (card Gravity 5)) screen)
+
+report
+    "'peek all' adds a card of theirs that was face up here and has been turned over since"
+    true
+    (peeked one "peek all" |> mentions (Card.name (card Metal 2)))
+
+report
+    "and never one of theirs that has only ever been face down"
+    false
+    (peeked one "peek all" |> mentions (Card.name (card Gravity 5)))
+
+report
+    "which is the same card to its owner, who put it there and may read it"
+    (true, true)
+    (let screen = peeked two "peek all"
+     mentions (Card.name (card Gravity 5)) screen, mentions (Card.name (card Metal 2)) screen)
+
+report
+    "the knowing is on the card and dies with it - back to hand and played down again, it is a secret"
+    (true, false)
+    // The same Metal-2, twice: face up and turned over, which both players read; and taken back
+    // into hand and laid down again, which neither of them did.
+    (let over =
+        standing (opened 1UL)
+        |> beneath two 2 [ Placed.turned (Placed.up (card Metal 2)) ]
+
+     let afresh =
+        standing (opened 1UL) |> beneath two 2 [ Placed.down (card Metal 2) ]
+
+     let reading session =
+         let model = opened 1UL
+
+         plain.Answer one "peek all" { model with Timeline = Timeline.advance (Make Refresh) session model.Timeline }
+         |> mentions (Card.name (card Metal 2))
+
+     reading over, reading afresh)
+
+report
+    "and a card played face up and flipped in play is read the same way, without a fixture saying so"
+    true
+    // Through the real rules rather than a posed board: Fire-0 flips any other card, so a card of
+    // theirs that was face up goes face down in front of both players - and stays readable.
+    (let session =
+        standing (opened 1UL)
+        |> onlyHolding one (card Fire 0)
+        |> poised two 2 [ card Metal 2 ]
+
+     match Turn.asked (Play(card Fire 0, 3, FaceUp)) session with
+     | Some after, _ ->
+         let model = opened 1UL
+
+         let screen =
+             plain.Answer one "peek all" { model with Timeline = Timeline.advance (Make Refresh) after model.Timeline }
+
+         Side.stack 2 (Session.side two after)
+         |> List.forall (Placed.isFaceUp >> not)
+         && mentions (Card.name (card Metal 2)) screen
+     | None, _ -> false)
+
+// --- and what the game has still to do ----------------------------------------------------------
+//
+// The pile is the one part of this game that is entirely real and entirely invisible. A card that
+// says "delete a card. If you do, draw a card" stops on the deletion, and the question a player is
+// staring at means something different depending on whether the draw is still behind it.
+
+report
+    "the pile can be read, in the order it will resolve, and says what is waiting on whom"
+    (true, true)
+    (let session =
+        standing (opened 1UL)
+        |> onlyHolding one (card Fire 4)
+        |> fun session ->
+            { session with
+                Field =
+                    session.Field
+                    |> Field.update one (fun side ->
+                        { side with
+                            Hand = [ card Fire 4; card Water 2; card Water 3 ] }) }
+
+     let model = opened 1UL
+
+     let asked =
+         Update.update
+             rules
+             (Make(Play(card Fire 4, 3, FaceUp)))
+             { model with Timeline = Timeline.advance (Make Refresh) session model.Timeline }
+
+     let screen = plain.Answer one "pile" asked
+     reads "waiting on you" screen, reads "the turn is handed on" screen)
+
+report
+    "and a game in the middle of nothing says so rather than drawing an empty list"
+    true
+    (plain.Answer one "pile" (opened 1UL) |> reads "nothing waiting")
+
+// --- and the one thing a screen must never say --------------------------------------------------
+//
+// A question can *be* a hand. "Your opponent discards a card" stops on the other player and offers
+// them everything they are holding, so the list of what is on offer is the list of their cards -
+// and the block that offers them is drawn to both players. It printed the whole of the other hand
+// on the board of whoever played the card.
+
+let private theirHandShown seat (asked: Model<Move, Session, Notice>) drawn =
+    (Session.side (Session.other seat) (standing asked)).Hand
+    |> List.exists (fun held -> mentions (Card.name held) drawn)
+
+report
+    "a card that makes them discard does not print their hand on your board, in any view"
+    ([], true)
+    (let session =
+        standing (opened 1UL)
+        |> onlyHolding one (card Plague 0)
+        // Plague is not one of the drafted protocols in this fixture, so the card is laid where it
+        // can go rather than where its protocol is: face down would say nothing, so it goes on the
+        // pile directly.
+        |> fun session ->
+            { session with
+                Pile =
+                    [ Run(
+                          Opposing Discard,
+                          { Owner = one
+                            Saying = card Plague 0
+                            Line = 1 }
+                      ) ] }
+
+     let after, _ = Resolving.settle session []
+     let model = opened 1UL
+
+     let asked =
+         { model with Timeline = Timeline.advance (Make Refresh) after model.Timeline }
+
+     (Playable.offered AtATerminal standard compiled
+      |> List.filter (fun view -> theirHandShown one asked (view.Board Margins.all one asked))
+      |> List.map (fun view -> view.Name)),
+     // And the game really is stopped on a question about their hand - without this the check
+     // above would pass on a board with nothing on it to leak.
+     (match Session.asking (standing asked) with
+      | Some { Chooser = chooser; Wanting = ACard(_, targets) } ->
+          chooser = two
+          && targets |> List.forall (fun target -> Target.owner target = two)
+      | _ -> false))
+
+report
+    "nor in the pile, nor in what is being asked - and their own screen still lists them"
+    (false, false, true)
+    (let session =
+        standing (opened 1UL)
+        |> fun session ->
+            { session with
+                Pile =
+                    [ Run(
+                          Opposing Discard,
+                          { Owner = one
+                            Saying = card Plague 0
+                            Line = 1 }
+                      ) ] }
+
+     let after, _ = Resolving.settle session []
+     let model = opened 1UL
+
+     let asked =
+         { model with Timeline = Timeline.advance (Make Refresh) after model.Timeline }
+
+     theirHandShown one asked (plain.Answer one "pile" asked),
+     theirHandShown one asked (plain.Answer one "nonsense" asked),
+     theirHandShown two asked (plain.Answer two "pile" asked) |> not)
+
 finish ()

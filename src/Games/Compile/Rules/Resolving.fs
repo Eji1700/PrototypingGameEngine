@@ -274,7 +274,7 @@ module Resolving =
         // Out of the hand and onto the line the command is standing in - laid the same way a play
         // is, interrupt and all, because it is a play. What it is not is the turn's action.
         | PlayFromHand(face, _), InHand(seat, card) ->
-            let placed = { Card = card; Face = face }
+            let placed = Placed.laid face card
 
             let session =
                 { session with
@@ -488,7 +488,7 @@ module Resolving =
             match taken with
             | None -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
             | Some card ->
-                let placed = { Card = card; Face = face }
+                let placed = Placed.laid face card
 
                 doneIt
                     { session with
@@ -612,7 +612,7 @@ module Resolving =
                         Rng = rng
                         Done = 1 }
 
-                let placed = { Card = card; Face = face }
+                let placed = Placed.laid face card
 
                 match where with
                 | ThisLine
@@ -1115,12 +1115,7 @@ module Resolving =
                 walk (fuel - 1) { session with Pile = rest } told
             else
 
-            let turned =
-                { placed with
-                    Face =
-                        match placed.Face with
-                        | FaceUp -> FaceDown
-                        | FaceDown -> FaceUp }
+            let turned = Placed.turned placed
 
             walk
                 (fuel - 1)

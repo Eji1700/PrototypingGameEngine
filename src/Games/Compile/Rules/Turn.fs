@@ -164,7 +164,7 @@ module Turn =
             elif face = FaceUp && not (Field.allows seat card line session.Field) then
                 None, [ Refused(NotFacingThere(card, line, Field.facingLines seat card session.Field)) ]
             else
-                let placed = { Card = card; Face = face }
+                let placed = Placed.laid face card
 
                 // The card leaves the hand at once and lands in its own good time: whatever it is
                 // about to cover has the right to say something first, and until that has been

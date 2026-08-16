@@ -380,7 +380,8 @@ module Words =
     let choices cards =
         cards |> List.map Card.name |> String.concat ", "
 
-    /// What a question is asking for, in the words that would answer it.
+    /// What a question is asking for, in the words that would answer it - the whole truth of it,
+    /// which is what a record is written in.
     let wanting =
         function
         | ACard(_, targets) -> $"say one of: {choices (targets |> List.map Target.card)}"
@@ -395,6 +396,67 @@ module Words =
         | Whether inner -> $"say yes or no - {printing inner}"
         | ALineFor(_, offered) -> $"say which line - {lines offered}"
         | OneOf(first, second) -> $"say first or second - {printing first}, or {printing second}"
+
+    /// The same, as much of it as one seat may know.
+    ///
+    /// **A question can be a hand.** *"Your opponent discards a card"* stops on the other player
+    /// and offers them everything they are holding, and the list of what is on offer is therefore
+    /// the list of their cards - so a screen that said it to both of them would hand over the one
+    /// thing at this game that is never said out loud. It did, and on the board of the player who
+    /// played the card: a Plague-0 printed the whole of the other hand for whoever played it.
+    ///
+    /// Only cards in somebody else's *hand* are held back. A card on the table is on the table,
+    /// and a card in your own hand is yours to read.
+    let wantingSeenBy seat asked =
+        let hidden =
+            function
+            | InHand(whose, _) -> whose <> seat
+            | OnTable _ -> false
+
+        match asked with
+        | ACard(_, targets) when targets |> List.exists hidden ->
+            let held = targets |> List.filter hidden |> List.length
+            let rest = targets |> List.filter (hidden >> not) |> List.map Target.card
+
+            match rest with
+            | [] -> $"they say which of the {held} they are holding"
+            | rest -> $"they say one of {choices rest}, or one of the {held} they are holding"
+        | asked -> wanting asked
+
+    /// One step of the pile, said to one seat.
+    ///
+    /// The pile is what the game is going to do next and has not done yet, and a player stopped
+    /// in the middle of a long one has every right to know what is behind the question - a card
+    /// that says *"delete a card. If you do, draw a card"* is a different question depending on
+    /// whether the draw is still coming.
+    ///
+    /// Said per seat for the same reason a question is: a step can be a hand.
+    let waiting seat step =
+        match step with
+        | Run(command, source) -> $"{card source.Saying}: {printing command}."
+        | Repeating(command, source, _) -> $"{card source.Saying}: {printing command}, again if you want it."
+        | Gate(commands, source) ->
+            let rest = commands |> List.map printing |> String.concat ", then "
+            $"{card source.Saying}: if that did anything, {rest}."
+        | Ask question ->
+            let who = if question.Chooser = seat then "you" else player question.Chooser
+            $"waiting on {who} - {wantingSeenBy seat question.Wanting}."
+        | Placing(who, placed, where, from) ->
+            let coming =
+                match from with
+                | Some was -> $"from {line was}"
+                | None -> "from hand"
+
+            $"{player who}'s {card placed.Card} lands on {line where}, {coming}."
+        | Turning(who, placed, where) -> $"{player who}'s {card placed.Card} on {line where} is turned over."
+        | Escaping wiped -> $"anything in {lines wiped} that can get out of a compile does it now."
+        | Compiling wiped -> $"{lines wiped} compiles."
+        | Refreshing -> "the hand goes down and a new one comes up."
+        | Trimming -> $"any hand over {Deck.HandSize} comes back down to it."
+        | Opening -> "the start commands of everything face up and uncovered."
+        | Closing -> "the end commands of everything face up and uncovered."
+        | BeginTurn -> "the turn begins: the control component, and whatever compiles."
+        | EndTurn -> "the turn is handed on."
 
     let rejection =
         function
@@ -485,4 +547,9 @@ module Words =
         // to has seen it now; the player it came from knows only that they are one lighter,
         // which is exactly what they would know at a table.
         | Happened(Took(who, _)) when who <> seat -> $"{player who} takes a card from the top of your deck."
+        // Two refusals say what the game is waiting for, and what it is waiting for can be a list
+        // of the other player's hand.
+        | Refused(AnswerFirst asked) ->
+            $"The game is waiting on an answer, and nothing else can happen until it comes: {wantingSeenBy seat asked}."
+        | Refused(NotOnOffer asked) -> $"That is not one of the things being offered: {wantingSeenBy seat asked}."
         | notice -> said notice

@@ -74,7 +74,27 @@ type Face =
 /// is a real cost, and a 0 played face down is a real gain. The card underneath is still
 /// carried, because it is still that card: it can be turned over later, and what it is then is
 /// not something the table gets to invent.
-type Placed = { Card: Card; Face: Face }
+type Placed =
+    { Card: Card
+      Face: Face
+
+      /// Whether this card has been face up **in the place it is lying now**.
+      ///
+      /// A card face down says nothing, and to the player across the table it is usually not even
+      /// a card - but one that was face up here and has since been turned over is a card both
+      /// players have read, and pretending otherwise would be the board keeping a secret that was
+      /// never one. So it is a fact about the game rather than about a screen, and it lives here.
+      ///
+      /// It rides on the `Placed` because that is exactly how long it should last. A card
+      /// returned to hand, discarded, deleted or swept away by a compile leaves its `Placed`
+      /// behind and the knowing goes with it - no list to keep in step, and no way to forget to
+      /// forget. A card *shifted* to another line carries it along, because everybody watched it
+      /// move and nobody stopped knowing what it was.
+      ///
+      /// Two positions that differ only in this really are two positions: a Fire-3 played face
+      /// down is not the same as a Fire-3 played face up and turned over, because in the second
+      /// one the other player knows something. They compare unequal, and they should.
+      Seen: bool }
 
 module Placed =
 
@@ -82,9 +102,25 @@ module Placed =
     [<Literal>]
     let FaceDownValue = 2
 
-    let up card = { Card = card; Face = FaceUp }
+    let up card = { Card = card; Face = FaceUp; Seen = true }
 
-    let down card = { Card = card; Face = FaceDown }
+    let down card = { Card = card; Face = FaceDown; Seen = false }
+
+    /// A card laid whichever way up it was played. Laid face up is laid where both players can
+    /// read it, which is the whole of what `Seen` starts out saying.
+    let laid face card =
+        { Card = card
+          Face = face
+          Seen = face = FaceUp }
+
+    /// The same card the other way up.
+    ///
+    /// Turned face up it has been read by both players, and no amount of turning it back makes
+    /// that untrue - so this only ever sets `Seen` and never clears it.
+    let turned placed =
+        match placed.Face with
+        | FaceUp -> { placed with Face = FaceDown }
+        | FaceDown -> { placed with Face = FaceUp; Seen = true }
 
     let value placed =
         match placed.Face with
@@ -92,6 +128,13 @@ module Placed =
         | FaceDown -> FaceDownValue
 
     let isFaceUp placed = placed.Face = FaceUp
+
+    /// Whether a player may read what is printed on this card.
+    ///
+    /// Face up, anybody may. Face down, the player it belongs to may - they put it there, and a
+    /// game that hid a card from the person who played it would be hiding it from the wrong
+    /// person - and the other player may only where it has been face up here.
+    let readableBy yours placed = isFaceUp placed || yours || placed.Seen
 
 /// A deck: the three drafted protocols' cards, shuffled together.
 module Deck =

@@ -53,6 +53,11 @@ Every command that is not about protocols or cards - `undo`, `redo`, `history`, 
 | `play fire-3 2` (`play fire-3 2 down`) | the same, the long way round |
 | `refresh` (`r`) | put your whole hand down and take five up - **instead of** playing, not as well as |
 | `fire-3` | answer a card that is waiting on you to pick one (or `choose fire-3`) |
+| `what fire-3` | read a card at length, wherever it is |
+| `peek` (`peek all`) | read the face-down cards you are entitled to know |
+| `pile` | what the game still has to do, in the order it will do it |
+
+The last three ask rather than move, so they cost no turn and go nowhere near the record.
 
 The short forms exist because the stage already says which of the three a bare line could be,
 and which one it is, is settled by how many words are in it: one word is a protocol, three are
@@ -85,6 +90,27 @@ answer is what can be typed **now**: the protocols still on the table at the dra
 your three could go in, the cards a waiting card is offering, or your own hand with the line each
 of them could go face up on. Your own hand and nobody else's - it is the same rule the board
 keeps.
+
+**`peek` is memory, not a new right.** Two face-down cards are not secrets: your own, because you
+put them there, and one of theirs that has been face up on that line and has been turned over
+since, because you read it when it was. `peek` shows the first, `peek all` shows both, and neither
+tells you anything you were not told once already. A card of theirs that has only ever been face
+down stays face down. The knowing rides on [the card where it lies](Rules/Cards.fs) rather than in
+a list somewhere, which is exactly how long it should last: **a card returned to hand, discarded,
+deleted or swept away by a compile leaves the knowing behind with its place on the table**, and
+one *shifted* to another line takes it along, because everybody watched it move.
+
+**`pile` reads what the game has still to do.** It is the one part of this game that is entirely
+real and entirely invisible: a card that says *"delete a card. If you do, draw a card"* stops on
+the deletion, and the question you are staring at means something different depending on whether
+the draw is still behind it. The board is the position; the pile is what is about to happen to it.
+
+Both are read per seat, and so is the block that offers you a question - because **a question can
+*be* a hand**. *"Your opponent discards 1 card"* stops on the other player and offers them
+everything they are holding, so the list of what is on offer is the list of their cards. That
+block is drawn to both players, and it used to print the whole of the other hand on the board of
+whoever played the card. What a reader is owed is that there is a question and how big it is,
+which is what somebody at a table would see: a hand held up, and no faces.
 
 ## How a game goes
 

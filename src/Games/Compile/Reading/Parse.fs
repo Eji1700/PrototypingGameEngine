@@ -67,11 +67,13 @@ module Parse =
         | [ "refresh" ]
         | [ "r" ] -> Ok(Send(Make Refresh))
 
-        // Not a move: a question, which the game's own view answers. What a card says is read
-        // here rather than drawn on the board, because a stack cell is nine characters wide and
-        // a card's text is a sentence.
+        // Not moves: questions, which the game's own view answers. What a card says at length,
+        // what is printed on the face-down cards this player is entitled to read, and what the
+        // game still has to do before it comes back round.
         | "what" :: _ :: _
-        | "says" :: _ :: _ -> Ok(Asking typed)
+        | "says" :: _ :: _
+        | "peek" :: _
+        | "pile" :: _ -> Ok(Asking typed)
 
         // Yes and no, for a card that offers rather than insists. Bare words, because that is
         // what somebody answering a yes-or-no question types.
