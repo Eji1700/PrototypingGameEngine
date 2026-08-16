@@ -54,7 +54,7 @@ type TableHub(table: Table, pages: Browser.Pages) =
         // A fresh token is minted out here and handed in, so the lobby stays a value:
         // a table that invented its own tokens could not be folded twice to the same
         // answer, and nothing in this codebase is allowed to be that sort of thing.
-        table.Sits(this.Context.ConnectionId, Guid.NewGuid().ToString "N", resuming, view, palette)
+        table.Sits(this.Context.ConnectionId, Guid.NewGuid().ToString "N", resuming, AtATerminal, view, palette)
         |> deliver this.Clients
 
     member this.Say(line: string) =
@@ -164,7 +164,7 @@ module Server =
 
     /// And what stands in front of the whole of it: what somebody in front of this said
     /// about the player, and the word at the door.
-    let private guarded (app: WebApplication) game standing reach =
+    let private guarded (app: WebApplication) (drawn: Browser.Drawn) reach =
         match reach.Wrapping with
         | InTheClear
         | Kept _ -> ()
@@ -234,7 +234,7 @@ module Server =
                         use all = door.AttemptAcquire()
                         not (mine.IsAcquired && all.IsAcquired)
 
-                    if waiting then Browser.tooOften ctx else Browser.turned game standing ctx)
+                    if waiting then Browser.tooOften ctx else Browser.turned drawn ctx)
             )
             |> ignore
 
@@ -242,14 +242,13 @@ module Server =
     ///
     /// The same four whether there is a lobby back there or one hot seat, which is the
     /// whole point of `Sitting` being four functions: a page is a page.
-    let private serving (app: WebApplication) game standing sitting pages =
+    let private serving (app: WebApplication) (drawn: Browser.Drawn) sitting pages =
         app.MapGet(Page.Client, RequestDelegate(fun ctx -> Browser.script ctx))
         |> ignore
 
-        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page game standing ctx))
-        |> ignore
+        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page drawn ctx)) |> ignore
 
-        app.MapGet(Page.Stream, RequestDelegate(fun ctx -> Browser.stream game standing sitting pages ctx :> Task))
+        app.MapGet(Page.Stream, RequestDelegate(fun ctx -> Browser.stream drawn sitting pages ctx :> Task))
         |> ignore
 
         app.MapPost(Page.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
@@ -294,7 +293,13 @@ module Server =
         listening builder reach
 
         let app = builder.Build()
-        guarded app game (Playable.standard game) reach
+
+        let drawn: Browser.Drawn =
+            { Shell = game.Page
+              Slots = game.Slots
+              Standard = Playable.standard game }
+
+        guarded app drawn reach
         app.MapHub<TableHub>(Protocol.Path) |> ignore
 
         // What a page needs of the table, which is what a console needs of it: a way to
@@ -303,15 +308,17 @@ module Server =
         // the terminals, and there is no call in progress to borrow them from.
         let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
 
-        let sitting: Browser.Sitting<_, _, _> =
-            { Watching = fun console view -> held.Change(Lobby.join console (Guid.NewGuid().ToString "N") None view)
+        let sitting: Browser.Sitting =
+            { Watching =
+                fun console view palette ->
+                    (held :> Table).Sits(console, Guid.NewGuid().ToString "N", None, InABrowser, view, palette)
               Said = fun console line -> held.Change(Lobby.said console line)
               Gone = fun console -> held.Change(Lobby.left console)
               Deliver = fun posts -> Wire.deliver hub.Clients pages posts |> ignore }
 
         // A hosted table settles nothing about colour on anybody's behalf: a console says
         // what it wants when it joins, and so does a page.
-        serving app game (Playable.standard game) sitting pages
+        serving app drawn sitting pages
 
         let seats = game.Rules.Seats(Model.state model)
         let mine, theirs = Seating.awaited sitters
@@ -423,15 +430,21 @@ module Server =
         let game = Solo.game solo
 
         let app = builder.Build()
-        guarded app game standing reach
 
-        let sitting: Browser.Sitting<_, _, _> =
-            { Watching = fun console view -> aside.Change(Solo.watching console { Margins = Margins.all; View = view })
+        let drawn: Browser.Drawn =
+            { Shell = game.Page
+              Slots = game.Slots
+              Standard = standing }
+
+        guarded app drawn reach
+
+        let sitting: Browser.Sitting =
+            { Watching = fun console view palette -> aside.Watches(console, InABrowser, view, palette)
               Said = fun console line -> aside.Said(console, line)
               Gone = fun console -> aside.Change(Solo.gone console)
               Deliver = fun posts -> posts |> List.iter (Browser.send pages) }
 
-        serving app game standing sitting pages
+        serving app drawn sitting pages
 
         let seats = game.Rules.Seats(Model.state (Solo.model solo))
 

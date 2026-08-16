@@ -21,7 +21,17 @@ type Table =
     /// `offered` is the one a new seat would be given, minted outside so the lobby stays a
     /// value. The view and the colours are the words a console sends, read at this end
     /// against the game actually being played.
-    abstract Sits: console: string * offered: string * resuming: string option * view: string * palette: string -> Post list
+    ///
+    /// `shown` is what kind of thing is sitting down, and it is told rather than guessed at.
+    /// A terminal and a page cannot read the same screens - `rich` means nothing to a browser
+    /// and `html` means nothing to a terminal - so a table asked for a view has to know which
+    /// list to look in. It could have been read off the console's own name, pages having a
+    /// mark in theirs, but that would mean this file knowing how a page is named, and how a
+    /// page is named is settled two files further out in the one place that has met an
+    /// `HttpContext`. A table that has never heard of a browser is worth more than a
+    /// parameter saved.
+    abstract Sits:
+        console: string * offered: string * resuming: string option * shown: Shown * view: string * palette: string -> Post list
 
     abstract Said: console: string * line: string -> Post list
 
@@ -57,7 +67,7 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
             posts)
 
     interface Table with
-        member this.Sits(console, offered, resuming, view, palette) =
+        member this.Sits(console, offered, resuming, shown, view, palette) =
             let game = Lobby.game lobby
 
             // A view a table has never heard of is no reason to turn a player away; they can
@@ -65,9 +75,12 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
             // passed over the same way, one at a time, by `Palette.read`.
             let palette = Palette.read game.Slots palette
 
+            // And only among the ways this kind of console can read at all, which is what
+            // `shown` is for: a page asking for `rich` is not asking for something that does
+            // not exist, it is asking for something it could not draw.
             let view =
-                Playable.byName AtATerminal palette game view
-                |> Result.defaultValue (Playable.plainest AtATerminal palette game)
+                Playable.byName shown palette game view
+                |> Result.defaultValue (Playable.plainest shown palette game)
 
             this.Change(Lobby.join console offered resuming view)
 
@@ -97,6 +110,24 @@ type Aside<'Move, 'State, 'Notice>
             let next, posts = change solo
             solo <- next
             posts)
+
+    /// Somebody starts reading this game, in the words a browser sends - the same door
+    /// `Held.Sits` opens, said the same way.
+    ///
+    /// There are no seats at a hot seat, so nothing is taken and nothing is handed back to
+    /// come back with; what a console gets here is a way of reading and a place to read it.
+    /// But the *words* are the same words, and that is the point of this member existing:
+    /// above here, a page sitting down at a table and a page watching a hot seat are one
+    /// thing, and neither the page nor the file serving it has to know which it found.
+    member this.Watches(console, shown, view, palette) =
+        let game = Solo.game solo
+        let palette = Palette.read game.Slots palette
+
+        let view =
+            Playable.byName shown palette game view
+            |> Result.defaultValue (Playable.plainest shown palette game)
+
+        this.Change(Solo.watching console { Margins = Margins.all; View = view })
 
     member _.Said(console, line) =
         lock gate (fun () ->

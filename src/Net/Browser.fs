@@ -37,6 +37,24 @@ module Browser =
     [<Literal>]
     let Prefix = "page-"
 
+    /// Everything this file needs to know about the game, and the whole of it: what a page is
+    /// shelled in, what takes a colour, and the colours nobody has changed.
+    ///
+    /// Three pieces of plain data, and all three were already plain - `Shell`, `Slot list` and
+    /// `Palette` have no type parameters between them. They were reached through the game
+    /// because there was one game to reach through; carried like this, nothing on the browser
+    /// side is generic any more, and a house can serve a page for any of its tables through
+    /// one set of routes.
+    [<NoComparison; NoEquality>]
+    type Drawn =
+        {
+            Shell: Shell
+            Slots: Slot list
+            /// The colours a game says its slots start out as, which is what a page gets when it
+            /// has asked for none of its own.
+            Standard: Palette
+        }
+
     let isPage (console: string) = console.StartsWith Prefix
 
     /// How often a stream with nothing to say says something anyway.
@@ -134,12 +152,25 @@ module Browser =
     /// Delivering comes in from outside for a second reason: at a networked table it
     /// reaches consoles this file knows nothing about - the players at terminals - and what
     /// those are is settled a file later.
+    ///
+    /// No type parameters, and they went for the reason they went from `Table`: a house holds
+    /// several tables of one game and cannot hold a different type for each of the ways a page
+    /// might read them.
+    ///
+    /// What that cost is one line moving. This used to be handed a `View` - built out here,
+    /// from the game, before the table was told anybody had arrived - and it is handed the
+    /// *words* now, exactly as a console at a terminal has always sent them, with the table
+    /// reading them against the game it is actually playing. Which is the arrangement `Table`
+    /// already had, so the two consoles now arrive by the same door.
     [<NoComparison; NoEquality>]
-    type Sitting<'Move, 'State, 'Notice> =
-        { Watching: string -> View<'Move, 'State, 'Notice> -> Post list
-          Said: string -> string -> Post list
-          Gone: string -> Post list
-          Deliver: Post list -> unit }
+    type Sitting =
+        {
+            /// The console, the way of drawing it asked for, and the colours - both as sent.
+            Watching: string -> string -> string -> Post list
+            Said: string -> string -> Post list
+            Gone: string -> Post list
+            Deliver: Post list -> unit
+        }
 
     // --- what goes down a stream -----------------------------------------------------------
 
@@ -216,10 +247,10 @@ module Browser =
     ///
     /// What there is to colour is the game's, which is why the game comes in: a palette read
     /// against the wrong list of slots would quietly drop every colour it named.
-    let private paletteOf game standing (ctx: HttpContext) =
+    let private paletteOf (drawn: Drawn) (ctx: HttpContext) =
         match ctx.Request.Query.TryGetValue "colours" with
-        | true, given when given.Count > 0 -> Palette.read game.Slots (String.Join(" ", given.ToArray()))
-        | _ -> standing
+        | true, given when given.Count > 0 -> Palette.read drawn.Slots (String.Join(" ", given.ToArray()))
+        | _ -> drawn.Standard
 
     // --- the word at the door ---------------------------------------------------------------
     //
@@ -269,12 +300,12 @@ module Browser =
     /// other address answers with the bare refusal, because nothing else here is opened by a
     /// person - they are the page's own fetches, and a stream handed a form instead of a
     /// board would be a stranger sort of failure than the one it is reporting.
-    let turned game standing (ctx: HttpContext) =
+    let turned (drawn: Drawn) (ctx: HttpContext) =
         if ctx.Request.Method = HttpMethods.Get && ctx.Request.Path = PathString "/" then
             ctx.Response.StatusCode <- 401
             ctx.Response.ContentType <- "text/html; charset=utf-8"
 
-            ctx.Response.WriteAsync(Page.locked game.Page (paletteOf game standing ctx) (not (List.isEmpty (presented ctx))))
+            ctx.Response.WriteAsync(Page.locked drawn.Shell (paletteOf drawn ctx) (not (List.isEmpty (presented ctx))))
         else
             ctx.Response.StatusCode <- 403
             ctx.Response.ContentType <- "text/plain; charset=utf-8"
@@ -309,11 +340,11 @@ module Browser =
 
     /// The page itself. It carries no game: it opens a stream and the table answers with a
     /// board, which is the same way every board after it arrives.
-    let page game standing (ctx: HttpContext) =
-        let palette = paletteOf game standing ctx
+    let page (drawn: Drawn) (ctx: HttpContext) =
+        let palette = paletteOf drawn ctx
         consoleOf ctx |> ignore
         ctx.Response.ContentType <- "text/html; charset=utf-8"
-        ctx.Response.WriteAsync(Page.page game.Page palette)
+        ctx.Response.WriteAsync(Page.page drawn.Shell palette)
 
     /// A line typed in a browser. It may come in the address, which is how a button says
     /// what it does, or in the signals, which is how the box at the bottom says what was
@@ -338,7 +369,7 @@ module Browser =
                     return ""
         }
 
-    let say (sitting: Sitting<_, _, _>) (ctx: HttpContext) =
+    let say (sitting: Sitting) (ctx: HttpContext) =
         task {
             let console = consoleOf ctx
             let! line = lineOf ctx
@@ -403,13 +434,25 @@ module Browser =
     /// Sitting down happens here rather than when the page was served, because a seat is
     /// only worth having while somebody is holding it: a page fetched and closed again has
     /// nobody at it, and the table would be waiting on a chair nobody is in.
-    let stream game standing (sitting: Sitting<_, _, _>) (pages: Pages) (ctx: HttpContext) =
+    let stream (drawn: Drawn) (sitting: Sitting) (pages: Pages) (ctx: HttpContext) =
         task {
             let console = consoleOf ctx
 
-            // The first way of drawing this game that a browser can show. Which one that is
-            // is the game's business; that a page gets one it can read is this file's.
-            let view = Playable.plainest InABrowser (paletteOf game standing ctx) game
+            // What this page wants to be drawn as, in the words it sent - and no word at all
+            // is the ordinary case, a browser having nothing to say about the matter. The
+            // table reads it against the game it is playing and falls back to the first way
+            // *a browser* can show, which is what this used to work out here. It is worked
+            // out there now, and that is the whole of the difference: this file has stopped
+            // needing to hold the game to find out how to draw it.
+            let asked =
+                match ctx.Request.Query.TryGetValue "view" with
+                | true, given when given.Count > 0 -> string given[0]
+                | _ -> ""
+
+            let colours =
+                match ctx.Request.Query.TryGetValue "colours" with
+                | true, given when given.Count > 0 -> String.Join(" ", given.ToArray())
+                | _ -> ""
 
             ctx.Features.Get<IHttpResponseBodyFeature>()
             |> Option.ofObj
@@ -426,7 +469,7 @@ module Browser =
                     ctx
                     [ KeyValuePair<string, StringValues>("X-Accel-Buffering", StringValues "no") ]
 
-            let seated = sitting.Watching console view
+            let seated = sitting.Watching console asked colours
 
             // Which seat this browser was given, kept so that the next visit on the same
             // cookie comes back to it rather than being handed a stranger's stones. A table

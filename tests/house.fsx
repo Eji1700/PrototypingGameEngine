@@ -66,8 +66,8 @@ let private twoPeople = Seating.here 2
 /// Said out in full, because this game has a `Table` of its own - the map - and its own names
 /// win inside its own namespace. The same trap `Program.fs` walks round with `TCModel.Play`.
 let private full (table: TCModel.Net.Table) =
-    table.Sits("one", "tok-one", None, "plain", "") |> ignore
-    table.Sits("two", "tok-two", None, "plain", "") |> ignore
+    table.Sits("one", "tok-one", None, AtATerminal, "plain", "") |> ignore
+    table.Sits("two", "tok-two", None, AtATerminal, "plain", "") |> ignore
     table
 
 // --- what a house is told before it deals anything ------------------------------------
@@ -132,8 +132,33 @@ report
     (Ok 1)
     (hosting().Deals(twoPeople, Some 42UL, None)
      |> Result.map (fun table ->
-         table.Sits("one", "tok-one", None, "plain", "") |> ignore
+         table.Sits("one", "tok-one", None, AtATerminal, "plain", "") |> ignore
          table.Standing.Sat))
+
+/// The screen one console was drawn, out of what a table said.
+let private screenFor console posts =
+    posts
+    |> List.tryPick (fun post ->
+        match post.To, post.Say with
+        | at, Screen text when at = console -> Some text
+        | _ -> None)
+    |> Option.defaultValue ""
+
+// The whole point of a table being *told* which kind of console is sitting down. A page and a
+// terminal cannot read the same screens - `html` means nothing to a terminal and `rich` means
+// nothing to a browser - so a table asked for a view has to know which list to look in. Before
+// this, the browser's way in resolved its own view out here and the table only ever answered
+// for terminals; a house serving both through one set of routes cannot work that way.
+report
+    "a page and a terminal at one table are drawn by the ways of reading each of them can read"
+    (Ok(false, true))
+    (hosting().Deals(twoPeople, Some 42UL, None)
+     |> Result.map (fun table ->
+         // A terminal asking for `html` is not asking for something that does not exist, it
+         // is asking for something it could not draw - so it gets the plainest one it can.
+         let terminal = table.Sits("one", "tok-one", None, AtATerminal, "html", "")
+         let page = table.Sits("two", "tok-two", None, InABrowser, "", "")
+         (screenFor "one" terminal).Contains "<div", (screenFor "two" page).Contains "<div"))
 
 report
     "and once it is full it is under way"
@@ -173,7 +198,7 @@ let private leftBehind () =
     match hosting().Deals(Seating.after 2 [ "easy" ], Some 42UL, None) with
     | Error said -> failwith said
     | Ok table ->
-        table.Sits("one", "tok-one", None, "plain", "") |> ignore
+        table.Sits("one", "tok-one", None, AtATerminal, "plain", "") |> ignore
         table.Said("one", "recruit r 3") |> ignore
         ours ()
 
@@ -203,7 +228,7 @@ report
          | Error said -> failwith said
          | Ok table ->
              let before = table.Standing.Stage
-             table.Sits("back", "tok-back", None, "plain", "") |> ignore
+             table.Sits("back", "tok-back", None, AtATerminal, "plain", "") |> ignore
              before, table.Standing.Sat
      | found -> failwith $"expected one record, found {List.length found}")
 
@@ -366,7 +391,7 @@ report
      match it.Opens(twoPeople, Some 42UL, None) with
      | Error said -> failwith said
      | Ok opened ->
-         opened.Table.Sits("one", "tok-one", None, "plain", "") |> ignore
+         opened.Table.Sits("one", "tok-one", None, AtATerminal, "plain", "") |> ignore
          clock.Value <- at (60.0 * 24.0 * 30.0)
          it.Swept(), List.length it.Listed)
 
