@@ -39,21 +39,42 @@ module Client =
         System.Console.Write "> "
         System.Console.Out.Flush()
 
-    /// Ask for the player's attention, in the one way a terminal has of asking.
+    /// Ask for the player's attention, in the two ways a terminal has of asking.
     ///
-    /// A bell, which is a single character and has meant this since before there were
+    /// **A bell**, which is a single character and has meant this since before there were
     /// windows to put a terminal in. What becomes of it is the terminal's business and the
     /// player's: most of them flash the window in the taskbar when it is not the one being
     /// looked at, some make a sound, and one told to do neither does neither. None of that
-    /// is worth second-guessing from here - and a console cannot see whether anybody is
-    /// watching it anyway, so it rings whenever the table says the turn arrived unasked.
-    let private ring () =
-        System.Console.Write '\a'
-        System.Console.Out.Flush()
+    /// is worth second-guessing from here - a console cannot see whether anybody is watching
+    /// it anyway. Whether to ring at all is the player's answer, given at the Audio page and
+    /// handed in, because that is a question about their room rather than about the table.
+    ///
+    /// **And the title**, which is the same thing the browser already does with its tab, and
+    /// is here so that the two consoles behave alike. It does not depend on how a terminal
+    /// was configured, which the bell entirely does: a terminal told to flash nothing and
+    /// sound nothing still shows a title, so a player who has turned the bell off is not left
+    /// with a table that cannot get their attention at all.
+    ///
+    /// Not settled by the Audio page, and deliberately: a title is not a noise, it interrupts
+    /// nobody, and there is nothing about it worth turning off.
+    let private ring rings =
+        if rings then
+            System.Console.Write '\a'
+            System.Console.Out.Flush()
+
+        Screens.marking true
+
+    /// And put it back, which is what the browser does when somebody looks again. Here that
+    /// is a line being typed: a console cannot see whether anybody is watching, but somebody
+    /// who has just typed at it plainly is.
+    let private looked () = Screens.marking false
 
     let private wait (task: Task) = task.GetAwaiter().GetResult()
 
-    let join game given resuming code (chosen: View<_, _, _>) =
+    /// `rings` is the Audio page's answer, handed in rather than read here for the reason
+    /// everything else about how a game is read is handed in: this file knows about a wire and
+    /// a keyboard, and nothing about what somebody settled on.
+    let join game given resuming code rings (chosen: View<_, _, _>) =
         match Reach.endpoint Protocol.Path given with
         | Error problem ->
             eprintfn "%s" problem
@@ -152,7 +173,7 @@ module Client =
 
         // Nothing to print. The board saying it is your turn is already on its way down the
         // same wire; this is only the part of that a player two rooms away can hear.
-        connection.On(Protocol.Call.Nudged, Action ring) |> ignore
+        connection.On(Protocol.Call.Nudged, Action(fun () -> ring rings)) |> ignore
 
         // What a player is told when the wire goes, which is a thing that happens between
         // houses and hardly ever within one. Worth saying out loud both times: a board that
@@ -217,6 +238,8 @@ module Client =
             match System.Console.ReadLine() with
             | null -> ()
             | line ->
+                // Somebody is plainly here, so the window stops asking for them.
+                looked ()
                 // A line typed while the wire is down is a line that goes nowhere, and the
                 // thing not to do about it is fall over: the seat is still this player's,
                 // the game has not moved, and saying it again in a moment will work. This is
@@ -254,4 +277,7 @@ module Client =
         hands.Start()
         over.Wait()
         wait (connection.StopAsync())
+        // Whatever the window was called before this console had it, it is called again. A
+        // player who leaves a table should not be left with a tab still asking for them.
+        looked ()
         0

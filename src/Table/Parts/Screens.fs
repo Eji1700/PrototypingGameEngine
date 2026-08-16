@@ -28,6 +28,40 @@ module Screens =
         with _ ->
             ()
 
+    /// What this window is called, kept so it can be put back. Read once, because a terminal
+    /// that will not say is a terminal this asks only once and then stops asking.
+    ///
+    /// Windows answers; a good many others throw rather than tell you, so the fallback is a
+    /// name rather than nothing - a window whose title cannot be read still has one set, and
+    /// putting back an empty string would leave a tab with no name on it at all.
+    let private wasCalled =
+        lazy
+            (try
+                match System.Console.Title with
+                | "" -> "TCModel"
+                | title -> title
+             with _ ->
+                 "TCModel")
+
+    /// Mark this window as wanting somebody, or put it back as it was.
+    ///
+    /// The terminal's own half of a nudge, and the one part of it that does not depend on how
+    /// the terminal was set up. A bell is a request a terminal is free to ignore - Windows
+    /// Terminal makes no sound and flashes nothing unless its `bellStyle` says to - but a
+    /// title is shown by all of them, on the tab and under the mouse in the taskbar.
+    ///
+    /// The same thing the browser does with its tab, and here so that the two consoles behave
+    /// alike: a player at a page and a player at a terminal should not need different habits
+    /// to notice the same game waiting for them.
+    ///
+    /// Swallowed like everything else here. A console that will not be renamed is a console
+    /// with a bell and a board, which is how this read before there was a title to set.
+    let marking wanted =
+        try
+            System.Console.Title <- if wanted then $"* {wasCalled.Value}" else wasCalled.Value
+        with _ ->
+            ()
+
     /// Hold the screen until a key, for the things that are longer than the screen about to
     /// wipe them. Nobody reads at the speed of a keypress, so this is only ever a courtesy.
     let held () =

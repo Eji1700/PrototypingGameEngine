@@ -220,7 +220,7 @@ let private serveFor game palette reach (model, sitters, stamp) =
 /// at some of its seats - those are played here and are never waited for. The reach goes in
 /// whole for the same reason: how far the table can be reached and what it takes to sit down
 /// at it are settled together or they contradict each other.
-let private hostFor game view reach (model, sitters, stamp) =
+let private hostFor game view rings reach (model, sitters, stamp) =
     // A seat of the host's own is taken from here, by a console sitting down at this very
     // table over the same wire everybody else arrives on. Nothing about the table is
     // special-cased for it: it joins, it is handed a seat and a token, it is drawn a board
@@ -234,7 +234,7 @@ let private hostFor game view reach (model, sitters, stamp) =
             None
         else
             Some(fun () ->
-                match Client.join game (Reach.at reach "localhost") None (Reach.word reach) view with
+                match Client.join game (Reach.at reach "localhost") None (Reach.word reach) rings view with
                 // The console got up, and the table it got up from is this process. It
                 // goes on standing - a player leaving their seat is not the same as
                 // closing the room - so what is left is to say so, where before there
@@ -473,8 +473,8 @@ let private starting settled choice =
         |> Result.map (fun table -> Done(serveFor game view.Palette (reach |> Option.defaultWith Reach.fresh) table))
     | Menu.Host(sitters, seed, reach) ->
         dealing sitters seed
-        |> Result.map (fun table -> Done(hostFor game view (reach |> Option.defaultWith Reach.fresh) table))
-    | Menu.Join(address, code) -> Ok(Done(Client.join game address None code view))
+        |> Result.map (fun table -> Done(hostFor game view settled.Rings (reach |> Option.defaultWith Reach.fresh) table))
+    | Menu.Join(address, code) -> Ok(Done(Client.join game address None code settled.Rings view))
     | Menu.Replay path ->
         takeUp game path
         |> Result.map (fun (model, sitters, stamp) -> Play(settled, model, sitters, stamp |> Option.defaultWith (stamping game)))
@@ -695,8 +695,8 @@ let private opening settled launch =
             printfn "%s" view.Rules
             play settled sitters stamp model)
     | Launch.Serve(start, reach) -> table Here start |> onward (serveFor game view.Palette reach)
-    | Launch.Host(start, reach) -> table Elsewhere start |> onward (hostFor game view reach)
-    | Launch.Join(address, token, code) -> Client.join game address token code view
+    | Launch.Host(start, reach) -> table Elsewhere start |> onward (hostFor game view settled.Rings reach)
+    | Launch.Join(address, token, code) -> Client.join game address token code settled.Rings view
 
 // --- one game, with its types sealed off behind it --------------------------------------
 //
