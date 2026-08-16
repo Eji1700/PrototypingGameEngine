@@ -52,6 +52,7 @@
 #load "../src/Net/Protocol.fs"
 #load "../src/Net/Lobby.fs"
 #load "../src/Net/Tables.fs"
+#load "../src/Net/House.fs"
 
 
 #load "../src/Games/Diplomacy/Rules/Powers.fs"

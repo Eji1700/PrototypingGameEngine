@@ -11,6 +11,7 @@
 
 #load "Whole.fsx"
 
+open System
 open System.IO
 open TCModel.Table
 open TCModel.Net
@@ -205,6 +206,181 @@ report
              table.Sits("back", "tok-back", None, "plain", "") |> ignore
              before, table.Standing.Sat
      | found -> failwith $"expected one record, found {List.length found}")
+
+// --- the rules a house keeps, as values -------------------------------------------------
+//
+// `Housekeeping` is apart from the house on purpose: what a house *holds* is live tables
+// behind a lock, and what it *decides* needs no table, no lock and no clock that moves. So
+// the rule that can throw somebody's game away is asked here about tables that do not exist,
+// at ages that have not happened.
+
+let private standing stage places machines sat reading : Lobby.Standing =
+    { Stage = stage
+      Places = places
+      Machines = machines
+      Sat = sat
+      Reading = reading
+      Sitters = [] }
+
+let private long = TimeSpan.FromDays 7.0
+let private brief = TimeSpan.FromMinutes 1.0
+
+let private spent age table =
+    Housekeeping.spent Housekeeping.ordinary age table
+
+report
+    "a table nobody ever sat at goes once it is old enough"
+    (false, true)
+    (spent brief (standing Lobby.Filling 2 0 0 0), spent long (standing Lobby.Filling 2 0 0 0))
+
+// The one worth being most careful about. A half-full table is not an unused one: somebody
+// took a seat, their seat is being kept for them, and a house that swept it away because
+// nobody was looking would be a house that lost a game somebody is coming back to.
+report "a table somebody took a seat at is never swept, however long it waits" false (spent long (standing Lobby.Filling 2 0 1 0))
+
+report "and a game being played is never swept, however long a turn takes" false (spent long (standing Lobby.Underway 2 0 2 0))
+
+report
+    "a finished game is kept a while and then goes"
+    (false, true)
+    (spent brief (standing Lobby.Finished 2 0 2 0), spent long (standing Lobby.Finished 2 0 2 0))
+
+report
+    "but never while somebody still has it open, whatever state it is in"
+    [ false; false; false ]
+    ([ Lobby.Filling; Lobby.Underway; Lobby.Finished ]
+     |> List.map (fun stage -> spent long (standing stage 2 0 2 1)))
+
+// --- and the order they are shown in ----------------------------------------------------
+
+let private at (minutes: float) = DateTime(2026, 1, 1).AddMinutes minutes
+
+let private listedAs entries =
+    entries
+    |> List.map (fun (name, minutes, standing) ->
+        { Id = name
+          At = at minutes
+          Way = "turncoats"
+          Table = Unchecked.defaultof<TCModel.Net.Table> },
+        standing)
+    |> Housekeeping.listed
+    |> List.map (fun (opened, _) -> opened.Id)
+
+report
+    "a house shows the tables you could sit down at first, then the games, then the records"
+    [ "spare"; "full-and-waiting"; "playing"; "over" ]
+    (listedAs
+        [ "over", 4.0, standing Lobby.Finished 2 0 2 0
+          "playing", 3.0, standing Lobby.Underway 2 0 2 0
+          "full-and-waiting", 2.0, standing Lobby.Filling 2 1 1 0
+          "spare", 1.0, standing Lobby.Filling 2 0 0 0 ])
+
+report
+    "and the newest of each first, so a table just opened is at the top of the list"
+    [ "new"; "old" ]
+    (listedAs
+        [ "old", 1.0, standing Lobby.Filling 2 0 0 0
+          "new", 9.0, standing Lobby.Filling 2 0 0 0 ])
+
+// --- a house holding several ------------------------------------------------------------
+
+let private clock = ref (at 0.0)
+let private named = ref 0
+
+let private house () =
+    clock.Value <- at 0.0
+    named.Value <- 0
+
+    House(
+        hosting (),
+        (fun () -> clock.Value),
+        (fun () ->
+            named.Value <- named.Value + 1
+            $"table-{named.Value}"),
+        Housekeeping.ordinary
+    )
+
+report
+    "a new house is empty, and says which game it is a house of"
+    ("turncoats", 0)
+    (let it = house () in it.Name, List.length it.Listed)
+
+report
+    "tables opened at a house are all held, each under a name of its own"
+    ([ "table-1"; "table-2" ], 2)
+    (let it = house ()
+     it.Opens(twoPeople, Some 42UL, None) |> ignore
+     it.Opens(twoPeople, Some 43UL, None) |> ignore
+     it.Listed |> List.map (fun (opened, _) -> opened.Id) |> List.sort, List.length it.Listed)
+
+report
+    "a table a house opened can be found again by its name, and one nobody opened cannot"
+    (true, false)
+    (let it = house ()
+
+     match it.Opens(twoPeople, Some 42UL, None) with
+     | Error said -> failwith said
+     | Ok opened -> (it.At opened.Id).IsSome, (it.At "no-such-table").IsSome)
+
+report
+    "a table the game refuses is not held, so a house is not filled with tables that failed"
+    0
+    (let it = house ()
+     it.Opens(Seating.here 99, None, None) |> ignore
+     List.length it.Listed)
+
+// A table names the way it was dealt, which is the fact a dealt table cannot be asked for and
+// a list of two games of Compile would be useless without.
+report
+    "and each table remembers which way it was dealt"
+    "turncoats"
+    (let it = house ()
+
+     match it.Opens(twoPeople, Some 42UL, None) with
+     | Error said -> failwith said
+     | Ok opened -> opened.Way)
+
+// --- and forgetting them ----------------------------------------------------------------
+
+report
+    "nothing is swept from a house whose tables were all just opened"
+    ([], 2)
+    (let it = house ()
+     it.Opens(twoPeople, Some 42UL, None) |> ignore
+     it.Opens(twoPeople, Some 43UL, None) |> ignore
+     it.Swept(), List.length it.Listed)
+
+report
+    "a table nobody sat at is swept once the clock has moved past it, and is named as it goes"
+    ([ "table-1" ], 0)
+    (let it = house ()
+     it.Opens(twoPeople, Some 42UL, None) |> ignore
+     clock.Value <- at (60.0 * 24.0)
+     it.Swept(), List.length it.Listed)
+
+report
+    "while one somebody is sitting at is left where it is, however far the clock has gone"
+    ([], 1)
+    (let it = house ()
+
+     match it.Opens(twoPeople, Some 42UL, None) with
+     | Error said -> failwith said
+     | Ok opened ->
+         opened.Table.Sits("one", "tok-one", None, "plain", "") |> ignore
+         clock.Value <- at (60.0 * 24.0 * 30.0)
+         it.Swept(), List.length it.Listed)
+
+report
+    "and a swept table is gone from the list rather than merely hidden from it"
+    false
+    (let it = house ()
+
+     match it.Opens(twoPeople, Some 42UL, None) with
+     | Error said -> failwith said
+     | Ok opened ->
+         clock.Value <- at (60.0 * 24.0)
+         it.Swept() |> ignore
+         (it.At opened.Id).IsSome)
 
 swept ()
 

@@ -217,20 +217,53 @@ that happens to be true.
 1. ~~**`Standing` on `Table`**, snapshot taken under the lock.~~ **Done** — `tests/lobby.fsx`.
 2. ~~**`Hosting`**, carrying the way of playing per the decision above.~~ **Done** —
    `Tables.fs` and `tests/house.fsx`, sixteen checks and not a socket among them.
-3. **The house as a value** — a dictionary of tables and the rules for opening, listing and
-   reaping one, pure, with no wire in it. This is why the lobby is testable at all: it is a
-   value that answers with a list of things to say. It goes in `Tables.fs` or beside it, and
-   its checks go in `house.fsx`, which is already there and already loading nothing heavier
-   than `Lobby`.
+3. ~~**The house as a value**~~ **Done** — [House.fs](House.fs), thirty checks in `house.fsx`
+   and still not a socket among them.
 4. **Routing and the page**, last, because by then it is a thin thing over something already
    checked.
 
-What step 3 still has to decide, none of which needs a socket to settle:
+### What step 3 settled
 
-- **Reaping.** When does a finished table go, and when does one nobody ever sat at? A house
-  that never forgets grows until the process does.
-- **Naming.** Tables need ids that are safe in a URL and mean nothing to guess at. `Reach`
-  already mints words of exactly that shape.
-- **What a house does at startup.** Nothing, or read `logs/` and offer what it finds?
-  `Resumes` makes the second cheap, and it is the difference between a restart being a pause
-  and being a loss.
+**The house is a lock and a list; the rules are values beside it.** What a house *holds* are
+live tables, so it cannot be a value the way `Lobby` is. What it *decides* — which tables have
+stopped being worth keeping, and what order to show them in — needs no table, no lock and no
+clock that moves, so `Housekeeping` is separate and is checked by being asked about tables that
+do not exist at ages that have not happened.
+
+**Reaping** is two spans, not one, because the two ways a table stops mattering are not alike:
+
+| | kept for | why |
+| --- | --- | --- |
+| nobody ever sat at it | an hour | nothing was played, nothing is written down |
+| finished | a day | somebody may want to walk the last moves back |
+| anything else | for ever | it is somebody's game |
+
+Three rules that matter more than the numbers, all checked:
+
+- **Never while a console is attached**, whatever state the table is in.
+- **A half-full table is not an unused one.** Somebody took a seat and their seat is being kept
+  for them; sweeping it because nobody is looking would lose a game somebody is coming back to.
+- **A game under way is never swept, however long a turn takes.** Diplomacy across two time
+  zones can sit untouched for a day and is not abandoned.
+
+Nothing on disk is touched by a sweep. The record outlives the table by design — a game swept
+off the list is one somebody can still take up from the file it wrote.
+
+**Naming** is `Reach.minted`: twelve letters that cannot be misheard down a telephone, grouped
+in fours, from the machine's own randomness rather than from the deal's. Already URL-safe,
+already unguessable, already written. Minted inside the gate, so two people opening a table at
+the same moment cannot be handed one name between them.
+
+**Startup** is the host's call, not the house's: `Resumes` is a method rather than something
+that happens. A house holds nothing that is not also on disk, so filling one from `logs/` is
+the whole of what a restart costs — but a container that is meant to come up empty should come
+up empty.
+
+### What step 4 has left to decide
+
+- **Where the house is made**, and how a game's executable is told to be one. A `house` command
+  beside `host` and `serve` is the obvious shape, and `Launch` already reads that grammar.
+- **Two doors.** The house door and the table door are both `Reach`; what is new is only that
+  there are two and the refusal has to say which.
+- **Who sweeps, and when.** Nothing calls `Swept()` yet. A timer in the web host is the dull
+  answer and probably the right one.

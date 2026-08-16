@@ -108,6 +108,9 @@
          nothing at all: not a line in here has met a socket, which is what lets the two seams
          a house is built on be checked by a script rather than by starting a web server. -->
     <Compile Include="Net/Tables.fs" />
+    <!-- Several tables of one game, and the rules for opening, listing and forgetting them.
+         Above the wire like the file before it, and for the same reason. -->
+    <Compile Include="Net/House.fs" />
     <Compile Include="Net/Server.fs" />
     <Compile Include="Net/Client.fs" />
   </ItemGroup>
