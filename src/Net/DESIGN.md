@@ -259,6 +259,27 @@ that happens. A house holds nothing that is not also on disk, so filling one fro
 the whole of what a restart costs — but a container that is meant to come up empty should come
 up empty.
 
+### Step 4 was not thin, and here is what it cost
+
+The claim above that the hard part was done was true of the **console** half and false of the
+browser half. `Table` had no type parameters; `Browser.Sitting` had three. A house holds
+several tables of one game behind one set of routes, so a page could be served for the one
+table a process was holding and for no other.
+
+Nothing had to be invented — only moved. What the browser side actually needed of a game was a
+`Shell`, a `Slot list` and a `Palette`, none of which has a type parameter; they were reached
+*through* the game because there was one game to reach through. They travel as `Browser.Drawn`
+now, and nothing on the browser side is generic.
+
+The one real change: `Sitting.Watching` is handed the **words** a page sent rather than a
+`View` built before the table was told anybody had arrived. That is the arrangement `Table.Sits`
+always had, so both consoles now arrive by the same door.
+
+And that door needed one more thing — **which kind of console is knocking**. A terminal and a
+page cannot read the same screens, so `Sits` is told `shown` rather than left to guess. It could
+have been read off the console's name, pages having a mark in theirs, but a table that has never
+heard of a browser is worth more than a parameter saved.
+
 ### What step 4 has left to decide
 
 - **Where the house is made**, and how a game's executable is told to be one. A `house` command
