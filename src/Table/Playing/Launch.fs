@@ -226,7 +226,7 @@ module Launch =
 
         // Whatever this program is called from where the reader is standing, and then the
         // game, because everything after that is read by the game.
-        let name = $"{Invoked.program.Value} {game.Name}"
+        let name = Invoked.opening game.Name
         let few, many = game.Fewest, game.Most
 
         let drawn =
@@ -279,7 +279,7 @@ module Launch =
             game.Name,
             fun _ ->
                 ArgumentParser.Create<Argument>(
-                    programName = $"{Invoked.program.Value} {game.Name}",
+                    programName = Invoked.opening game.Name,
                     errorHandler = ExceptionExiter(),
                     usageStringCharacterWidth = 100,
                     helpTextMessage = examples game
@@ -415,7 +415,7 @@ module Launch =
     /// here - Argu's own description of an argument among them - and inference would
     /// cheerfully pick one of those.
     let written (game: Playable<_, _, _>) launch =
-        $"{Invoked.program.Value} {game.Name} {write launch}"
+        $"{Invoked.opening game.Name} {write launch}"
 
     // --- and words as a launch ----------------------------------------------------------
 

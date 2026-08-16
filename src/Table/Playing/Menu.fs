@@ -311,7 +311,7 @@ module Menu =
               // a person who has never read a README now finds out there is such a thing.
               Keys.sends (Keys.nth 2) "Continue a game" "one you put down, taken up where it was left" "continue"
               drawn
-              Keys.sends (Keys.nth 4) "Settings" "how it is drawn, in what colours, and kept for next time" "settings"
+              Keys.sends (Keys.nth 4) "Settings" "sound, how it is drawn, and what this game lets you settle" "settings"
               Keys.sends (Keys.nth 5) "Rules" "the rules and the commands, at length" "rules"
               Keys.sends (Keys.nth 6) "Quit" "" "quit" ]
           Note =

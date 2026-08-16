@@ -216,3 +216,19 @@ module Offer =
     /// And the same game with the optional rule in it, which is a component sitting between the
     /// players until somebody leads two lanes.
     let withControl = offering InTheMiddle
+
+    /// Every way this game can be played, the plainest first - and the only game here with
+    /// more than one.
+    ///
+    /// Two entries rather than two games, which is the change worth writing down. They were
+    /// two entries in the list of games for a while, so the program with all four in it offered
+    /// five and the picker asked twice about the same game. They are one game with two ways of
+    /// being played now, and which way is asked at the Game page of this game's own settings.
+    ///
+    /// What has *not* changed is that each way keeps a name of its own. A game with the
+    /// optional rule in it is a different game - different deal, different reckoning - and its
+    /// record says so on the deal line, so a saved game is taken back up exactly as it was
+    /// played whatever the settings were left saying. A setting that could quietly change what
+    /// a record replayed into would not be a setting, it would be a bug with a screen in front
+    /// of it.
+    let ways = [ playable; withControl ]

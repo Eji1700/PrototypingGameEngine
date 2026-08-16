@@ -12,6 +12,10 @@ open TCModel.Table
 /// Here rather than in `Launch`, and it has to be: which game is being opened settles how
 /// many may play, what the machines are called and what a move looks like, all of which
 /// `Launch` needs before it can read a word.
+///
+/// Only this program asks the question. A game's own executable has one game in it and the
+/// first word of its line is already a launch, which is exactly the difference between the
+/// two and the whole of it.
 let private picked argv =
     match argv with
     | word :: rest ->
@@ -72,53 +76,29 @@ let rec private asking at said =
 
 // --- and what opening one comes to -------------------------------------------------------------
 
-/// Nothing is opened at a game that says it is broken. Asked here rather than at each way in,
-/// because a map that does not hang together is not a thing to find out about halfway through
-/// dealing.
-/// Nothing is opened at a game that says it is broken. Asked here rather than at each way in,
-/// because a map that does not hang together is not a thing to find out about halfway through
-/// dealing.
-///
-/// `None` back means the player has not finished with this program - they walked out of the
-/// game rather than out of the door - so it is a code or it is nothing.
-let private opened (game: Play.Chosen) open' =
-    match game.Faults with
-    | _ :: _ as problems ->
-        eprintfn $"{game.Title} does not hang together:"
-        problems |> List.iter (eprintfn "  %s")
-        Some 1
-    | [] -> open' game
-
 /// Ask which game, play it, and ask again if the player walked back out of it. The list is
-/// the front door now, so backing out of a game lands here rather than in a shell.
+/// the front door here, so backing out of a game lands on it rather than in a shell.
+///
+/// Which is the one thing this program does that a game's own executable cannot: `Play.opened`
+/// is the same refusal at both, and `FromMenu true` is the same menu with somewhere behind it.
 let rec private choosing at =
     match asking at "" with
     | None, _ -> 0
     | Some game, at ->
-        match opened game (fun game -> game.FromMenu true) with
+        match Play.opened game (fun game -> game.FromMenu true) with
         | Some code -> code
         | None -> choosing at
 
 [<EntryPoint>]
 let main argv =
-    /// A game opened by name and then left to its own menu. Nothing is behind that menu
-    /// when the game was named outright, so backing out of it is leaving.
-    let alone game =
-        opened game (fun game -> game.FromMenu false) |> Option.defaultValue 0
-
     match List.ofArray argv with
     // Nothing said at all: ask which game, and then let that game's own menu ask the rest.
     // With only one to choose from there is nothing to ask, and it would be rude to.
     | [] ->
         match Games.all with
-        | [ only ] -> alone only
+        | [ only ] -> Play.alone only []
         | _ -> choosing 0
-    | words ->
-        // Arguments say what to open and go straight to it, so a game can still be started
-        // from a script or a shortcut. A line that named a game and nothing else has said
-        // which game and no more, so it gets that game's menu.
-        match picked words with
-        | game, [] -> alone game
-        | game, launch ->
-            opened game (fun game -> Some(game.FromCommandLine launch))
-            |> Option.defaultValue 0
+    // Arguments say what to open and go straight to it, so a game can still be started from a
+    // script or a shortcut. Once the game is settled there is nothing left that a game's own
+    // executable does not do identically, so `Play.alone` does it for both.
+    | words -> picked words ||> Play.alone

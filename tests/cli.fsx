@@ -423,7 +423,7 @@ let private settings palette =
     let drawn =
         Playable.offered AtATerminal palette playing |> List.map (fun view -> view.Name)
 
-    Options.screen drawn (List.head drawn) palette
+    Options.video drawn (List.head drawn) palette
 
 /// A choice as something that can be compared. `Menu.Choice` carries a view, and a view is
 /// a bundle of functions, so the choices cannot be held up against each other whole.
@@ -607,7 +607,7 @@ report "every row the menu offers stands for a line the menu itself can read" []
 report
     "and the same on the colour screen, where left and right walk a slot through the colours"
     []
-    (unread (Options.choose standard) (settings standard))
+    (unread (Options.chooseVideo standard) (settings standard))
 
 // The seat list is not reached by opening a row - it is reached by a line, and comes back as
 // one - so it has to be walked over separately. Every seating there is, at every size the
@@ -702,10 +702,135 @@ report
     true
     (match (settings standard).Backs with
      | Some line ->
-         match Options.choose standard line with
+         match Options.chooseVideo standard line with
          | Ok Options.Done -> true
          | _ -> false
      | None -> false)
+
+// --- the settings, which are four screens rather than one --------------------------------------
+//
+// The same promise as everywhere else above, held to each of them: every row stands for a line,
+// and the line it stands for is one the screen's own reader takes. Four readers now, so four
+// checks - and they are worth having four of, because the way these came to be four screens was
+// by one screen being cut into pages, and a row left pointing at the reader it used to have
+// would be a row that did nothing at all.
+
+/// The ways a game might offer, as the Game page wants them. Made up here rather than taken
+/// from a game, which is the point of the page: it has never met one. Two, because a page that
+/// only ever showed one would not be checked for the case it exists for.
+let private waysOffered =
+    [ "compile", "Draft three protocols and play across the table."
+      "compile-control", "The same, with the optional rule." ]
+
+report
+    "every row on the settings menu stands for a line the menu itself reads"
+    []
+    (unread Options.choose (Options.screen (List.length waysOffered)))
+
+report
+    "and every row on the Audio page, including the one left and right turn over"
+    []
+    (unread Options.chooseAudio (Options.audio true)
+     @ unread Options.chooseAudio (Options.audio false))
+
+report
+    "and every row on the Game page, whichever way is in play"
+    []
+    (waysOffered
+     |> List.collect (fun (name, _) -> unread (Options.chooseGame waysOffered) (Options.game waysOffered name)))
+
+report
+    "a game with one way to play it still draws a page that reads"
+    []
+    (unread (Options.chooseGame [ List.head waysOffered ]) (Options.game [ List.head waysOffered ] "compile"))
+
+report
+    "the way back out of each page is a line that page reads as going back"
+    [ true; true; true; true ]
+    ([ Options.screen 2, Options.choose
+       Options.audio true, Options.chooseAudio
+       Options.game waysOffered "compile", Options.chooseGame waysOffered
+       settings standard, Options.chooseVideo standard ]
+     |> List.map (fun ((screen: Keys.Screen), reader) ->
+         match screen.Backs with
+         | Some line ->
+             match reader line with
+             | Ok Options.Done -> true
+             | _ -> false
+         | None -> false))
+
+// One `save` keeps all three pages, so every page has to have a row that says so and every
+// page's reader has to take it. A page that could be changed and not kept would be a page
+// whose answers quietly went away.
+report
+    "'save' is a line every page reads as keeping the lot"
+    [ true; true; true ]
+    ([ Options.chooseAudio; Options.chooseGame waysOffered; Options.chooseVideo standard ]
+     |> List.map (fun reader ->
+         match reader "save" with
+         | Ok Options.Keep -> true
+         | _ -> false))
+
+// --- and the file they are kept in ---------------------------------------------------------
+//
+// Every line of it is a line somebody could have typed at the screen it belongs to, which is
+// the bargain this file keeps and the reason it is worth checking both ways round: what is
+// written has to read back as what it was, or the answers given at a screen are not the
+// answers handed back next time.
+
+let private saidBack settings =
+    Settings.write settings |> Settings.read |> fst
+
+report
+    "a bell turned off is written down and read back off"
+    (false, true)
+    (Settings.none |> Settings.ringing false |> saidBack |> Settings.bell,
+     Settings.none |> Settings.ringing true |> saidBack |> Settings.bell)
+
+report
+    "and nobody having said anything about it rings, which is what every table did before there was a way to say"
+    true
+    (Settings.bell Settings.none)
+
+report
+    "a way of playing is written down under the game that offers it, and read back"
+    (Some "compile-control")
+    (Settings.none
+     |> Settings.playing "compile" "compile-control"
+     |> saidBack
+     |> Settings.plays "compile")
+
+// The one that would have gone wrong quietly. The Video page and the Game page both keep
+// answers about the same game, and one `save` writes both - so keeping colours must put them
+// beside the way of playing rather than over the top of it.
+report
+    "keeping this game's colours does not forget which way it is being played"
+    (Some "compile-control", Some "plain")
+    (let kept =
+        Settings.none
+        |> Settings.playing "compile" "compile-control"
+        |> Settings.keeping "compile" "plain" standard
+        |> saidBack
+
+     Settings.plays "compile" kept, Settings.drawn "compile" kept)
+
+// A line in the wrong half of the file is worth a sentence and worth nothing at all to stop
+// on, which is the rule this file has always followed. Both of the new lines have a half they
+// belong in, and they belong in opposite ones.
+report
+    "a way of playing said above the games is complained about rather than swallowed"
+    true
+    (Settings.read "plays compile-control" |> snd |> List.isEmpty |> not)
+
+report
+    "and a bell said under one game is too, being nobody's game in particular"
+    true
+    (Settings.read "[compile]\nbell on" |> snd |> List.isEmpty |> not)
+
+report
+    "a bell that is neither on nor off is a complaint and not a silence"
+    true
+    (Settings.read "bell sometimes" |> snd |> List.isEmpty |> not)
 
 report
     "and no two rows on one screen answer to the same number"
@@ -955,7 +1080,7 @@ let private walkedRight times palette =
         (fun palette press ->
             match walkingAt FirstSlot (settings palette) [ press ] with
             | Some line ->
-                match Options.choose palette line with
+                match Options.chooseVideo palette line with
                 | Ok(Options.Changed changed) -> changed
                 | _ -> palette
             | None -> palette)

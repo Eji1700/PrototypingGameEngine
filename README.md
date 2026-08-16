@@ -14,7 +14,7 @@ README of its own:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 players | Stones on a map, hidden bags, and a game settled twice over. The game this was built for |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
-| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule that is a second game |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
@@ -76,7 +76,7 @@ without anything above it moving. Nothing did, once.
 [What a third game found](#what-a-third-game-found)
 
 **The code** — [How it is put together](#how-it-is-put-together) · [Layout](#layout) ·
-[Tests](#tests) · [One file](#one-file) · [Tooling](#tooling)
+[Tests](#tests) · [One file each](#one-file-each) · [Tooling](#tooling)
 
 ## Running
 
@@ -119,6 +119,14 @@ dotnet run -- host 3 --cert stones.pfx --cert-password <pw>  # ...or is held her
 dotnet run -- --help           # every command; --help works on each of them too
 ```
 
+Each game is also its own program, which is what goes in a container and what a release
+hands you. There the game's name is already said, so it is not said twice:
+
+```powershell
+dotnet run --project src/Games/TicTacToe -- play 2   # from a clone
+Turncoats host 3 --open                              # from a published file
+```
+
 **Every command above belongs to the engine and not to any game**, which is why they are the
 same three lines whichever one is being played: `play`, `serve`, `host`, `join`, `replay`,
 `--seed`, `--rival`, `--view`, `--colour`, and at the prompt `undo`, `redo`, `history`,
@@ -132,7 +140,7 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Turncoats**](src/Games/Turncoats/README.md) | 2 to 5 | Stones on a map, hidden bags, and a game settled twice over |
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
-| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule that is a second game |
+| [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
 
 Everything below this line is about the program rather than about any of them.
 
@@ -323,10 +331,75 @@ the word "Green" in a sentence, a bar in a chart and a region's border all follo
 [Tint.fs](src/Table/Parts/Tint.fs) and `Words.glyph`. The reader's own seat is marked in
 gold rather than a fourth hue that could be mistaken for a stone.
 
+### Settings, and the three kinds of question
+
+`settings` at the menu opens a short menu of its own, and a page behind each row of it
+([Options.fs](src/Table/Parts/Options.fs)):
+
+```
+     1  audio  whether the table rings when your turn comes round
+     2  video  how the board is drawn, and what is drawn in what colour
+  -> 3  game   2 ways this game can be played
+     0  done   back to the menu
+
+  Nothing on any of these pages is kept unless you say 'save', which keeps all three
+  at once - so a page you only looked at is a page that changed nothing.
+```
+
+Three pages because there are three kinds of question. **Video** is how a board reaches your
+eyes. **Audio** is how it reaches your ears, which today is one bell and a question about
+whether you want it. **Game** is whatever this particular game lets you settle about itself,
+which for three of these four games is nothing at all.
+
+The split is not decoration. Before it there was one screen with a view row and a colour row
+on it, and every new kind of question would have gone on the end of the same list until it was
+a list nobody could read. What a menu with pages behind it buys is not room so much as a
+*settled place to put the next thing*.
+
+One `save` writes all three from whichever page it was said on, which is the only honest
+reading of the word: nothing on any page is a draft, and a save that kept the page you
+happened to be standing on would quietly drop the answer you gave two screens ago.
+
+#### Audio
+
+One row, and a real one rather than a place kept for later. The table already rang when the
+turn came round and nothing you did brought it round — that is what `Nudged` is, and it is
+how a game you are not watching tells you it is waiting. Until this page there was no way to
+say you would rather it did not.
+
+It is the one setting that is not a game's own. A bell is a fact about the room you are
+sitting in, so it is asked once, kept above all the games, and every game picks it up.
+
+#### Game
+
+The page a game answers for itself, and the reason `Games.all` is four entries rather than
+five. Compile can be played with an optional rule in it, and that used to be a second game in
+the picker — so the front door asked which game and then asked the same question again in
+different words. It is one game with two ways of being played now:
+
+```
+     1  compile          in play   Draft three protocols, set them against three lines, ...
+  -> 2  compile-control            The same, with the optional rule: lead 2 lanes and take ...
+     0  done             back to the settings
+```
+
+**Each way keeps a name of its own, and that is load-bearing.** A game with the optional rule
+in it is a different game — different deal, different reckoning — and its record says so on
+the deal line. So a saved game is taken back up exactly as it was played whatever this page
+was last left saying, and `compile-control` on a command line still opens that game outright,
+because a word somebody typed is not a question they are asking. What is settled here is what
+a *new* game is dealt as, and nothing about an old one.
+
+That constraint is what the page is *for*, and it is worth saying which way round it runs: a
+setting that could quietly change what a record replayed into would not be a setting, it would
+be a bug with a screen in front of it. Which is also why a game's other choices — how it draws
+a board, how much of it to show — are not on this page and never will be. Those are views, and
+a game that wants another one adds a view.
+
 ### Colours a player chooses
 
 Which colour is drawn for what is a **palette** ([Palette.fs](src/Table/Parts/Palette.fs)),
-and `settings` at the menu opens the screen that changes one:
+and the Video page is the screen that changes one:
 
 ```
      1  drawn                           rich      panels, charts and colour
@@ -357,7 +430,7 @@ Left and right walk the marked slot through the nineteen, and the sample beside 
 under the cursor as they do. Nothing is remembered between presses: what a slot is drawn in
 now is in the palette the screen was built from, so the step is read off that and the line
 the press stands for - `red ember` - says the whole of the change. It goes through the same
-`Options.choose` a person typing those two words would have reached, the screen comes
+`Options.chooseVideo` a person typing those two words would have reached, the screen comes
 straight back in the new palette, and walking right round the list arrives back at the
 colour it set out from.
 
@@ -383,11 +456,12 @@ compiler saying so.
 
 ### Kept for next time
 
-`save` on that screen writes [settings.txt](src/Table/Parts/Settings.fs) beside the records,
-and every way into a game reads it — the menu, and the command line alike:
+`save` on any of the three pages writes [settings.txt](src/Table/Parts/Settings.fs) beside the
+records, and every way into a game reads it — the menu, and the command line alike:
 
 ```
 view rich
+bell off
 
 [turncoats]
 view rich
@@ -396,13 +470,25 @@ blue azure
 green moss
 hidden slate
 yours gold
+
+[compile]
+plays compile-control
 ```
 
-**Every line in it is a line you could type at the screen it belongs to.** `view rich` is
-what the menu takes; `red lemon` is what the settings screen takes; and reading the file
-back is handing those lines to those very readers. So the file cannot come to hold something
-no screen can express, no screen can come to offer something the file cannot hold, and what
-a line *means* is settled in one place rather than two. It is the bargain the record already
+**Every line in it is a line you could type at the screen it belongs to.** `view rich` is what
+the menu takes; `bell off` is what the Audio page takes; `plays compile-control` is what the
+Game page takes; `red lemon` is what the Video page takes; and reading the file back is
+handing those lines to those very readers. So the file cannot come to hold something no screen
+can express, no screen can come to offer something the file cannot hold, and what a line
+*means* is settled in one place rather than two.
+
+Which half of the file a line belongs in is part of what it means, and the two new lines
+belong in opposite halves. `bell` is nobody's game in particular, so it goes above the first
+`[game]` and is complained about under one; `plays` is a game's own answer — there is no way
+of playing that every game has — so it goes under a game and is complained about above them.
+A `plays` line is kept under the name of the game that *offers* the ways rather than the name
+of the way settled on, because the second of those is what the line says, and a file that kept
+it under itself would be answering a question with itself. It is the bargain the record already
 keeps — a record is the moves a player typed — applied one level out, to the answers they
 gave rather than the moves they made. Editing it by hand is reading it back, and a line that
 has gone stale is said out loud at the menu rather than passed over in silence.
@@ -437,7 +523,7 @@ A name already known is restated **in place**, so saying what crimson should hav
 not shuffle a list somebody has learnt the shape of; a new name goes on the end; `no <name>`
 drops one. Hex rather than a colour name, because the point of the file is the colours this
 program does not have. Names are letters only — a name with a space in it could not be said
-in the two words the settings screen reads.
+in the two words the Video page reads.
 
 What a *game* draws itself in is looked up in the built-in catalogue rather than in this
 list, and that separation is load-bearing: Diplomacy says Russia is `violet`, and a player
@@ -1287,14 +1373,24 @@ no general reader would think of writes its own `View` instead, and Turncoats do
 **3. `Offer.fs`** — both seams joined into one `Playable`, which is the only file either layer
 above ever sees.
 
-**4. One line in [Games.fs](src/Games.fs)**, and one `ItemGroup` in
-[TCModel.fsproj](TCModel.fsproj) in the right place — the order of that file *is* the
-architecture, and the only thing enforcing it.
+**4. A project of its own** — a `.fsproj` listing the game's files in order, referencing
+[TCModel.Engine.fsproj](src/TCModel.Engine.fsproj), and a `Program.fs` that is one line:
+
+```fsharp
+[<EntryPoint>]
+let main argv = TCModel.Play.only Offer.ways argv
+```
+
+That line is the same at all four games, and its being the same is the fair test of the two
+seams: by the time a game is a `Playable` there is nothing left for a way in to decide.
+
+**5. And one line in [Games.fs](src/Games.fs)**, if it is also to appear in the program that
+has all of them in it and asks which.
 
 What you get for it, without writing any of it: the timeline, undo and redo, the record on
-disk and the replay off it, the seats and their tokens, the menu, the seat list, the colour
-screen, the command line and its `--help`, three ways of drawing a board, the browser, the wire
-between machines, and a loop that lets a machine play any seat.
+disk and the replay off it, the seats and their tokens, the menu, the seat list, the settings
+and their three pages, the command line and its `--help`, three ways of drawing a board, the
+browser, the wire between machines, and a loop that lets a machine play any seat.
 
 Two things are worth filling in that are easy to leave empty. **`Faults`** is what the game
 says is wrong with *itself* before anybody sits down — a game built out of data can be built
@@ -1478,11 +1574,34 @@ program that plays Diplomacy for you.
 
 ### Layout
 
-Seven layers, each depending only on the ones above it. **The order in
-[TCModel.fsproj](TCModel.fsproj) is the architecture, and the only thing enforcing it**:
-F# compiles a project in the order its files are listed, so a layer cannot reach into one
-beneath it even by accident. Read it top to bottom — nothing generic mentions a game, and
-the games never mention each other.
+Seven layers, each depending only on the ones above it — and now six projects, because the
+seam between the engine and the games is a project boundary rather than a place in a list.
+
+**Within a project, the order in its `.fsproj` is the architecture and the only thing
+enforcing it**: F# compiles a project in the order its files are listed, so a layer cannot
+reach into one beneath it even by accident. Read
+[TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) top to bottom — nothing in it mentions a
+game.
+
+**Between projects, the compiler enforces it outright.** A game references the engine; the
+engine references nothing. "A game may reach the engine and the engine may not reach a game"
+used to be a convention that happened to hold and could be checked by reading; it is now a
+thing that will not build. Not one line of code moved to get that — the split is project
+files, and every source file is where it always was, which is why the sixteen test scripts
+that `#load` them by path did not change either.
+
+| Project | What it is |
+| --- | --- |
+| [src/TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) | Everything that is not a game: `Common`, `Engine`, `Table`, `Net`, and `Play` |
+| [src/Games/Turncoats/Turncoats.fsproj](src/Games/Turncoats/Turncoats.fsproj) | One game, and its own executable |
+| [src/Games/TicTacToe/TicTacToe.fsproj](src/Games/TicTacToe/TicTacToe.fsproj) | " |
+| [src/Games/Diplomacy/Diplomacy.fsproj](src/Games/Diplomacy/Diplomacy.fsproj) | " |
+| [src/Games/Compile/Compile.fsproj](src/Games/Compile/Compile.fsproj) | " |
+| [TCModel.fsproj](TCModel.fsproj) | All four in one program, which asks which. What a clone runs |
+
+A game's own executable is one game, one port and nothing else in the image, which is what
+goes in a container. `TCModel` is what somebody who wants all four downloads once, and what
+every `dotnet run` line in this README is.
 
 **`src/Common`** — generic, and knows nothing about the game.
 
@@ -1527,7 +1646,7 @@ point: `Parts` does not know there is a seam, and `Playing` is written against i
 | [Tint.fs](src/Table/Parts/Tint.fs) | Colour laid over writing already laid out, and Spectre's output as a string |
 | [Page.fs](src/Table/Parts/Page.fs) | The browser's shell: the stream, the prompt, the colour form, the door, and the two places a fragment can land. A game brings a stylesheet and a name for the tab |
 | [Screens.fs](src/Table/Parts/Screens.fs) | Driving a screen at a real terminal: clear it, draw it, read a key, hand back a line |
-| [Options.fs](src/Table/Parts/Options.fs) | The settings screen: how the board is drawn, what is drawn in what, and whether to be handed the same answers next time |
+| [Options.fs](src/Table/Parts/Options.fs) | The settings: a short menu, and a page behind each row of it - Audio, Video, and whatever this game lets you settle |
 | [Readers.fs](src/Table/Parts/Readers.fs) | The three ways of reading a `Scene` - as text, as Spectre's widgets, as a page - written once for every game there will ever be |
 | [Playable.fs](src/Table/Playable.fs) | **The seam**: everything a game has to say about itself to be read and played here |
 | [Solo.fs](src/Table/Playing/Solo.fs) | The game at one keyboard, as a value: what a typed line does, who answers it, and what it asks written down |
@@ -1564,11 +1683,23 @@ The games never mention each other, and nothing above them names any of them unt
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.
 
+[Play.fs](src/Play.fs) is the last file in the engine rather than the first outside it, and
+that is the point of it: what opening a game *involves* — dealing one, keeping its record, the
+menu loops, the settings pages, both tables and the browser — is generic in the game, and ends
+in the interface that seals a game's types off. It is the whole of what a game's own door has
+to call.
+
 | File | Role |
 | --- | --- |
-| [Play.fs](src/Play.fs) | What opening a game *involves*: dealing one, keeping its record, the menu loops, both tables and the browser - still generic - ending in the interface that seals a game's types off |
+| [Play.fs](src/Play.fs) | The above, ending in `Chosen` — and `Play.only`, which is what `main` is at a game's own executable |
+| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all four: `Play.only Offer.ways argv` |
 | [Games.fs](src/Games.fs) | The games there are, and the only file in the program that names more than one |
 | [Program.fs](src/Program.fs) | Which game a line is about, the screen that asks when nothing says, and nothing else |
+
+A game's door being one line is the fair test of the two seams. By the time a game is a
+`Playable` there is nothing left for a way in to decide: what a line means, what the menu
+offers, where a record goes and how far a table reaches are all settled above it, generically,
+and none of it is written four times.
 
 ### Keeping invalid states out
 
@@ -2014,18 +2145,36 @@ is refused at the deal, a `redo` left over from an earlier undo carries the game
 *forward*. That is `redo` keeping its own promise. The property now says which case it
 means rather than quietly covering both.
 
-## One file
+## One file each
 
 ```powershell
-pwsh tools/publish.ps1                     # both shapes, for this machine
+pwsh tools/publish.ps1                     # every program, both shapes, for this machine
 pwsh tools/publish.ps1 -Shape portable     # just the small one
+pwsh tools/publish.ps1 -Program Turncoats  # just the one game
 pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
 ```
 
+Five programs come out: one per game, and `TCModel`, which has all four in it and asks
+which. A game's own file is one game, one port and nothing else — which is what goes in a
+container — and `TCModel` is what somebody who wants all four downloads once.
+
 | | size | wants |
 | --- | --- | --- |
-| `portable` | 6.3 MB | the ASP.NET Core 10 runtime installed |
-| `standalone` | 104.7 MB | nothing at all |
+| `portable` | 6.1 – 7.2 MB | the ASP.NET Core 10 runtime installed |
+| `standalone` | ~105 MB | nothing at all |
+
+The checks below are run against each of the five, and they are not the same lines at each: a
+game's own file takes `serve 2` and the one with four games in it takes `tictactoe serve 2`.
+That difference is the whole of what publishing separately changed, so it is checked rather
+than assumed — `Turncoats.exe` printing `Turncoats turncoats play 2` is a line that runs and
+then refuses, which is worse than one that does not run at all.
+
+**Publishing passes `-p:SelfContained` rather than `--self-contained`, and the difference is
+load-bearing.** The second sets the property on the project named and on nothing else, so
+publishing `TCModel` portable left the four games it references self-contained and the SDK
+refused the mixture outright (NETSDK1151). A `-p:` on the command line is a global property:
+it reaches every project in the graph and overrides what each says for itself, which is
+exactly what "this whole publish is one shape" means.
 
 Guests need neither. They join in a browser, and the browser is served by whoever is
 hosting — which is what embedding [datastar.js](assets/datastar.js) rather than fetching it
@@ -2057,13 +2206,29 @@ sent, called by its own name.
 ```
     dotnet run -- turncoats join greg-pc --code kbd4-9mtx-7rfp     # from a clone
     TCModel turncoats join greg-pc --code kbd4-9mtx-7rfp           # from a published file
+    Turncoats join greg-pc --code kbd4-9mtx-7rfp                   # from that game's own file
 ```
 
 [Invoked.fs](src/Table/Parts/Invoked.fs) answers that once, and everything that prints a
 line asks it: the usage and the examples, the address a table reads out to the room, the
 line a dropped player is handed for getting back to their seat, the header on a record. What
-it asks is not how this process was started but **where the reader is standing** — `dotnet
-run --` works when there is a project in the current directory to run, and nowhere else.
+it asks is not how this process was started but **where the reader is standing**.
+
+Splitting the games into their own executables put a second question beside the first, and
+the third line above is it: `Turncoats` has already said which game, so nothing it prints
+should say it again. That is one flag, set by `Play.only` and by nothing else — a program
+cannot see how many games were compiled into it, so the door that knows says so once, before
+it opens anything. The same flag is why a game's own file, handed a record belonging to a
+different game, says which game that is rather than inventing a command for an executable it
+has never seen.
+
+It also broke the first question, quietly, and in the way these things usually break: "is
+there a project here to `dotnet run`" was enough while there was one project, and there are
+six now. A clone's root holds a project that `dotnet run` would run and it is not the game
+whose executable somebody just started from that folder — so `Turncoats.exe` printing `dotnet
+run -- play 5` there was an instruction that runs, and runs something else, which is worse
+than one that does not run. The project has to be *ours*, so every project here sets
+`AssemblyName` to its own file's name and the question is one lookup.
 
 Until there was a file to hand anybody, every one of those said `dotnet run --` and nobody
 noticed, because everybody testing it had the repository.

@@ -135,3 +135,11 @@ module Offer =
 
           Page = Html.shell
           Views = views }
+
+    /// Every way this game can be played, the plainest first.
+    ///
+    /// One, here. A game with an optional rule in it offers two and the Game page of the
+    /// settings screen asks which - see [Compile](../Compile/Offer.fs). This is a list even
+    /// where it holds one so that the door and the settings screen are the same at every game
+    /// rather than nearly the same at most of them.
+    let ways = [ playable ]

@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The second game, and the whole point of the two seams. Nine squares against a map,
+       nothing hidden against a closed bag, no dice against a generator - and the same two
+       folders filled in, in the same order, at a fraction of the size. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <SelfContained>false</SelfContained>
+    <AssemblyName>TicTacToe</AssemblyName>
+    <RootNamespace>TCModel.TicTacToe</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup Label="How it is played">
+    <Compile Include="Rules/Marks.fs" />
+    <Compile Include="Rules/Board.fs" />
+    <Compile Include="Rules/Session.fs" />
+    <Compile Include="Rules/Turn.fs" />
+    <Compile Include="Rules/Words.fs" />
+    <Compile Include="Rules/Rival.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="How it is read">
+    <!-- Three files where the game of stones has five, and the two missing ones are the
+         point: this game describes its screens once as a `Scene` and `Readers` draws all
+         three. -->
+    <Compile Include="Reading/Ink.fs" />
+    <Compile Include="Reading/Parse.fs" />
+    <Compile Include="Reading/Render.fs" />
+    <Compile Include="Offer.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="And the door">
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../TCModel.Engine.fsproj" />
+  </ItemGroup>
+
+</Project>

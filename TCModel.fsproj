@@ -1,262 +1,38 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- All four games in one program, which is what a clone of this repository runs.
+
+       Each game is its own executable now - `src/Games/Turncoats` builds `Turncoats`, and
+       so on down - and this is the fifth, the one that offers a list and asks which. It is
+       here rather than gone because a repository is not a release: every line in the README
+       is a `dotnet run` from this directory, and somebody reading it wants all four games
+       without publishing four files first.
+
+       It owns two files and nothing else, and the two are the whole difference between a
+       program with one game in it and a program with four: the list, and the screen that
+       asks. Everything either of them does is `Play`'s, shared with the four doors that do
+       not have to ask. -->
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
   </PropertyGroup>
 
-  <!-- The order below is the architecture, and the only thing enforcing it. F# compiles a
-       project in the order its files are listed, so a layer cannot reach into one beneath it
-       on this list even by accident. Read top to bottom: nothing generic mentions a game,
-       and the games never mention each other. -->
-
-  <ItemGroup Label="Common - generic, knows nothing of any game">
-    <Compile Include="src/Common/Result.fs" />
-    <Compile Include="src/Common/Cascade.fs" />
-    <Compile Include="src/Common/Random.fs" />
-  </ItemGroup>
-
-  <!-- Engine - what every turn-based game wants and none of them should write again: a
-       history to walk, a record that replays, seats, a machine to play one of them. `Rules`
-       is the whole seam, and everything here is generic over what a move is, where a game
-       stands, and what it says. -->
-  <ItemGroup Label="Engine - how a game is played">
-    <Compile Include="src/Engine/Seats.fs" />
-    <Compile Include="src/Engine/Messages.fs" />
-    <Compile Include="src/Engine/Told.fs" />
-    <Compile Include="src/Engine/Rules.fs" />
-    <Compile Include="src/Engine/Timeline.fs" />
-    <Compile Include="src/Engine/Journal.fs" />
-    <Compile Include="src/Engine/Model.fs" />
-    <Compile Include="src/Engine/Update.fs" />
-    <!-- A seat played by something that is not a person, and after `Update` because taking a
-         turn is making a move like anybody else's. -->
-    <Compile Include="src/Engine/Machines.fs" />
-  </ItemGroup>
-
-  <!-- Table - how a game is *read*, which is the second seam. `Playable` is to this layer
-       what `Rules` is to the engine: fill it in and the timeline, the record, the seats, the
-       tokens, the menu, the command line and every screen already work. Nothing here names
-       a game, a piece, or a board.
-
-       Two folders and one file between them, and the file is the point: `Parts` is
-       everything a game and a table are described in and does not know there is a seam;
-       `Playing` is written against it. -->
-  <ItemGroup Label="Table - the parts a game and a table are described in">
-    <Compile Include="src/Table/Parts/Invoked.fs" />
-    <Compile Include="src/Table/Parts/Showing.fs" />
-    <Compile Include="src/Table/Parts/Waiting.fs" />
-    <!-- What a screen is made of, before anybody has decided what it looks like. Here rather
-         than beside the readers below, because a scene is described by games and drawn by
-         readers and neither end should have to reach past the other. -->
-    <Compile Include="src/Table/Parts/Scene.fs" />
-    <Compile Include="src/Table/Parts/Palette.fs" />
-    <!-- What a player settled on last time and gets again this time, which is the palette
-         above and a view by name. After the palette because it is written out of one, and
-         before every screen below because the screens are what settle it. -->
-    <Compile Include="src/Table/Parts/Settings.fs" />
-    <!-- How far a table can be reached and what it takes to sit down at one. Above the page
-         because the door has a page of its own. -->
-    <Compile Include="src/Table/Parts/Reach.fs" />
-    <!-- One reads a key, the other a line; both before anything that offers a screen. -->
-    <Compile Include="src/Table/Parts/Keys.fs" />
-    <Compile Include="src/Table/Parts/Commands.fs" />
-    <Compile Include="src/Table/Parts/View.fs" />
-    <!-- Who is going to be at each seat, which every way of opening a game has to settle. -->
-    <Compile Include="src/Table/Parts/Seating.fs" />
-    <!-- And the kit those are drawn with: colour over text, the browser's shell, and a
-         screen driven at a real terminal. -->
-    <Compile Include="src/Table/Parts/Tint.fs" />
-    <Compile Include="src/Table/Parts/Page.fs" />
-    <Compile Include="src/Table/Parts/Screens.fs" />
-    <Compile Include="src/Table/Parts/Options.fs" />
-    <!-- And the three ways of reading a scene, written once for every game there will ever
-         be. Last, because they are built out of everything above: the colours, the ink, and
-         the page. -->
-    <Compile Include="src/Table/Parts/Readers.fs" />
-  </ItemGroup>
-
-  <!-- The seam itself. Everything below this line is written against it, and everything
-       above it could not name it if it tried. -->
-  <ItemGroup Label="Table - the seam">
-    <Compile Include="src/Table/Playable.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Table - playing one, and the two ways in">
-    <Compile Include="src/Table/Playing/Solo.fs" />
-    <Compile Include="src/Table/Playing/Transcript.fs" />
-    <Compile Include="src/Table/Playing/Menu.fs" />
-    <Compile Include="src/Table/Playing/Launch.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Net - the same table, with the players at different keyboards">
-    <Compile Include="src/Net/Protocol.fs" />
-    <!-- Before the lobby, and not after it, because it does not know there is one. -->
-    <Compile Include="src/Net/Browser.fs" />
-    <Compile Include="src/Net/Lobby.fs" />
-    <Compile Include="src/Net/Server.fs" />
-    <Compile Include="src/Net/Client.fs" />
-  </ItemGroup>
-
-  <!-- A game is a folder, and inside it the two seams are two folders. `Rules` is how it is
-       played: no English, no screen, and nothing from `src/Table` - which is not a house rule
-       but a fact you can check, because not one file in there opens it. `Reading` is how it
-       is read. `Offer.fs` is the two halves joined, and the only file either layer above ever
-       sees. -->
-  <ItemGroup Label="Turncoats - how it is played">
-    <Compile Include="src/Games/Turncoats/Rules/Stones.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Board.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Players.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Position.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Ruling.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Game.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Knowledge.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Events.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Actions.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Outcome.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Setup.fs" />
-    <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
-         a turn that stays open until a stone goes back is nobody else's rule. -->
-    <Compile Include="src/Games/Turncoats/Rules/Turn.fs" />
-    <Compile Include="src/Games/Turncoats/Rules/Playing.fs" />
-    <!-- Words are in here rather than beside the drawings because they are the game talking,
-         not a screen: what an event or a refusal *says* is settled once, and the three views
-         lay the same sentence out three ways. -->
-    <Compile Include="src/Games/Turncoats/Rules/Words.fs" />
-    <!-- And a seat played by the program, which reads the game the way a player does and
-         draws nothing at all. -->
-    <Compile Include="src/Games/Turncoats/Rules/Rival.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Turncoats - how it is read">
-    <Compile Include="src/Games/Turncoats/Reading/Ink.fs" />
-    <Compile Include="src/Games/Turncoats/Reading/Parse.fs" />
-    <Compile Include="src/Games/Turncoats/Reading/Render.fs" />
-    <Compile Include="src/Games/Turncoats/Reading/Rich.fs" />
-    <Compile Include="src/Games/Turncoats/Reading/Html.fs" />
-    <!-- Both seams filled in: this game as the engine takes one, and as a table reads one. -->
-    <Compile Include="src/Games/Turncoats/Offer.fs" />
-  </ItemGroup>
-
-  <!-- The second game, and the whole point of the two seams above. Nine squares against a
-       map, nothing hidden against a closed bag, no dice against a generator - and the same
-       two folders filled in, in the same order, at a fraction of the size. -->
-  <ItemGroup Label="Noughts and crosses - how it is played">
-    <Compile Include="src/Games/TicTacToe/Rules/Marks.fs" />
-    <Compile Include="src/Games/TicTacToe/Rules/Board.fs" />
-    <Compile Include="src/Games/TicTacToe/Rules/Session.fs" />
-    <Compile Include="src/Games/TicTacToe/Rules/Turn.fs" />
-    <Compile Include="src/Games/TicTacToe/Rules/Words.fs" />
-    <Compile Include="src/Games/TicTacToe/Rules/Rival.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Noughts and crosses - how it is read">
-    <!-- Three files where the other game has five, and the two missing ones are the point:
-         this game describes its screens once as a `Scene` and `Readers` draws all three. -->
-    <Compile Include="src/Games/TicTacToe/Reading/Ink.fs" />
-    <Compile Include="src/Games/TicTacToe/Reading/Parse.fs" />
-    <Compile Include="src/Games/TicTacToe/Reading/Render.fs" />
-    <Compile Include="src/Games/TicTacToe/Offer.fs" />
-  </ItemGroup>
-
-  <!-- The third game, and the one that leans on the seams hardest. Everybody moves at once,
-       so a phase is seven seats writing in secret and one resolution; a year is three kinds of
-       phase, two of which are usually skipped; and the map is a table of three hundred borders
-       rather than a shape. None of that needed a line changing above it. -->
-  <ItemGroup Label="Diplomacy - how it is played">
-    <Compile Include="src/Games/Diplomacy/Rules/Powers.fs" />
-    <Compile Include="src/Games/Diplomacy/Rules/Atlas.fs" />
-    <Compile Include="src/Games/Diplomacy/Rules/Position.fs" />
-    <Compile Include="src/Games/Diplomacy/Rules/Orders.fs" />
-    <!-- Working out what happened when everybody moved at once, which is the only hard thing
-         in this game and is hard because an order's outcome can depend on itself. -->
-    <Compile Include="src/Games/Diplomacy/Rules/Adjudicate.fs" />
-    <Compile Include="src/Games/Diplomacy/Rules/Session.fs" />
-    <Compile Include="src/Games/Diplomacy/Rules/Turn.fs" />
-    <Compile Include="src/Games/Diplomacy/Rules/Words.fs" />
-    <!-- And a seat played by the program, which reads the board a player reads and draws
-         nothing at all. -->
-    <Compile Include="src/Games/Diplomacy/Rules/Rival.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Diplomacy - how it is read">
-    <!-- Three files, like the game of nine squares and unlike the game of stones: this one
-         describes its screens once as a `Scene` and `Readers` draws all three. -->
-    <Compile Include="src/Games/Diplomacy/Reading/Ink.fs" />
-    <Compile Include="src/Games/Diplomacy/Reading/Parse.fs" />
-    <Compile Include="src/Games/Diplomacy/Reading/Render.fs" />
-    <Compile Include="src/Games/Diplomacy/Offer.fs" />
-  </ItemGroup>
-
-  <!-- The fourth game, and the first one that is not a board at all: a deck each, built out
-       of protocols the players draft between them, and three lines running across the table
-       with a stack of cards growing at each end. What it leans on that none of the others did
-       is the stage - a game of this is a draft, then a laying-out, then play, and the three
-       have different moves and three different senses of whose turn it is. -->
-  <ItemGroup Label="Compile - how it is played">
-    <Compile Include="src/Games/Compile/Rules/Protocols.fs" />
-    <Compile Include="src/Games/Compile/Rules/Cards.fs" />
-    <!-- What a card's rules text is made of, as data rather than as functions - so that the
-         game can check it, print it, and reason about it, none of which it could do to a
-         closure. And what is printed on each of the seventy-two, which is a lookup rather than
-         a field on a card: text is a fact *about* a card, and a card stays a protocol and a
-         number so that it stays cheap to compare and easy to type. -->
-    <Compile Include="src/Games/Compile/Rules/Effects.fs" />
-    <Compile Include="src/Games/Compile/Rules/Printed.fs" />
-    <!-- The lines, one side of the table, and both of them together. -->
-    <Compile Include="src/Games/Compile/Rules/Field.fs" />
-    <!-- Whose pick it is, which is a list of six and nothing else. -->
-    <Compile Include="src/Games/Compile/Rules/Drafting.fs" />
-    <Compile Include="src/Games/Compile/Rules/Session.fs" />
-    <!-- What the game has to say, above the two things that say it: a move made by a player,
-         and the pile working its way down after one. -->
-    <Compile Include="src/Games/Compile/Rules/Events.fs" />
-    <!-- The pile: what a card's text sets off, one command at a time, with a look at the table
-         between every two of them. -->
-    <Compile Include="src/Games/Compile/Rules/Resolving.fs" />
-    <Compile Include="src/Games/Compile/Rules/Turn.fs" />
-    <Compile Include="src/Games/Compile/Rules/Words.fs" />
-    <Compile Include="src/Games/Compile/Rules/Rival.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Compile - how it is read">
-    <Compile Include="src/Games/Compile/Reading/Ink.fs" />
-    <Compile Include="src/Games/Compile/Reading/Parse.fs" />
-    <Compile Include="src/Games/Compile/Reading/Render.fs" />
-    <Compile Include="src/Games/Compile/Offer.fs" />
-  </ItemGroup>
-
-  <!-- What opening a game actually involves - dealing one, keeping its record, the menu,
-       the two tables and the browser - generic in the game, and ending in the one interface
-       that seals a game's types off so that a list can hold more than one. -->
-  <ItemGroup Label="Opening a game">
-    <Compile Include="src/Play.fs" />
-  </ItemGroup>
-
-  <!-- The only file in the program that names more than one game. -->
-  <ItemGroup Label="The games there are">
+  <ItemGroup Label="The only file in the program that names more than one game">
     <Compile Include="src/Games.fs" />
   </ItemGroup>
 
-  <ItemGroup Label="The way in - compiled last, because it needs every layer above it">
+  <ItemGroup Label="The way in - the screen before there is a game">
     <Compile Include="src/Program.fs" />
   </ItemGroup>
 
-  <ItemGroup Label="The browser's own client, carried rather than fetched">
-    <!-- Datastar's client, committed as it was published. A table opened on a machine with
-         no way out to the internet is exactly the table this game is for, so the browser
-         is handed the script by the same process that is hosting the game. -->
-    <EmbeddedResource Include="assets/datastar.js" LogicalName="datastar.js" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Argu" Version="6.2.5" />
-    <PackageReference Include="Falco.Datastar" Version="1.3.0" />
-    <PackageReference Include="Falco.Markup" Version="1.4.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
-    <PackageReference Include="Spectre.Console" Version="0.51.1" />
+  <ItemGroup Label="The engine, and the games it can open">
+    <ProjectReference Include="src/TCModel.Engine.fsproj" />
+    <ProjectReference Include="src/Games/Turncoats/Turncoats.fsproj" />
+    <ProjectReference Include="src/Games/TicTacToe/TicTacToe.fsproj" />
+    <ProjectReference Include="src/Games/Diplomacy/Diplomacy.fsproj" />
+    <ProjectReference Include="src/Games/Compile/Compile.fsproj" />
   </ItemGroup>
 
 </Project>

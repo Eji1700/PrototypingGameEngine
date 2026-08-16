@@ -23,29 +23,68 @@ open System.IO
 /// of stones colours three factions and a game of nine squares colours two marks, and there
 /// is no one list to keep them in. What every game shares - which way of drawing is wanted
 /// first - is said once above them all, and a game may still say otherwise for itself.
+/// What was settled at one game.
+///
+/// Never seen outside the type below, whose only field holding one is private. It is a record
+/// rather than the tuple it started as because there are three things in it now, two of them
+/// optional strings, and a pair of those in a tuple is a pair nobody can read.
+[<NoComparison; NoEquality>]
+type Kept =
+    { /// The view this game opens in.
+      Drawn: string option
+      /// Which of this game's ways of being played was settled on, where it has more than
+      /// one. A name, and this file does not check it against anything - which of them there
+      /// are is the game's own answer, and the game may not even be in this build.
+      Plays: string option
+      /// The lines the colour screen would take to put its colours where they are.
+      Colours: string list }
+
 [<NoComparison; NoEquality>]
 type Settings =
     private
         {
             /// The view every game opens in, where one has been settled on.
             Drawn: string option
-            /// Per game, in the order the file said them: the view that game opens in, and
-            /// the lines the colour screen would take to put its colours where they are.
+            /// Whether a terminal rings when the turn comes round and nobody asked for it.
+            ///
+            /// Above the games rather than under each of them, because whether somebody wants
+            /// a beep is a fact about the room they are sitting in and not about which game is
+            /// on the table. `None` is nobody having said, which rings - that is what every
+            /// table did before there was a way to say otherwise.
+            Bell: bool option
+            /// Per game, in the order the file said them.
             ///
             /// An association list rather than a map, and that is the whole reason for it:
             /// a file somebody has read and edited comes back out in the order they left it,
             /// rather than reshuffled into whatever order a map felt like.
-            Games: (string * (string option * string list)) list
+            Games: (string * Kept) list
         }
 
 module Settings =
 
+    /// Nothing settled at one game.
+    let private nothing =
+        { Drawn = None
+          Plays = None
+          Colours = [] }
+
     /// Nothing settled on: what a program with no settings file has, and what every game
     /// therefore opens exactly as it always did.
-    let none = { Drawn = None; Games = [] }
+    let none =
+        { Drawn = None
+          Bell = None
+          Games = [] }
 
     [<Literal>]
     let private DrawnWord = "view"
+
+    /// Said above the games, and read at the Audio screen.
+    [<Literal>]
+    let private BellWord = "bell"
+
+    /// Said under a game, and read at that game's own screen.
+    [<Literal>]
+    let private PlaysWord = "plays"
 
     let private forGame name settings =
         settings.Games
@@ -62,8 +101,24 @@ module Settings =
     /// asked where the view is actually built.
     let drawn name settings =
         forGame name settings
-        |> Option.bind fst
+        |> Option.bind (fun kept -> kept.Drawn)
         |> Option.orElse settings.Drawn
+
+    /// Which of this game's ways of being played was settled on. `None` where nothing was, and
+    /// then the game is played the way it is played when nobody has said - which is the first
+    /// way it offers.
+    ///
+    /// Not checked against the game here, for the reason the view is not: which ways there are
+    /// is the game's own answer, and a name that no longer matches one of them is a line worth
+    /// a sentence and no reason to refuse anybody a game.
+    let plays name settings =
+        forGame name settings |> Option.bind (fun kept -> kept.Plays)
+
+    /// Whether a terminal rings when the turn comes round unasked.
+    ///
+    /// Nobody having said means it rings, which is what every table did before there was a way
+    /// to say otherwise - a setting nobody has touched should not change what the program does.
+    let bell settings = settings.Bell |> Option.defaultValue true
 
     /// The palette a game opens in: whatever it says its slots start out as, with the lines
     /// that were kept for it laid over the top.
@@ -74,7 +129,7 @@ module Settings =
     /// on a screen - and no reason at all to refuse somebody a board.
     let palette name slots settings =
         forGame name settings
-        |> Option.map snd
+        |> Option.map (fun kept -> kept.Colours)
         |> Option.defaultValue []
         |> List.fold
             (fun (palette, problems) (line: string) ->
@@ -104,19 +159,58 @@ module Settings =
     /// this one; and a game they later settle differently keeps its own answer, because its own
     /// line is read first. The colours cannot be shared the same way and are not: a slot is a
     /// game's own, and there is no one list of them to keep.
-    let keeping name view palette settings =
-        let kept =
-            Some view,
-            (Palette.slots palette
-             |> List.map (fun slot -> $"{slot.Key} {(Palette.inSlot slot palette).Name}"))
+    /// One game's own answers, changed and put back where they were.
+    ///
+    /// Every page of the settings screen keeps a different part of them, and none of them may
+    /// tread on the rest: keeping colours from the Video page must not forget which way of
+    /// playing was settled at the Game page, and the only way to be sure of that is for none of
+    /// them to write a whole `Kept` from nothing. So each says what it changes and this puts
+    /// the change back over what was already there.
+    ///
+    /// A game already in the file keeps its place in it; a new one goes on the end. Which is
+    /// the same rule the colours file follows, and for the same reason: a file somebody keeps
+    /// coming back to should not rearrange itself under them.
+    let private changing name change settings =
+        { settings with
+            Games =
+                if settings.Games |> List.exists (fun (said, _) -> said = name) then
+                    settings.Games
+                    |> List.map (fun (said, was) -> if said = name then said, change was else said, was)
+                else
+                    settings.Games @ [ (name, change nothing) ] }
 
-        { Drawn = Some view
-          Games =
-            if settings.Games |> List.exists (fun (said, _) -> said = name) then
-                settings.Games
-                |> List.map (fun (said, was) -> if said = name then said, kept else said, was)
-            else
-                settings.Games @ [ (name, kept) ] }
+    /// These colours and this view, kept for this game.
+    ///
+    /// The colours are written out of the palette rather than remembered as they were typed,
+    /// so what is kept is where the colours actually stand - a slot walked through nineteen
+    /// shades with the arrows leaves one line behind it and not nineteen.
+    ///
+    /// The view is written down twice - once for this game and once above all of them - and
+    /// that is what makes it a *default* rather than a note about one game. Somebody who has
+    /// settled on rich has settled on it for the games they have not opened yet as much as for
+    /// this one; and a game they later settle differently keeps its own answer, because its own
+    /// line is read first. The colours cannot be shared the same way and are not: a slot is a
+    /// game's own, and there is no one list of them to keep.
+    let keeping name view palette (settings: Settings) =
+        let colours =
+            Palette.slots palette
+            |> List.map (fun slot -> $"{slot.Key} {(Palette.inSlot slot palette).Name}")
+
+        { settings with Drawn = Some view }
+        |> changing name (fun (kept: Kept) ->
+            { kept with
+                Drawn = Some view
+                Colours = colours })
+
+    /// This way of playing, kept for this game. Under the name of the game that offers the
+    /// ways rather than the name of the way settled on, because the second of those is what
+    /// this line *says* and a file that kept it under itself would answer a question with
+    /// itself.
+    let playing name way settings =
+        settings |> changing name (fun kept -> { kept with Plays = Some way })
+
+    /// And whether the bell rings, which is kept above all of them.
+    let ringing on settings = { settings with Bell = Some on }
 
     // --- the file ---------------------------------------------------------------------------
 
@@ -124,9 +218,9 @@ module Settings =
         [ "# What this program was left set to, and picks up again next time."
           "#"
           "# Every line here is one you could type at the screen it belongs to: 'view <name>'"
-          "# is what the menu takes, and '<what> <colour>' is what the colour screen takes."
-          "# So there is nothing in this file that cannot be said at a screen, and nothing at"
-          "# a screen that cannot be written here."
+          "# and 'bell on' are what the settings pages take, and '<what> <colour>' is what the"
+          "# Video page takes. So there is nothing in this file that cannot be said at a"
+          "# screen, and nothing at a screen that cannot be written here."
           "#"
           "# A name in square brackets opens one game's own settings. Anything above the first"
           "# of them is said about every game at once."
@@ -134,19 +228,27 @@ module Settings =
           "# Written by the 'save' row on the settings screen. Editing it by hand is fine -"
           "# it is read the same way either round." ]
 
+    /// On and off, spelt the way somebody would say them rather than as `true` and `false`.
+    /// This file is read by people and the screen it mirrors has an on and an off on it.
+    let private said on = if on then "on" else "off"
+
     let write settings =
-        let colours name =
+        let under name =
             match forGame name settings with
             | None -> []
-            | Some(view, lines) -> (view |> Option.toList |> List.map (fun said -> $"{DrawnWord} {said}")) @ lines
+            | Some kept ->
+                (kept.Drawn |> Option.toList |> List.map (fun said -> $"{DrawnWord} {said}"))
+                @ (kept.Plays |> Option.toList |> List.map (fun way -> $"{PlaysWord} {way}"))
+                @ kept.Colours
 
         String.concat
             Environment.NewLine
             (heading
              @ [ "" ]
-             @ (settings.Drawn |> Option.toList |> List.map (fun said -> $"{DrawnWord} {said}"))
+             @ (settings.Drawn |> Option.toList |> List.map (fun name -> $"{DrawnWord} {name}"))
+             @ (settings.Bell |> Option.toList |> List.map (fun on -> $"{BellWord} {said on}"))
              @ (settings.Games
-                |> List.collect (fun (name, _) -> [ ""; $"[{name}]" ] @ colours name))
+                |> List.collect (fun (name, _) -> [ ""; $"[{name}]" ] @ under name))
              @ [ "" ])
 
     /// Read one back: what was settled on, and what in the file could not be made sense of.
@@ -176,23 +278,8 @@ module Settings =
             /// One line put where the heading above it says. A game's lines are kept as they
             /// were written rather than read here, because what a slot is called is the game's
             /// own answer and the game whose settings these are may not even be in this build.
-            let under name said =
-                let was = forGame name settings |> Option.defaultValue (None, [])
-
-                let now =
-                    match said with
-                    | Choice1Of2 view -> Some view, snd was
-                    | Choice2Of2 colour -> fst was, snd was @ [ colour ]
-
-                { settings with
-                    Games =
-                        if settings.Games |> List.exists (fun (had, _) -> had = name) then
-                            settings.Games
-                            |> List.map (fun (had, before) -> if had = name then had, now else had, before)
-                        else
-                            settings.Games @ [ (name, now) ] },
-                into,
-                problems
+            let under name change =
+                changing name change settings, into, problems
 
             match line.StartsWith "[", line.EndsWith "]" with
             | true, true ->
@@ -203,30 +290,31 @@ module Settings =
                 else
                     // Named rather than started afresh, so a file that opens the same game
                     // twice adds to it rather than throwing the first half away.
-                    let settings =
-                        if settings.Games |> List.exists (fun (had, _) -> had = name) then
-                            settings
-                        else
-                            { settings with
-                                Games = settings.Games @ [ (name, (None, [])) ] }
-
-                    settings, Some name, problems
+                    changing name id settings, Some name, problems
             | true, false
             | false, true -> wrong $"'{line}' opens a game's settings but does not close them. Say '[{line.Trim('[', ']')}]'."
             | false, false ->
-                match words, into with
-                | [ word; said ], _ when word.ToLowerInvariant() = DrawnWord ->
-                    match into with
-                    | Some name -> under name (Choice1Of2(said.ToLowerInvariant()))
-                    | None ->
-                        { settings with
-                            Drawn = Some(said.ToLowerInvariant()) },
-                        into,
-                        problems
-                | [ _; _ ], Some name -> under name (Choice2Of2(line.ToLowerInvariant()))
+                match words |> List.map (fun word -> word.ToLowerInvariant()), into with
+                | [ word; name ], Some game when word = DrawnWord -> under game (fun kept -> { kept with Drawn = Some name })
+                | [ word; name ], None when word = DrawnWord -> { settings with Drawn = Some name }, into, problems
+                // Which way a game is played is a game's own answer, so it is only ever said
+                // under one - there is no way of playing that every game has.
+                | [ word; way ], Some game when word = PlaysWord -> under game (fun kept -> { kept with Plays = Some way })
+                | [ word; _ ], None when word = PlaysWord ->
+                    wrong $"'{line}' says how one game is played, and nothing above it says which. Put a '[<game>]' line over it."
+                // And the bell is the other way round: it is nobody's game in particular, so it
+                // is only ever said above all of them.
+                | [ word; on ], None when word = BellWord ->
+                    match on with
+                    | "on" -> { settings with Bell = Some true }, into, problems
+                    | "off" -> { settings with Bell = Some false }, into, problems
+                    | _ -> wrong $"'{line}' is not '{BellWord} on' or '{BellWord} off'."
+                | [ word; _ ], Some _ when word = BellWord ->
+                    wrong $"'{line}' is said about every game at once, so it goes above the first '[<game>]' line rather than under one."
+                | [ _; _ ], Some game -> under game (fun kept -> { kept with Colours = kept.Colours @ [ line.ToLowerInvariant() ] })
                 | [ _; _ ], None ->
                     wrong $"'{line}' colours something, and nothing above it says which game. Put a '[<game>]' line over it."
-                | _ -> wrong $"'{line}' is not '{DrawnWord} <name>' or '<what> <colour>'."
+                | _ -> wrong $"'{line}' is not '{DrawnWord} <name>', '{BellWord} on', '{PlaysWord} <name>' or '<what> <colour>'."
 
         let settings, _, problems = meaningful |> List.fold folding (none, None, [])
         settings, problems

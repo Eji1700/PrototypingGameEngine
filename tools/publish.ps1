@@ -1,8 +1,19 @@
-# Build the program into one file, and check the file that comes out actually plays.
+# Build each program into one file, and check the files that come out actually play.
 #
-#   pwsh tools/publish.ps1                     # both shapes, for this machine
-#   pwsh tools/publish.ps1 -Shape portable     # just the small one
-#   pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
+#   pwsh tools/publish.ps1                          # every program, both shapes, this machine
+#   pwsh tools/publish.ps1 -Shape portable          # just the small one
+#   pwsh tools/publish.ps1 -Runtime linux-x64       # for somebody else's machine
+#   pwsh tools/publish.ps1 -Program Turncoats       # just the one game
+#
+# There are five programs now: a game apiece, and `TCModel`, which has all four in it and
+# asks which. A game's own file is what goes in a container - one game, one port, nothing
+# else in the image - and `TCModel` is what somebody who wants all four downloads once.
+#
+# The checks below are run against each of them, and they are not the same lines at each:
+# a game's own file takes `serve 2`, and the one with four games in it takes `tictactoe
+# serve 2`. That difference is the whole of what publishing separately changed, and it is
+# checked rather than assumed, because "the file names itself correctly" is exactly the
+# sort of thing that is true until a fifth program exists.
 #
 # Two shapes, because there are two reasons to want one file:
 #
@@ -30,6 +41,8 @@
 param(
     [ValidateSet("both", "portable", "standalone")]
     [string]$Shape = "both",
+    [ValidateSet("all", "TCModel", "Turncoats", "TicTacToe", "Diplomacy", "Compile")]
+    [string]$Program = "all",
     # Empty means this machine's own.
     [string]$Runtime = "",
     [string]$Into = "",
@@ -61,18 +74,38 @@ $building = @(
     @{ Name = "standalone"; SelfContained = "true" }
 ) | Where-Object { $Shape -eq "both" -or $_.Name -eq $Shape }
 
+# The programs there are, and what each of them takes on a command line.
+#
+# `Words` is the difference between them and the only one: a file with one game in it has
+# already said which game, and a file with four has not. Everything else below is written
+# against these entries rather than against a name, so a fifth game is a line here.
+#
+# `Draws` is a class this game's own stylesheet defines and no other file would have any
+# reason to. It is what says the *game's* drawing reached the page rather than merely a page.
+$programs = @(
+    @{ Name = "TCModel"; Project = "TCModel.fsproj"; Words = @{ Serve = "tictactoe serve"; Host = "turncoats host"; Join = "turncoats join" }; Draws = "\.grid" }
+    @{ Name = "Turncoats"; Project = "src/Games/Turncoats/Turncoats.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.map" }
+    @{ Name = "TicTacToe"; Project = "src/Games/TicTacToe/TicTacToe.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.grid" }
+    @{ Name = "Diplomacy"; Project = "src/Games/Diplomacy/Diplomacy.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
+    @{ Name = "Compile"; Project = "src/Games/Compile/Compile.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
+) | Where-Object { $Program -eq "all" -or $_.Name -eq $Program }
+
+# How many sit down at each, because not every game takes two: Diplomacy is seven and
+# Compile is two, and a line that asks a game for a table it does not deal is a failed check
+# that says nothing about publishing.
+$seats = @{ TCModel = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2 }
+
 # --- what a published file has to be able to do -------------------------------------------
 
-function Test-Published($exe) {
+function Test-Published($exe, $made) {
+    $words = $made.Words
+    $many = $seats[$made.Name]
     Stop-Tables
 
     # Run from where it lives, which is how anybody would - and is the difference between a
     # file that has a project beside it and one that does not. Run from a clone this program
     # is right to say `dotnet run --`, because from there that line works.
     $here = Split-Path -Parent $exe
-
-    ""
-    "  $(Split-Path -Leaf (Split-Path -Parent $exe)):"
 
     # The command line, which is the one Argu builds by reflection. A trimmed build falls
     # over here and nowhere earlier.
@@ -85,15 +118,20 @@ function Test-Published($exe) {
     # is no project beside a published file to `dotnet run`.
     Report "    and the lines it tells people to type name the file, not the project" ($help -notmatch "dotnet run") "it still says 'dotnet run'"
 
+    # And names the game after the file only where the file is not the game. This is the
+    # check that the split is actually wired up: `Turncoats.exe` printing `Turncoats turncoats
+    # play 2` is a line that runs and refuses, which is worse than one that does not run.
+    Report "    and names the game after it only where the file holds more than one" ($help -match "(?m)^\s+\S+ $($words.Host) ") "the usage lines do not open this file's own game"
+
     # A table in a browser: ASP.NET, the stream, and the client carried inside the file
     # rather than fetched, which is the whole reason it is an embedded resource.
-    $served = Start-Console $exe "tictactoe serve 2 --port $Port --open" $here
+    $served = Start-Console $exe "$($words.Serve) $many --port $Port --open" $here
 
     try {
         Wait-ForPort $Port 60
         $page = (Invoke-WebRequest -Uri "http://localhost:$Port/" -UseBasicParsing -TimeoutSec 20).Content
         Report "    it serves a page" ($page -match "id=`"screen`"") "no board slot on the page"
-        Report "    with the game's own drawing in it" ($page -match "\.cell") "the game's stylesheet did not reach the page"
+        Report "    with the game's own drawing in it" ($page -match $made.Draws) "the game's stylesheet did not reach the page"
         Report "    and the browser's client carried inside it" ((Invoke-WebRequest -Uri "http://localhost:$Port/datastar.js" -UseBasicParsing -TimeoutSec 20).StatusCode -eq 200) "the client was not served"
     }
     finally {
@@ -103,12 +141,12 @@ function Test-Published($exe) {
 
     # And a table over a socket, which is the reflection SignalR does to find a hub and its
     # methods - the part that has already been broken once without anything noticing.
-    $hosted = Start-Console $exe "turncoats host 2 --port $Port --open" $here
+    $hosted = Start-Console $exe "$($words.Host) $many --port $Port --open" $here
     $joined = $null
 
     try {
         Wait-ForPort $Port 60
-        $joined = Start-Console $exe "turncoats join localhost:$Port" $here
+        $joined = Start-Console $exe "$($words.Join) localhost:$Port" $here
 
         Wait-For "the published file to seat a console at its own table" 60 { (Told $joined) -match "You are at seat 1" } | Out-Null
         Report "    it hosts a table a console can sit down at" $true ""
@@ -126,27 +164,41 @@ function Test-Published($exe) {
 try {
     "Publishing for $Runtime..."
 
-    foreach ($each in $building) {
-        $out = Join-Path (Join-Path $Into $Runtime) $each.Name
+    foreach ($made in $programs) {
+        ""
+        "$($made.Name):"
 
-        Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
+        foreach ($each in $building) {
+            # A folder per program under each shape, because two single-file publishes into
+            # one folder is two files that both want to be called the program.
+            $out = Join-Path (Join-Path (Join-Path $Into $Runtime) $each.Name) $made.Name
 
-        dotnet publish $root -c Release -r $Runtime `
-            --self-contained $each.SelfContained `
-            -p:PublishSingleFile=true `
-            -p:PublishTrimmed=false `
-            -o $out | Out-Null
+            Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
 
-        if ($LASTEXITCODE -ne 0) { throw "publishing $($each.Name) failed" }
+            # `-p:` rather than `--self-contained`, and the difference is the whole reason
+            # this line has a comment. `--self-contained` sets the property on the project
+            # named and on nothing else, so publishing `TCModel` portable left the four games
+            # it references self-contained, and the SDK refuses that mixture outright
+            # (NETSDK1151). A `-p:` on the command line is a global property: it reaches every
+            # project in the graph and overrides what each of them says for itself, which is
+            # exactly what "this whole publish is one shape" means.
+            dotnet publish (Join-Path $root $made.Project) -c Release -r $Runtime `
+                -p:SelfContained=$($each.SelfContained) `
+                -p:PublishSingleFile=true `
+                -p:PublishTrimmed=false `
+                -o $out | Out-Null
 
-        $exe = Get-ChildItem -Path $out -Filter "TCModel*" |
-            Where-Object { $_.Extension -in @(".exe", "") -and -not $_.PSIsContainer } |
-            Select-Object -First 1
+            if ($LASTEXITCODE -ne 0) { throw "publishing $($made.Name) ($($each.Name)) failed" }
 
-        if (-not $exe) { throw "nothing runnable came out of publishing $($each.Name)" }
+            $exe = Get-ChildItem -Path $out -Filter "$($made.Name)*" |
+                Where-Object { $_.Extension -in @(".exe", "") -and -not $_.PSIsContainer } |
+                Select-Object -First 1
 
-        "  $($each.Name): $([math]::Round($exe.Length / 1MB, 1)) MB  ->  $($exe.FullName)"
-        Test-Published $exe.FullName
+            if (-not $exe) { throw "nothing runnable came out of publishing $($made.Name) ($($each.Name))" }
+
+            "  $($each.Name): $([math]::Round($exe.Length / 1MB, 1)) MB  ->  $($exe.FullName)"
+            Test-Published $exe.FullName $made
+        }
     }
 
     ""

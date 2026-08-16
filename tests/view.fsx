@@ -352,7 +352,7 @@ report
 report
     "two words are a colour for something"
     (Ok "teal")
-    (match Options.choose standard "blue teal" with
+    (match Options.chooseVideo standard "blue teal" with
      | Ok(Options.Changed palette) -> Ok (Palette.shadeOf "blue" palette).Name
      | Ok _ -> Error "no change"
      | Error problem -> Error problem)
@@ -360,21 +360,21 @@ report
 report
     "'reset' puts them all back"
     "crimson"
-    (match Options.choose redIsTeal "reset" with
+    (match Options.chooseVideo redIsTeal "reset" with
      | Ok(Options.Changed palette) -> (Palette.shadeOf "red" palette).Name
      | _ -> "nothing")
 
 report
     "'done' goes back to the menu"
     true
-    (match Options.choose redIsTeal "done" with
+    (match Options.chooseVideo redIsTeal "done" with
      | Ok Options.Done -> true
      | _ -> false)
 
 report
     "and an empty line simply asks again"
     true
-    (match Options.choose redIsTeal "" with
+    (match Options.chooseVideo redIsTeal "" with
      | Ok Options.Same -> true
      | _ -> false)
 
@@ -390,7 +390,7 @@ let private offering = drawnBy redIsTeal "rich"
 report
     "the colour screen shows what it is offering"
     true
-    (offering.Says(Keys.draw None (Options.screen [ "plain"; "rich" ] "rich" redIsTeal))
+    (offering.Says(Keys.draw None (Options.video [ "plain"; "rich" ] "rich" redIsTeal))
      |> inked 45)
 
 finish ()

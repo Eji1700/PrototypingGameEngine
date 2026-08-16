@@ -1,0 +1,139 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Everything that is not a game.
+
+       This used to be the top two thirds of one project file, held in place by nothing but
+       the order the files were listed in. It is a library now, and the games reference it,
+       so "a game may reach the engine and the engine may not reach a game" has stopped
+       being a convention that happened to hold and become something the compiler will not
+       let anybody break. Not one line moved to do it: the split is a project file, and
+       every file is where it always was.
+
+       The order below is still the architecture, and within this project it is still the
+       only thing enforcing it. F# compiles a project in the order its files are listed, so
+       a layer cannot reach into one beneath it on this list even by accident. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <AssemblyName>TCModel.Engine</AssemblyName>
+    <RootNamespace>TCModel</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup Label="Common - generic, knows nothing of any game">
+    <Compile Include="Common/Result.fs" />
+    <Compile Include="Common/Cascade.fs" />
+    <Compile Include="Common/Random.fs" />
+  </ItemGroup>
+
+  <!-- Engine - what every turn-based game wants and none of them should write again: a
+       history to walk, a record that replays, seats, a machine to play one of them. `Rules`
+       is the whole seam, and everything here is generic over what a move is, where a game
+       stands, and what it says. -->
+  <ItemGroup Label="Engine - how a game is played">
+    <Compile Include="Engine/Seats.fs" />
+    <Compile Include="Engine/Messages.fs" />
+    <Compile Include="Engine/Told.fs" />
+    <Compile Include="Engine/Rules.fs" />
+    <Compile Include="Engine/Timeline.fs" />
+    <Compile Include="Engine/Journal.fs" />
+    <Compile Include="Engine/Model.fs" />
+    <Compile Include="Engine/Update.fs" />
+    <!-- A seat played by something that is not a person, and after `Update` because taking a
+         turn is making a move like anybody else's. -->
+    <Compile Include="Engine/Machines.fs" />
+  </ItemGroup>
+
+  <!-- Table - how a game is *read*, which is the second seam. `Playable` is to this layer
+       what `Rules` is to the engine: fill it in and the timeline, the record, the seats, the
+       tokens, the menu, the command line and every screen already work. Nothing here names
+       a game, a piece, or a board.
+
+       Two folders and one file between them, and the file is the point: `Parts` is
+       everything a game and a table are described in and does not know there is a seam;
+       `Playing` is written against it. -->
+  <ItemGroup Label="Table - the parts a game and a table are described in">
+    <Compile Include="Table/Parts/Invoked.fs" />
+    <Compile Include="Table/Parts/Showing.fs" />
+    <Compile Include="Table/Parts/Waiting.fs" />
+    <!-- What a screen is made of, before anybody has decided what it looks like. Here rather
+         than beside the readers below, because a scene is described by games and drawn by
+         readers and neither end should have to reach past the other. -->
+    <Compile Include="Table/Parts/Scene.fs" />
+    <Compile Include="Table/Parts/Palette.fs" />
+    <!-- What a player settled on last time and gets again this time. After the palette
+         because part of it is written out of one, and before every screen below because the
+         screens are what settle it. -->
+    <Compile Include="Table/Parts/Settings.fs" />
+    <!-- How far a table can be reached and what it takes to sit down at one. Above the page
+         because the door has a page of its own. -->
+    <Compile Include="Table/Parts/Reach.fs" />
+    <!-- One reads a key, the other a line; both before anything that offers a screen. -->
+    <Compile Include="Table/Parts/Keys.fs" />
+    <Compile Include="Table/Parts/Commands.fs" />
+    <Compile Include="Table/Parts/View.fs" />
+    <!-- Who is going to be at each seat, which every way of opening a game has to settle. -->
+    <Compile Include="Table/Parts/Seating.fs" />
+    <!-- And the kit those are drawn with: colour over text, the browser's shell, and a
+         screen driven at a real terminal. -->
+    <Compile Include="Table/Parts/Tint.fs" />
+    <Compile Include="Table/Parts/Page.fs" />
+    <Compile Include="Table/Parts/Screens.fs" />
+    <Compile Include="Table/Parts/Options.fs" />
+    <!-- And the three ways of reading a scene, written once for every game there will ever
+         be. Last, because they are built out of everything above: the colours, the ink, and
+         the page. -->
+    <Compile Include="Table/Parts/Readers.fs" />
+  </ItemGroup>
+
+  <!-- The seam itself. Everything below this line is written against it, and everything
+       above it could not name it if it tried. -->
+  <ItemGroup Label="Table - the seam">
+    <Compile Include="Table/Playable.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Table - playing one, and the two ways in">
+    <Compile Include="Table/Playing/Solo.fs" />
+    <Compile Include="Table/Playing/Transcript.fs" />
+    <Compile Include="Table/Playing/Menu.fs" />
+    <Compile Include="Table/Playing/Launch.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="Net - the same table, with the players at different keyboards">
+    <Compile Include="Net/Protocol.fs" />
+    <!-- Before the lobby, and not after it, because it does not know there is one. -->
+    <Compile Include="Net/Browser.fs" />
+    <Compile Include="Net/Lobby.fs" />
+    <Compile Include="Net/Server.fs" />
+    <Compile Include="Net/Client.fs" />
+  </ItemGroup>
+
+  <!-- What opening a game actually involves - dealing one, keeping its record, the menu, the
+       two tables and the browser - generic in the game, and ending in the one interface that
+       seals a game's types off so that something can hold a game without knowing what a move
+       is at it. Last here, and last is the point: it is the whole of what a game's own
+       executable has to call, and none of it is any game in particular. -->
+  <ItemGroup Label="Opening a game">
+    <Compile Include="Play.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="The browser's own client, carried rather than fetched">
+    <!-- Datastar's client, committed as it was published. A table opened on a machine with
+         no way out to the internet is exactly the table this game is for, so the browser
+         is handed the script by the same process that is hosting the game.
+
+         In this project rather than in a game's, because `Browser.fs` reads it off the
+         assembly it is itself compiled into, and `Browser.fs` is here. -->
+    <EmbeddedResource Include="../assets/datastar.js" LogicalName="datastar.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Argu" Version="6.2.5" />
+    <PackageReference Include="Falco.Datastar" Version="1.3.0" />
+    <PackageReference Include="Falco.Markup" Version="1.4.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+    <PackageReference Include="Spectre.Console" Version="0.51.1" />
+  </ItemGroup>
+
+</Project>
