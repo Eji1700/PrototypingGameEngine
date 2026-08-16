@@ -67,8 +67,10 @@ if (-not $Runtime) {
 if (-not $Into) { $Into = Join-Path $root "publish" }
 
 # Loop variables named apart from the parameters. PowerShell does not tell `$shape` from
-# `$Shape`, so a loop over the shapes would assign to the validated parameter and fail on
-# the first turn - which is the second time that trap has been walked into in this folder.
+# `$Shape`, so a loop over the shapes would assign to the validated parameter and fail on the
+# first turn - which is the third time that trap has been walked into in this folder, so it is
+# worth saying plainly: no variable below may be a parameter's name in another case. `$each`
+# and `$made` are ugly on purpose.
 $building = @(
     @{ Name = "portable"; SelfContained = "false" }
     @{ Name = "standalone"; SelfContained = "true" }
@@ -163,6 +165,33 @@ function Test-Published($exe, $made) {
 
 try {
     "Publishing for $Runtime..."
+
+    # The layout changed when the games became their own programs. A shape folder used to hold
+    # one executable; it holds a folder per program now, and this script never writes a file
+    # loose in one again. So anything loose in one is from before that change - and it is worse
+    # than merely stale, because `standalone/TCModel.exe` sits one level *above*
+    # `standalone/TCModel/TCModel.exe` and is the one an eye going down the folder lands on
+    # first. A file somebody could hand to a player by mistake is not a file to leave lying
+    # about, and "the newest build is the one that runs" is the whole point of publishing.
+    #
+    # Files only. The folders below are what this script writes, and each is cleared by the
+    # publish that fills it. Only the shapes being built are swept, because a run that says
+    # `-Shape portable` has said nothing whatever about the other one.
+    foreach ($each in $building) {
+        # Not `$shape`, for the reason given where the loop variables are named: PowerShell
+        # does not tell it from `$Shape`, and assigning a path to it fails the parameter's own
+        # validation. That is the third time now.
+        $folder = Join-Path (Join-Path $Into $Runtime) $each.Name
+
+        if (Test-Path $folder) {
+            $loose = @(Get-ChildItem -Path $folder -File -ErrorAction SilentlyContinue)
+
+            if ($loose.Count -gt 0) {
+                "  swept $($loose.Count) file(s) left in $($each.Name) by the layout before this one"
+                $loose | Remove-Item -Force
+            }
+        }
+    }
 
     foreach ($made in $programs) {
         ""
