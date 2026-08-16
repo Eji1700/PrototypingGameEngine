@@ -22,8 +22,7 @@ module Ink =
           Shows = Words.player seat
           Standard = standard }
 
-    let slots =
-        [ slot (Seat.at 1) Palette.crimson; slot (Seat.at 2) Palette.azure ]
+    let slots = [ slot (Seat.at 1) Palette.crimson; slot (Seat.at 2) Palette.azure ]
 
     /// A seat's colour as markup says it.
     let ink palette seat = Palette.inkOf (key seat) palette

@@ -48,7 +48,9 @@ module Printed =
     let private atStart commands = { blank with AtStart = commands }
 
     /// *"After you draw cards: ..."* - a top-box trigger, which goes on listening covered.
-    let private after trigger commands = { blank with After = [ trigger, commands ] }
+    let private after trigger commands =
+        { blank with
+            After = [ trigger, commands ] }
 
     let private atEnd commands = { blank with AtEnd = commands }
 
@@ -97,7 +99,8 @@ module Printed =
             WhenCovered = [ Flip(Select.any |> Select.this') ] }
 
     /// *"Flip 1 of your opponent's face-up cards."*
-    let private apathyThree = shown [ Flip(Select.any |> Select.theirs |> Select.faceUp) ]
+    let private apathyThree =
+        shown [ Flip(Select.any |> Select.theirs |> Select.faceUp) ]
 
     /// *"You may flip 1 of your face-up covered cards."*
     ///
@@ -182,11 +185,7 @@ module Printed =
     /// and it comes round **before** the component is taken and before anything compiles, which
     /// is the whole use of it: the card it deletes is a card that was going to count.
     let private deathOne =
-        atStart
-            [ IfYouDo(
-                  May(Draw(Just 1)),
-                  [ Delete(Select.any |> Select.other); Delete(Select.any |> Select.this') ]
-              ) ]
+        atStart [ IfYouDo(May(Draw(Just 1)), [ Delete(Select.any |> Select.other); Delete(Select.any |> Select.this') ]) ]
 
     /// *"Delete 1 face-down card."*
     let private deathThree = shown [ Delete(Select.any |> Select.faceDown) ]
@@ -261,8 +260,7 @@ module Printed =
     /// from anywhere to here. Never both, because a card already standing here cannot be shifted
     /// into it - so which half of the sentence applies is settled by where the card you point at
     /// happens to be.
-    let private gravityOne =
-        shown [ Draw(Just 2); Shift(Select.any, ToOrFromHere) ]
+    let private gravityOne = shown [ Draw(Just 2); Shift(Select.any, ToOrFromHere) ]
 
     /// *"Flip 1 card. Shift that card to this line."*
     ///
@@ -350,7 +348,8 @@ module Printed =
     let private lifeOne = shown [ Flip Select.any; Flip Select.any ]
 
     /// *"Draw 1 card. You may flip 1 face-down card."*
-    let private lifeTwo = shown [ Draw(Just 1); May(Flip(Select.any |> Select.faceDown)) ]
+    let private lifeTwo =
+        shown [ Draw(Just 1); May(Flip(Select.any |> Select.faceDown)) ]
 
     /// *"If this card is covering a card, draw 1 card."*
     ///
@@ -399,12 +398,7 @@ module Printed =
         shown
             [ Draw(Just 2)
               Show(Select.any |> Select.faceDown)
-              May(
-                  Either(
-                      Shift(Select.any |> Select.thatCard, AnyLine),
-                      Flip(Select.any |> Select.thatCard)
-                  )
-              ) ]
+              May(Either(Shift(Select.any |> Select.thatCard, AnyLine), Flip(Select.any |> Select.thatCard))) ]
 
     /// *"Shift all face-down cards in this line to another line."*
     ///
@@ -582,7 +576,8 @@ module Printed =
         shown [ Opposing(Times(Just 2, Discard)); Rearrange Theirs ]
 
     /// *"Your opponent discards 1 card. Shift 1 of their cards."*
-    let private psychicThree = shown [ Opposing Discard; Shift(Select.any |> Select.theirs, AnyLine) ]
+    let private psychicThree =
+        shown [ Opposing Discard; Shift(Select.any |> Select.theirs, AnyLine) ]
 
     /// *"End: You may return 1 of your opponent's cards. If you do, flip this card."*
     ///
@@ -636,11 +631,11 @@ module Printed =
     /// is already on but may certainly turn itself over.
     let private speedThree =
         { shown [ Shift(Select.any |> Select.yours |> Select.other, AnyLine) ] with
-            AtEnd =
-                [ IfYouDo(May(Shift(Select.any |> Select.yours, AnyLine)), [ Flip(Select.any |> Select.this') ]) ] }
+            AtEnd = [ IfYouDo(May(Shift(Select.any |> Select.yours, AnyLine)), [ Flip(Select.any |> Select.this') ]) ] }
 
     /// *"Shift 1 of your opponent's face-down cards."*
-    let private speedFour = shown [ Shift(Select.any |> Select.theirs |> Select.faceDown, AnyLine) ]
+    let private speedFour =
+        shown [ Shift(Select.any |> Select.theirs |> Select.faceDown, AnyLine) ]
 
     // --- Spirit -----------------------------------------------------------------------------
     //
@@ -695,7 +690,8 @@ module Printed =
     /// Turns something over and then turns itself face down, which is a two that has already spent
     /// its text - and the only card that names **itself** in its middle box rather than in an
     /// interrupt.
-    let private waterZero = shown [ Flip(Select.any |> Select.other); Flip(Select.any |> Select.this') ]
+    let private waterZero =
+        shown [ Flip(Select.any |> Select.other); Flip(Select.any |> Select.this') ]
 
     /// *"Play the top card of your deck face-down in each other line."*
     ///

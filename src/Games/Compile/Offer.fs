@@ -62,8 +62,7 @@ module Offer =
           // balance of the game before a single card has any text on it, which is why they are
           // checked rather than trusted.
           if Stack.ToCompile <= List.max Card.values then
-              yield
-                  $"a line compiled at {Stack.ToCompile}, which one card of {List.max Card.values} would reach on its own"
+              yield $"a line compiled at {Stack.ToCompile}, which one card of {List.max Card.values} would reach on its own"
 
           for protocol in Protocol.all do
               let whole = Card.inProtocol protocol |> List.sumBy (fun card -> card.Value)
@@ -86,8 +85,7 @@ module Offer =
           // The optional rule's own two numbers. Checked whether or not it is being played,
           // because both games are built from this list and a fault in one is a fault in both.
           if Field.LanesForControl > Lines.Count then
-              yield
-                  $"a control component taken by leading {Field.LanesForControl} of {Lines.Count} lanes, which nobody could do"
+              yield $"a control component taken by leading {Field.LanesForControl} of {Lines.Count} lanes, which nobody could do"
 
           if Field.LanesForControl < 1 then
               yield $"a control component taken by leading {Field.LanesForControl} lanes, which everybody has always done"
@@ -104,6 +102,7 @@ module Offer =
           // asked any of this.
           for card in Protocol.all |> List.collect Card.inProtocol do
               let text = Printed.on card
+
               let commands =
                   text.Shown
                   @ text.AtStart
@@ -112,6 +111,7 @@ module Offer =
                   @ text.WhenFlipped
                   @ text.WhenCompiled
                   @ (text.After |> List.collect snd)
+
               let rules = text.Top @ text.Bottom
 
               let rec faulty =

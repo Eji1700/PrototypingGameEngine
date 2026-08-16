@@ -117,13 +117,12 @@ let private launches =
     // `host` names no machines, so a start of its own that did would be a line the program
     // could not have written.
     let starting =
-        Gen.oneof
-            [ dealing |> Gen.map Start.Dealt
-              path |> Gen.map Start.Saved ]
+        Gen.oneof [ dealing |> Gen.map Start.Dealt; path |> Gen.map Start.Saved ]
 
     let hosting =
         Gen.oneof
-            [ Gen.zip players seed |> Gen.map (fun (players, seed) -> Start.Dealt(players, seed, []))
+            [ Gen.zip players seed
+              |> Gen.map (fun (players, seed) -> Start.Dealt(players, seed, []))
               path |> Gen.map Start.Saved ]
 
     Gen.oneof
@@ -273,16 +272,25 @@ report
     (0, Some(Launch.Play(Start.Dealt(Table.MinPlayers, None, []))))
     (through [ "play" ])
 
-report "a seed left unsaid is left unsaid, for the clock to answer" (0, Some(Launch.Play(Start.Dealt(3, None, [])))) (through [ "play"; "3" ])
+report
+    "a seed left unsaid is left unsaid, for the clock to answer"
+    (0, Some(Launch.Play(Start.Dealt(3, None, []))))
+    (through [ "play"; "3" ])
 
-report "and a seed given is carried through" (0, Some(Launch.Play(Start.Dealt(3, Some 42UL, [])))) (through [ "play"; "3"; "--seed"; "42" ])
+report
+    "and a seed given is carried through"
+    (0, Some(Launch.Play(Start.Dealt(3, Some 42UL, []))))
+    (through [ "play"; "3"; "--seed"; "42" ])
 
 report
     "how the board is drawn can be said in either spelling"
     (0, Some(Launch.Play(Start.Dealt(2, None, []))))
     (through [ "play"; "2"; "--color"; "blue=teal" ])
 
-report "a game with nobody said to play it is a game between people" (0, Some(Launch.Play(Start.Dealt(3, None, [])))) (through [ "play"; "3" ])
+report
+    "a game with nobody said to play it is a game between people"
+    (0, Some(Launch.Play(Start.Dealt(3, None, []))))
+    (through [ "play"; "3" ])
 
 report
     "and the machines are taken in the order they were named"
@@ -318,10 +326,7 @@ report
     (0, Some(Launch.Play(Start.Saved saved)))
     (through [ "play"; "--from"; saved ])
 
-report
-    "or in a browser"
-    (0, Some(Launch.Serve(Start.Saved saved, Reach.ajar)))
-    (unlocked [ "serve"; "--from"; saved; "--open" ])
+report "or in a browser" (0, Some(Launch.Serve(Start.Saved saved, Reach.ajar))) (unlocked [ "serve"; "--from"; saved; "--open" ])
 
 report
     "or as a table others join"
@@ -765,7 +770,9 @@ report
 report
     "'save' is a line every page reads as keeping the lot"
     [ true; true; true ]
-    ([ Options.chooseAudio; Options.chooseGame waysOffered; Options.chooseVideo standard ]
+    ([ Options.chooseAudio
+       Options.chooseGame waysOffered
+       Options.chooseVideo standard ]
      |> List.map (fun reader ->
          match reader "save" with
          | Ok Options.Keep -> true
@@ -1072,7 +1079,8 @@ let private colours = settings standard
 /// The first colour is one row down, the screen opening on the row that says how the board
 /// is drawn. Said once here rather than counted at each check below, because it is one fact
 /// about the shape of the screen and not four.
-let [<Literal>] private FirstSlot = 1
+[<Literal>]
+let private FirstSlot = 1
 
 let private walkedRight times palette =
     List.replicate times (key ConsoleKey.RightArrow)
@@ -1126,10 +1134,7 @@ report
 // And the row above them all walks the ways of drawing the same way, which is the whole of
 // what it is: a view is picked here exactly as a colour is.
 
-report
-    "right walks the top row on to the next way of drawing"
-    (Some "view rich")
-    (walking colours [ key ConsoleKey.RightArrow ])
+report "right walks the top row on to the next way of drawing" (Some "view rich") (walking colours [ key ConsoleKey.RightArrow ])
 
 // Where the cursor was left comes back with the line, because the screen is built again from
 // the palette every time one changes and the cursor has to still be on the slot being walked.
@@ -1153,5 +1158,3 @@ report
            key ConsoleKey.RightArrow ])
 
 finish ()
-
-

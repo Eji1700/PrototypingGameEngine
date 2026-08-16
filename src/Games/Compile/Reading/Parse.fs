@@ -20,7 +20,8 @@ module Parse =
         | Some protocol -> Ok protocol
         | None -> Error $"'{word}' is not a protocol. There are: {Protocol.names}."
 
-    let private drafting word = protocol word |> Result.map (Take >> Make >> Send)
+    let private drafting word =
+        protocol word |> Result.map (Take >> Make >> Send)
 
     let private arrangement words =
         words

@@ -134,10 +134,8 @@ module Render =
         let who = Words.seated yours seat
 
         match Session.asking session, session.Stage with
-        | Some asked, _ ->
-            $"Turn {session.Turn} - {whoAsks asked.Because} is waiting on {who}"
-        | None, Drafting _ ->
-            $"The draft, pick {Session.picksMade session + 1} of {Draft.Picks} - {who} to choose a protocol"
+        | Some asked, _ -> $"Turn {session.Turn} - {whoAsks asked.Because} is waiting on {who}"
+        | None, Drafting _ -> $"The draft, pick {Session.picksMade session + 1} of {Draft.Picks} - {who} to choose a protocol"
         | None, Arranging -> $"Protocols - {who} to set theirs against the lines"
         | None, Playing -> $"Turn {session.Turn} - {who} to play"
         | None, Done ending -> $"The game is over: {Words.ending ending}"
@@ -158,7 +156,11 @@ module Render =
                     Scene.squared (
                         row
                         |> List.map (fun protocol ->
-                            Tile(None, Tone.Quiet, [ Does(Protocol.name protocol, $"draft {Protocol.key protocol}", Tone.Plainly) ]))
+                            Tile(
+                                None,
+                                Tone.Quiet,
+                                [ Does(Protocol.name protocol, $"draft {Protocol.key protocol}", Tone.Plainly) ]
+                            ))
                     ))
             )
 
@@ -237,7 +239,10 @@ module Render =
                       yield! inSmall top ]
 
             let laid = cards |> List.mapi drawn
-            (if newestLast then List.rev laid else laid) |> List.concat |> fun body -> Tile(None, tone, body)
+
+            (if newestLast then List.rev laid else laid)
+            |> List.concat
+            |> fun body -> Tile(None, tone, body)
 
     /// The middle of a line: the two protocols that meet there, theirs above yours, in the
     /// colours of whoever they belong to.
@@ -248,7 +253,9 @@ module Render =
     /// the one thing on this board drawn differently for the two people reading it.
     let private middle field (them, theirs) (you, yours) theirTone yourTone shown line =
         let facing side =
-            Side.protocolOn line side |> Option.map Protocol.name |> Option.defaultValue "not set"
+            Side.protocolOn line side
+            |> Option.map Protocol.name
+            |> Option.defaultValue "not set"
 
         let theirFacing =
             if shown then facing theirs
@@ -261,8 +268,12 @@ module Render =
         // the player who has to answer it.
         let against name tone seat side =
             let standing =
-                if Field.won seat line field then "  ready"
-                elif Side.protocolOn line side |> Option.exists (fun protocol -> Side.hasCompiled protocol side) then
+                if Field.won seat line field then
+                    "  ready"
+                elif
+                    Side.protocolOn line side
+                    |> Option.exists (fun protocol -> Side.hasCompiled protocol side)
+                then
                     "  done"
                 else
                     ""
@@ -359,9 +370,7 @@ module Render =
               // of blanks at a game without the rule would be a screen drawn for a rule it does
               // not have.
               if Session.withControl session then
-                  Scene.cell
-                      (Tone.Slot(Ink.key seat))
-                      (if session.Control = HeldBy seat then "control" else "")
+                  Scene.cell (Tone.Slot(Ink.key seat)) (if session.Control = HeldBy seat then "control" else "")
               else
                   Scene.cell
                       Tone.Quiet
@@ -502,8 +511,7 @@ module Render =
                                 Some(Card.name card),
                                 (if yours then Tone.Yours else Tone.Quiet),
                                 [ Scene.quietly where
-                                  if yours then
-                                      Does("choose", $"choose {Card.key card}", Tone.Plainly) ]
+                                  if yours then Does("choose", $"choose {Card.key card}", Tone.Plainly) ]
                             ))
 
                 doing, choices
@@ -518,10 +526,7 @@ module Render =
                         Tile(
                             None,
                             (if yours then Tone.Yours else Tone.Quiet),
-                            [ if yours then
-                                  Does(caption, $"arrange {typed}", Tone.Plainly)
-                              else
-                                  Scene.quietly caption ]
+                            [ if yours then Does(caption, $"arrange {typed}", Tone.Plainly) else Scene.quietly caption ]
                         ))
 
                 $"put the {Protocol.Each} protocols in a different order", choices
@@ -533,10 +538,7 @@ module Render =
                         Tile(
                             Some $"Line {line}",
                             (if yours then Tone.Yours else Tone.Quiet),
-                            [ if yours then
-                                  Does("move it here", $"choose line {line}", Tone.Plainly)
-                              else
-                                  Scene.quietly "" ]
+                            [ if yours then Does("move it here", $"choose line {line}", Tone.Plainly) else Scene.quietly "" ]
                         ))
 
                 $"say where {Card.name (Target.card moving)} goes", choices
@@ -548,10 +550,7 @@ module Render =
                         Tile(
                             Some $"Line {line}",
                             (if yours then Tone.Yours else Tone.Quiet),
-                            [ if yours then
-                                  Does("here", $"choose line {line}", Tone.Plainly)
-                              else
-                                  Scene.quietly "" ]
+                            [ if yours then Does("here", $"choose line {line}", Tone.Plainly) else Scene.quietly "" ]
                         ))
 
                 $"say which line to {Words.printing command} in", choices
@@ -577,10 +576,7 @@ module Render =
                         Tile(
                             None,
                             (if yours then Tone.Yours else Tone.Quiet),
-                            [ if yours then
-                                  Does(caption, typed, Tone.Plainly)
-                              else
-                                  Scene.quietly caption ]
+                            [ if yours then Does(caption, typed, Tone.Plainly) else Scene.quietly caption ]
                         ))
 
                 "say which of the two", choices
@@ -661,7 +657,8 @@ module Render =
     /// per seat rather than written once, like everything else on this board.
     let wording = Told.inWords Words.said Words.command
 
-    let private heardBy seat = Told.inWords (Words.saidTo seat) Words.command
+    let private heardBy seat =
+        Told.inWords (Words.saidTo seat) Words.command
 
     let private log beholder (model: Model<Move, Session, Notice>) =
         match model.Log with
@@ -682,8 +679,7 @@ module Render =
             match Session.asking session, session.Stage with
             | Some asked, _ -> Block(Blocks.choosing, [ question beholder asked ])
             | None, Drafting left -> Block(Blocks.draft, [ pool left; Scene.noted margins Notes.draft ])
-            | None, Arranging ->
-                Block(Blocks.protocols, [ arranging beholder session; Scene.noted margins Notes.arranging ])
+            | None, Arranging -> Block(Blocks.protocols, [ arranging beholder session; Scene.noted margins Notes.arranging ])
             | None, Playing
             | None, Done _ ->
                 Block(
@@ -691,10 +687,7 @@ module Render =
                     [ hand beholder session
                       Scene.noted margins Notes.hand
                       Scene.noted margins Notes.refreshing
-                      (if Session.withControl session then
-                           Scene.noted margins Notes.control
-                       else
-                           Blank) ]
+                      (if Session.withControl session then Scene.noted margins Notes.control else Blank) ]
                 )
 
         let table =
@@ -744,7 +737,11 @@ module Render =
         let entry (entry: Entry<Move, Notice>) =
             [ Scene.cell Tone.Quiet $"{entry.Ordinal}  turn {entry.Turn}"
               Scene.cell Tone.Plainly $"{Words.player entry.Actor}: {askedFor beholder session entry}"
-              Scene.cell Tone.Plainly (entry.Told |> List.map (Told.inWords (Words.saidTo beholder) Words.command) |> String.concat " ") ]
+              Scene.cell
+                  Tone.Plainly
+                  (entry.Told
+                   |> List.map (Told.inWords (Words.saidTo beholder) Words.command)
+                   |> String.concat " ") ]
 
         match Journal.entries model.Journal with
         | [] -> Block("The record", [ Scene.quietly nothingYet ])
@@ -797,7 +794,8 @@ module Render =
         | None ->
             Block(
                 "Peek",
-                [ Scene.says "Say 'peek' to read your own cards lying face down, or 'peek all' to read every face-down card on the table you already know." ]
+                [ Scene.says
+                      "Say 'peek' to read your own cards lying face down, or 'peek all' to read every face-down card on the table you already know." ]
             )
         | Some everywhere ->
             let found = mine (not everywhere)

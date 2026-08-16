@@ -44,36 +44,38 @@ type Pick =
 /// what a card points at is always some corner of this and a card should read as a phrase:
 /// `any |> theirs |> uncovered` is one line and no new type.
 type Selector =
-    { Whose: Whose
-      Where: Where
-      /// Either way up, when it is `None`.
-      Showing: Face option
-      /// Only the top card of a stack, which is the only one whose text is in play.
-      Uncovered: bool
-      /// Only cards with something on top of them - *"1 of your face-up covered cards"*, which is
-      /// the half of a stack whose text is silent, and therefore the half worth digging out.
-      Covered: bool
-      /// Only cards worth one of these. Empty means any - and the worth meant is what a card is
-      /// worth *on the table*, so a face-down five is a two.
-      Worth: int list
-      /// *"1 other card"* - anything but the card whose text is talking.
-      NotThis: bool
-      /// *"Flip this card"* - the card whose text is talking, and nothing else. The opposite
-      /// narrowing to `NotThis`, and the only selector that never asks anybody anything.
-      JustThis: bool
-      /// *"...and shift **that card**"* - whatever the command before this one landed on, and
-      /// nothing else. The only narrowing that reads the game rather than the board: everything
-      /// else here can be settled by looking at the table, and this one needs to know what just
-      /// happened on it.
-      ///
-      /// It narrows rather than names, so it composes with the rest: *"that card, if it is face
-      /// down"* is this and `faceDown` together, and a card that has left the table since is not
-      /// among the targets at all - which is "still valid, checked when it resolves" doing the
-      /// work rather than a special case.
-      WasChosen: bool
-      /// Narrowed to the best or worst of what is left. Everything tied for it survives, so a
-      /// card asking for the highest of two fives still asks which.
-      Pick: Pick }
+    {
+        Whose: Whose
+        Where: Where
+        /// Either way up, when it is `None`.
+        Showing: Face option
+        /// Only the top card of a stack, which is the only one whose text is in play.
+        Uncovered: bool
+        /// Only cards with something on top of them - *"1 of your face-up covered cards"*, which is
+        /// the half of a stack whose text is silent, and therefore the half worth digging out.
+        Covered: bool
+        /// Only cards worth one of these. Empty means any - and the worth meant is what a card is
+        /// worth *on the table*, so a face-down five is a two.
+        Worth: int list
+        /// *"1 other card"* - anything but the card whose text is talking.
+        NotThis: bool
+        /// *"Flip this card"* - the card whose text is talking, and nothing else. The opposite
+        /// narrowing to `NotThis`, and the only selector that never asks anybody anything.
+        JustThis: bool
+        /// *"...and shift **that card**"* - whatever the command before this one landed on, and
+        /// nothing else. The only narrowing that reads the game rather than the board: everything
+        /// else here can be settled by looking at the table, and this one needs to know what just
+        /// happened on it.
+        ///
+        /// It narrows rather than names, so it composes with the rest: *"that card, if it is face
+        /// down"* is this and `faceDown` together, and a card that has left the table since is not
+        /// among the targets at all - which is "still valid, checked when it resolves" doing the
+        /// work rather than a special case.
+        WasChosen: bool
+        /// Narrowed to the best or worst of what is left. Everything tied for it survives, so a
+        /// card asking for the highest of two fives still asks which.
+        Pick: Pick
+    }
 
 module Select =
 
@@ -93,7 +95,11 @@ module Select =
     let theirs selector = { selector with Whose = Theirs }
     let here selector = { selector with Where = ThisLine }
     let elsewhere selector = { selector with Where = OtherLines }
-    let faceDown selector = { selector with Showing = Some FaceDown }
+
+    let faceDown selector =
+        { selector with
+            Showing = Some FaceDown }
+
     let faceUp selector = { selector with Showing = Some FaceUp }
     let uncovered selector = { selector with Uncovered = true }
     let covered selector = { selector with Covered = true }
@@ -354,52 +360,56 @@ type Trigger =
     | YouClearCache
 
 type Text =
-    { /// The top box: a standing rule that a covering card cannot silence.
-      Top: Ongoing list
-      /// ...and what it listens for, which a covering card cannot silence either.
-      After: (Trigger * Command list) list
-      /// The middle box: what fires when the box becomes shown.
-      Shown: Command list
-      /// The bottom box: a standing rule, silenced by anything played over it.
-      Bottom: Ongoing list
-      /// *"Start: …"* - the first thing a turn does, before the control component is taken and
-      /// before anything is compiled. Silenced by a cover like everything else in the box.
-      ///
-      /// The order is the reason it is its own field rather than the end box read twice: a card
-      /// that deletes at the start of a turn changes what the lines are worth, and therefore
-      /// changes who is leading two of them and what compiles.
-      AtStart: Command list
-      /// *"End: …"* - the last thing, after the action and after the cache has been checked.
-      AtEnd: Command list
+    {
+        /// The top box: a standing rule that a covering card cannot silence.
+        Top: Ongoing list
+        /// ...and what it listens for, which a covering card cannot silence either.
+        After: (Trigger * Command list) list
+        /// The middle box: what fires when the box becomes shown.
+        Shown: Command list
+        /// The bottom box: a standing rule, silenced by anything played over it.
+        Bottom: Ongoing list
+        /// *"Start: …"* - the first thing a turn does, before the control component is taken and
+        /// before anything is compiled. Silenced by a cover like everything else in the box.
+        ///
+        /// The order is the reason it is its own field rather than the end box read twice: a card
+        /// that deletes at the start of a turn changes what the lines are worth, and therefore
+        /// changes who is leading two of them and what compiles.
+        AtStart: Command list
+        /// *"End: …"* - the last thing, after the action and after the cache has been checked.
+        AtEnd: Command list
 
-      /// *"When this card would be covered: First, …"* - an **interrupt**. It resolves before the
-      /// covering card lands, and the card then lands on whatever the interrupting left behind:
-      /// a card that flips itself face down is covered face down, and one that deletes itself is
-      /// not covered at all because it is no longer there.
-      ///
-      /// The only trigger built so far, and the awkward one - it is the only thing in the game
-      /// that happens *during* a move rather than before or after one.
-      WhenCovered: Command list
-      /// *"When this card would be covered **or flipped**: First, ..."* - the same interrupt on the
-      /// other thing that can happen to a card where it lies. One card carries both, and it
-      /// carries them as two boxes saying the same thing rather than as one box with a set of
-      /// triggers, because they fire from two different places in the rules.
-      WhenFlipped: Command list
-      /// *"When this card would be deleted by compiling: First, ..."* - the other interrupt, and
-      /// the only one that fires on something **no card asked for**. Compiling wipes a line, both
-      /// players' cards alike; this is the one way out, and it runs before the sweeping so the
-      /// card is somewhere else by the time it happens.
-      WhenCompiled: Command list }
+        /// *"When this card would be covered: First, …"* - an **interrupt**. It resolves before the
+        /// covering card lands, and the card then lands on whatever the interrupting left behind:
+        /// a card that flips itself face down is covered face down, and one that deletes itself is
+        /// not covered at all because it is no longer there.
+        ///
+        /// The only trigger built so far, and the awkward one - it is the only thing in the game
+        /// that happens *during* a move rather than before or after one.
+        WhenCovered: Command list
+        /// *"When this card would be covered **or flipped**: First, ..."* - the same interrupt on the
+        /// other thing that can happen to a card where it lies. One card carries both, and it
+        /// carries them as two boxes saying the same thing rather than as one box with a set of
+        /// triggers, because they fire from two different places in the rules.
+        WhenFlipped: Command list
+        /// *"When this card would be deleted by compiling: First, ..."* - the other interrupt, and
+        /// the only one that fires on something **no card asked for**. Compiling wipes a line, both
+        /// players' cards alike; this is the one way out, and it runs before the sweeping so the
+        /// card is somewhere else by the time it happens.
+        WhenCompiled: Command list
+    }
 
 /// Where a command came from: whose card said it, which card, and which line that card is in.
 ///
 /// Carried for three reasons - the log can name the card that is talking, `ThisLine` needs to
 /// know which line that is, and a command can ask whether its own source is still on the table.
 type Source =
-    { Owner: PlayerId
-      /// The card whose text is talking.
-      Saying: Card
-      Line: int }
+    {
+        Owner: PlayerId
+        /// The card whose text is talking.
+        Saying: Card
+        Line: int
+    }
 
 /// One card a question could be answered with, and where it is.
 type Target =

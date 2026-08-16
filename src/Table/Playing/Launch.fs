@@ -336,17 +336,14 @@ module Launch =
         | Start.Dealt(count, seeded, rivals) ->
             [ players count ]
             @ (seeded |> Option.toList |> List.map seed)
-            @ (rivals |> List.collect (fun skill -> rival |> Option.toList |> List.map (fun name -> name skill)))
+            @ (rivals
+               |> List.collect (fun skill -> rival |> Option.toList |> List.map (fun name -> name skill)))
         | Start.Saved path -> [ from path ]
 
     let private arguments launch =
         match launch with
         | Launch.Play start ->
-            [ Play(
-                  playing.ToParseResults(
-                      starting PlayArgs.Players PlayArgs.Seed (Some PlayArgs.Rival) PlayArgs.From start
-                  )
-              ) ]
+            [ Play(playing.ToParseResults(starting PlayArgs.Players PlayArgs.Seed (Some PlayArgs.Rival) PlayArgs.From start)) ]
         | Launch.Serve(start, reach) ->
             [ Serve(
                   serving.ToParseResults(

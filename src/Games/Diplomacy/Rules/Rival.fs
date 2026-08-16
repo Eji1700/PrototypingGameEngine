@@ -15,16 +15,18 @@ open TCModel.Common
 /// a push rather than send it somewhere on its own. That is a recognisable game of Diplomacy
 /// and a beatable one, and saying so plainly is better than a name that promises more.
 type Skill =
-    { Name: string
-      Describe: string
-      /// How far it will look for something worth taking. One is "next door only".
-      Sight: int
-      /// Whether it will spend a unit backing another unit's move instead of moving itself.
-      Backs: bool
-      /// Whether it will stand a unit in front of a centre it already holds.
-      Guards: bool
-      /// Out of a hundred, how often it does something other than the best it saw.
-      Slips: int }
+    {
+        Name: string
+        Describe: string
+        /// How far it will look for something worth taking. One is "next door only".
+        Sight: int
+        /// Whether it will spend a unit backing another unit's move instead of moving itself.
+        Backs: bool
+        /// Whether it will stand a unit in front of a centre it already holds.
+        Guards: bool
+        /// Out of a hundred, how often it does something other than the best it saw.
+        Slips: int
+    }
 
 /// A machine at a seat: how it plays, and its own generator.
 ///
@@ -65,7 +67,8 @@ module Rival =
 
         let step province =
             Atlas.armyReach province
-            @ (Atlas.fleetReach { At = province; Coast = None } |> List.map (fun there -> there.At))
+            @ (Atlas.fleetReach { At = province; Coast = None }
+               |> List.map (fun there -> there.At))
             |> List.distinct
 
         let rec spread found edge depth =
@@ -78,7 +81,9 @@ module Rival =
                     |> List.distinct
                     |> List.filter (fun province -> not (Map.containsKey province found))
 
-                let found = next |> List.fold (fun found province -> Map.add province depth found) found
+                let found =
+                    next |> List.fold (fun found province -> Map.add province depth found) found
+
                 spread found next (depth + 1)
 
         spread (wanted |> List.map (fun centre -> centre, 0) |> Map.ofList) wanted 1
@@ -198,10 +203,7 @@ module Rival =
     let private raising power position province =
         let mine = Position.unitsOf power position
 
-        let fleets =
-            mine
-            |> List.filter (fun piece -> piece.Kind = Fleet)
-            |> List.length
+        let fleets = mine |> List.filter (fun piece -> piece.Kind = Fleet) |> List.length
 
         if Atlas.terrainOf province <> Coastal then Army
         elif power = England then Fleet
@@ -257,9 +259,7 @@ module Rival =
                 |> List.filter (fun (province, says) ->
                     match says with
                     | Builds _ -> Position.ownerOf province play.Board = Some power
-                    | Disbands ->
-                        Position.at province play.Board
-                        |> Option.map (fun piece -> piece.Power) = Some power
+                    | Disbands -> Position.at province play.Board |> Option.map (fun piece -> piece.Power) = Some power
                     | _ -> false)
 
             if owing > 0 then

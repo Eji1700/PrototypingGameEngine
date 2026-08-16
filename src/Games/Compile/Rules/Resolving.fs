@@ -61,7 +61,8 @@ module Resolving =
             && (not selector.WasChosen || Some placed.Card = session.Chose)
             // What a card is worth *on the table*, so a face-down five is a two - which is the
             // reading a player would use, and the only one they can see.
-            && (List.isEmpty selector.Worth || List.contains (Placed.value placed) selector.Worth)
+            && (List.isEmpty selector.Worth
+                || List.contains (Placed.value placed) selector.Worth)
 
         let found =
             Field.seats field
@@ -170,7 +171,10 @@ module Resolving =
         { side with
             Stacks =
                 side.Stacks
-                |> Map.add line (Side.stack line side |> List.map (fun other -> if other = placed then change other else other)) }
+                |> Map.add
+                    line
+                    (Side.stack line side
+                     |> List.map (fun other -> if other = placed then change other else other)) }
 
     let private removing line placed side =
         { side with
@@ -280,7 +284,9 @@ module Resolving =
                 { session with
                     Field =
                         session.Field
-                        |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) }) }
+                        |> Field.update seat (fun side ->
+                            { side with
+                                Hand = side.Hand |> List.filter ((<>) card) }) }
 
             laying seat placed source.Line None session, []
 
@@ -290,8 +296,12 @@ module Resolving =
             { session with
                 Field =
                     session.Field
-                    |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) })
-                    |> Field.update them (fun side -> { side with Hand = side.Hand @ [ card ] }) },
+                    |> Field.update seat (fun side ->
+                        { side with
+                            Hand = side.Hand |> List.filter ((<>) card) })
+                    |> Field.update them (fun side ->
+                        { side with
+                            Hand = side.Hand @ [ card ] }) },
             [ Happened(Gave(seat, card)) ]
 
         | Discard, InHand(seat, card) -> discarded seat card session
@@ -369,10 +379,7 @@ module Resolving =
             | WorthOfChosen -> session.Chose |> Option.map (fun card -> card.Value) |> Option.defaultValue 0
             | HowManyPlus n -> session.Done + n
             | PerCards(each, selector) ->
-                if each <= 0 then
-                    0
-                else
-                    List.length (targets actor (Delete selector) source session) / each
+                if each <= 0 then 0 else List.length (targets actor (Delete selector) source session) / each
 
         match command with
         | Opposing inner ->
@@ -459,7 +466,9 @@ module Resolving =
             | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
             | lines ->
                 { session with
-                    Pile = (lines |> List.map (fun line -> Run(inner, { source with Line = line }))) @ session.Pile },
+                    Pile =
+                        (lines |> List.map (fun line -> Run(inner, { source with Line = line })))
+                        @ session.Pile },
                 []
 
         // "1 or more" - one forced, and then offered again for as long as they keep saying yes.
@@ -508,7 +517,9 @@ module Resolving =
                 |> List.filter ((<>) source.Line)
                 |> List.map (fun line -> Run(inner, { source with Line = line }))
 
-            { session with Pile = each @ session.Pile }, []
+            { session with
+                Pile = each @ session.Pile },
+            []
 
         // "...all cards..." - every one of them, and nobody asked. A command that asks which is
         // a command with a choice in it, and there is no choice in "all".
@@ -529,10 +540,12 @@ module Resolving =
         // "You may X." Not offered at all if X could not have been done anyway.
         | May inner ->
             match targets actor inner source session with
-            | [] when (match inner with
-                       | Draw _
-                       | Refreshing' -> false
-                       | _ -> true) ->
+            | [] when
+                (match inner with
+                 | Draw _
+                 | Refreshing' -> false
+                 | _ -> true)
+                ->
                 nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
             | _ ->
                 { session with
@@ -616,7 +629,8 @@ module Resolving =
 
                 match where with
                 | ThisLine
-                | ToOrFromHere -> laying actor placed source.Line None session, [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
+                | ToOrFromHere ->
+                    laying actor placed source.Line None session, [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
                 | AnyLine
                 | OtherLines ->
                     let offered =
@@ -650,8 +664,12 @@ module Resolving =
                     { session with
                         Field =
                             session.Field
-                            |> Field.update them (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) })
-                            |> Field.update actor (fun side -> { side with Hand = side.Hand @ [ card ] })
+                            |> Field.update them (fun side ->
+                                { side with
+                                    Hand = side.Hand |> List.filter ((<>) card) })
+                            |> Field.update actor (fun side ->
+                                { side with
+                                    Hand = side.Hand @ [ card ] })
                         Rng = rng },
                 [ Happened(TookAtRandom(actor, card)) ]
 
@@ -690,8 +708,7 @@ module Resolving =
 
             let swapped =
                 Protocol.orders order
-                |> List.filter (fun each ->
-                    List.zip each order |> List.filter (fun (a, b) -> a <> b) |> List.length = 2)
+                |> List.filter (fun each -> List.zip each order |> List.filter (fun (a, b) -> a <> b) |> List.length = 2)
 
             match swapped with
             | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
@@ -730,7 +747,10 @@ module Resolving =
         // Remembered rather than asked of the board, because the card that said it will be gone
         // long before the turn it is about.
         | StopTheirCompile ->
-            doneIt { session with NoCompile = Some(Session.other actor) }, [ Happened(StoppedCompiling(Session.other actor)) ]
+            doneIt
+                { session with
+                    NoCompile = Some(Session.other actor) },
+            [ Happened(StoppedCompiling(Session.other actor)) ]
 
         | Refreshing' ->
             let side, rng = Side.refreshed (Session.side actor session) session.Rng
@@ -754,7 +774,11 @@ module Resolving =
             | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
             | [ only ] ->
                 let session, said = carriedOut source command only session
-                doneIt { session with Chose = Some(Target.card only) }, said
+
+                doneIt
+                    { session with
+                        Chose = Some(Target.card only) },
+                said
             | many ->
                 { session with
                     Pile =
@@ -773,10 +797,16 @@ module Resolving =
 
         let field =
             match taken with
-            | Some card -> session.Field |> Field.withSide them theirs |> Field.update seat (Side.took card)
+            | Some card ->
+                session.Field
+                |> Field.withSide them theirs
+                |> Field.update seat (Side.took card)
             | None -> session.Field |> Field.withSide them theirs
 
-        taken, { session with Field = field; Rng = rng }
+        taken,
+        { session with
+            Field = field
+            Rng = rng }
 
     /// One line, won.
     ///
@@ -899,20 +929,29 @@ module Resolving =
                 | Happened event -> Some event
                 | _ -> None)
 
-        [ if happened |> List.exists (function
-              | Drew(who, n) -> who = actor && n > 0
-              | _ -> false) then
+        [ if
+              happened
+              |> List.exists (function
+                  | Drew(who, n) -> who = actor && n > 0
+                  | _ -> false)
+          then
               yield! listening YouDraw actor session
 
-          if happened |> List.exists (function
-              | Deleted _ -> true
-              | _ -> false) then
+          if
+              happened
+              |> List.exists (function
+                  | Deleted _ -> true
+                  | _ -> false)
+          then
               yield! listening YouDelete actor session
 
           for who in Session.seats do
-              if happened |> List.exists (function
-                  | Discarded(seat, _) -> seat = who
-                  | _ -> false) then
+              if
+                  happened
+                  |> List.exists (function
+                      | Discarded(seat, _) -> seat = who
+                      | _ -> false)
+              then
                   yield! listening TheyDiscard (Session.other who) session ]
 
     /// One of the two timed boxes, read off everything the player to move has standing face up
@@ -961,7 +1000,10 @@ module Resolving =
             { session with
                 Pile = rearranging seat session :: Escaping lines :: Compiling lines :: session.Pile },
             told @ [ Happened(MustRearrange seat) ]
-        | lines -> { session with Pile = Escaping lines :: Compiling lines :: session.Pile }, told
+        | lines ->
+            { session with
+                Pile = Escaping lines :: Compiling lines :: session.Pile },
+            told
 
     // --- the look at the table --------------------------------------------------------------
 
@@ -993,7 +1035,10 @@ module Resolving =
     let private lookAgain session =
         let showing = shownNow session.Field
         let now = showing |> List.map (fun (_, _, card) -> card) |> Set.ofList
-        let fresh = showing |> List.filter (fun (_, _, card) -> not (Set.contains card session.Revealed))
+
+        let fresh =
+            showing
+            |> List.filter (fun (_, _, card) -> not (Set.contains card session.Revealed))
 
         fresh, { session with Revealed = now }
 
@@ -1042,7 +1087,11 @@ module Resolving =
                               Line = line }
                         )))
 
-            walk (fuel - 1) { session with Pile = pushed @ session.Pile } told
+            walk
+                (fuel - 1)
+                { session with
+                    Pile = pushed @ session.Pile }
+                told
 
         | [], session ->
 
@@ -1128,7 +1177,11 @@ module Resolving =
         // command it was waiting under did something, and is thrown away if it did not.
         | Gate(rest, source) :: tail ->
             if session.Done > 0 then
-                walk (fuel - 1) { session with Pile = (rest |> List.map (fun command -> Run(command, source))) @ tail } told
+                walk
+                    (fuel - 1)
+                    { session with
+                        Pile = (rest |> List.map (fun command -> Run(command, source))) @ tail }
+                    told
             else
                 walk (fuel - 1) { session with Pile = tail } (told @ [ Happened(Fizzled(source.Owner, source.Saying)) ])
 
@@ -1170,7 +1223,8 @@ module Resolving =
                     Pile = rest
                     Field = session.Field |> Field.withSide seat after
                     Rng = rng }
-                (told @ [ Happened(Refreshed(seat, List.length before.Hand, List.length after.Hand)) ])
+                (told
+                 @ [ Happened(Refreshed(seat, List.length before.Hand, List.length after.Hand)) ])
 
         // The check cache phase. The cache is the hand, and a hand over its limit is discarded
         // back down to it - by the player it belongs to, a card at a time.
@@ -1189,16 +1243,17 @@ module Resolving =
             let hand = (Session.side seat session).Hand
 
             let over =
-                if Field.skipsCache seat session.Field then
-                    0
-                else
-                    List.length hand - Deck.HandSize
+                if Field.skipsCache seat session.Field then 0 else List.length hand - Deck.HandSize
 
             if over <= 0 then
                 // The phase is over - which happens every turn, whether or not there was anything
                 // to put down. So this is the one trigger that fires on a *phase* rather than on
                 // something a command reported.
-                walk (fuel - 1) { session with Pile = listening YouClearCache seat session @ rest } told
+                walk
+                    (fuel - 1)
+                    { session with
+                        Pile = listening YouClearCache seat session @ rest }
+                    told
             else
                 // Always a question and never a straight answer: over the limit is six cards or
                 // more, so there are always at least six to choose between. The step goes back on
@@ -1211,19 +1266,31 @@ module Resolving =
 
                 walk
                     (fuel - 1)
-                    { session with Pile = asking :: Trimming :: rest }
+                    { session with
+                        Pile = asking :: Trimming :: rest }
                     (told @ [ Happened(OverTheLimit(seat, over)) ])
 
         // Another one? Asked for as long as the last attempt did something and there is anything
         // left to do it to. Saying no is a nothing-done, which is what stops it.
         | Repeating(inner, source, tally) :: rest ->
             if session.Done = 0 then
-                walk (fuel - 1) { session with Pile = rest; Done = tally } told
+                walk
+                    (fuel - 1)
+                    { session with
+                        Pile = rest
+                        Done = tally }
+                    told
             else
                 let tally = tally + 1
 
                 match targets source.Owner inner source session with
-                | [] -> walk (fuel - 1) { session with Pile = rest; Done = tally } told
+                | [] ->
+                    walk
+                        (fuel - 1)
+                        { session with
+                            Pile = rest
+                            Done = tally }
+                        told
                 | _ ->
                     walk
                         (fuel - 1)
@@ -1233,16 +1300,27 @@ module Resolving =
                                     { Chooser = source.Owner
                                       Because = ACardSaying source
                                       Wanting = Whether inner }
-                                :: Repeating(inner, source, tally) :: rest }
+                                :: Repeating(inner, source, tally)
+                                :: rest }
                         told
 
         // Either end of a turn: everything this player has face up and uncovered says that box,
         // in line order. On the pile like anything else, so one of them that stops to ask stops
         // the turn where it stands - which is the behaviour a table would expect and would have
         // been a special case anywhere else.
-        | Opening :: rest -> walk (fuel - 1) { session with Pile = timed _.AtStart session @ rest } told
+        | Opening :: rest ->
+            walk
+                (fuel - 1)
+                { session with
+                    Pile = timed _.AtStart session @ rest }
+                told
 
-        | Closing :: rest -> walk (fuel - 1) { session with Pile = timed _.AtEnd session @ rest } told
+        | Closing :: rest ->
+            walk
+                (fuel - 1)
+                { session with
+                    Pile = timed _.AtEnd session @ rest }
+                told
 
     /// Settle whatever is waiting, and say what happened.
     let settle session told = walk Runaway session told
@@ -1255,14 +1333,17 @@ module Resolving =
     /// draws should not be undone by the same turn's trimming. Which way round it goes is an
     /// assumption rather than a rule anybody gave; it is one line if it is the other way.
     let ending session =
-        { session with Pile = session.Pile @ [ Trimming; Closing; EndTurn ] }
+        { session with
+            Pile = session.Pile @ [ Trimming; Closing; EndTurn ] }
 
     /// A refresh, with the rearrangement the control component forces in front of it.
     ///
     /// Two steps rather than one function, for the same reason compiling is: what the component
     /// costs is a question, and a question has to be able to stop the game where it stands.
     let refreshing seat session =
-        let session = { session with Pile = Refreshing :: session.Pile }
+        let session =
+            { session with
+                Pile = Refreshing :: session.Pile }
 
         if Session.holdsControl seat session then
             { session with
@@ -1280,7 +1361,9 @@ module Resolving =
         let session, told = settle session said
         Some session, told
 
-    let private without session = { session with Pile = List.tail session.Pile }
+    let private without session =
+        { session with
+            Pile = List.tail session.Pile }
 
     /// The card behind a question, where a card is behind it.
     ///
@@ -1310,7 +1393,11 @@ module Resolving =
                     | None, InHand(seat, card) -> discarded seat card (without session)
                     | None, OnTable _ -> without session, []
 
-                carryOn { session with Done = 1; Chose = Some(Target.card target) } said
+                carryOn
+                    { session with
+                        Done = 1
+                        Chose = Some(Target.card target) }
+                    said
 
         // "You may." Saying no is an answer like any other, and it is the answer that leaves
         // whatever was waiting on it with nothing to do.

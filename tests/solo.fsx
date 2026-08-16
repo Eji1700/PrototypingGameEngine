@@ -117,10 +117,7 @@ report "'commands' takes them off" false (drawnAfter [ "commands" ] |> says aCom
 
 report "and 'commands' again puts them back" true (drawnAfter [ "commands"; "commands" ] |> says aCommand)
 
-report
-    "turning the notes off leaves the commands where they are"
-    true
-    (drawnAfter [ "notes off" ] |> says aCommand)
+report "turning the notes off leaves the commands where they are" true (drawnAfter [ "notes off" ] |> says aCommand)
 
 report
     "and turning the commands off leaves the notes where they are"

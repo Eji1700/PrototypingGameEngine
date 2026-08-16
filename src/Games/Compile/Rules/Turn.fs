@@ -75,7 +75,10 @@ module Turn =
         if List.length order <> Protocol.Each then
             Some(NotThree(List.length order))
         else
-            match order |> List.tryFind (fun protocol -> order |> List.filter ((=) protocol) |> List.length > 1) with
+            match
+                order
+                |> List.tryFind (fun protocol -> order |> List.filter ((=) protocol) |> List.length > 1)
+            with
             | Some twice -> Some(SaidTwice twice)
             | None ->
                 order
@@ -107,8 +110,7 @@ module Turn =
                 | Some _ -> Some session, [ laid ]
                 | None ->
                     let both =
-                        Session.seats
-                        |> List.map (fun seat -> seat, (Session.side seat session).Order)
+                        Session.seats |> List.map (fun seat -> seat, (Session.side seat session).Order)
 
                     Some(Session.dealHands session), [ laid; Happened(Revealed both); Happened HandsDealt ]
 
@@ -175,7 +177,9 @@ module Turn =
                     { session with
                         Field =
                             session.Field
-                            |> Field.update seat (fun side -> { side with Hand = side.Hand |> List.filter ((<>) card) }) }
+                            |> Field.update seat (fun side ->
+                                { side with
+                                    Hand = side.Hand |> List.filter ((<>) card) }) }
                     |> Resolving.ending
                     |> Resolving.laying seat placed line None
                     |> fun session -> Resolving.settle session []

@@ -111,8 +111,7 @@ module Commands =
         | [ "commands" ] -> Some(Ok(Listing None))
         | [ "commands"; "on" ] -> Some(Ok(Listing(Some true)))
         | [ "commands"; "off" ] -> Some(Ok(Listing(Some false)))
-        | "commands" :: _ ->
-            Some(Error "Say 'commands' to turn the box the other way, or 'commands on' or 'commands off'.")
+        | "commands" :: _ -> Some(Error "Say 'commands' to turn the box the other way, or 'commands on' or 'commands off'.")
         | [ "view"; name ] -> Some(Ok(Looking name))
         | "view" :: _ -> Some(Error "Say 'view <name>' to change how the board is drawn.")
         | [ "undo" ]

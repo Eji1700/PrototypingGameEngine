@@ -174,8 +174,7 @@ module Turn =
         | Take at ->
             match Map.tryFind at play.Written with
             | None -> None, [ Refused(NothingWritten at) ]
-            | Some _ when written power play |> List.exists (fst >> (=) at) |> not ->
-                None, [ Refused(NothingWritten at) ]
+            | Some _ when written power play |> List.exists (fst >> (=) at) |> not -> None, [ Refused(NothingWritten at) ]
             | Some _ ->
                 Some(
                     InPlay

@@ -134,7 +134,8 @@ module Adjudicate =
                 | _ -> None)
 
         let destinationOf province =
-            movers |> List.tryPick (fun (from, into, _) -> if from = province then Some into else None)
+            movers
+            |> List.tryPick (fun (from, into, _) -> if from = province then Some into else None)
 
         let isCarried province =
             movers |> List.exists (fun (from, _, carried) -> from = province && carried)
@@ -164,8 +165,7 @@ module Adjudicate =
             | Guessing guess ->
                 // We have come round to a question that is still open. Say what was guessed
                 // and write down that this answer is only as good as the guess.
-                if not (waiting.Contains province) then
-                    waiting.Add province
+                if not (waiting.Contains province) then waiting.Add province
 
                 guess
             | Untouched ->
@@ -186,8 +186,7 @@ module Adjudicate =
                     // come apart on the second look.
                     status[province] <- Guessing first
 
-                    if not (waiting.Contains province) then
-                        waiting.Add province
+                    if not (waiting.Contains province) then waiting.Add province
 
                     first
                 else
@@ -294,9 +293,7 @@ module Adjudicate =
                     else
                         let next =
                             carriers
-                            |> Set.filter (fun other ->
-                                not (Set.contains other reached)
-                                && washes other sea)
+                            |> Set.filter (fun other -> not (Set.contains other reached) && washes other sea)
                             |> Set.toList
 
                         walk (Set.add sea reached) (next @ rest)
@@ -401,10 +398,7 @@ module Adjudicate =
                 let push = pushOf province
 
                 let beatsWhoIsThere =
-                    if headToHead province into.At then
-                        push > standOf into.At
-                    else
-                        push > gripOn into.At
+                    if headToHead province into.At then push > standOf into.At else push > gripOn into.At
 
                 push > 0
                 && beatsWhoIsThere
@@ -418,7 +412,8 @@ module Adjudicate =
             plan |> Map.toList |> List.map (fun (province, _) -> province, resolve province)
 
         let answered province =
-            settled |> List.tryPick (fun (other, answer) -> if other = province then Some answer else None)
+            settled
+            |> List.tryPick (fun (other, answer) -> if other = province then Some answer else None)
             |> Option.defaultValue false
 
         let arrived = movers |> List.filter (fun (from, _, _) -> answered from)
@@ -449,7 +444,8 @@ module Adjudicate =
             |> List.map (fun (_, into, _) -> into.At)
             |> List.countBy id
             |> List.filter (fun (province, tries) ->
-                tries > 1 && not (arrived |> List.exists (fun (_, into, _) -> into.At = province)))
+                tries > 1
+                && not (arrived |> List.exists (fun (_, into, _) -> into.At = province)))
             |> List.map fst
             |> Set.ofList
 
@@ -471,7 +467,9 @@ module Adjudicate =
                     pieceAt from |> Option.map (fun piece -> into.At, { piece with Where = into }))
 
             { position with
-                Units = walked |> List.fold (fun units (province, piece) -> Map.add province piece units) staying }
+                Units =
+                    walked
+                    |> List.fold (fun units (province, piece) -> Map.add province piece units) staying }
 
         let retreats =
             pushedOut
@@ -544,7 +542,8 @@ module Adjudicate =
             |> List.map fst
             |> Set.ofList
 
-        let survivors = going |> List.filter (fun (_, into) -> not (Set.contains into.At crowded))
+        let survivors =
+            going |> List.filter (fun (_, into) -> not (Set.contains into.At crowded))
 
         let position =
             survivors

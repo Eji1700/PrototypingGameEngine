@@ -16,8 +16,7 @@ open TCModel.Engine
 module Draft =
 
     /// The seats, in the order they pick.
-    let order =
-        [ Seat.at 1; Seat.at 2; Seat.at 2; Seat.at 1; Seat.at 1; Seat.at 2 ]
+    let order = [ Seat.at 1; Seat.at 2; Seat.at 2; Seat.at 1; Seat.at 1; Seat.at 2 ]
 
     /// How many picks a whole draft is.
     let Picks = List.length order
@@ -27,4 +26,5 @@ module Draft =
     let picking made = order |> List.tryItem made
 
     /// How many of them a seat makes, for a game checking its own draft adds up.
-    let picksBy seat = order |> List.filter ((=) seat) |> List.length
+    let picksBy seat =
+        order |> List.filter ((=) seat) |> List.length

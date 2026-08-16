@@ -149,15 +149,15 @@ module Words =
                     |> List.length
 
                 let stopped =
-                    was.Reports
-                    |> List.filter (fun entry -> entry.Fate = Bounced)
-                    |> List.length
+                    was.Reports |> List.filter (fun entry -> entry.Fate = Bounced) |> List.length
 
                 [ if moved > 0 then $"{moved} moved"
                   if stopped > 0 then $"{stopped} held up" ]
             | Falling _ ->
-                [ if not (List.isEmpty was.Retreated) then $"{List.length was.Retreated} retreated"
-                  if not (List.isEmpty was.Scattered) then $"{List.length was.Scattered} disbanded" ]
+                [ if not (List.isEmpty was.Retreated) then
+                      $"{List.length was.Retreated} retreated"
+                  if not (List.isEmpty was.Scattered) then
+                      $"{List.length was.Scattered} disbanded" ]
             | Building ->
                 [ if not (List.isEmpty was.Built) then $"{List.length was.Built} built"
                   if not (List.isEmpty was.Removed) then $"{List.length was.Removed} given up" ]
@@ -169,7 +169,9 @@ module Words =
                 | Some was -> $"{province centre} passes from {Power.name was} to {Power.name owner}"
                 | None -> $"{province centre} falls to {Power.name owner}")
 
-        let gone = was.Eliminated |> List.map (fun power -> $"{Power.name power} is out of the game")
+        let gone =
+            was.Eliminated
+            |> List.map (fun power -> $"{Power.name power} is out of the game")
 
         let parts = counted @ changed @ gone
 

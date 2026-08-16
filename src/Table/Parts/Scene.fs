@@ -167,7 +167,8 @@ module Scene =
 
     /// A note, or nothing, which is the only thing the notes flag ever decides. Written here
     /// so that a game says `noted margins text` once per note instead of every reader asking.
-    let noted (margins: Margins) text = if margins.Notes then Note text else Blank
+    let noted (margins: Margins) text =
+        if margins.Notes then Note text else Blank
 
     /// The block that lists what a player may type, or nothing at all.
     ///

@@ -23,20 +23,22 @@ module Lines =
 /// stack is the head of the list, which is the card everything about a stack is going to want
 /// to ask about first.
 type Side =
-    { /// The three protocols this player took, in the order they took them.
-      Drafted: Protocol list
-      /// The same three, in the order they face the lines: the first is line one. Empty until
-      /// they have been arranged, which is what says the arranging is still to do.
-      Order: Protocol list
-      /// Top first.
-      Deck: Card list
-      /// Most recently discarded first.
-      Discard: Card list
-      Hand: Card list
-      /// Line to the cards played on it, newest first.
-      Stacks: Map<int, Placed list>
-      /// The protocols this player has compiled. All three of them is the game.
-      Compiled: Set<Protocol> }
+    {
+        /// The three protocols this player took, in the order they took them.
+        Drafted: Protocol list
+        /// The same three, in the order they face the lines: the first is line one. Empty until
+        /// they have been arranged, which is what says the arranging is still to do.
+        Order: Protocol list
+        /// Top first.
+        Deck: Card list
+        /// Most recently discarded first.
+        Discard: Card list
+        Hand: Card list
+        /// Line to the cards played on it, newest first.
+        Stacks: Map<int, Placed list>
+        /// The protocols this player has compiled. All three of them is the game.
+        Compiled: Set<Protocol>
+    }
 
 /// What a run of cards on one line is worth. The number both players are playing towards, and
 /// the only arithmetic in this game - which is why it is here, once, rather than in whichever
@@ -57,10 +59,7 @@ module Ruling =
 
     /// What a card is saying, right now, from where it is lying.
     let saying uncovered placed =
-        if Placed.isFaceUp placed then
-            Printed.ongoing uncovered placed.Card
-        else
-            []
+        if Placed.isFaceUp placed then Printed.ongoing uncovered placed.Card else []
 
     let private live = saying
 
@@ -110,7 +109,8 @@ module Side =
     let holds card side = side.Hand |> List.contains card
 
     let drafted protocol side =
-        { side with Drafted = side.Drafted @ [ protocol ] }
+        { side with
+            Drafted = side.Drafted @ [ protocol ] }
 
     let arranged order side = { side with Order = order }
 
@@ -146,10 +146,7 @@ module Side =
 
                 // Nothing came back, so there is nothing left anywhere and asking again would
                 // ask forever.
-                if List.isEmpty restocked.Deck then
-                    restocked, rng
-                else
-                    drawing count restocked rng
+                if List.isEmpty restocked.Deck then restocked, rng else drawing count restocked rng
 
     /// The whole hand to the discard, and a fresh five up. One action, and it costs a turn.
     let refreshed side rng =
@@ -180,7 +177,8 @@ module Side =
             Stacks = side.Stacks |> Map.add line [] }
 
     let compiled protocol side =
-        { side with Compiled = Set.add protocol side.Compiled }
+        { side with
+            Compiled = Set.add protocol side.Compiled }
 
     let hasCompiled protocol side = Set.contains protocol side.Compiled
 
@@ -203,7 +201,9 @@ module Side =
         | [] -> None, side, rng
         | top :: rest -> Some top, { side with Deck = rest }, rng
 
-    let took card side = { side with Hand = side.Hand @ [ card ] }
+    let took card side =
+        { side with
+            Hand = side.Hand @ [ card ] }
 
 /// Both halves of the table.
 ///
@@ -224,7 +224,8 @@ module Field =
 
     let withSide seat replacement (Field sides) = Field(Map.add seat replacement sides)
 
-    let update seat change field = withSide seat (change (side seat field)) field
+    let update seat change field =
+        withSide seat (change (side seat field)) field
 
     let seats (Field sides) = sides |> Map.toList |> List.map fst
 
@@ -241,8 +242,7 @@ module Field =
 
     /// Both protocols facing that line, in seating order.
     let protocolsOn line field =
-        seats field
-        |> List.choose (fun seat -> Side.protocolOn line (side seat field))
+        seats field |> List.choose (fun seat -> Side.protocolOn line (side seat field))
 
     /// Every standing rule this player has in play on that line, and every one the other player
     /// has. Two questions asked so often below that they are worth naming.
@@ -257,7 +257,8 @@ module Field =
     /// rule saying *"skip your check cache phase"* is about the player rather than about the line
     /// the card carrying it happens to be standing in.
     let skipsCache seat field =
-        Lines.all |> List.exists (fun each -> mine seat each field |> List.contains SkipsCacheCheck)
+        Lines.all
+        |> List.exists (fun each -> mine seat each field |> List.contains SkipsCacheCheck)
 
     /// Whether a card may be played face up there.
     ///

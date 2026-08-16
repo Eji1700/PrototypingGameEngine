@@ -132,14 +132,25 @@ report
             | GotUp _ -> true
             | _ -> false))
 
-report "the table lets go of the console" true (heard "one" (stood |> Lobby.said "one" "history" |> snd) |> mentions "You are not sitting at this table.")
+report
+    "the table lets go of the console"
+    true
+    (heard "one" (stood |> Lobby.said "one" "history" |> snd)
+     |> mentions "You are not sitting at this table.")
 
-report "but keeps the seat, so the token still brings them back" true (heard "one-again" (stood |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") plain |> snd) |> mentions "seated at 1")
+report
+    "but keeps the seat, so the token still brings them back"
+    true
+    (heard "one-again" (stood |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") plain |> snd)
+     |> mentions "seated at 1")
 
 // A table still filling up answered every line with the waiting screen, whatever it said,
 // so this was the one place a player could sit with nothing to look at and no way out of
 // it. The game that has finished is checked further down, where there is one.
-report "getting up works at a table still filling up" true (heard "one" (seatedOne |> upFrom |> snd) |> mentions "You are up from the table")
+report
+    "getting up works at a table still filling up"
+    true
+    (heard "one" (seatedOne |> upFrom |> snd) |> mentions "You are up from the table")
 
 // --- who may act ----------------------------------------------------------------------
 
@@ -196,7 +207,11 @@ report "and a game that is over has come round to nobody" (false, false) (nudged
 
 // The table this was reported from: the game had finished, the host typed `quit`, and the
 // board it was looking at was the last thing it ever heard.
-report "a player may get up from a game that has finished" true (heard "one" (fst played |> upFrom |> snd) |> mentions "You are up from the table")
+report
+    "a player may get up from a game that has finished"
+    true
+    (heard "one" (fst played |> upFrom |> snd)
+     |> mentions "You are up from the table")
 
 // --- what a player may not ask for -----------------------------------------------------
 

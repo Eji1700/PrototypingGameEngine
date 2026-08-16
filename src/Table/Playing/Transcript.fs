@@ -27,13 +27,15 @@ module Transcript =
     /// was asked for, oldest first.
     [<NoComparison; NoEquality>]
     type Reading<'Move> =
-        { Players: int
-          Seed: uint64
-          /// One entry per seat. A record written before a seating was part of one has
-          /// everybody down as a person, which is the only reading of it that cannot be wrong
-          /// about a machine.
-          Sitters: Sitter list
-          Moves: Msg<'Move> list }
+        {
+            Players: int
+            Seed: uint64
+            /// One entry per seat. A record written before a seating was part of one has
+            /// everybody down as a person, which is the only reading of it that cannot be wrong
+            /// about a machine.
+            Sitters: Sitter list
+            Moves: Msg<'Move> list
+        }
 
     let private preamble game sitters journal =
         // Written as one line rather than assembled with spaces between, so a record with no
@@ -212,11 +214,13 @@ module Transcript =
     /// and every caller treats that as "cannot be shown to be a record of ours", which is the
     /// safe way round for all three of the things asked of it.
     let filed (path: string) =
-        match Path.GetFileNameWithoutExtension(path: string).Split '-' |> List.ofArray |> List.rev with
+        match
+            Path.GetFileNameWithoutExtension(path: string).Split '-'
+            |> List.ofArray
+            |> List.rev
+        with
         | seed :: seats :: rest when seed.StartsWith "seed" && seats.EndsWith "p" ->
-            match
-                UInt64.TryParse(seed.Substring 4), Int32.TryParse(seats.Substring(0, seats.Length - 1)), List.rev rest
-            with
+            match UInt64.TryParse(seed.Substring 4), Int32.TryParse(seats.Substring(0, seats.Length - 1)), List.rev rest with
             | (true, seed), (true, players), (_ :: _ as stamp) -> Some(String.Join("-", stamp), players, seed)
             | _ -> None
         | _ -> None
@@ -229,12 +233,12 @@ module Transcript =
     /// because a record that cannot be shown to be this game's is a record not to write over.
     let stampOf (path: string) (players: int) (seed: uint64) =
         filed path
-        |> Option.bind (fun (stamp, said, dealt) ->
-            if said = players && dealt = seed then Some stamp else None)
+        |> Option.bind (fun (stamp, said, dealt) -> if said = players && dealt = seed then Some stamp else None)
 
     /// Which game a record is, as far as its name says. Both `None`s mean the same thing here
     /// and are worth keeping apart nowhere: nothing is known, so nothing is claimed.
-    let about path = filed path |> Option.bind (fun (stamp, _, _) -> gameOf stamp)
+    let about path =
+        filed path |> Option.bind (fun (stamp, _, _) -> gameOf stamp)
 
     /// How much of what is being saved is already in the file, matched piece by piece from
     /// the top: how far the two run together, and what is left over to write.
@@ -277,20 +281,22 @@ module Transcript =
 
     /// One saved record, as much of it as can be told without knowing whose game it is.
     type Saved =
-        { Path: string
-          /// The same, said the way a person would type it - which is the way it is printed
-          /// when a record is written, and the way a row on a list of them hands it back.
-          Named: string
-          /// The game it says it is. `None` for a record filed before the name said, which is
-          /// worth listing all the same - it is still somebody's game, and the only thing not
-          /// known about it is a thing a person may well know.
-          Game: string option
-          Players: int
-          Seed: uint64
-          /// How many moves are in it, which is the one thing worth knowing about a saved game
-          /// that its name cannot say: whether it is a game or an opening.
-          Moves: int
-          Written: DateTime }
+        {
+            Path: string
+            /// The same, said the way a person would type it - which is the way it is printed
+            /// when a record is written, and the way a row on a list of them hands it back.
+            Named: string
+            /// The game it says it is. `None` for a record filed before the name said, which is
+            /// worth listing all the same - it is still somebody's game, and the only thing not
+            /// known about it is a thing a person may well know.
+            Game: string option
+            Players: int
+            Seed: uint64
+            /// How many moves are in it, which is the one thing worth knowing about a saved game
+            /// that its name cannot say: whether it is a game or an opening.
+            Moves: int
+            Written: DateTime
+        }
 
     /// A record read only as far as a list of them needs, which is the deal line, the count of
     /// what follows it, and what is on the outside of the file.
@@ -344,8 +350,7 @@ module Transcript =
         let path = path stamp journal
         let pieces = pieces game sitters journal
 
-        let existing =
-            if File.Exists path then File.ReadAllText path else ""
+        let existing = if File.Exists path then File.ReadAllText path else ""
 
         match shared existing pieces with
         // The file is this record as far as it goes, so the rest of it goes on the end. This

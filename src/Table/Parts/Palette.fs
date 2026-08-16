@@ -124,7 +124,9 @@ module Palette =
         let digits = if word.StartsWith "#" then word.Substring 1 else word
 
         if digits.Length = 6 && digits |> Seq.forall Uri.IsHexDigit then
-            let part at = Convert.ToByte(digits.Substring(at, 2), 16)
+            let part at =
+                Convert.ToByte(digits.Substring(at, 2), 16)
+
             Some(Color(part 0, part 2, part 4))
         else
             None
@@ -164,8 +166,7 @@ module Palette =
         /// not shuffle the list somebody has learnt the shape of.
         let put shade =
             if shades |> List.exists (fun (have: Shade) -> have.Name = shade.Name) then
-                shades
-                |> List.map (fun have -> if have.Name = shade.Name then shade else have)
+                shades |> List.map (fun have -> if have.Name = shade.Name then shade else have)
             else
                 shades @ [ shade ]
 
@@ -214,7 +215,9 @@ module Palette =
                     // Every colour gone is a screen with nothing on it to choose, which is not
                     // a thing to hand anybody however plainly they asked for it.
                     if List.isEmpty shades then
-                        catalogue, problems @ [ $"{Path.GetFileName path} leaves no colours at all, so the usual ones stand." ]
+                        catalogue,
+                        problems
+                        @ [ $"{Path.GetFileName path} leaves no colours at all, so the usual ones stand." ]
                     else
                         shades, problems |> List.map (fun said -> $"{Path.GetFileName path}: {said}")
                 | None -> catalogue, []

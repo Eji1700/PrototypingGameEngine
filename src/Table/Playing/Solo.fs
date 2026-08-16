@@ -66,15 +66,17 @@ type Errand<'Move, 'State, 'Notice> =
 [<NoComparison; NoEquality>]
 type Solo<'Move, 'State, 'Notice> =
     private
-        { Game: Playable<'Move, 'State, 'Notice>
-          Model: Model<'Move, 'State, 'Notice>
-          Stamp: string
-          /// How far the game had got when this table took it up, which is nought for a fresh
-          /// deal and wherever it was left for a game taken up again. What it is for is to
-          /// tell a sitting that added something from one that only looked.
-          Opened: int
-          Rivals: (PlayerId * Seated<'Move, 'State>) list
-          Watchers: (string * Reading<'Move, 'State, 'Notice>) list }
+        {
+            Game: Playable<'Move, 'State, 'Notice>
+            Model: Model<'Move, 'State, 'Notice>
+            Stamp: string
+            /// How far the game had got when this table took it up, which is nought for a fresh
+            /// deal and wherever it was left for a game taken up again. What it is for is to
+            /// tell a sitting that added something from one that only looked.
+            Opened: int
+            Rivals: (PlayerId * Seated<'Move, 'State>) list
+            Watchers: (string * Reading<'Move, 'State, 'Notice>) list
+        }
 
 module Solo =
 

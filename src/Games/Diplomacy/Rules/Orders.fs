@@ -76,9 +76,7 @@ module Orders =
     /// the carrying are ordered in the same breath, and an order refused at the prompt for want
     /// of a convoy that is being written two seats away would be refused for the wrong reason.
     let private couldBeCarried from into =
-        from <> into
-        && Atlas.terrainOf from = Coastal
-        && Atlas.terrainOf into = Coastal
+        from <> into && Atlas.terrainOf from = Coastal && Atlas.terrainOf into = Coastal
 
     /// A destination as the piece would actually arrive at it, with the coast settled.
     ///
@@ -151,14 +149,10 @@ module Orders =
                     Ok(SupportMove(who, into))
 
             | Convoys(who, into) ->
-                if piece.Kind <> Fleet then
-                    Error(OnlyFleetsConvoy order.At)
-                elif not (Atlas.isSea order.At) then
-                    Error(ConvoysAreAtSea order.At)
-                elif not (couldBeCarried who into) then
-                    Error(ConvoysCarryArmies(who, into))
-                else
-                    Ok(Convoys(who, into))
+                if piece.Kind <> Fleet then Error(OnlyFleetsConvoy order.At)
+                elif not (Atlas.isSea order.At) then Error(ConvoysAreAtSea order.At)
+                elif not (couldBeCarried who into) then Error(ConvoysCarryArmies(who, into))
+                else Ok(Convoys(who, into))
 
             | says -> Error(NotThisPhase says)
 
@@ -201,7 +195,8 @@ module Orders =
     let buildable power position =
         Atlas.homesOf power
         |> List.filter (fun home ->
-            Position.ownerOf home position = Some power && not (Position.occupied home position))
+            Position.ownerOf home position = Some power
+            && not (Position.occupied home position))
 
     /// One build or one removal. `owed` is what the centres came to, which the session works
     /// out: a power builds when it is positive and gives units up when it is negative.

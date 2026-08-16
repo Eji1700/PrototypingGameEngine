@@ -3,26 +3,6 @@ namespace TCModel.Table
 open System
 open System.IO
 
-/// What somebody has settled on, kept between sittings: how a board is drawn, and what is
-/// drawn in what colour.
-///
-/// None of it is part of any game. It is how a game is *read* - the same things that already
-/// stay out of the record and out of the wire, so that two people at one networked table can
-/// read one board in colours that have nothing to do with each other. All that is added here
-/// is that putting the program down no longer forgets them.
-///
-/// **There is no second language.** Every line in the file is a line somebody could have
-/// typed at the screen it belongs to: `view rich` is what the menu takes, and `red crimson`
-/// is what the colour screen takes, read back by those very readers. So a settings file
-/// cannot come to hold something no screen can express, a screen cannot come to offer
-/// something no file can hold, and what a line means is settled in one place rather than two.
-/// The same bargain the record keeps, one level out - a record is the moves a player typed,
-/// and this is the answers they gave.
-///
-/// The colours are per game and the view may be, because a game's slots are its own: a game
-/// of stones colours three factions and a game of nine squares colours two marks, and there
-/// is no one list to keep them in. What every game shares - which way of drawing is wanted
-/// first - is said once above them all, and a game may still say otherwise for itself.
 /// What was settled at one game.
 ///
 /// Never seen outside the type below, whose only field holding one is private. It is a record
@@ -30,15 +10,38 @@ open System.IO
 /// optional strings, and a pair of those in a tuple is a pair nobody can read.
 [<NoComparison; NoEquality>]
 type Kept =
-    { /// The view this game opens in.
-      Drawn: string option
-      /// Which of this game's ways of being played was settled on, where it has more than
-      /// one. A name, and this file does not check it against anything - which of them there
-      /// are is the game's own answer, and the game may not even be in this build.
-      Plays: string option
-      /// The lines the colour screen would take to put its colours where they are.
-      Colours: string list }
+    {
+        /// The view this game opens in.
+        Drawn: string option
+        /// Which of this game's ways of being played was settled on, where it has more than
+        /// one. A name, and this file does not check it against anything - which of them there
+        /// are is the game's own answer, and the game may not even be in this build.
+        Plays: string option
+        /// The lines the Video page would take to put its colours where they are.
+        Colours: string list
+    }
 
+/// What somebody has settled on, kept between sittings: whether the table rings, how a board
+/// is drawn, what is drawn in what colour, and which way a game with more than one is played.
+///
+/// None of it is part of any game. It is how a game is *read* - the same things that already
+/// stay out of the record and out of the wire, so that two people at one networked table can
+/// read one board in colours that have nothing to do with each other. All that is added here
+/// is that putting the program down no longer forgets them.
+///
+/// **There is no second language.** Every line in the file is a line somebody could have
+/// typed at the screen it belongs to: `view rich` is what the menu takes, `bell off` is what
+/// the Audio page takes, and `red crimson` is what the Video page takes, read back by those
+/// very readers. So a settings file cannot come to hold something no screen can express, a
+/// screen cannot come to offer something no file can hold, and what a line means is settled in
+/// one place rather than two. The same bargain the record keeps, one level out - a record is
+/// the moves a player typed, and this is the answers they gave.
+///
+/// The colours are per game and the view may be, because a game's slots are its own: a game
+/// of stones colours three factions and a game of nine squares colours two marks, and there
+/// is no one list to keep them in. What every game shares - which way of drawing is wanted
+/// first, and whether a bell rings - is said once above them all, and a game may still say
+/// otherwise about the view.
 [<NoComparison; NoEquality>]
 type Settings =
     private
@@ -87,9 +90,7 @@ module Settings =
     let private PlaysWord = "plays"
 
     let private forGame name settings =
-        settings.Games
-        |> List.tryFind (fun (said, _) -> said = name)
-        |> Option.map snd
+        settings.Games |> List.tryFind (fun (said, _) -> said = name) |> Option.map snd
 
     // --- what a game opens with ------------------------------------------------------------
 
@@ -118,7 +119,8 @@ module Settings =
     ///
     /// Nobody having said means it rings, which is what every table did before there was a way
     /// to say otherwise - a setting nobody has touched should not change what the program does.
-    let bell settings = settings.Bell |> Option.defaultValue true
+    let bell settings =
+        settings.Bell |> Option.defaultValue true
 
     /// The palette a game opens in: whatever it says its slots start out as, with the lines
     /// that were kept for it laid over the top.
@@ -133,7 +135,10 @@ module Settings =
         |> Option.defaultValue []
         |> List.fold
             (fun (palette, problems) (line: string) ->
-                match line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofArray with
+                match
+                    line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+                    |> List.ofArray
+                with
                 | [ slot; colour ] ->
                     match Palette.set slot colour palette with
                     | Ok palette -> palette, problems
@@ -273,7 +278,8 @@ module Settings =
             let wrong said = settings, into, problems @ [ said ]
 
             let words =
-                line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries) |> List.ofArray
+                line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+                |> List.ofArray
 
             /// One line put where the heading above it says. A game's lines are kept as they
             /// were written rather than read here, because what a slot is called is the game's
@@ -310,8 +316,12 @@ module Settings =
                     | "off" -> { settings with Bell = Some false }, into, problems
                     | _ -> wrong $"'{line}' is not '{BellWord} on' or '{BellWord} off'."
                 | [ word; _ ], Some _ when word = BellWord ->
-                    wrong $"'{line}' is said about every game at once, so it goes above the first '[<game>]' line rather than under one."
-                | [ _; _ ], Some game -> under game (fun kept -> { kept with Colours = kept.Colours @ [ line.ToLowerInvariant() ] })
+                    wrong
+                        $"'{line}' is said about every game at once, so it goes above the first '[<game>]' line rather than under one."
+                | [ _; _ ], Some game ->
+                    under game (fun kept ->
+                        { kept with
+                            Colours = kept.Colours @ [ line.ToLowerInvariant() ] })
                 | [ _; _ ], None ->
                     wrong $"'{line}' colours something, and nothing above it says which game. Put a '[<game>]' line over it."
                 | _ -> wrong $"'{line}' is not '{DrawnWord} <name>', '{BellWord} on', '{PlaysWord} <name>' or '<what> <colour>'."
@@ -320,8 +330,7 @@ module Settings =
         settings, problems
 
     /// Where the settings are kept, beside the records.
-    let source =
-        Path.Combine(Directory.GetCurrentDirectory(), "settings.txt")
+    let source = Path.Combine(Directory.GetCurrentDirectory(), "settings.txt")
 
     /// What is on disk, and what was wrong with it. No file at all is not a complaint: it is
     /// the ordinary case, and what it means is that nothing has been settled on yet.

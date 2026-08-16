@@ -69,8 +69,7 @@ let private errand game sitters doing =
 /// what the player last said and not what the file last held.
 let private tell rings posts =
     for post in posts do
-        if rings && post.Say = Nudged then
-            printf "\a"
+        if rings && post.Say = Nudged then printf "\a"
 
     posts
     |> List.choose (fun post ->
@@ -164,8 +163,7 @@ let private takeUp game path =
 
     let ours =
         match Transcript.about path with
-        | Some other when other <> game.Name ->
-            Error $"'{path}' is a game of {other}, not of {game.Name}.{elsewhere other}"
+        | Some other when other <> game.Name -> Error $"'{path}' is a game of {other}, not of {game.Name}.{elsewhere other}"
         | _ -> Ok()
 
     if not (File.Exists path) then
@@ -207,8 +205,7 @@ let private serveFor game palette reach (model, sitters, stamp) =
     // the only moment anybody is really there - and the machines have already played up
     // to the first seat a person has to fill by the time it does.
     let solo, doing =
-        Solo.opened game stamp model
-        |> Solo.against (machines game sitters model)
+        Solo.opened game stamp model |> Solo.against (machines game sitters model)
 
     // Nobody at a keyboard here, so there is nowhere to put what it has to say - a browser is
     // told where its record went by the page rather than by this process's console.
@@ -269,13 +266,15 @@ let private hostFor game view reach (model, sitters, stamp) =
 /// A game with one way carries a list of one, which is the ordinary case and costs nothing.
 [<NoComparison; NoEquality>]
 type private Settled<'Move, 'State, 'Notice> =
-    { /// Every way this game can be played, the plainest first.
-      Ways: Playable<'Move, 'State, 'Notice> list
-      /// The one being played, which is always one of the above.
-      Game: Playable<'Move, 'State, 'Notice>
-      View: View<'Move, 'State, 'Notice>
-      /// Whether the table rings when the turn comes round unasked.
-      Rings: bool }
+    {
+        /// Every way this game can be played, the plainest first.
+        Ways: Playable<'Move, 'State, 'Notice> list
+        /// The one being played, which is always one of the above.
+        Game: Playable<'Move, 'State, 'Notice>
+        View: View<'Move, 'State, 'Notice>
+        /// Whether the table rings when the turn comes round unasked.
+        Rings: bool
+    }
 
 module private Settled =
 
@@ -478,8 +477,7 @@ let private starting settled choice =
     | Menu.Join(address, code) -> Ok(Done(Client.join game address None code view))
     | Menu.Replay path ->
         takeUp game path
-        |> Result.map (fun (model, sitters, stamp) ->
-            Play(settled, model, sitters, stamp |> Option.defaultWith (stamping game)))
+        |> Result.map (fun (model, sitters, stamp) -> Play(settled, model, sitters, stamp |> Option.defaultWith (stamping game)))
     // The rest are screens rather than games. The front door answers every one of them
     // itself, so what is left here is somebody at the seat list asking for one of them from
     // there - which is a fair thing to type and wants an answer rather than a shrug.
@@ -634,8 +632,7 @@ let private play settled sitters stamp model =
     // A game taken up again seats them from what its record said, so they come back to the
     // seats they were playing rather than to whatever the line that opened it happened to say.
     let seated, doing =
-        Solo.opened game stamp model
-        |> Solo.against (machines game sitters model)
+        Solo.opened game stamp model |> Solo.against (machines game sitters model)
 
     let kept = errand game sitters doing
 
@@ -766,11 +763,7 @@ type Chosen =
 /// are two arguments rather than one because the second is not always the first of the first:
 /// a command line that named a way outright opens that way, and the settings file may name
 /// another, and a `Chosen` is built the same way whichever of those settled it.
-let rec private making
-    (ways: Playable<'Move, 'State, 'Notice> list)
-    (game: Playable<'Move, 'State, 'Notice>)
-    (asked: bool)
-    =
+let rec private making (ways: Playable<'Move, 'State, 'Notice> list) (game: Playable<'Move, 'State, 'Notice>) (asked: bool) =
     /// Which way to open, and the whole of the difference `asked` makes.
     ///
     /// Somebody who typed `compile-control` has said which way and is not asking; the settings
@@ -829,8 +822,7 @@ let rec private making
             // the first screen there is to say it on rather than off the top of one. Both are
             // files a person writes by hand, so a line of either that quietly did nothing is
             // a line they would otherwise spend an evening on.
-            let said =
-                String.concat Environment.NewLine (Palette.complaints @ unread @ stale)
+            let said = String.concat Environment.NewLine (Palette.complaints @ unread @ stale)
 
             let settled =
                 { Ways = ways

@@ -108,20 +108,30 @@ let private touches province =
     let afloat =
         match Atlas.coastsOf province with
         | [] -> Atlas.fleetReach { At = province; Coast = None }
-        | coasts -> coasts |> List.collect (fun coast -> Atlas.fleetReach { At = province; Coast = Some coast })
+        | coasts ->
+            coasts
+            |> List.collect (fun coast -> Atlas.fleetReach { At = province; Coast = Some coast })
 
-    Atlas.armyReach province @ (afloat |> List.map (fun there -> there.At)) |> List.distinct
+    Atlas.armyReach province @ (afloat |> List.map (fun there -> there.At))
+    |> List.distinct
 
 /// The map as half-columns: a cell is two half-columns from the next, and the row is shifted by
 /// its own head. Read off `Atlas.layout` the same way a renderer reads it.
 let private mapped =
     Atlas.layout
     |> List.map (fun (shift, cells) ->
-        cells |> List.mapi (fun step cell -> cell, shift + 2 * step) |> List.choose (fun (c, h) -> c |> Option.map (fun p -> p, h)))
+        cells
+        |> List.mapi (fun step cell -> cell, shift + 2 * step)
+        |> List.choose (fun (c, h) -> c |> Option.map (fun p -> p, h)))
 
 /// The six cells round one, on a lattice where a row sits half a cell across from the one above.
 let private around (row, here) =
-    [ row, here - 2; row, here + 2; row - 1, here - 1; row - 1, here + 1; row + 1, here - 1; row + 1, here + 1 ]
+    [ row, here - 2
+      row, here + 2
+      row - 1, here - 1
+      row - 1, here + 1
+      row + 1, here - 1
+      row + 1, here + 1 ]
 
 /// Two *different* provinces the picture puts side by side: two half-columns apart in one row,
 /// or one half-column apart in rows that touch. A side between two hexes of the same province is
@@ -131,12 +141,14 @@ let private sides =
         [ for row in mapped do
               for one, here in row do
                   for other, there in row do
-                      if one <> other && abs (here - there) = 2 then yield min one other, max one other
+                      if one <> other && abs (here - there) = 2 then
+                          yield min one other, max one other
 
           for above, below in List.pairwise mapped do
               for one, here in above do
                   for other, there in below do
-                      if one <> other && abs (here - there) = 1 then yield min one other, max one other ]
+                      if one <> other && abs (here - there) = 1 then
+                          yield min one other, max one other ]
 
 report
     "every province is somewhere on the map"
@@ -217,7 +229,9 @@ report
         |> List.collect id
 
      let filled =
-         placed |> List.choose (fun (where, cell) -> cell |> Option.map (fun province -> where, province)) |> Map.ofList
+         placed
+         |> List.choose (fun (where, cell) -> cell |> Option.map (fun province -> where, province))
+         |> Map.ofList
 
      placed
      |> List.filter (snd >> Option.isNone)
@@ -247,7 +261,9 @@ let private wallsAcross =
     Atlas.layout
     |> List.sumBy (fun (_, cells) ->
         let cells = Array.ofList cells
-        let at index = if index >= 0 && index < cells.Length then cells[index] else None
+
+        let at index =
+            if index >= 0 && index < cells.Length then cells[index] else None
 
         [ 0 .. cells.Length ]
         |> List.filter (fun edge ->
@@ -273,14 +289,16 @@ report
 // whose is whose. It is drawn on the walls rather than written in words, so a reader that lost
 // the tone on the way would still draw a perfectly good map and say nothing about it.
 
-let private rich = diplomacy.Views standard |> List.find (fun view -> view.Name = "rich")
+let private rich =
+    diplomacy.Views standard |> List.find (fun view -> view.Name = "rich")
 
 let private painted = rich.Board Margins.all (Power.seatOf Austria) dealt
 
 /// What a slot comes out as at a terminal, asked of the very machinery that paints with it
 /// rather than written down here a second time.
 let private inkOf key =
-    let sample = Tint.renderAt 20 (Spectre.Console.Markup(Tint.wrap (Palette.inkOf key standard) "x"))
+    let sample =
+        Tint.renderAt 20 (Spectre.Console.Markup(Tint.wrap (Palette.inkOf key standard) "x"))
 
     Regex.Match(sample, "38;5;([0-9]+)").Groups[1].Value
 
@@ -307,12 +325,11 @@ let private marked (province: Province) =
 report
     "the map writes every sea between tildes"
     []
-    (seas |> List.filter (marked >> not) |> List.map (fun province -> Atlas.code province.Id))
+    (seas
+     |> List.filter (marked >> not)
+     |> List.map (fun province -> Atlas.code province.Id))
 
-report
-    "and nothing that is not a sea"
-    []
-    (lands |> List.filter marked |> List.map (fun province -> Atlas.code province.Id))
+report "and nothing that is not a sea" [] (lands |> List.filter marked |> List.map (fun province -> Atlas.code province.Id))
 
 report "and the water has a colour of its own" true (Regex.IsMatch(painted, $"\\[38;5;{inkOf Ink.Sea}m~[a-z]+~"))
 
@@ -340,8 +357,13 @@ report
 
 let private cut =
     resolve
-        [ Germany, Army, "ber"; Germany, Army, "mun"; Russia, Army, "sil"; Russia, Army, "boh" ]
-        [ "ber", MoveTo(loc "sil"); "mun", SupportMove(p "ber", p "sil"); "boh", MoveTo(loc "mun") ]
+        [ Germany, Army, "ber"
+          Germany, Army, "mun"
+          Russia, Army, "sil"
+          Russia, Army, "boh" ]
+        [ "ber", MoveTo(loc "sil")
+          "mun", SupportMove(p "ber", p "sil")
+          "boh", MoveTo(loc "mun") ]
 
 // The attack on Munich fails and cuts the support anyway. Support is not a fight; it is a unit
 // with its attention somewhere else.
@@ -402,7 +424,10 @@ report "and the fleet carrying it reports as much" (Some Carried) (came convoyed
 
 let private longWay =
     resolve
-        [ England, Army, "lon"; England, Fleet, "eng"; England, Fleet, "mao"; England, Fleet, "wes" ]
+        [ England, Army, "lon"
+          England, Fleet, "eng"
+          England, Fleet, "mao"
+          England, Fleet, "wes" ]
         [ "lon", MoveTo(loc "naf")
           "eng", Convoys(p "lon", p "naf")
           "mao", Convoys(p "lon", p "naf")
@@ -537,19 +562,22 @@ report "and Austria writes first" (Power.seatOf Austria) (Session.active opening
 // asked. That is the common case rather than the odd one.
 let private quietSpring = phase [] opening
 
-report "a spring with nothing dislodged goes straight to the autumn" (Moving Autumn, 1901) ((Session.play quietSpring).Stage, (Session.play quietSpring).Year)
+report
+    "a spring with nothing dislodged goes straight to the autumn"
+    (Moving Autumn, 1901)
+    ((Session.play quietSpring).Stage, (Session.play quietSpring).Year)
 
 // And an autumn where nothing changed hands skips the winter too.
 let private quietAutumn = phase [] quietSpring
 
-report "an autumn that changed nothing goes straight to the next spring" (Moving Spring, 1902) ((Session.play quietAutumn).Stage, (Session.play quietAutumn).Year)
+report
+    "an autumn that changed nothing goes straight to the next spring"
+    (Moving Spring, 1902)
+    ((Session.play quietAutumn).Stage, (Session.play quietAutumn).Year)
 
 // Now one that does change something. Austria walks into Serbia in the spring and stays there
 // through the autumn, which is a centre and therefore a build.
-let private taken =
-    opening
-    |> phase [ ("bud", MoveTo(loc "ser")) ]
-    |> phase []
+let private taken = opening |> phase [ ("bud", MoveTo(loc "ser")) ] |> phase []
 
 report "a neutral centre sat on through an autumn changes hands" (Some Austria) (Position.ownerOf (p "ser") (Session.board taken))
 report "which means somebody is owed a build" (Building, 1901) ((Session.play taken).Stage, (Session.play taken).Year)
@@ -581,7 +609,12 @@ let private refuse move =
 
 report "an order for somebody else's unit" (Some(Rejected(p "lon", NotYours(p "lon", England)))) (refuse (Give(p "lon", Holds)))
 report "an order for an empty province" (Some(Rejected(p "bel", NothingThere(p "bel")))) (refuse (Give(p "bel", Holds)))
-report "a march to a province that does not border" (Some(Rejected(p "vie", CannotReach(p "vie", p "ber")))) (refuse (Give(p "vie", MoveTo(loc "ber"))))
+
+report
+    "a march to a province that does not border"
+    (Some(Rejected(p "vie", CannotReach(p "vie", p "ber"))))
+    (refuse (Give(p "vie", MoveTo(loc "ber"))))
+
 report "an army told to stand on a coast" true ((refuse (Give(p "vie", MoveTo { At = p "tri"; Coast = Some North }))) <> None)
 report "a build before there is anything to build" true ((refuse (Give(p "vie", Builds(Army, None)))) <> None)
 
@@ -621,9 +654,14 @@ report "the power that wrote an order reads it" true ((diplomacy.SeenBy (Power.s
 report "and nobody else does" false ((diplomacy.SeenBy (Power.seatOf Italy) wroteIt).Contains "vie - tri")
 report "though everybody is told there was one" true ((diplomacy.SeenBy (Power.seatOf Italy) wroteIt).Contains "Vienna")
 
-let private whispered = Happened(Whispered(Austria, Some Italy, "leave Trieste alone"))
+let private whispered =
+    Happened(Whispered(Austria, Some Italy, "leave Trieste alone"))
 
-report "a word sent to one power is read by the two of them" true ((diplomacy.SeenBy (Power.seatOf Italy) whispered).Contains "Trieste")
+report
+    "a word sent to one power is read by the two of them"
+    true
+    ((diplomacy.SeenBy (Power.seatOf Italy) whispered).Contains "Trieste")
+
 report "and by nobody else" false ((diplomacy.SeenBy (Power.seatOf France) whispered).Contains "Trieste")
 report "who are told it went" true ((diplomacy.SeenBy (Power.seatOf France) whispered).Contains "sends word")
 
@@ -686,7 +724,8 @@ for msg in roundTrip do
 
 report "a table of six is turned away" true (Result.isError (Update.start rules 6 0UL))
 
-let private ordered = Update.update rules (Make(Give(p "vie", MoveTo(loc "tri")))) dealt
+let private ordered =
+    Update.update rules (Make(Give(p "vie", MoveTo(loc "tri")))) dealt
 
 report "an order lands on the timeline" 1 (Timeline.movesMade ordered.Timeline)
 report "and comes back off it" 0 (Timeline.movesMade (Update.update rules Undo ordered).Timeline)
@@ -699,7 +738,8 @@ report "and comes back off it" 0 (Timeline.movesMade (Update.update rules Undo o
 /// because a year has three of those and only one of them happens every time. A board drawn at
 /// a movement says nothing about the board drawn at a retreat.
 let private played =
-    let seated = diplomacy.Seating 7UL (List.replicate 7 (Some "medium")) (Model.state dealt)
+    let seated =
+        diplomacy.Seating 7UL (List.replicate 7 (Some "medium")) (Model.state dealt)
 
     let kindOf =
         function
@@ -713,7 +753,7 @@ let private played =
         let seen =
             if seen |> List.exists (fst >> (=) kind) then seen else seen @ [ (kind, model) ]
 
-        if fuel <= 0 || rules.Over (Model.state model) then
+        if fuel <= 0 || rules.Over(Model.state model) then
             model, seen
         else
             let seat = rules.Active(Model.state model)
@@ -729,11 +769,7 @@ let private played =
                     if Timeline.movesMade next.Timeline = Timeline.movesMade model.Timeline then
                         next, seen
                     else
-                        grind
-                            (fuel - 1)
-                            (rivals |> List.map (fun (s, was) -> s, (if s = seat then seated else was)))
-                            next
-                            seen
+                        grind (fuel - 1) (rivals |> List.map (fun (s, was) -> s, (if s = seat then seated else was))) next seen
 
     grind 4000 seated dealt []
 
@@ -890,8 +926,8 @@ report
 
 report "the game names itself once" "diplomacy" diplomacy.Name
 report "seven seats and no other number" (7, 7) (diplomacy.Fewest, diplomacy.Most)
-report "a seat is a power" "Austria" (diplomacy.Seat (Seat.at 1))
-report "the last seat too" "Turkey" (diplomacy.Seat (Seat.at 7))
+report "a seat is a power" "Austria" (diplomacy.Seat(Seat.at 1))
+report "the last seat too" "Turkey" (diplomacy.Seat(Seat.at 7))
 report "it colours eight things - seven powers and the water" 8 (List.length diplomacy.Slots)
 report "and offers three machines" 3 (List.length diplomacy.Skills)
 report "and can be put down" true diplomacy.Resign.IsSome

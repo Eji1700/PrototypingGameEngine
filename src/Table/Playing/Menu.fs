@@ -324,10 +324,7 @@ module Menu =
               $"'host {game.Fewest}', 'vs <skill>...' for {machines},"
               $"'join <address> [word]', 'continue', 'replay <file>',"
               $"'view <{Playable.namesFor AtATerminal game}>',"
-              (if behind then
-                   "'settings', 'rules', 'back', 'quit'."
-               else
-                   "'settings', 'rules', 'quit'.") ]
+              (if behind then "'settings', 'rules', 'back', 'quit'." else "'settings', 'rules', 'quit'.") ]
           Backs = (if behind then Some "back" else None) }
 
     // --- a typed line ----------------------------------------------------------------------

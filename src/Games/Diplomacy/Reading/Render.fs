@@ -254,7 +254,8 @@ module Render =
                        |> List.exists (fun beaten -> beaten.From = province && Some beaten.Piece.Power = power))
 
         let orderFor province =
-            written |> List.tryPick (fun (other, says) -> if other = province then Some says else None)
+            written
+            |> List.tryPick (fun (other, says) -> if other = province then Some says else None)
 
         match power with
         | None -> Blank
@@ -357,11 +358,7 @@ module Render =
                                 | [] -> [ types $"build f {where}" ]
                                 | coasts -> coasts |> List.map (fun coast -> types $"build f {where}/{Coast.code coast}")
 
-                        Tile(
-                            Some(Atlas.nameOf home),
-                            Tone.Slot(Ink.key power),
-                            types $"build a {where}" :: ports
-                        ))
+                        Tile(Some(Atlas.nameOf home), Tone.Slot(Ink.key power), types $"build a {where}" :: ports))
                 elif owing < 0 then
                     Position.unitsOf power play.Board
                     |> List.filter (fun piece -> (orderFor piece.Where.At).IsNone)
@@ -393,13 +390,11 @@ module Render =
                   Scene.cell Tone.Quiet came ])
 
         let asides =
-            [ for piece, into in was.Retreated ->
-                  Scene.cell Tone.Quiet $"{Words.piece piece} retreats to {Words.spot into}"
+            [ for piece, into in was.Retreated -> Scene.cell Tone.Quiet $"{Words.piece piece} retreats to {Words.spot into}"
               for piece in was.Scattered -> Scene.cell Tone.Quiet $"{Words.piece piece} is disbanded"
               for piece in was.Built -> Scene.cell Tone.Quiet $"{Words.named piece} is raised"
               for piece in was.Removed -> Scene.cell Tone.Quiet $"{Words.piece piece} is given up"
-              for centre, owner, _ in was.Changed ->
-                  Scene.cell Tone.Quiet $"{Words.province centre} to {Power.name owner}" ]
+              for centre, owner, _ in was.Changed -> Scene.cell Tone.Quiet $"{Words.province centre} to {Power.name owner}" ]
 
         Stack
             [ Scene.quietly (Words.phase was.Was was.Year)
@@ -475,7 +470,8 @@ module Render =
 
     // --- the log -------------------------------------------------------------------------------------------
 
-    let private wordsFor beholder = Told.inWords (Words.saidTo beholder) Words.command
+    let private wordsFor beholder =
+        Told.inWords (Words.saidTo beholder) Words.command
 
     let private log beholder (model: Model<Move, Session, Notice>) =
         match model.Log with
@@ -494,7 +490,12 @@ module Render =
               Beside
                   [ Block(Blocks.powers, [ powers beholder session ])
                     Block(Blocks.orders, [ chores margins beholder play ]) ]
-              Block(Blocks.board, [ honeycomb position; Scene.noted margins Notes.board; Scene.noted margins Notes.borders ])
+              Block(
+                  Blocks.board,
+                  [ honeycomb position
+                    Scene.noted margins Notes.board
+                    Scene.noted margins Notes.borders ]
+              )
               lastTime play
               Scene.listing margins Blocks.commands commands
               Block(Blocks.log, log beholder model) ]
@@ -551,7 +552,8 @@ module Render =
         // Written out rather than said line by line, and for the same reason the other game's
         // answer is: this lands beside the board rather than on it, and it is a column of
         // related lines that have to stay in the order and the shape they were written in.
-        let written title lines = Block(title, [ Written(String.concat "\n" lines) ])
+        let written title lines =
+            Block(title, [ Written(String.concat "\n" lines) ])
 
         let borders province =
             let byLand = Atlas.armyReach province |> List.map Atlas.nameOf |> List.sort
@@ -603,7 +605,11 @@ module Render =
                    | Neutral, None -> "A supply centre nobody holds.") ]
 
         let lost why =
-            written Blocks.board [ why; ""; "Ask 'borders vie' for what a piece in Vienna could reach, or 'where vie' for what is standing there." ]
+            written
+                Blocks.board
+                [ why
+                  ""
+                  "Ask 'borders vie' for what a piece in Vienna could reach, or 'where vie' for what is standing there." ]
 
         match Commands.words (asked.ToLowerInvariant()) with
         | [ "borders"; word ] ->

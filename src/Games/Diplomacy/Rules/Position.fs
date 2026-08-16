@@ -116,7 +116,9 @@ module Position =
             |> List.map (fun (province, piece) -> province, piece.Power)
 
         { position with
-            Owners = taken |> List.fold (fun owners (province, power) -> Map.add province power owners) position.Owners }
+            Owners =
+                taken
+                |> List.fold (fun owners (province, power) -> Map.add province power owners) position.Owners }
 
     // --- and the one it starts from --------------------------------------------------------------
 

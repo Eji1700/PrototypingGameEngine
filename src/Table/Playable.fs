@@ -183,7 +183,9 @@ module Playable =
 
         let view =
             match Settings.drawn game.Name settings with
-            | Some name -> byName shown palette game name |> Result.defaultValue (plainest shown palette game)
+            | Some name ->
+                byName shown palette game name
+                |> Result.defaultValue (plainest shown palette game)
             | None -> plainest shown palette game
 
         view, problems

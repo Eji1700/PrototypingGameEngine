@@ -30,53 +30,57 @@ type Ending =
 /// One phase resolved, in the terms the phase itself deals in. `Turn` turns this into things
 /// to say; nothing here knows any English.
 type Passing =
-    { Was: Stage
-      Year: int
-      Reports: Report list
-      /// Beaten units that went somewhere, and beaten units that had nowhere to go.
-      Retreated: (Piece * Location) list
-      Scattered: Piece list
-      Built: Piece list
-      Removed: Piece list
-      /// A centre changing hands: which, to whom, and from whom.
-      Changed: (ProvinceId * Power * Power option) list
-      Eliminated: Power list }
+    {
+        Was: Stage
+        Year: int
+        Reports: Report list
+        /// Beaten units that went somewhere, and beaten units that had nowhere to go.
+        Retreated: (Piece * Location) list
+        Scattered: Piece list
+        Built: Piece list
+        Removed: Piece list
+        /// A centre changing hands: which, to whom, and from whom.
+        Changed: (ProvinceId * Power * Power option) list
+        Eliminated: Power list
+    }
 
 /// A game still going.
 type Play =
-    { Year: int
-      Stage: Stage
-      Board: Position
+    {
+        Year: int
+        Stage: Stage
+        Board: Position
 
-      /// The orders written so far this phase, by the province they are for. Secret: what a
-      /// seat may read of them is `Knowledge`'s business, and it is the whole reason this game
-      /// is worth having beside the other two.
-      Written: Map<ProvinceId, Instruction>
+        /// The orders written so far this phase, by the province they are for. Secret: what a
+        /// seat may read of them is `Knowledge`'s business, and it is the whole reason this game
+        /// is worth having beside the other two.
+        Written: Map<ProvinceId, Instruction>
 
-      /// Who has said their orders are final. When the last of them does, the phase resolves -
-      /// which is what makes a game where everybody moves at once playable at one prompt.
-      Sealed: Set<Power>
+        /// Who has said their orders are final. When the last of them does, the phase resolves -
+        /// which is what makes a game where everybody moves at once playable at one prompt.
+        Sealed: Set<Power>
 
-      /// Waiting to be told where to go, in a falling phase.
-      Beaten: Retreating list
+        /// Waiting to be told where to go, in a falling phase.
+        Beaten: Retreating list
 
-      /// Provinces two units bounced off each other in, which nobody may retreat into.
-      Contested: Set<ProvinceId>
+        /// Provinces two units bounced off each other in, which nobody may retreat into.
+        Contested: Set<ProvinceId>
 
-      /// Powers that walked away. Their units stand where they are and are taken off the board
-      /// as they are pushed out - which is what a set of rules for this calls civil disorder,
-      /// and is a great deal more honest than ending a game of seven because one of them left.
-      Adrift: Set<Power>
+        /// Powers that walked away. Their units stand where they are and are taken off the board
+        /// as they are pushed out - which is what a set of rules for this calls civil disorder,
+        /// and is a great deal more honest than ending a game of seven because one of them left.
+        Adrift: Set<Power>
 
-      /// The phases that resolved to get here, kept so that every screen can show what all
-      /// those orders came to.
-      ///
-      /// The log would not do. It holds the last dozen lines and a bloody autumn is thirty
-      /// orders, and the one thing everybody wants to look at while writing the next set is
-      /// the last set and what happened to it.
-      Last: Passing list
+        /// The phases that resolved to get here, kept so that every screen can show what all
+        /// those orders came to.
+        ///
+        /// The log would not do. It holds the last dozen lines and a bloody autumn is thirty
+        /// orders, and the one thing everybody wants to look at while writing the next set is
+        /// the last set and what happened to it.
+        Last: Passing list
 
-      Turn: int }
+        Turn: int
+    }
 
 type Session =
     | InPlay of Play
@@ -134,9 +138,7 @@ module Session =
         else
             match play.Stage with
             | Moving _ -> Position.unitsOf power play.Board |> List.isEmpty |> not
-            | Falling _ ->
-                play.Beaten
-                |> List.exists (fun beaten -> beaten.Piece.Power = power)
+            | Falling _ -> play.Beaten |> List.exists (fun beaten -> beaten.Piece.Power = power)
             | Building ->
                 match owed power play.Board with
                 | 0 -> false
@@ -182,7 +184,8 @@ module Session =
                     edge
                     |> List.collect (fun place ->
                         Atlas.armyReach place
-                        @ (Atlas.fleetReach { At = place; Coast = None } |> List.map (fun there -> there.At)))
+                        @ (Atlas.fleetReach { At = place; Coast = None }
+                           |> List.map (fun there -> there.At)))
                     |> List.distinct
                     |> List.filter (fun place -> not (Set.contains place seen))
 
@@ -241,9 +244,14 @@ module Session =
 
     /// Whether anybody has won, asked only where it can have changed.
     let private decided play =
-        let standing = Position.stillIn play.Board |> List.filter (fun power -> not (Set.contains power play.Adrift))
+        let standing =
+            Position.stillIn play.Board
+            |> List.filter (fun power -> not (Set.contains power play.Adrift))
 
-        match Power.all |> List.tryFind (fun power -> List.length (Position.centresOf power play.Board) >= Victory) with
+        match
+            Power.all
+            |> List.tryFind (fun power -> List.length (Position.centresOf power play.Board) >= Victory)
+        with
         | Some winner -> Some(Solo(winner, List.length (Position.centresOf winner play.Board)))
         | None ->
             match standing with
@@ -266,9 +274,13 @@ module Session =
                 Turn = play.Turn + 1 }
 
         { play with
-            Sealed = Power.all |> List.filter (fun power -> not (hasSomethingToDo power play)) |> Set.ofList }
+            Sealed =
+                Power.all
+                |> List.filter (fun power -> not (hasSomethingToDo power play))
+                |> Set.ofList }
 
-    let private nextAfter season = if season = Spring then Moving Autumn else Building
+    let private nextAfter season =
+        if season = Spring then Moving Autumn else Building
 
     /// Work the phase out, apply it, and walk on until somebody is owed a question.
     ///
@@ -295,19 +307,15 @@ module Session =
                     Contested = resolution.Contested },
                 { nothingHappened (Moving season) play.Year with
                     Reports = resolution.Reports },
-                (if List.isEmpty resolution.Retreats then
-                     nextAfter season
-                 else
-                     Falling season)
+                (if List.isEmpty resolution.Retreats then nextAfter season else Falling season)
 
             | Falling season ->
                 // Anybody who was not told where to go, and anybody whose power walked away
                 // without saying, walks off the board.
-                let board, survivors, scattered = Adjudicate.retreat play.Board play.Beaten play.Written
+                let board, survivors, scattered =
+                    Adjudicate.retreat play.Board play.Beaten play.Written
 
-                { play with
-                    Board = board
-                    Beaten = [] },
+                { play with Board = board; Beaten = [] },
                 { nothingHappened (Falling season) play.Year with
                     Retreated = survivors |> List.map (fun (who, into) -> who.Piece, into)
                     Scattered = scattered |> List.map (fun who -> who.Piece) },
@@ -403,22 +411,20 @@ module Session =
 
     /// Say a power's orders are final, and resolve if that was the last of them.
     let seal power play =
-        let play = { play with Sealed = Set.add power play.Sealed }
+        let play =
+            { play with
+                Sealed = Set.add power play.Sealed }
 
-        if List.isEmpty (awaited play) then
-            resolveNow play
-        else
-            InPlay play, []
+        if List.isEmpty (awaited play) then resolveNow play else InPlay play, []
 
     /// A power walks away. Its units stand and are taken off as they are pushed out, and it is
     /// never asked for anything again - so sealing it may be what finishes the phase.
     let walkAway power play =
-        let play = { play with Adrift = Set.add power play.Adrift }
+        let play =
+            { play with
+                Adrift = Set.add power play.Adrift }
 
-        if List.isEmpty (awaited play) then
-            resolveNow play
-        else
-            InPlay play, []
+        if List.isEmpty (awaited play) then resolveNow play else InPlay play, []
 
     // --- and the board it all starts from -------------------------------------------------------------
 
@@ -437,4 +443,7 @@ module Session =
 
         InPlay
             { opening with
-                Sealed = Power.all |> List.filter (fun power -> not (hasSomethingToDo power opening)) |> Set.ofList }
+                Sealed =
+                    Power.all
+                    |> List.filter (fun power -> not (hasSomethingToDo power opening))
+                    |> Set.ofList }

@@ -168,7 +168,8 @@ report "and there is nothing to take back at the deal" (standing dealt) (standin
 // The record, which is written in the words the prompt takes and read back by the same
 // parser - so a game plays again from its own file without a second language in between.
 
-let private record = Transcript.write noughts [ Here; Machine "hard" ] walked.Journal
+let private record =
+    Transcript.write noughts [ Here; Machine "hard" ] walked.Journal
 
 report "a record says how the game was dealt, and who was at it" true (record |> mentions "deal 2 0 you hard")
 
@@ -362,7 +363,8 @@ for view in views do
     report
         $"and the {view.Name} view's notes can be turned off"
         false
-        (seen (view.Board Margins.none (Seat.at 1) walked) |> mentions Render.Notes.winning)
+        (seen (view.Board Margins.none (Seat.at 1) walked)
+         |> mentions Render.Notes.winning)
 
     report
         $"the {view.Name} view answers a table still filling up"
@@ -502,7 +504,8 @@ report "and the page's buttons are exactly the controls the game described" (des
 report
     "and the terminal is told to type the very same lines"
     true
-    (described |> List.forall (fun (caption, _) -> plain.Board Margins.all (Seat.at 1) walked |> mentions caption))
+    (described
+     |> List.forall (fun (caption, _) -> plain.Board Margins.all (Seat.at 1) walked |> mentions caption))
 
 // A note is the game's decision and not a reader's, so it is off in the description before it
 // is off on any screen - which is what makes turning it off in one place enough.

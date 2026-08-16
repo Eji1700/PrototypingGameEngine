@@ -95,12 +95,14 @@ for view in views do
     report
         $"the {view.Name} view names the drawn stone to the player who drew it"
         true
-        (seen (view.Board Margins.all drawer.Id drawn) |> mentions $"drew a {drewColor} stone")
+        (seen (view.Board Margins.all drawer.Id drawn)
+         |> mentions $"drew a {drewColor} stone")
 
     report
         $"the {view.Name} view does not name it to anybody else"
         false
-        (seen (view.Board Margins.all other.Id drawn) |> mentions $"drew a {drewColor} stone")
+        (seen (view.Board Margins.all other.Id drawn)
+         |> mentions $"drew a {drewColor} stone")
 
 // --- the notes -----------------------------------------------------------------------------
 //

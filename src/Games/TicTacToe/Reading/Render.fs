@@ -73,7 +73,11 @@ module Render =
         // Nine across is what makes a square look square rather than a letter in a slot, at a
         // reader with the room for it. The one counting characters has not, and will give a
         // square the one character in it.
-        Walled(9, Squares.rows |> List.map (fun row -> Scene.squared (row |> List.map (square board))))
+        Walled(
+            9,
+            Squares.rows
+            |> List.map (fun row -> Scene.squared (row |> List.map (square board)))
+        )
 
     // --- who is playing -----------------------------------------------------------------------
 

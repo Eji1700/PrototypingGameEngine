@@ -362,8 +362,11 @@ module Rival =
         | Some question ->
             match question.Wanting with
             | ACard(command, targets) ->
-                let chosen, rng = best (counting (worthChoosing question.Chooser command)) targets rival.Rng
-                chosen |> Option.map (fun target -> Choose(TheCard(Target.card target)), { rival with Rng = rng })
+                let chosen, rng =
+                    best (counting (worthChoosing question.Chooser command)) targets rival.Rng
+
+                chosen
+                |> Option.map (fun target -> Choose(TheCard(Target.card target)), { rival with Rng = rng })
             | ALine(_, offered)
             | ALineFor(_, offered) ->
                 let line, rng = pick offered rival.Rng
@@ -449,12 +452,10 @@ module Rival =
             let ways =
                 [ for card in (Session.side seat session).Hand do
                       for line in Field.facingLines seat card session.Field do
-                          if open' line FaceUp then
-                              card, line, FaceUp
+                          if open' line FaceUp then card, line, FaceUp
 
                       for line in Lines.all do
-                          if open' line FaceDown then
-                              card, line, FaceDown ]
+                          if open' line FaceDown then card, line, FaceDown ]
 
             // The machine that looks ahead ignores every estimate above and plays the move out:
             // the board it leaves is the score. It keeps the counting machine's arithmetic only as
@@ -462,11 +463,11 @@ module Rival =
             // of them may have spent a five to get there.
             let score (card, line, face) =
                 if not looks then
-                    worthPlaying seat session (card, line, face) + readingPlay seat (card, line, face)
+                    worthPlaying seat session (card, line, face)
+                    + readingPlay seat (card, line, face)
                 else
                     match after seat (Play(card, line, face)) session with
-                    | Some played ->
-                        standingIn seat played * 4 + worthPlaying seat session (card, line, face)
+                    | Some played -> standingIn seat played * 4 + worthPlaying seat session (card, line, face)
                     | None -> System.Int32.MinValue
 
             match best (counting score) ways rival.Rng with
@@ -489,8 +490,7 @@ module Rival =
 
     let hard =
         { Name = "hard"
-          Describe =
-            "counts, and reads the cards - it plays for what a card says as well as for what it is worth" }
+          Describe = "counts, and reads the cards - it plays for what a card says as well as for what it is worth" }
 
     let deep =
         { Name = "deep"

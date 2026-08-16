@@ -60,57 +60,59 @@ type Doing =
 /// player's protocols are their side of it before their deck is, and a stage that had to
 /// carry the draft's results and then hand them on would be two places a protocol could be.
 type Session =
-    { Stage: Stage
-      Field: Field
-      /// Whose turn it is once there is play to be had. Before then it is worked out from
-      /// how far the draft or the arranging has got, which is what `active` is for.
-      ToPlay: PlayerId
-      Turn: int
+    {
+        Stage: Stage
+        Field: Field
+        /// Whose turn it is once there is play to be had. Before then it is worked out from
+        /// how far the draft or the arranging has got, which is what `active` is for.
+        ToPlay: PlayerId
+        Turn: int
 
-      /// Where the control component is, and whether there is one at all.
-      Control: Control
+        /// Where the control component is, and whether there is one at all.
+        Control: Control
 
-      /// What is waiting to happen, newest first. Empty almost always, and the whole of what
-      /// "the game is mid-effect" means.
-      Pile: Pending list
+        /// What is waiting to happen, newest first. Empty almost always, and the whole of what
+        /// "the game is mid-effect" means.
+        Pile: Pending list
 
-      /// Every card face up on the table when the pile was last looked at.
-      ///
-      /// A set of cards rather than of places, because a card *is* a place here: no protocol is
-      /// drafted twice, so all thirty-six cards in a game are distinct and one of them names
-      /// itself. It also survives a stack shifting under it, which an index would not.
-      ///
-      /// What is in here and no longer face up drops out; what is face up and not in here has
-      /// just been turned over, and its text goes on the pile. The difference is the only
-      /// trigger this game has.
-      Revealed: Set<Card>
+        /// Every card face up on the table when the pile was last looked at.
+        ///
+        /// A set of cards rather than of places, because a card *is* a place here: no protocol is
+        /// drafted twice, so all thirty-six cards in a game are distinct and one of them names
+        /// itself. It also survives a stack shifting under it, which an index would not.
+        ///
+        /// What is in here and no longer face up drops out; what is face up and not in here has
+        /// just been turned over, and its text goes on the pile. The difference is the only
+        /// trigger this game has.
+        Revealed: Set<Card>
 
-      /// Who may not compile when their turn next begins.
-      ///
-      /// The one thing in this game that is **remembered** rather than asked of the board. Every
-      /// other standing rule is a card lying face up somewhere, and stops the moment that card is
-      /// covered, flipped or deleted; this one was said once and outlives the card that said it,
-      /// so there is nowhere to read it from but here.
-      NoCompile: PlayerId option
+        /// Who may not compile when their turn next begins.
+        ///
+        /// The one thing in this game that is **remembered** rather than asked of the board. Every
+        /// other standing rule is a card lying face up somewhere, and stops the moment that card is
+        /// covered, flipped or deleted; this one was said once and outlives the card that said it,
+        /// so there is nowhere to read it from but here.
+        NoCompile: PlayerId option
 
-      /// The card the command that last finished landed on, which is what *"that card"* means.
-      ///
-      /// Kept beside `Did` and for the same reason: a command that stopped to ask has not landed
-      /// on anything until the answer comes back, and the command reading it may be several moves
-      /// away by then.
-      Chose: Card option
+        /// The card the command that last finished landed on, which is what *"that card"* means.
+        ///
+        /// Kept beside `Did` and for the same reason: a command that stopped to ask has not landed
+        /// on anything until the answer comes back, and the command reading it may be several moves
+        /// away by then.
+        Chose: Card option
 
-      /// How many things the command that last finished actually did.
-      ///
-      /// A number rather than a yes: *"if you do"* reads whether it is more than nought, and
-      /// *"the amount discarded"* reads the number itself. It has to be kept rather than worked
-      /// out, because a command that stops to ask has not finished doing anything until the
-      /// answer comes back - which may be several moves later.
-      Done: int
+        /// How many things the command that last finished actually did.
+        ///
+        /// A number rather than a yes: *"if you do"* reads whether it is more than nought, and
+        /// *"the amount discarded"* reads the number itself. It has to be kept rather than worked
+        /// out, because a command that stops to ask has not finished doing anything until the
+        /// answer comes back - which may be several moves later.
+        Done: int
 
-      /// The shuffle, and whatever else is drawn later. It travels in the state so that a
-      /// game is a value and a seed is a whole game.
-      Rng: Rng }
+        /// The shuffle, and whatever else is drawn later. It travels in the state so that a
+        /// game is a value and a seed is a whole game.
+        Rng: Rng
+    }
 
 module Session =
 

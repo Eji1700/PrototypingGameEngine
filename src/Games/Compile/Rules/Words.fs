@@ -27,7 +27,10 @@ module Words =
         | [ only ] -> line only
         | many ->
             let said = many |> List.map line
-            String.concat ", " (List.truncate (List.length said - 1) said) + " or " + List.last said
+
+            String.concat ", " (List.truncate (List.length said - 1) said)
+            + " or "
+            + List.last said
 
     /// A card as it lies, to somebody who may see what it is: face down, what it is worth is
     /// two whatever is printed on it, and saying both is the whole of what a player needs.
@@ -100,7 +103,11 @@ module Words =
             | [ only ] -> $" worth {only}"
             | many ->
                 let said = many |> List.map string
-                " worth " + String.concat ", " (List.truncate (List.length said - 1) said) + " or " + List.last said
+
+                " worth "
+                + String.concat ", " (List.truncate (List.length said - 1) said)
+                + " or "
+                + List.last said
 
         let where =
             match selector.Where with
@@ -182,12 +189,15 @@ module Words =
         | InEachOtherLine inner -> (printing inner) + ", in each other line"
         | InEachLineHolding inner -> (printing inner) + ", in each line where you have a card"
         | InAChosenLineOf(atLeast, inner) ->
-            (printing inner) + $", in another line of your choosing with {atLeast} or more cards"
+            (printing inner)
+            + $", in another line of your choosing with {atLeast} or more cards"
         | Every inner -> (printing inner).Replace(" any ", " every ").Replace(" your ", " every ").Replace(" their ", " every ")
         | IfYouDo(first, rest) ->
             let after = rest |> List.map printing |> String.concat ", then "
             $"{printing first}. If you do, {after}"
-        | IfCovering rest -> "if this card is covering a card, " + (rest |> List.map printing |> String.concat ", then ")
+        | IfCovering rest ->
+            "if this card is covering a card, "
+            + (rest |> List.map printing |> String.concat ", then ")
         | Either(first, second) -> $"either {printing first} or {printing second}"
         | Opposing inner -> $"your opponent: {printing inner}"
 
@@ -208,10 +218,7 @@ module Words =
     /// it reads in the middle of a sentence, so the capital goes on here rather than in ten
     /// places that would have to agree about it.
     let private capital (text: string) =
-        if text = "" then
-            text
-        else
-            string (System.Char.ToUpperInvariant text[0]) + text.Substring 1
+        if text = "" then text else string (System.Char.ToUpperInvariant text[0]) + text.Substring 1
 
     let private sentence said =
         match said with
@@ -471,11 +478,11 @@ module Words =
             let where =
                 match couldGo with
                 | [] -> $"{protocol wanted.Protocol} is on no line, so it can only go face down."
-                | couldGo -> $"{protocol wanted.Protocol} is on {lines couldGo} - or play it face down anywhere, for {Placed.FaceDownValue}."
+                | couldGo ->
+                    $"{protocol wanted.Protocol} is on {lines couldGo} - or play it face down anywhere, for {Placed.FaceDownValue}."
 
             $"{card wanted} cannot go face up on {line said}. {where}"
-        | AnswerFirst asked ->
-            $"The game is waiting on an answer, and nothing else can happen until it comes: {wanting asked}."
+        | AnswerFirst asked -> $"The game is waiting on an answer, and nothing else can happen until it comes: {wanting asked}."
         | NotOnOffer asked -> $"That is not one of the things being offered: {wanting asked}."
         | Forbidden(why, where) ->
             let said =

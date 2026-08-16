@@ -144,10 +144,7 @@ report
 
 report "and says who was in each seat" seating read.Sitters
 
-report
-    "so the machines sit back down where they were"
-    [ None; Some "hard" ]
-    (Seating.machines read.Sitters)
+report "so the machines sit back down where they were" [ None; Some "hard" ] (Seating.machines read.Sitters)
 
 // And only the machines. Whether the people at a table are in this room or at their own
 // machines is not a fact about the game - it is what `play`, `serve` and `host` mean - so a
@@ -191,15 +188,9 @@ report
 
 let private filed = Transcript.path "2026-08-12-120000" walked.Journal
 
-report
-    "a record is filed under the stamp it was saved with"
-    (Some "2026-08-12-120000")
-    (Transcript.stampOf filed 2 42UL)
+report "a record is filed under the stamp it was saved with" (Some "2026-08-12-120000") (Transcript.stampOf filed 2 42UL)
 
-report
-    "and one nobody can show is this game's is left alone"
-    None
-    (Transcript.stampOf "logs/somebody-renamed-this.log" 2 42UL)
+report "and one nobody can show is this game's is left alone" None (Transcript.stampOf "logs/somebody-renamed-this.log" 2 42UL)
 
 // --- and the writing of it ---------------------------------------------------------
 //

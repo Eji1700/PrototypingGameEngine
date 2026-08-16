@@ -95,4 +95,6 @@ module Protocol =
         | [] -> [ [] ]
         | _ ->
             protocols
-            |> List.collect (fun one -> orders (protocols |> List.filter ((<>) one)) |> List.map (fun rest -> one :: rest))
+            |> List.collect (fun one ->
+                orders (protocols |> List.filter ((<>) one))
+                |> List.map (fun rest -> one :: rest))

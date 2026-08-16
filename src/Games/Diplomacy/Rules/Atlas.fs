@@ -183,9 +183,7 @@ module Atlas =
     /// against each other: a coast that appears in one and not the other is a mistake, and
     /// deriving either from the other is how it would go unnoticed.
     let private twoCoasted =
-        [ "spa", [ North; South ]
-          "bul", [ East; South ]
-          "stp", [ North; South ] ]
+        [ "spa", [ North; South ]; "bul", [ East; South ]; "stp", [ North; South ] ]
 
     // --- where an army may walk -----------------------------------------------------------------
 
@@ -377,7 +375,8 @@ module Atlas =
     /// A province by the three letters, if there is one. The only door in: a line typed at the
     /// prompt becomes a `ProvinceId` here or stays a string.
     let byCode (text: string) =
-        Map.tryFind (text.ToLowerInvariant()) lookup |> Option.map (fun province -> province.Id)
+        Map.tryFind (text.ToLowerInvariant()) lookup
+        |> Option.map (fun province -> province.Id)
 
     /// Everything known about one. Every id was minted above, so this is a total lookup on the
     /// ids that exist - written with a fallback rather than an option because every caller has
@@ -406,7 +405,8 @@ module Atlas =
     let isLand id = terrainOf id <> Sea
 
     /// Every supply centre, in the order the board lists them.
-    let centres = all |> List.filter (fun p -> p.Centre <> NotACentre) |> List.map (fun p -> p.Id)
+    let centres =
+        all |> List.filter (fun p -> p.Centre <> NotACentre) |> List.map (fun p -> p.Id)
 
     /// The home centres of one power - the only places it may ever build.
     let homesOf power =
@@ -475,11 +475,13 @@ module Atlas =
     let private fleetMap = edgesOf fleetBorders locationOf
 
     /// Where an army in that province may walk.
-    let armyReach id = Map.tryFind id armyMap |> Option.defaultValue []
+    let armyReach id =
+        Map.tryFind id armyMap |> Option.defaultValue []
 
     /// Where a fleet standing there may sail. Asked of a location rather than a province,
     /// because on the three with two coasts that is the whole question.
-    let fleetReach location = Map.tryFind location fleetMap |> Option.defaultValue []
+    let fleetReach location =
+        Map.tryFind location fleetMap |> Option.defaultValue []
 
     /// Every place a piece of that kind, standing there, could be ordered to go.
     let reach kind location =
@@ -587,23 +589,293 @@ module Atlas =
     let private places =
         [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
           -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
-          -4, [ "mao"; "iri"; "nao"; "cly"; "cly"; "cly"; "edi"; "nwg"; "nwy"; "stp"; "stp"; "stp"; "stp" ]
-          -5, [ "mao"; "iri"; "lvp"; "cly"; "lvp"; "lvp"; "edi"; "nwg"; "nwy"; "nwy"; "nwy"; "nwy"; "nwy"; "stp" ]
-          -4, [ "mao"; "iri"; "lvp"; "lvp"; "wal"; "yor"; "nth"; "nth"; "nth"; "nth"; "ska"; "swe"; "fin"; "stp" ]
-          -3, [ "mao"; "iri"; "iri"; "wal"; "lon"; "nth"; "nth"; "nth"; "den"; "den"; "swe"; "bot"; "stp"; "stp"; "stp" ]
-          -2, [ "mao"; "eng"; "eng"; "lon"; "lon"; "nth"; "hel"; "den"; "bal"; "bal"; "bot"; "bot"; "bot"; "lvn"; "stp" ]
-          -3, [ "mao"; "eng"; "eng"; "eng"; "eng"; "nth"; "hol"; "kie"; "bal"; "bal"; "bal"; "bal"; "lvn"; "lvn"; "stp" ]
-          -4, [ "mao"; "bre"; "pic"; "bel"; "bel"; "bel"; "hol"; "kie"; "kie"; "ber"; "pru"; "pru"; "pru"; "war"; "mos" ]
-          -5, [ "mao"; "gas"; "bre"; "pic"; "bel"; "bel"; "hol"; "kie"; "kie"; "kie"; "ber"; "pru"; "pru"; "war"; "war"; "mos" ]
-          -6, [ "mao"; "mao"; "gas"; "par"; "bur"; "bur"; "bel"; "ruh"; "ruh"; "mun"; "mun"; "sil"; "sil"; "sil"; "gal"; "ukr"; "sev" ]
-          -5, [ "mao"; "gas"; "gas"; "bur"; "bur"; "bur"; "bur"; "bur"; "mun"; "mun"; "boh"; "boh"; "gal"; "gal"; "ukr"; "sev"; "sev" ]
-          -6, [ "mao"; "spa"; "spa"; "gas"; "mar"; "."; "."; "."; "."; "tyr"; "boh"; "vie"; "vie"; "bud"; "rum"; "sev"; "bla"; "sev"; "sev" ]
-          -5, [ "mao"; "spa"; "spa"; "spa"; "mar"; "pie"; "pie"; "pie"; "tyr"; "tyr"; "tyr"; "tri"; "tri"; "ser"; "rum"; "bla"; "bla"; "bla"; "arm" ]
-          -4, [ "mao"; "por"; "por"; "spa"; "gol"; "tus"; "tus"; "ven"; "ven"; "ven"; "tri"; "tri"; "ser"; "ser"; "bul"; "con"; "ank"; "arm" ]
-          -3, [ "mao"; "mao"; "spa"; "gol"; "tus"; "rom"; "rom"; "ven"; "adr"; "adr"; "tri"; "ser"; "ser"; "bul"; "con"; "ank"; "arm" ]
-          -2, [ "mao"; "wes"; "wes"; "tys"; "rom"; "nap"; "apu"; "adr"; "adr"; "adr"; "alb"; "alb"; "gre"; "aeg"; "smy"; "smy"; "syr" ]
-          -1, [ "naf"; "naf"; "wes"; "tys"; "tys"; "ion"; "adr"; "ion"; "ion"; "alb"; "gre"; "gre"; "aeg"; "smy"; "syr"; "syr" ]
-          2, [ "naf"; "tun"; "tun"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "ion"; "eas"; "eas" ] ]
+          -4,
+          [ "mao"
+            "iri"
+            "nao"
+            "cly"
+            "cly"
+            "cly"
+            "edi"
+            "nwg"
+            "nwy"
+            "stp"
+            "stp"
+            "stp"
+            "stp" ]
+          -5,
+          [ "mao"
+            "iri"
+            "lvp"
+            "cly"
+            "lvp"
+            "lvp"
+            "edi"
+            "nwg"
+            "nwy"
+            "nwy"
+            "nwy"
+            "nwy"
+            "nwy"
+            "stp" ]
+          -4,
+          [ "mao"
+            "iri"
+            "lvp"
+            "lvp"
+            "wal"
+            "yor"
+            "nth"
+            "nth"
+            "nth"
+            "nth"
+            "ska"
+            "swe"
+            "fin"
+            "stp" ]
+          -3,
+          [ "mao"
+            "iri"
+            "iri"
+            "wal"
+            "lon"
+            "nth"
+            "nth"
+            "nth"
+            "den"
+            "den"
+            "swe"
+            "bot"
+            "stp"
+            "stp"
+            "stp" ]
+          -2,
+          [ "mao"
+            "eng"
+            "eng"
+            "lon"
+            "lon"
+            "nth"
+            "hel"
+            "den"
+            "bal"
+            "bal"
+            "bot"
+            "bot"
+            "bot"
+            "lvn"
+            "stp" ]
+          -3,
+          [ "mao"
+            "eng"
+            "eng"
+            "eng"
+            "eng"
+            "nth"
+            "hol"
+            "kie"
+            "bal"
+            "bal"
+            "bal"
+            "bal"
+            "lvn"
+            "lvn"
+            "stp" ]
+          -4,
+          [ "mao"
+            "bre"
+            "pic"
+            "bel"
+            "bel"
+            "bel"
+            "hol"
+            "kie"
+            "kie"
+            "ber"
+            "pru"
+            "pru"
+            "pru"
+            "war"
+            "mos" ]
+          -5,
+          [ "mao"
+            "gas"
+            "bre"
+            "pic"
+            "bel"
+            "bel"
+            "hol"
+            "kie"
+            "kie"
+            "kie"
+            "ber"
+            "pru"
+            "pru"
+            "war"
+            "war"
+            "mos" ]
+          -6,
+          [ "mao"
+            "mao"
+            "gas"
+            "par"
+            "bur"
+            "bur"
+            "bel"
+            "ruh"
+            "ruh"
+            "mun"
+            "mun"
+            "sil"
+            "sil"
+            "sil"
+            "gal"
+            "ukr"
+            "sev" ]
+          -5,
+          [ "mao"
+            "gas"
+            "gas"
+            "bur"
+            "bur"
+            "bur"
+            "bur"
+            "bur"
+            "mun"
+            "mun"
+            "boh"
+            "boh"
+            "gal"
+            "gal"
+            "ukr"
+            "sev"
+            "sev" ]
+          -6,
+          [ "mao"
+            "spa"
+            "spa"
+            "gas"
+            "mar"
+            "."
+            "."
+            "."
+            "."
+            "tyr"
+            "boh"
+            "vie"
+            "vie"
+            "bud"
+            "rum"
+            "sev"
+            "bla"
+            "sev"
+            "sev" ]
+          -5,
+          [ "mao"
+            "spa"
+            "spa"
+            "spa"
+            "mar"
+            "pie"
+            "pie"
+            "pie"
+            "tyr"
+            "tyr"
+            "tyr"
+            "tri"
+            "tri"
+            "ser"
+            "rum"
+            "bla"
+            "bla"
+            "bla"
+            "arm" ]
+          -4,
+          [ "mao"
+            "por"
+            "por"
+            "spa"
+            "gol"
+            "tus"
+            "tus"
+            "ven"
+            "ven"
+            "ven"
+            "tri"
+            "tri"
+            "ser"
+            "ser"
+            "bul"
+            "con"
+            "ank"
+            "arm" ]
+          -3,
+          [ "mao"
+            "mao"
+            "spa"
+            "gol"
+            "tus"
+            "rom"
+            "rom"
+            "ven"
+            "adr"
+            "adr"
+            "tri"
+            "ser"
+            "ser"
+            "bul"
+            "con"
+            "ank"
+            "arm" ]
+          -2,
+          [ "mao"
+            "wes"
+            "wes"
+            "tys"
+            "rom"
+            "nap"
+            "apu"
+            "adr"
+            "adr"
+            "adr"
+            "alb"
+            "alb"
+            "gre"
+            "aeg"
+            "smy"
+            "smy"
+            "syr" ]
+          -1,
+          [ "naf"
+            "naf"
+            "wes"
+            "tys"
+            "tys"
+            "ion"
+            "adr"
+            "ion"
+            "ion"
+            "alb"
+            "gre"
+            "gre"
+            "aeg"
+            "smy"
+            "syr"
+            "syr" ]
+          2,
+          [ "naf"
+            "tun"
+            "tun"
+            "ion"
+            "ion"
+            "ion"
+            "ion"
+            "ion"
+            "ion"
+            "ion"
+            "ion"
+            "eas"
+            "eas" ] ]
 
     /// Every cell with the half-column it stands in, gaps and all.
     let private placedCells =
@@ -627,8 +899,7 @@ module Atlas =
             [ for row in placedPlaces do
                   for one, here in row do
                       for other, there in row do
-                          if one <> other && abs (here - there) = 2 then
-                              yield asPair one other
+                          if one <> other && abs (here - there) = 2 then yield asPair one other
 
               for above, below in List.pairwise placedPlaces do
                   for one, here in above do
@@ -662,8 +933,7 @@ module Atlas =
         |> List.map (fun row ->
             let start = row |> List.map snd |> List.min
 
-            start - westmost,
-            row |> List.map (fun (code, _) -> if code = "." then None else byCode code))
+            start - westmost, row |> List.map (fun (code, _) -> if code = "." then None else byCode code))
 
     // --- what could be wrong with all of it ------------------------------------------------------
 
@@ -690,11 +960,14 @@ module Atlas =
         /// The two ends of every border in a table, as plain text, so that one can be looked
         /// for in the other.
         let pairs table =
-            table |> List.collect (fun (from, into) -> into |> List.map (fun there -> from, there))
+            table
+            |> List.collect (fun (from, into) -> into |> List.map (fun there -> from, there))
 
         let unmirrored table =
             let held = Set.ofList (pairs table)
-            pairs table |> List.filter (fun (from, into) -> not (Set.contains (into, from) held))
+
+            pairs table
+            |> List.filter (fun (from, into) -> not (Set.contains (into, from) held))
 
         let terrainOfCode code =
             declared
@@ -706,7 +979,12 @@ module Atlas =
                 | [] -> seen
                 | here :: rest when Set.contains here seen -> walk seen rest
                 | here :: rest ->
-                    let next = borders |> List.tryFind (fst >> (=) here) |> Option.map snd |> Option.defaultValue []
+                    let next =
+                        borders
+                        |> List.tryFind (fst >> (=) here)
+                        |> Option.map snd
+                        |> Option.defaultValue []
+
                     walk (Set.add here seen) (next @ rest)
 
             walk Set.empty [ start ]
@@ -728,8 +1006,7 @@ module Atlas =
           if List.length codes <> List.length (List.distinct codes) then
               yield "the same province written down twice"
 
-          if count <> 75 then
-              yield $"{count} provinces, where the board has 75"
+          if count <> 75 then yield $"{count} provinces, where the board has 75"
 
           if List.length centres <> 34 then
               yield $"{List.length centres} supply centres, where the board has 34"
@@ -842,11 +1119,10 @@ module Atlas =
           let laid = placedPlaces |> List.collect id |> List.map fst
 
           let touching =
-            Set.ofList
-                [ for from, into in together do
-                      for other in into do
-                          if from <> other then
-                              yield asPair from other ]
+              Set.ofList
+                  [ for from, into in together do
+                        for other in into do
+                            if from <> other then yield asPair from other ]
 
           for one, other in drawnBorders do
               if not (Set.contains (asPair one other) touching) then
@@ -884,7 +1160,8 @@ module Atlas =
           // A row whose cells do not alternate parity with the row above cannot share a side
           // with it at all, which would be a map in two halves rather than one map.
           for above, below in List.pairwise placedCells do
-              let parity row = row |> List.map (snd >> abs >> (fun h -> h % 2)) |> List.distinct
+              let parity row =
+                  row |> List.map (snd >> abs >> (fun h -> h % 2)) |> List.distinct
 
               match parity above, parity below with
               | [ one ], [ other ] when one <> other -> ()

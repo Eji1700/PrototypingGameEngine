@@ -149,7 +149,9 @@ module Readers =
             let every = laid |> List.collect (fun (_, cells) -> List.ofArray cells)
 
             let tall =
-                every |> List.fold (fun tall facet -> max tall (List.length facet.Lines)) 0 |> max 1
+                every
+                |> List.fold (fun tall facet -> max tall (List.length facet.Lines)) 0
+                |> max 1
 
             let widest =
                 every
@@ -195,7 +197,8 @@ module Readers =
             /// A wall stands between two cells unless there is nothing on either side of it, or
             /// unless the two are one region - in which case it is the inside of that region
             /// and is not drawn at all.
-            let wall one other = (there one || there other) && not (joined one other)
+            let wall one other =
+                (there one || there other) && not (joined one other)
 
             let at (cells: Facet[]) index =
                 if index >= 0 && index < Array.length cells then Some cells[index] else None
@@ -274,10 +277,14 @@ module Readers =
 
                 for column in 0 .. width - 1 do
                     let up =
-                        above |> Option.map (fun row -> standing row column) |> Option.defaultValue false
+                        above
+                        |> Option.map (fun row -> standing row column)
+                        |> Option.defaultValue false
 
                     let down =
-                        below |> Option.map (fun row -> standing row column) |> Option.defaultValue false
+                        below
+                        |> Option.map (fun row -> standing row column)
+                        |> Option.defaultValue false
 
                     if up || down || along[column] then
                         let sides =
@@ -290,11 +297,7 @@ module Readers =
                         // turns a corner instead of leaving a stub pointing at nothing.
                         let drawn =
                             if up || down then
-                                glyph
-                                    up
-                                    down
-                                    (column > 0 && along[column - 1])
-                                    (column < width - 1 && along[column + 1])
+                                glyph up down (column > 0 && along[column - 1]) (column < width - 1 && along[column + 1])
                             else
                                 glyph false false true true
 
@@ -338,8 +341,7 @@ module Readers =
             picture
             |> Array.toList
             |> List.map (fun line ->
-                let last =
-                    line |> Array.tryFindIndexBack (fun (letter, _) -> letter <> ' ')
+                let last = line |> Array.tryFindIndexBack (fun (letter, _) -> letter <> ' ')
 
                 match last with
                 | None -> []
@@ -349,7 +351,9 @@ module Readers =
                         (fun spans (letter, tone) ->
                             match spans with
                             | (run: Span) :: rest when run.Tone = tone ->
-                                { run with Text = run.Text + string letter } :: rest
+                                { run with
+                                    Text = run.Text + string letter }
+                                :: rest
                             | _ -> { Text = string letter; Tone = tone } :: spans)
                         []
                     |> List.rev)
@@ -377,7 +381,10 @@ module Readers =
         /// them look like a board rather than a list.
         let private centred room (text: string) =
             let spare = max 0 (room - String.length text)
-            String.replicate (spare / 2) " " + text + String.replicate (spare - spare / 2) " "
+
+            String.replicate (spare / 2) " "
+            + text
+            + String.replicate (spare - spare / 2) " "
 
         /// Cells with the columns lined up and no walls between them.
         let private aligned (rows: Line list list) =
@@ -388,8 +395,7 @@ module Readers =
                 [ for column in 0 .. columns - 1 ->
                       texts
                       |> List.fold
-                          (fun room row ->
-                              if column < List.length row then max room (String.length row[column]) else room)
+                          (fun room row -> if column < List.length row then max room (String.length row[column]) else room)
                           0 ]
 
             texts
@@ -416,8 +422,7 @@ module Readers =
             // A map is laid out in one place for both readers that draw at a terminal, and
             // this one asks for it in dashes and bars. What it gets back is the same map the
             // colour screen draws, character for character.
-            | Walled(across, rows) when Comb.isMap rows ->
-                Comb.lay Comb.bare across rows |> List.map Scene.plainText
+            | Walled(across, rows) when Comb.isMap rows -> Comb.lay Comb.bare across rows |> List.map Scene.plainText
             | Walled(across, rows) -> grid across rows
             | Tile(title, _, body) ->
                 (match title with
@@ -470,7 +475,9 @@ module Readers =
                 (List.replicate (drawn |> List.fold (fun most (_, cells) -> max most (List.length cells)) 0) wall
                  |> String.concat "+")
 
-            drawn |> List.map laid |> List.reduce (fun above below -> above @ [ between ] @ below)
+            drawn
+            |> List.map laid
+            |> List.reduce (fun above below -> above @ [ between ] @ below)
 
         let screen scene =
             draw scene |> String.concat Environment.NewLine
@@ -508,8 +515,7 @@ module Readers =
         let private line paint palette (line: Line) =
             line |> List.map (span paint palette) |> String.concat ""
 
-        let private quietly (text: string) =
-            Tint.wrap (Palette.ink hush) (esc text)
+        let private quietly (text: string) = Tint.wrap (Palette.ink hush) (esc text)
 
         let private walled palette tone title (content: IRenderable) wide =
             let panel = Panel(content)
@@ -541,12 +547,9 @@ module Readers =
                 rule.Style <- Style(Color.Grey37)
                 [ rule :> IRenderable ]
             | Say text -> [ markup (line paint palette text) ]
-            | Note text ->
-                markup ""
-                :: (Scene.wrap (room - 6) text |> List.map (quietly >> markup))
+            | Note text -> markup "" :: (Scene.wrap (room - 6) text |> List.map (quietly >> markup))
             | Written text -> [ markup (paint palette text) ]
-            | Block(title, body) ->
-                [ walled palette Tone.Plainly (Some title) (stacked paint palette room body) wide ]
+            | Block(title, body) -> [ walled palette Tone.Plainly (Some title) (stacked paint palette room body) wide ]
             | Stack parts -> [ stacked paint palette room parts ]
             | Beside parts ->
                 // Each gets its share of the room, which is what the notes inside them are
@@ -558,7 +561,11 @@ module Readers =
                 for _ in parts do
                     grid.AddColumn() |> ignore
 
-                grid.AddRow(parts |> List.map (fun part -> stacked paint palette share [ part ]) |> Array.ofList)
+                grid.AddRow(
+                    parts
+                    |> List.map (fun part -> stacked paint palette share [ part ])
+                    |> Array.ofList
+                )
                 |> ignore
 
                 [ grid :> IRenderable ]
@@ -630,8 +637,7 @@ module Readers =
             // A space rather than nothing, because nothing is what Spectre folds away: an
             // empty markup renders no segment at all and the room asked for never arrives.
             let roomy cell =
-                Spectre.Console.Rows([ markup " " ] @ render paint palette inner true cell @ [ markup " " ])
-                :> IRenderable
+                Spectre.Console.Rows([ markup " " ] @ render paint palette inner true cell @ [ markup " " ]) :> IRenderable
 
             let walls (row: Course) =
                 let table = Table()
@@ -642,12 +648,7 @@ module Readers =
                 for _ in row.Cells do
                     table.AddColumn(TableColumn("").Width(inner).Centered()) |> ignore
 
-                table.AddRow(
-                    row.Cells
-                    |> List.map roomy
-                    |> Array.ofList
-                )
-                |> ignore
+                table.AddRow(row.Cells |> List.map roomy |> Array.ofList) |> ignore
 
                 table :> IRenderable
 
@@ -717,15 +718,13 @@ module Readers =
             | Written text -> [ Page.lines text ]
             | Block(title, body) -> [ Page.block title (body |> List.collect draw) ]
             | Stack parts -> [ Elem.div [] (parts |> List.collect draw) ]
-            | Beside parts ->
-                [ Elem.div
-                      [ Attr.class' "beside" ]
-                      (parts |> List.map (fun part -> Elem.div [] (draw part))) ]
+            | Beside parts -> [ Elem.div [ Attr.class' "beside" ] (parts |> List.map (fun part -> Elem.div [] (draw part))) ]
             | Aligned rows ->
                 [ Elem.div
                       [ Attr.class' "rows" ]
                       (rows
-                       |> List.map (fun row -> Elem.div [ Attr.class' "row" ] (row |> List.map (fun cell -> Elem.span [] (cell |> List.map span))))) ]
+                       |> List.map (fun row ->
+                           Elem.div [ Attr.class' "row" ] (row |> List.map (fun cell -> Elem.span [] (cell |> List.map span))))) ]
             | Walled(_, rows) ->
                 [ Elem.div
                       [ Attr.class' "grid" ]
@@ -740,8 +739,7 @@ module Readers =
                                         // arithmetic so that the cell can be whatever size the
                                         // sheet makes it and the offset still lands right.
                                         [ Page.attr "style" $"margin-left: calc(var(--cell) * {row.Shift} / 2)" ]))
-                               (row.Cells |> List.collect draw)))
-                  ]
+                               (row.Cells |> List.collect draw))) ]
             | Tile(title, tone, body) ->
                 let walls =
                     match tone with
