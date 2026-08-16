@@ -123,6 +123,103 @@ module Lobby =
     let private everyoneHere lobby =
         lobby.Seats |> List.forall (isEmpty >> not)
 
+    // --- what a table looks like from the door -------------------------------------------
+    //
+    // A table can be played and, until now, could not be *described*. Nothing needed it: a
+    // process held one, and whoever was at it was looking at a board. A house holding several
+    // is mostly a list of descriptions, and every fact in one is already here - so this is a
+    // projection rather than anything new to keep in step.
+    //
+    // Read under the same lock as everything else, which is why it is a value taken all at
+    // once rather than a handful of members to ask one at a time. A list drawn from six
+    // separate questions is a list that can show a table mid-move.
+
+    /// Where a table has got to, which is the first thing anybody scanning a list wants.
+    ///
+    /// Three states and not four: a table nobody has sat at yet and a table half full are the
+    /// same thing to somebody looking for a game, which is *a seat going spare*. What tells
+    /// them apart is the count beside it.
+    ///
+    /// None of these words is `Waiting` or `Playing`, and that is not squeamishness: both are
+    /// already types in this program - one is a seat at a table filling up, the other is a
+    /// stage of a game of Compile - and a case that shadows a type is an afternoon lost to an
+    /// inference error a long way from here.
+    type Stage =
+        /// Still filling up. Nobody has moved, because nobody may until everyone is here.
+        | Filling
+        /// Every seat taken and the game not yet decided.
+        | Underway
+        /// Decided. Still readable - a finished game is worth walking back through - but not
+        /// a table anybody is going to be dealt into.
+        | Finished
+
+    /// A table as a list has to show it.
+    ///
+    /// Counts rather than the seats themselves, because what a door wants to say is "two of
+    /// three, one played by the machine" and not a roster. `Sitters` carries the roster for a
+    /// house that wants to show one, in the words the game gives its own seats.
+    ///
+    /// Nothing here is a name or a time. Which table this is, and when it was opened, are
+    /// facts the *house* holds - it made the table and did the naming - and a table that
+    /// answered for them would be answering a question it was never asked.
+    type Standing =
+        {
+            Stage: Stage
+            /// Every seat at the game.
+            Places: int
+            /// Of those, the ones the program plays. Never empty and never sat at.
+            Machines: int
+            /// Of the rest, the ones a person has taken - whether or not they are reading it
+            /// this moment.
+            Sat: int
+            /// And of those, the ones with a console actually attached. A player who dropped
+            /// still holds their seat, so this is the smaller number, and the honest one to put
+            /// beside a table that looks stalled.
+            Reading: int
+            /// Who is at each seat, in the game's own words for them.
+            Sitters: string list
+        }
+
+    /// The above, taken in one go.
+    ///
+    /// One value rather than a handful of members to ask one at a time, and that is the whole
+    /// reason it is a record: a house draws its list under the same lock that moves a game, and
+    /// six separate questions is a list that can show one table in two states at once.
+    let described lobby : Standing =
+        let counted wanted =
+            lobby.Seats |> List.filter (fun seat -> wanted seat.Occupant) |> List.length
+
+        { Stage =
+            if (rules lobby).Over(standing lobby) then Finished
+            elif everyoneHere lobby then Underway
+            else Filling
+          Places = List.length lobby.Seats
+          Machines = counted (fun occupant -> occupant = Played)
+          Sat =
+            counted (fun occupant ->
+                match occupant with
+                | Taken _ -> true
+                | Played
+                | Empty -> false)
+          Reading =
+            counted (fun occupant ->
+                match occupant with
+                | Taken(_, Some _) -> true
+                | Taken(_, None)
+                | Played
+                | Empty -> false)
+          Sitters =
+            lobby.Seats
+            |> List.map (fun seat ->
+                let who =
+                    match seat.Occupant with
+                    | Empty -> "waiting"
+                    | Played -> "the machine"
+                    | Taken(_, Some _) -> "here"
+                    | Taken(_, None) -> "away"
+
+                $"{lobby.Game.Seat seat.Player} ({who})") }
+
     // --- what a console is shown ------------------------------------------------------
 
     /// Who is here and who is not, as a list for a view to lay out. Nothing here decides

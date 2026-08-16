@@ -40,6 +40,14 @@ type Table =
 
     abstract Left: console: string -> Post list
 
+    /// What this table looks like from the door: how far along it is, how many seats are
+    /// going spare, and who is at the ones that are not.
+    ///
+    /// The only member here that does not change anything, and the only one a house of tables
+    /// needs before somebody has decided which table they are joining. Taken under the same
+    /// lock as the rest, so a list of tables cannot catch one halfway through a move.
+    abstract Standing: Lobby.Standing
+
 /// The one lobby this process is hosting.
 ///
 /// Every change goes through here under a lock, so the pure fold inside never sees two
@@ -79,6 +87,11 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
         member this.Said(console, line) = this.Change(Lobby.said console line)
 
         member this.Left console = this.Change(Lobby.left console)
+
+        // Under the gate like every other reading of the lobby, and it has to be: the slot is
+        // written by whichever thread last moved the game, and a description read beside that
+        // write is a description of neither state.
+        member _.Standing = lock gate (fun () -> Lobby.described lobby)
 
 /// The same, for the one hot seat this process is serving to a browser.
 ///

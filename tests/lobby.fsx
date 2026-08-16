@@ -336,4 +336,61 @@ report
     true
     (movesMade answered >= movesMade alone + 2)
 
+// --- and what the table looks like from the door ----------------------------------------
+//
+// A table could be played and not described until there was a house holding several of them,
+// and a list of tables is mostly descriptions. Every fact in one was already in the lobby, so
+// what is checked here is that the projection says what the lobby means - and in particular
+// that it tells apart the three things that look alike from outside: a seat nobody has taken,
+// a seat somebody has taken and walked away from, and a seat the machine is playing.
+
+let private described lobby = Lobby.described lobby
+
+report
+    "a table nobody has sat at is filling up, with every seat going spare"
+    (Lobby.Filling, 2, 0, 0, 0)
+    (let door = described (opened ())
+     door.Stage, door.Places, door.Machines, door.Sat, door.Reading)
+
+report
+    "one arrival is counted, and the table is still filling"
+    (Lobby.Filling, 1, 1)
+    (let door = described seatedOne
+     door.Stage, door.Sat, door.Reading)
+
+report
+    "a full table is under way"
+    (Lobby.Underway, 2, 2)
+    (let door = described (full ())
+     door.Stage, door.Sat, door.Reading)
+
+// The one a count of "who is here" would get wrong. A player who drops keeps their seat, so
+// the table is still full and still under way - it is not waiting for anybody - but there is
+// one fewer console reading it, and that is the number worth showing beside a table that
+// looks stalled. `dropped` is the lobby the seat-keeping checks above already built.
+report
+    "a player who drops still holds their seat, so the table is full and one console short"
+    (Lobby.Underway, 2, 1)
+    (let door = described dropped
+     door.Stage, door.Sat, door.Reading)
+
+// And the seat the machine plays, which is neither empty nor sat in. A house offering "one
+// seat going spare" at a table of two where the machine has one would be offering a seat that
+// does not exist.
+report
+    "a seat the machine plays is counted as its own thing and never as one going spare"
+    (Lobby.Underway, 2, 1, 1)
+    (let door = described alone
+     door.Stage, door.Places, door.Machines, door.Sat)
+
+report
+    "and the roster says who is at each seat in the game's own words for them"
+    [ "Player 1 (the machine)"; "Player 2 (here)" ]
+    (described alone).Sitters
+
+report
+    "a seat somebody walked away from says so, rather than reading as empty"
+    [ "Player 1 (away)"; "Player 2 (here)" ]
+    (described dropped).Sitters
+
 finish ()
