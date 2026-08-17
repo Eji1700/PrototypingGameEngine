@@ -11,11 +11,14 @@
 # arguments on, a port bound to the loopback inside the container and therefore to nothing at
 # all - none of those fail at build.
 #
-# **This script has never been run.** It was written on a machine with no Docker on it, beside
-# a Dockerfile that has therefore never been built. Everything it checks was reasoned about
-# rather than observed, which is the opposite of how everything else in this folder was
-# arrived at. The first person to run it should expect to fix it, and should treat a failure
-# here as a question about this script and the Dockerfile before anything else.
+# It runs on the build machine too, which is where it is actually exercised: the image is a
+# Linux one and the runner is Linux, so what CI builds and runs is the thing that ships rather
+# than a Windows box's idea of it. That is also why it is written to run under both PowerShell
+# 7 and 5.1 - the runner has one and a clone has the other.
+#
+# **It had never been run when it was written**, on a machine with no Docker, beside a
+# Dockerfile that had therefore never been built. If it is failing in a way that looks like the
+# script rather than the image, that is the likeliest thing it is.
 
 param(
     [string]$Game = "Turncoats",
@@ -44,9 +47,24 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 
 $container = "$Tag-check"
 
+# Docker's own noise, swallowed without letting it stop the script.
+#
+# `2>&1` is deliberately not used anywhere here. Redirecting a native command's stderr into
+# the pipeline wraps every line in an ErrorRecord, and with `$ErrorActionPreference = "Stop"`
+# that ends the run - so `docker rm` on a container that was never there would fail a check
+# about an image it had not looked at yet.
+function Quietly {
+    $before = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    try { & $args[0] @($args[1..($args.Count - 1)]) 2>$null | Out-Null }
+    catch { }
+    finally { $ErrorActionPreference = $before }
+}
+
 # Anything left from a previous run answers instead of what this one builds, which reads as
 # the new image working when it is the old one that is.
-docker rm -f $container 2>&1 | Out-Null
+Quietly docker rm -f $container
 
 try {
     "Building $Tag from $Game for $Runtime..."
@@ -85,38 +103,50 @@ try {
     # that cannot be checked from inside the image and is the usual way a container serves
     # nothing at all: `-p` forwards to the container's address, and a server listening on
     # 127.0.0.1 in there is listening on an address the forwarding never reaches.
-    Add-Type -AssemblyName System.Net.Http
-    $c = New-Object Net.Http.HttpClient
+    #
+    # `Invoke-WebRequest` and not `HttpClient`, because this runs on a Linux runner under
+    # PowerShell 7 as well as on somebody's Windows machine under 5.1, and `Add-Type
+    # -AssemblyName System.Net.Http` is one of the things that is not the same on both. A
+    # session on its own so nothing carries between requests but what the house sets.
+    $keeping = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 
-    try {
-        $front = $c.GetAsync("http://localhost:$Port/").GetAwaiter().GetResult()
-        $said = $front.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-
-        Report "and serves its front page through the forwarded port" ([int]$front.StatusCode -eq 200) "it answered $([int]$front.StatusCode)"
-        Report "which offers a way to open a table" ($said -match '/open\?players=') "the page carried no way to open one"
-        Report "and says which game the house is of" ($said -match '<h1>') "there was no heading on it"
-
-        # Opening one, which is the whole of what a house does that a hosted table does not -
-        # and the first thing that touches the working directory the image sets up.
-        $opened = $c.GetAsync("http://localhost:$Port/open?players=2").GetAwaiter().GetResult()
-        $board = $opened.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-
-        Report "a table can be opened at it" ([int]$opened.StatusCode -eq 200) "opening answered $([int]$opened.StatusCode)"
-        Report "and the browser is sent to a board of its own" ($board -match 'id="screen"') "what came back was not a board page"
-
-        $after = $c.GetStringAsync("http://localhost:$Port/").GetAwaiter().GetResult()
-        Report "which the house then lists" ($after -match '/table/') "the front page listed no table"
+    function Fetch($where) {
+        try {
+            $answer = Invoke-WebRequest -Uri $where -UseBasicParsing -WebSession $keeping -TimeoutSec 30
+            @{ Code = [int]$answer.StatusCode; Said = [string]$answer.Content }
+        }
+        catch {
+            $code = 0
+            if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+            @{ Code = $code; Said = "" }
+        }
     }
-    finally { $c.Dispose() }
+
+    $front = Fetch "http://localhost:$Port/"
+
+    Report "and serves its front page through the forwarded port" ($front.Code -eq 200) "it answered $($front.Code)"
+    Report "which offers a way to open a table" ($front.Said -match '/open\?players=') "the page carried no way to open one"
+    Report "and says which game the house is of" ($front.Said -match '<h1>') "there was no heading on it"
+
+    # Opening one, which is the whole of what a house does that a hosted table does not - and
+    # the first thing that touches the working directory the image sets up. If `/data` is not
+    # writable by the user the image runs as, this is where it shows.
+    $opened = Fetch "http://localhost:$Port/open?players=2"
+
+    Report "a table can be opened at it" ($opened.Code -eq 200) "opening answered $($opened.Code)"
+    Report "and the browser is sent to a board of its own" ($opened.Said -match 'id="screen"') "what came back was not a board page"
+
+    $after = Fetch "http://localhost:$Port/"
+    Report "which the house then lists" ($after.Said -match '/table/') "the front page listed no table"
 
     # And that it says what it is for. An image whose log does not say where to point a browser
     # is an image somebody has to read this file to use.
-    $log = (docker logs $container 2>&1) -join "`n"
+    $log = (docker logs $container) -join "`n"
     Report "the log says where to open it" ($log -match "Open in a browser") "the log read '$($log.Trim())'"
 
     # Not root. Said here rather than trusted to the Dockerfile, because `USER` is one line and
     # a base image that stopped shipping that user would drop it silently.
-    $who = (docker exec $container id -un 2>&1) -join ""
+    $who = (docker exec $container id -un) -join ""
     Report "and it is not running as root" ($who.Trim() -ne "root" -and $who.Trim() -ne "") "it is running as '$($who.Trim())'"
 
     ""
@@ -127,6 +157,6 @@ finally {
         "Left running as $container on port $Port."
     }
     else {
-        docker rm -f $container 2>&1 | Out-Null
+        Quietly docker rm -f $container
     }
 }

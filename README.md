@@ -1034,14 +1034,23 @@ database, no state directory, and no settings file. A container comes up having 
 nothing, which is what `Settings.none` has always meant and is now something a house relies
 on.
 
-**Nothing here has been built.** There is no Docker on the machine this was written on, so
-the [Dockerfile](Dockerfile) and [image.ps1](tools/image.ps1) were reasoned about rather than
-run — which is the opposite of how everything else in this repository was arrived at, and is
-said plainly in both files. What *was* checked is the part that does not need Docker: a
-published game, copied alone into an empty directory and started there, serves a house with
-no settings file, no project beside it and nothing else in the folder, and calls itself by
-the name it was published under. Those are the assumptions the image rests on. The image
-itself is somebody's first afternoon.
+**The build machine builds it and then plays a game in it**, which is where that is worth
+doing rather than on anybody's own machine: what ships is a Linux image and the runner is
+Linux, so what CI builds is the thing rather than a Windows box's idea of it. It runs
+[image.ps1](tools/image.ps1) — the same checks a person runs, not a second set written in
+shell — against two of the four games, because one would build an image and prove nothing
+about `--build-arg GAME`, which is the only thing that differs between them and therefore the
+only thing that can be wrong.
+
+What that catches is the set of things that do not fail at build: a `WORKDIR` the image's own
+user cannot write to, an entry point that does not pass its arguments on, and a port bound to
+the container's loopback and therefore to nothing at all.
+
+**It was written without ever being built** — there was no Docker on the machine at the time,
+and both files say so in their first lines. The part that did not need Docker was checked
+then: a published game, copied alone into an empty directory and started there, serves a house
+with no settings file, no project beside it and nothing else in the folder, and calls itself
+by the name it was published under. Those are the assumptions the image rests on.
 
 | | terminal | browser |
 | --- | --- | --- |

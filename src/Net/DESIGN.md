@@ -335,9 +335,14 @@ Two decisions taken while building it:
 
 - **Terminal consoles at a house** — the hub that resolves which table a connection is for.
   The one piece here that has broken silently before, so: with `wire.ps1` watching.
-- ~~**A container.**~~ Written, and **not built** — there is no Docker on the machine this was
-  written on. The [Dockerfile](../../Dockerfile) and [image.ps1](../../tools/image.ps1) say so
-  in their own first lines.
+- ~~**A container.**~~ Written, and built by the build machine rather than by anybody's own —
+  which is the right place for it, the image being a Linux one and the runner being Linux.
+  `image.ps1` is the checks and CI is what runs them, against two games so that
+  `--build-arg GAME` is proved to be wired to something.
+
+  It was written without ever being built, there having been no Docker to hand at the time.
+  The [Dockerfile](../../Dockerfile) and [image.ps1](../../tools/image.ps1) both say so in
+  their first lines, and should stop saying it once CI has had a green run.
 
   One decision worth keeping: **configuration is the command line, not the environment.** The
   design note above asked for env vars; that was wrong for the same reason a second door was.
