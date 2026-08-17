@@ -76,7 +76,7 @@ without anything above it moving. Nothing did, once.
 [What a third game found](#what-a-third-game-found)
 
 **The code** — [How it is put together](#how-it-is-put-together) · [Layout](#layout) ·
-[Tests](#tests) · [One file each](#one-file-each) · [Tooling](#tooling)
+[A house of them](#a-house-of-them) · [Tests](#tests) · [One file each](#one-file-each) · [Tooling](#tooling)
 
 ## Running
 
@@ -116,6 +116,9 @@ dotnet run -- join greg-pc --token <token>  # come back to the seat you were in
 dotnet run -- host 3 --behind --at stones.example.org   # https ends at a tunnel or proxy
 dotnet run -- host 3 --cert stones.pfx --cert-password <pw>  # ...or is held here
 
+dotnet run -- house            # several games at once, listed on a page, dealt on demand
+dotnet run -- house --fill     # ...taking up the games in logs/ on the way up
+
 dotnet run -- --help           # every command; --help works on each of them too
 ```
 
@@ -128,7 +131,8 @@ Turncoats host 3 --open                              # from a published file
 ```
 
 **Every command above belongs to the engine and not to any game**, which is why they are the
-same three lines whichever one is being played: `play`, `serve`, `host`, `join`, `replay`,
+same three lines whichever one is being played: `play`, `serve`, `host`, `house`, `join`,
+`replay`,
 `--seed`, `--rival`, `--view`, `--colour`, and at the prompt `undo`, `redo`, `history`,
 `save`, `notes`, `commands`, `view`, `restart`, `help` and `quit`. Each game adds the words for its own
 moves and nothing else, and each has a `help` of its own for them.
@@ -964,6 +968,48 @@ table people join are the same problem the moment either is further away than a 
 be drawn a board of their own. `Lobby` never learns there are two kinds of console: it
 addresses a `Post` to a console id, and which sort that is, is written into the id
 ([Browser.fs](src/Net/Browser.fs)).
+
+### A house of them
+
+`host` opens one table and waits at it. A **house** opens none and deals them on demand:
+
+```powershell
+dotnet run -- house           # a house of this game, dealing tables as people ask for them
+dotnet run -- house --open    # ...with no word at the door, for a room you trust
+dotnet run -- house --fill    # ...taking up the games in logs/ on the way up
+```
+
+What answers is a page listing what is being played — a link to open a table at each size
+the game takes, and a row for every table there is, the ones with a seat going spare first.
+Open one and you are sent to a table of your own, at an address you can read out to whoever
+is playing.
+
+This is what goes in a container: one program, one port, one game, several games of it at
+once. It is what the per-game executables were split apart *for*.
+
+**Browsers, for now.** A console at a terminal reaches a table through a SignalR hub that
+the framework builds from a type named in a route, so a house needs one that works out which
+table a connection is for. That is the piece of this program that has broken silently before
+— a console that negotiates, connects, and is dropped without a word — so it is worth doing
+on its own. Until then a house says nothing about `join`, and `host` is still how a terminal
+is given a table.
+
+**One door, not two.** Everything in a house is behind the same word: the list, opening a
+table, and every board. A table with a second word of its own was considered and is the wrong
+shape here — a house exists so people can see what is being played and sit down at it, and a
+list of games you are not allowed to join is a list with no purpose. Whoever is in the house
+was let in at the front.
+
+**Tables are forgotten, and games are not.** A table nobody ever sat at goes after an hour,
+a finished one after a day, and one with anybody at it never — however long a turn takes,
+because a game of Diplomacy between two time zones can sit untouched for a day and is not
+abandoned. Sweeping touches nothing on disk: every table writes the same replayable record
+every other game writes, so a game swept off the list is still one you can take up, and
+`--fill` is a house reading them back. A restart is a pause rather than a loss.
+
+The rules behind all of that are values and are checked as values —
+[house.fsx](tests/house.fsx) asks them about tables that do not exist at ages that have not
+happened. [DESIGN.md](src/Net/DESIGN.md) is how it was built and what it cost.
 
 | | terminal | browser |
 | --- | --- | --- |
@@ -2267,7 +2313,7 @@ by hand after touching anything a browser or a socket reads.
 | | |
 | --- | --- |
 | [Spectre.Console](https://spectreconsole.net) | the `rich` view's panels, tables and charts |
-| [Argu](https://fsprojects.github.io/Argu/) | the command surface both ways round: `play`, `serve`, `host`, `join`, `replay`, and a command line as a value the program can write |
+| [Argu](https://fsprojects.github.io/Argu/) | the command surface both ways round: `play`, `serve`, `host`, `house`, `join`, `replay`, and a command line as a value the program can write |
 | [Falco.Markup](https://github.com/FalcoFramework/Falco.Markup) | the `html` view's elements |
 | [Falco.Datastar](https://github.com/FalcoFramework/Falco.Datastar) | the client's attributes, its stream frames and its signals, so none of those spellings are this repo's to remember |
 | [FsCheck](https://fscheck.github.io/FsCheck/) | the generated games in `properties.fsx` (a test-time reference) |

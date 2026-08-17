@@ -690,9 +690,13 @@ try {
 
     $housePort = $Port + 1
 
+    # With a word at the door, like the table above, so what is driven below is the way a
+    # house is actually opened rather than a way round it. One door and not two: everything
+    # inside a house is behind this, and a table having a second word of its own would be a
+    # house whose whole purpose - a list of games you can join - you could not use.
     $housed = @("run", "--project", $root, "--")
     if ($Game) { $housed += $Game }
-    $housed += @("house", "--port", "$housePort", "--open")
+    $housed += @("house", "--port", "$housePort", "--code", $Code)
 
     $inn = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $housed
 
@@ -708,6 +712,23 @@ try {
     } | Out-Null
 
     try {
+        # The door first, before a browser is driven through it. A house is one room and one
+        # door: everything in it - the list, opening a table, the boards - is behind the same
+        # word, so a stranger who has not got it cannot see what is being played, never mind
+        # sit down at it.
+        $outside = New-Object Net.Http.HttpClient
+
+        try {
+            $shutOut = $outside.GetAsync("http://localhost:$housePort/").GetAwaiter().GetResult()
+            $shutOutSaid = $shutOut.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $openTried = $outside.GetAsync("http://localhost:$housePort/open?players=2").GetAwaiter().GetResult()
+
+            Report "a house with a word at the door does not list its tables to a stranger" ([int]$shutOut.StatusCode -eq 401) "the house answered $([int]$shutOut.StatusCode)"
+            Report "and shows them the door rather than a number" ($shutOutSaid -match 'word at the door') "it sent $($shutOutSaid.Length) characters"
+            Report "nor will it deal one for them" ([int]$openTried.StatusCode -eq 403) "opening answered $([int]$openTried.StatusCode)"
+        }
+        finally { $outside.Dispose() }
+
         # The front page, read the way a person reads it rather than as markup: what is on it
         # is a heading, some links to open a table, and either a list or a line saying there
         # is nothing yet.
@@ -722,7 +743,7 @@ try {
 })()
 '@
 
-        $front = Invoke-InPage "http://localhost:$housePort/" $reading
+        $front = Invoke-InPage "http://localhost:$housePort/?code=$Code" $reading
         $f = $front.value
 
         Report "a house serves a front page" ($front.threw.Count -eq 0 -and $f) ($front.threw -join "; ")

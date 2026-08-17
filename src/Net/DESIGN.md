@@ -314,11 +314,30 @@ Two decisions taken while building it:
   silently before. Until it is done a house says nothing about `join`, and `host` is still how
   a terminal is given a table.
 
-### What step 4 has left to decide
+### The three things step 4 had left, and how they went
 
-- **Where the house is made**, and how a game's executable is told to be one. A `house` command
-  beside `host` and `serve` is the obvious shape, and `Launch` already reads that grammar.
-- **Two doors.** The house door and the table door are both `Reach`; what is new is only that
-  there are two and the refusal has to say which.
-- **Who sweeps, and when.** Nothing calls `Swept()` yet. A timer in the web host is the dull
-  answer and probably the right one.
+- ~~**Where the house is made.**~~ A `house` command beside `host` and `serve`, read and
+  written by the same declaration as every other.
+- ~~**Who sweeps, and when.**~~ A timer in the web host, on a five-minute tick, saying out loud
+  what it took away.
+- **Two doors — decided against.** This was on the list above and should not have been. A house
+  exists so that people can *see what is being played and sit down at it*; a table with a
+  second word of its own is a row on that list you are not allowed to use, which is a list with
+  no purpose. One door, and everything inside is behind it — the list, opening a table, and
+  every board. `smoke.ps1` holds a house to that: a stranger with no word is shown the door,
+  cannot read the list, and cannot have a table dealt for them.
+
+  What a second door would actually buy is a *public* house where strangers open tables and
+  play each other without joining yours. That is a different thing from what this is, and it
+  should be built when somebody wants it rather than because the word "two" was appealing.
+
+### What is left
+
+- **Terminal consoles at a house** — the hub that resolves which table a connection is for.
+  The one piece here that has broken silently before, so: with `wire.ps1` watching.
+- **A container.** The reason the games were split into their own executables, and now
+  deliverable: browser play works end to end. It wants a Dockerfile over the portable publish,
+  configuration from the environment rather than argv, and a volume for `logs/` — which is
+  where records live and where `--fill` reads a house back from.
+- **`--fill` has no check**, and the sweep timer is verified only as far as `Housekeeping`
+  goes: nothing watches it actually fire in a live house.
