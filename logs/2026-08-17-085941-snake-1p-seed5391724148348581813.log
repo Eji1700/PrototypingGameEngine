@@ -1,0 +1,200 @@
+# A Snake game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program.
+#
+#   dotnet run -- snake replay <this file>
+
+deal 1 5391724148348581813 you
+
+#   1  turn 1, Snake A
+go
+
+#   2  turn 2, Snake A
+go
+
+#   3  turn 3, Snake A
+go
+
+#   4  turn 4, Snake A
+go
+
+#   5  turn 5, Snake A
+go
+
+#   6  turn 6, Snake A
+go
+
+#   7  turn 7, Snake A
+faster
+#      The clock is wound to 6 of 9.
+
+#   8  turn 7, Snake A
+faster
+#      The clock is wound to 7 of 9.
+
+#   9  turn 7, Snake A
+go
+
+#  10  turn 8, Snake A
+go
+
+#  11  turn 9, Snake A
+go
+
+#  12  turn 10, Snake A
+a south
+#      Snake A turns south.
+
+#  13  turn 10, Snake A
+go
+
+#  14  turn 11, Snake A
+go
+
+#  15  turn 12, Snake A
+go
+
+#  16  turn 13, Snake A
+go
+
+#  17  turn 14, Snake A
+go
+#      Snake A eats - 1 piece now, and 4 segments once it has grown.
+
+#  18  turn 15, Snake A
+a west
+#      Snake A turns west.
+
+#  19  turn 15, Snake A
+go
+
+#  20  turn 16, Snake A
+go
+
+#  21  turn 17, Snake A
+go
+
+#  22  turn 18, Snake A
+a north
+#      Snake A turns north.
+
+#  23  turn 18, Snake A
+go
+
+#  24  turn 19, Snake A
+go
+
+#  25  turn 20, Snake A
+a east
+#      Snake A turns east.
+
+#  26  turn 20, Snake A
+go
+
+#  27  turn 21, Snake A
+go
+
+#  28  turn 22, Snake A
+go
+
+#  29  turn 23, Snake A
+go
+
+#  30  turn 24, Snake A
+go
+
+#  31  turn 25, Snake A
+faster
+#      The clock is wound to 8 of 9.
+
+#  32  turn 25, Snake A
+go
+
+#  33  turn 26, Snake A
+a north
+#      Snake A turns north.
+
+#  34  turn 26, Snake A
+go
+
+#  35  turn 27, Snake A
+go
+
+#  36  turn 28, Snake A
+go
+
+#  37  turn 29, Snake A
+go
+
+#  38  turn 30, Snake A
+go
+
+#  39  turn 31, Snake A
+go
+
+#  40  turn 32, Snake A
+go
+
+#  41  turn 33, Snake A
+a east
+#      Snake A turns east.
+
+#  42  turn 33, Snake A
+go
+
+#  43  turn 34, Snake A
+go
+
+#  44  turn 35, Snake A
+go
+
+#  45  turn 36, Snake A
+go
+
+#  46  turn 37, Snake A
+go
+
+#  47  turn 38, Snake A
+a south
+#      Snake A turns south.
+
+#  48  turn 38, Snake A
+go
+
+#  49  turn 39, Snake A
+go
+
+#  50  turn 40, Snake A
+go
+
+#  51  turn 41, Snake A
+go
+
+#  52  turn 42, Snake A
+go
+
+#  53  turn 43, Snake A
+go
+
+#  54  turn 44, Snake A
+go
+
+#  55  turn 45, Snake A
+a east
+#      Snake A turns east.
+
+#  56  turn 45, Snake A
+a north
+#      Snake A turns north.
+
+#  57  turn 45, Snake A
+go
+#      Snake A ran into itself.
+#      The game is over: nothing is left moving.
+

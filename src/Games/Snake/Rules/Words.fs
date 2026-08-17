@@ -95,7 +95,7 @@ module Words =
     let rejection =
         function
         | CannotTurnBack way ->
-            $"A snake cannot turn back into its own neck, and {direction way} is the way this one came. The other three are open."
+            $"A snake cannot turn back into its own neck, and {direction way} is where this one's neck is. The other three are open."
         | HasStopped who -> $"{player who} has stopped. Nothing steers it now."
         | NoSuchSnake who -> $"There is no {player who} at this table."
         | NoSuchSpeed said ->

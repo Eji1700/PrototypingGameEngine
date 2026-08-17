@@ -344,6 +344,34 @@ report
     (toldBy snake (played racing [ Steer(seat 3, North) ] ticking)
      |> List.exists (mentions "There is no Snake C"))
 
+// Two turns inside one beat, which is what steering quickly *is* at this pace - and where the
+// rule went wrong. "Not the opposite of the way you are facing" is only the same thing as "not
+// back into your own neck" while the two agree, and a snake that has been turned but not yet
+// moved is facing one way and lying another. Turning north and then west used to be two legal
+// presses that killed the snake on the next beat.
+
+let private turnedTwice =
+    played racing [ Steer(seat 1, North); Steer(seat 1, West) ] ticking
+
+report
+    "the second of two quick turns cannot point the head at its own neck"
+    true
+    (toldBy snake turnedTwice |> List.exists (mentions "where this one's neck is"))
+
+report "so the beat after two quick turns finds the snake alive" None (snakeOf 1 (played racing [ Beat ] turnedTwice)).Fate
+
+report "and going the way it was pointed" (Board.along North (headOf 1 ticking)) (headOf 1 (played racing [ Beat ] turnedTwice))
+
+report
+    "two quick turns that are not into the neck are both taken"
+    South
+    (snakeOf 1 (played racing [ Steer(seat 1, North); Steer(seat 1, South) ] ticking)).Facing
+
+report
+    "and the same pair a beat apart, where the neck has moved, is fine either way"
+    None
+    (snakeOf 1 (played racing [ Steer(seat 1, North); Beat; Steer(seat 1, West); Beat ] ticking)).Fate
+
 // --- everybody at once ------------------------------------------------------------------------
 //
 // The three rules a game of turns never needed, and the reason the beat is one move rather than

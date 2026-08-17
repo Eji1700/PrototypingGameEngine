@@ -82,6 +82,17 @@ module Turn =
 
             if List.contains target body then Some other else None)
 
+    /// Whether that way is back into the snake's own neck, which is the one thing this game
+    /// refuses rather than allowing and killing you for.
+    ///
+    /// A fact about the body and not about the facing. The two are the same thing at a game of
+    /// turns, where a snake moves the instant it is turned - and are not at a game on a clock,
+    /// where a player can turn twice between two beats. Asked this way, both paces get the rule
+    /// they meant.
+    let private backwards seat way play =
+        let snake = Session.snakeAt seat play
+        Snake.neck snake = Some(Board.along way (Snake.head snake))
+
     /// What lies one square that way from a seat's head.
     let ahead seat direction play =
         let snake = Session.snakeAt seat play
@@ -296,12 +307,9 @@ module Turn =
 
         | InPlay play, Onward -> taking play.ToPlay (Session.snakeAt play.ToPlay play).Facing play
 
-        // The one refusal. A snake of one segment could turn back into nothing and would still
-        // be refused: which way it may not go is a fact about the way it is facing, not about
-        // how long it is, and a rule that changed with the length would be one nobody could
-        // hold in their head.
-        | InPlay play, Go direction when direction = Direction.opposite (Session.snakeAt play.ToPlay play).Facing ->
-            None, [ Refused(CannotTurnBack direction) ]
+        // The one refusal, and it is about where the neck is rather than about which way the
+        // head is pointing - see `backwards`.
+        | InPlay play, Go direction when backwards play.ToPlay direction play -> None, [ Refused(CannotTurnBack direction) ]
 
         | InPlay play, Go direction -> taking play.ToPlay direction play
 
@@ -345,8 +353,12 @@ module Turn =
 
         | InPlay play, Steer(seat, _) when not (Snake.isAlive (Session.snakeAt seat play)) -> None, [ Refused(HasStopped seat) ]
 
-        | InPlay play, Steer(seat, way) when way = Direction.opposite (Session.snakeAt seat play).Facing ->
-            None, [ Refused(CannotTurnBack way) ]
+        // Where the neck is, rather than which way the head points - and at this pace that is
+        // the whole of the rule rather than a nicety. Turning is not moving here, so a player
+        // can turn twice inside one beat: north and then east, quicker than the clock, used to
+        // leave a snake facing east with its neck still to the east, and the beat after it ran
+        // into itself for a pair of presses that were each perfectly legal.
+        | InPlay play, Steer(seat, way) when backwards seat way play -> None, [ Refused(CannotTurnBack way) ]
 
         // Turning to where it already points is not a refusal and not a move: it is what a
         // player leaning on a key is asking for, and the honest answer to it is nothing at all.

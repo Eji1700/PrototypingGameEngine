@@ -43,6 +43,16 @@ module Snake =
 
     let head snake = List.head snake.Body
 
+    /// The square behind the head, which is the one square a snake may never move onto.
+    ///
+    /// Asked of the body rather than worked out from the way it is facing, and that distinction
+    /// is a bug that was in here: at a pace where turning and moving are two different moves, a
+    /// snake that has been turned but not yet moved is facing one way and lying another. Turning
+    /// north and then east - two presses inside one beat - left a snake facing east with its
+    /// neck still to the east, and "not the opposite of the way you are facing" let it through.
+    /// Where the neck *is* cannot be got wrong that way.
+    let neck snake = snake.Body |> List.tryItem 1
+
     let length snake = List.length snake.Body
 
     let isAlive snake = Option.isNone snake.Fate

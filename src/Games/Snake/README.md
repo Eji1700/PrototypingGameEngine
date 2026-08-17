@@ -102,7 +102,11 @@ snake.
 - A board of 24 by 14 with **walls** at the edges. [Life](../Life/README.md) joins its edges and
   this one does not, which is the difference between a board you can watch for ever and a board
   that is a game.
-- One square a beat (or a turn), any way but back into your own neck.
+- One square a beat (or a turn), any way but **back into your own neck** — which is where the
+  neck actually is, not the opposite of the way the head points. On a clock those are different
+  questions: turning is not moving, so a snake can be turned twice between two beats, and it is
+  then facing one way while lying another. Asking about the facing let north-then-east through as
+  two legal presses and killed the snake on the next beat.
 - A snake starts three segments long. Eating adds one, and it arrives **on the next step**,
   because a snake grows by keeping its tail rather than by gaining a head.
 - The next piece of food is placed the moment one is eaten, somewhere nothing is standing.

@@ -164,10 +164,16 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         | ConsoleKey.Escape -> Leaving'
         | _ -> Steering
 
-    /// `wanted` is what this player reads with when the game is standing still, and `drawn` is
-    /// how tall the last screen was - which is all the redrawing below needs to write over it
-    /// rather than clearing the terminal and painting it again.
-    let rec spin holding wanted drawn said solo =
+    /// `wanted` is what this player reads with when the game is standing still, `drawn` is how
+    /// tall the last screen was - which is all the redrawing below needs to write over it rather
+    /// than clearing the terminal and painting it again - and `due` is when the next beat is.
+    ///
+    /// The beat is carried rather than worked out each time round, and that is the difference
+    /// between a clock and a stopwatch somebody keeps resetting: a press does not push the next
+    /// beat back. It used to, because the deadline was a moment from *now* however this loop had
+    /// come round - so a player steering quickly, which is the whole of playing this game, held
+    /// the board still by doing it.
+    let rec spin holding wanted drawn said due solo =
         // A game that is over is a game standing still, and is read like a held one: the clock
         // is not consulted, and the writing and the box of commands come back. Which they must -
         // there is nothing left to follow, and what somebody wants at that moment is exactly the
@@ -202,7 +208,7 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         ///
         /// What the player reads with is taken back off the table afterwards, because `notes`
         /// and `commands` are lines like any other and this is where saying one lands.
-        let heard holding line solo =
+        let heard holding due line solo =
             let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
             let answered = tell rings posts @ errand (Solo.game solo) sitters doing
 
@@ -214,53 +220,73 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
                 show answered
                 Solo.model next
             | Carrying
-            | Keeping _ -> spin holding wanted drawn answered next
+            | Keeping _ -> spin holding wanted drawn answered due next
+
+        /// When the next beat is, counted from this moment: what a game standing still starts
+        /// again from, and what anything that stopped the clock for a while has to ask for
+        /// rather than serving a beat that was due while nobody was playing.
+        let afresh () =
+            DateTime.UtcNow + pulse.Every(Model.state (Solo.model solo))
 
         // Held or over, the clock is simply not consulted - the game stands still and a press
         // still steers, which is what anybody stopping to think wants.
-        let due =
-            DateTime.UtcNow
-            + (if still then TimeSpan.FromDays 1.0 else pulse.Every(Model.state (Solo.model solo)))
-
-        match Screens.awaiting due with
+        match Screens.awaiting (if still then DateTime.UtcNow + TimeSpan.FromDays 1.0 else due) with
         | None ->
             let next, posts, doing = Solo.beaten solo
-            spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) next
+
+            // Counted from now rather than from when the beat was due, so a machine that was
+            // busy for half a second plays one late beat rather than four quick ones catching
+            // up on a board nobody saw.
+            let due = DateTime.UtcNow + pulse.Every(Model.state (Solo.model next))
+
+            spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) due next
         | Some key ->
             match key with
-            | Leaving' -> heard holding "quit" solo
-            | Holding -> spin (not holding) wanted drawn said solo
+            | Leaving' -> heard holding due "quit" solo
+            | Holding -> spin (not holding) wanted drawn said (afresh ()) solo
             // Dealing another is a line every game knows, so this is a shortcut for typing it
             // and not a fifth thing the table can do. Only where the game is standing still,
             // which is the whole of the guard it needs: an `r` meant for a snake in the middle
             // of a run would otherwise sweep the game away, and a game swept away by a
             // mistyped key is a game nobody would type a key at again.
-            | Restarting when still -> heard holding "restart" solo
-            | Restarting -> spin holding wanted drawn said solo
+            | Restarting when still -> heard holding (afresh ()) "restart" solo
+            | Restarting -> spin holding wanted drawn said due solo
             | Typing ->
                 printf "> "
 
                 match Console.ReadLine() with
-                | null -> heard holding "quit" solo
+                | null -> heard holding due "quit" solo
                 | line ->
                     // What was typed is sitting on the screen under the board, so the next one
                     // starts from an empty terminal rather than being written over the top of
                     // it. Once, where somebody has just stopped to type - which is the one
                     // moment in this loop where a clear costs nothing to follow.
                     Screens.cleared ()
-                    heard holding line solo
+                    // And the clock starts again from the moment they finished typing, rather
+                    // than owing beats for the whole time they spent at it.
+                    heard holding (afresh ()) line solo
             // A game that is over takes no moves, and the engine says so - once per press, into
             // a log that would be nothing else. Left alone here instead: the board says it is
             // over and the line under it says what to do about that.
-            | Steering when over -> spin holding wanted drawn said solo
+            | Steering when over -> spin holding wanted drawn said due solo
+            // The one that carries the deadline through unchanged, and the reason it is carried
+            // at all: steering is what a player does constantly, and a beat pushed back by every
+            // press is a board that stands still for whoever plays quickest.
             | Steering ->
                 match pulse.Pressed key with
-                | Some line -> heard holding line solo
-                | None -> spin holding wanted drawn said solo
+                | Some line -> heard holding due line solo
+                | None -> spin holding wanted drawn said due solo
 
     if Screens.steering () then
         Screens.cleared ()
-        spin false (Solo.margins Keyboard solo |> Option.defaultValue Margins.all) 0 said solo
+
+        spin
+            false
+            (Solo.margins Keyboard solo |> Option.defaultValue Margins.all)
+            0
+            said
+            (DateTime.UtcNow + pulse.Every(Model.state (Solo.model solo)))
+            solo
     else
         loop rings sitters said solo
 
