@@ -737,12 +737,18 @@ try {
 (async () => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const said = { };
+  // Waited for until it stops being the placeholder, and *that* is the whole of what this
+  // loop is about. The shell ships with "Sitting down..." already in #screen, so asking
+  // whether the element has any text in it is asking nothing at all - it answers yes before
+  // a single byte has come down the stream. Two checks passed that way against a house that
+  // was doing nothing, and the seat count below is what caught it.
   for (let i = 0; i < 80; i++) {
     const screen = document.querySelector("#screen");
-    said.drew = screen ? screen.innerText.trim().split("\n")[0] : "";
-    if (said.drew) break;
+    const drew = screen ? screen.innerText.trim() : "";
+    if (drew && !/^sitting down/i.test(drew)) { said.drew = drew.split("\n")[0]; break; }
     await wait(250);
   }
+  said.drew = said.drew ?? "";
   said.where = location.pathname;
   // Read the front page from here rather than by going to it. Leaving this page ends the
   // stream, and a console that leaves a table still filling up gives its seat back - so a
@@ -761,18 +767,11 @@ try {
         # moment at which anybody is at it: a console that leaves a table still filling up gives
         # its seat back, so a check that went to the front page to look would be reading the
         # house after the browser had got up.
+        Report "and a board arrives there over the stream, in place of the placeholder" ($o.drew -ne "") "the page still read 'Sitting down...'"
         Report "the table it dealt is listed at the house" ($o.front -match "/table/") "the front page linked to no table"
 
-        # NOT CHECKED HERE, AND KNOWN NOT TO WORK: that a board then arrives over the stream and
-        # the browser takes a seat. It does not. `/stream` answers 200 as an event stream and
-        # the table it belongs to is found, but the seat is never taken and the page sits on its
-        # "Sitting down..." placeholder - which is exactly what the first draft of this section
-        # reported as a pass, having asked only whether `#screen` had any text in it at all.
-        #
-        # Left out rather than left failing, so that what a house *does* do goes on being
-        # checked. It goes back in with the fix.
         $said = (($o.front -replace '<[^>]+>', ' ') -replace '\s+', ' ').Trim()
-        Report "and the house is drawn with the seats it dealt" ($said -match "of 2 seated") "the front page read '$said'"
+        Report "and the house says somebody is sitting at it" ($said -match "1 of 2 seated") "the front page read '$said'"
     }
     finally {
         if ($inn -and -not $inn.HasExited) { Stop-Process -Id $inn.Id -Force -ErrorAction SilentlyContinue }

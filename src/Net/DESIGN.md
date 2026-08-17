@@ -280,23 +280,26 @@ page cannot read the same screens, so `Sits` is told `shown` rather than left to
 have been read off the console's name, pages having a mark in theirs, but a table that has never
 heard of a browser is worth more than a parameter saved.
 
-### Step 4, as far as it goes — and one thing that does not work
+### Step 4 — done, for browsers
 
-Built: a `house` command, `Server.house`, and a front page that lists the tables and opens
-one. Verified in a real browser by `smoke.ps1`: the front page serves, opening a table lands
-the browser on a table of its own, and the house lists it with the seats it dealt.
+A `house` command, `Server.house`, and a front page that lists the tables and opens one.
+Driven in a real browser by `smoke.ps1`: the front page serves and names the game, opening a
+table lands the browser on a table of its own, a board arrives there over the stream, and the
+house then says somebody is sitting at it.
 
-**Not working, and known: a browser at a house table never takes a seat.** `/stream` answers
-200 as an event stream and the table it belongs to *is* found from the cookie, but the seat is
-never taken and the page sits on its "Sitting down…" placeholder. The cause is not yet found —
-no exception reaches the host's output, and the same `Browser.stream` handler seats a browser
-correctly at a table served by `serve` or `host`.
+**A note about a bug that was not there.** This was written up as broken — "a browser at a
+house table never takes a seat" — and it was not. The check was.
 
-Worth recording how nearly this was missed: the first draft of the smoke check asked only
-whether `#screen` had *any* text in it, and the shell ships with `Sitting down…` already in
-that element — so it passed, twice, against a house that was doing nothing. The check that
-caught it was reading the front page from inside the board page and asking how many were
-seated.
+`#screen` ships with `Sitting down…` already in it, so a loop asking whether that element had
+*any* text in it exited on its first turn and read the front page before a byte had come down
+the stream. The same mistake in a second, quite different check: `sseStartResponseWithHeaders`
+runs **before** `sitting.Watching`, so a client that reads the response headers and then asks
+the house who is seated has asked too early. Two checks, one error, reported as a defect in
+the server.
+
+What the check is worth is the difference between "the element has text" and "the element has
+stopped saying the one thing it says before anything happens". The first is a check that
+cannot fail; the second is the check.
 
 Two decisions taken while building it:
 
