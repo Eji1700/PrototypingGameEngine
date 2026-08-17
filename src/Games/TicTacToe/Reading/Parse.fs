@@ -27,7 +27,7 @@ module Parse =
     /// The long way round is kept because it is what a record is written in, and a record
     /// that read as a column of bare digits would be a record nobody could skim.
     let line typed =
-        match Commands.words typed |> List.map (fun word -> word.ToLowerInvariant()) with
+        match Commands.lowered typed with
         | [ n ] -> square n
         | [ "place"; n ]
         | [ "mark"; n ]

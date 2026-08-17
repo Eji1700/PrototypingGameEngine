@@ -1746,14 +1746,14 @@ hole](#a-game-shaped-hole).
 | File | Role |
 | --- | --- |
 | [Seats.fs](src/Engine/Seats.fs) | `PlayerId`: which seat, and nothing about who is in it |
-| [Messages.fs](src/Engine/Messages.fs) | `Msg<'Move>`: the game's own move, and the three the engine answers itself |
+| [Messages.fs](src/Engine/Messages.fs) | `Msg<'Move>`: the game's own move, and the three the engine answers itself - and the words a record writes those three in |
 | [Told.fs](src/Engine/Told.fs) | `Told<'Move,'Notice>`: what the game said, and what the engine said |
 | [Rules.fs](src/Engine/Rules.fs) | The seam: the seven questions the machinery asks a game |
 | [Timeline.fs](src/Engine/Timeline.fs) | Every state a game has stood in, with a finger on the present |
 | [Journal.fs](src/Engine/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
 | [Model.fs](src/Engine/Model.fs) | The timeline, the journal, and the last few lines on screen |
 | [Update.fs](src/Engine/Update.fs) | `Rules -> Msg -> Model -> Model`, and nothing in it can fail |
-| [Machines.fs](src/Engine/Machines.fs) | Seats played by something that is not a person, and when they take their turns |
+| [Machines.fs](src/Engine/Machines.fs) | Seats played by something that is not a person: which machines a game offers, which seats they take and what each draws its choices out of, and when they take their turns |
 
 **`src/Table`** — how a game is *read*, which is the second seam. Nothing here names a
 game, a piece, or a board. Two folders and one file between them, and the file is the

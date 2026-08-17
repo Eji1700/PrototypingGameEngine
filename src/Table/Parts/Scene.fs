@@ -1,5 +1,7 @@
 namespace TCModel.Table
 
+open TCModel.Engine
+
 /// What a player wants in the margins: the writing that explains the board, and the box that
 /// lists what can be typed.
 ///
@@ -172,10 +174,11 @@ module Scene =
 
     /// The block that lists what a player may type, or nothing at all.
     ///
-    /// Here rather than in each game for the same reason `noted` is: three games build this
-    /// block out of the same two pieces - a title and a table of verbs already laid out - and
-    /// a fourth turns it off in three places of its own. What a game decides is what is *in*
-    /// it; whether it is on the screen is the reader's, and is decided once.
+    /// Here rather than in each game for the same reason `noted` is: every game that describes
+    /// its screens builds this block out of the same two pieces - a title and a table of verbs
+    /// already laid out - and the one that draws its own turns it off in three places. What a
+    /// game decides is what is *in* it; whether it is on the screen is the reader's, and is
+    /// decided once.
     let listing (margins: Margins) title text =
         if margins.Commands then Block(title, [ Written text ]) else Blank
 
@@ -205,6 +208,83 @@ module Scene =
 
         let lines, last = text.Split ' ' |> Array.fold put ([], "")
         lines @ [ last ]
+
+    /// A paragraph broken once, as one string, for the places a scene takes text that has
+    /// already been laid out.
+    ///
+    /// `Written` means laid out already: the reader counting characters into columns will not
+    /// break it, and the one building panels breaks it again at whatever width the panel came
+    /// out - so a paragraph written to the width of a screen comes out of the second as a
+    /// column of scraps. Narrower than both, and neither has anything left to do to it.
+    let paragraph room text = wrap room text |> String.concat "\n"
+
+    // --- runs of the same colour ------------------------------------------------------------
+
+    /// Glyphs gathered into one span per run of the same tone.
+    ///
+    /// A board drawn a character to a cell is a span to a cell if nothing gathers them, and at
+    /// four hundred cells drawn afresh every time anybody looks at it that is four hundred
+    /// records where a handful would do. What comes out is what the text of a row *is*.
+    ///
+    /// Here rather than in the two games that draw boards this way, because it is a fact about
+    /// spans rather than about either board - and the two had written the same fold twice.
+    let runs (glyphs: (string * Tone) seq) : Line =
+        glyphs
+        |> Seq.fold
+            (fun spans (glyph, tone) ->
+                match spans with
+                | (span: Span) :: rest when span.Tone = tone -> { span with Text = span.Text + glyph } :: rest
+                | _ -> { Text = glyph; Tone = tone } :: spans)
+            []
+        |> List.rev
+
+    // --- the blocks every game has ----------------------------------------------------------
+    //
+    // Three parts of a screen that are the same wherever there is a game: what the game has
+    // said lately, the record of what was asked, and the page of rules. What is *in* each of
+    // them is the game's, and comes in; the shape and the wording round it are not, and were
+    // being written out once per game - five times, and drifting.
+
+    /// What a block with nothing in it yet says. One phrase, so a game that has just been
+    /// dealt reads the same wherever the empty block is.
+    [<Literal>]
+    let NothingYet = "nothing yet"
+
+    /// What the game has said lately, oldest first, in whatever words the reader is owed.
+    ///
+    /// `told` is the game's own wording - `Playable.told`, or the one seat's own where a game
+    /// has something to hide from the rest. The order is the only other thing here, and it is
+    /// the same at every game: a log is added to at the front and read from the back.
+    let log told (model: Model<'Move, 'State, 'Notice>) =
+        match model.Log with
+        | [] -> [ quietly NothingYet ]
+        | notices -> notices |> List.rev |> List.map (told >> says)
+
+    /// The record of the game so far: a row per entry, and where the game stands under it.
+    ///
+    /// The heading is repeated at the foot because this block is shown on a screen of its own,
+    /// with no board beside it - so without it a player reading the record has to remember
+    /// whose turn it is.
+    let record heading rows =
+        match rows with
+        | [] -> Block("The record", [ quietly NothingYet ])
+        | rows -> Block("The record", [ Aligned rows; quietly heading ])
+
+    /// The page of rules, as a screen of its own.
+    let rules help = Block("The rules", [ Written help ])
+
+    /// The verbs a game offers, laid out as a column: what to type, and what it does.
+    ///
+    /// The width is measured rather than written down, and that is the reason this is here
+    /// rather than in each game. Five of them had these two lines with a hand-tuned number in
+    /// each, and a number is a thing that goes stale silently: the widest game's longest verb
+    /// had already grown to touch its own gloss with a single space between them.
+    let verbs (listed: (string * string) list) =
+        let across = listed |> List.map (fst >> String.length) |> List.fold max 0
+
+        listed
+        |> List.map (fun (verb: string, says) -> "  " + verb.PadRight across + "  " + says)
+        |> String.concat "\n"
 
     // --- the one screen with no game behind it -------------------------------------------
     //

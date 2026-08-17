@@ -41,7 +41,7 @@ module Parse =
     /// record is written in, and a record that read as a column of bare coordinates would be a
     /// record nobody could skim.
     let line typed =
-        match Commands.words typed |> List.map (fun word -> word.ToLowerInvariant()) with
+        match Commands.lowered typed with
         | [ "step" ]
         | [ "s" ]
         | [ "run" ] -> Ok(Send(Make(Step 1)))

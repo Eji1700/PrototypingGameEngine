@@ -389,36 +389,17 @@ module Rival =
     /// line, the menu and the checks rather than any of them keeping their own list.
     let all = [ easy; medium; hard ]
 
-    let names = all |> List.map (fun skill -> skill.Name) |> String.concat ", "
+    let names = Machines.named (fun skill -> skill.Name) all
 
-    let byName (name: string) =
-        let wanted = name.ToLowerInvariant()
+    let byName name =
+        Machines.byName (fun skill -> skill.Name) all name
 
-        match all |> List.tryFind (fun skill -> skill.Name = wanted) with
-        | Some skill -> Ok skill
-        | None -> Error $"'{name}' is not a way for the machine to play. There is {names}."
-
-    /// Which seats the machines take, and what each of them draws its choices out of.
-    ///
-    /// One entry per seat, in the order the game deals them, and `None` where the seat is
-    /// somebody's. Said seat by seat rather than as a run of machines after the first,
-    /// because which seats are the program's is a thing to be chosen and not a thing to be
-    /// counted: a table of three may be a person between two machines.
-    ///
-    /// A generator each, drawn from the seed the game was dealt from and from where the seat
-    /// sits, so a game against machines replays exactly like any other - and moving a machine
-    /// along one seat gives it the generator that seat has always had.
+    /// Seat the machines named. Which seats there are is this game's answer - and the only
+    /// one of the six where it takes the dealt game to say, the table being two to seven -
+    /// and everything else about it is the engine's.
     let seating (seed: uint64) sitting game =
-        Game.players game
-        |> List.indexed
-        |> List.choose (fun (seat, player) ->
-            sitting
-            |> List.tryItem seat
-            |> Option.flatten
-            |> Option.map (fun skill ->
-                player.Id,
-                { Skill = skill
-                  Rng = Rng.ofSeed (seed + uint64 seat) }))
+        Machines.seating (Game.players game |> List.map (fun player -> player.Id)) seed sitting
+        |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })
 
     // --- taking their turns -----------------------------------------------------------------
     //
@@ -434,7 +415,11 @@ module Rival =
 
     /// What the engine asks of a chooser: a state and a machine, and a move if there is one.
     /// A finished game is not asked, but a total answer is cheaper than an argument about it.
-    let private taking session rival =
+    ///
+    /// This game's `plays` takes a game in progress rather than a session, so the guard is
+    /// here rather than nowhere; the other five hand `Machines.choosing` their `plays`
+    /// directly. Public because `Offer` builds its machine out of it.
+    let taking session rival =
         match session with
         | InPlay play -> plays play rival
         | Finished _ -> None

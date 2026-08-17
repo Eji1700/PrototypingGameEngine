@@ -138,27 +138,24 @@ module Words =
     /// A message written the way a player types it. The record is kept in the same
     /// words the prompt takes, so a game can be read back and played again without a
     /// second language standing between the two.
-    let command msg =
+    ///
+    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
+    /// engine's words and are written once, by the engine, in `Msg.written`.
+    let command =
         let short color =
             (glyph color |> string).ToLowerInvariant()
 
-        match msg with
-        | Make(Recruit(c, into)) -> $"recruit {short c} {number into}"
-        | Make(Battle(c, target, AsManyAsAllowed)) -> $"battle {short c} {number target}"
-        | Make(Battle(c, target, These [])) -> $"battle {short c} {number target} none"
-        | Make(Battle(c, target, These driven)) ->
-            let driven = driven |> List.map short |> String.concat " "
-            $"battle {short c} {number target} {driven}"
-        | Make(March(c, from, into, count)) -> $"march {short c} {number from} {number into} {count}"
-        | Make Negotiate -> "negotiate"
-        | Make(Settle c) -> $"return {short c}"
-        | Make Resign -> "resign"
-        | Undo -> "undo"
-        | Redo -> "redo"
-        | Restart(None, None) -> "restart"
-        | Restart(None, Some seed) -> $"restart {seed}"
-        | Restart(Some players, None) -> $"players {players}"
-        | Restart(Some players, Some seed) -> $"players {players} {seed}"
+        Msg.written (function
+            | Recruit(c, into) -> $"recruit {short c} {number into}"
+            | Battle(c, target, AsManyAsAllowed) -> $"battle {short c} {number target}"
+            | Battle(c, target, These []) -> $"battle {short c} {number target} none"
+            | Battle(c, target, These driven) ->
+                let driven = driven |> List.map short |> String.concat " "
+                $"battle {short c} {number target} {driven}"
+            | March(c, from, into, count) -> $"march {short c} {number from} {number into} {count}"
+            | Negotiate -> "negotiate"
+            | Settle c -> $"return {short c}"
+            | Resign -> "resign")
 
     /// What this game itself said - and the whole of what a game has to say for itself.
     /// Everything the engine says about undo, redo and a line nobody could read is said once,

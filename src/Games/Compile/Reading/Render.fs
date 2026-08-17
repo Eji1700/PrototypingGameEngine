@@ -56,8 +56,6 @@ module Render =
         let hand =
             $"Say a card and a line to play it - 'fire-3 2'. Face up it is worth the number printed on it and may only go where its protocol is - either player's. Face down - 'fire-3 2 down' - it is worth {Placed.FaceDownValue} and goes anywhere, so a card you cannot use is never a dead card."
 
-    let nothingYet = "nothing yet"
-
     /// Who is waiting on an answer, in a phrase that will stand at the front of a sentence.
     ///
     /// Written once because three screens say it - the heading, the block that offers the
@@ -615,10 +613,7 @@ module Render =
           "resign", "give the game up, but write it down"
           "quit", "leave; the game is written down and 'replay' takes it up again" ]
 
-    let commands =
-        verbs
-        |> List.map (fun (verb, says) -> $"  %-18s{verb} %s{says}")
-        |> String.concat "\n"
+    let commands = Scene.verbs verbs
 
     let help =
         String.concat
@@ -659,11 +654,6 @@ module Render =
 
     let private heardBy seat =
         Told.inWords (Words.saidTo seat) Words.command
-
-    let private log beholder (model: Model<Move, Session, Notice>) =
-        match model.Log with
-        | [] -> [ Scene.quietly nothingYet ]
-        | notices -> notices |> List.rev |> List.map (heardBy beholder >> Scene.says)
 
     // --- the whole screen -----------------------------------------------------------------------
 
@@ -715,7 +705,7 @@ module Render =
               stage
               Block(Blocks.players, [ players beholder session ])
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, log beholder model) ]
+              Block(Blocks.log, Scene.log (heardBy beholder) model) ]
 
     // --- the rest of what a player reads --------------------------------------------------------
 
@@ -737,20 +727,11 @@ module Render =
         let entry (entry: Entry<Move, Notice>) =
             [ Scene.cell Tone.Quiet $"{entry.Ordinal}  turn {entry.Turn}"
               Scene.cell Tone.Plainly $"{Words.player entry.Actor}: {askedFor beholder session entry}"
-              Scene.cell
-                  Tone.Plainly
-                  (entry.Told
-                   |> List.map (Told.inWords (Words.saidTo beholder) Words.command)
-                   |> String.concat " ") ]
+              Scene.cell Tone.Plainly (entry.Told |> List.map (heardBy beholder) |> String.concat " ") ]
 
-        match Journal.entries model.Journal with
-        | [] -> Block("The record", [ Scene.quietly nothingYet ])
-        | entries ->
-            Block(
-                "The record",
-                [ Aligned(entries |> List.map entry)
-                  Scene.quietly (heading beholder (Model.state model)) ]
-            )
+        Journal.entries model.Journal
+        |> List.map entry
+        |> Scene.record (heading beholder (Model.state model))
 
     // --- looking under a card, and into the pile ------------------------------------------------
 
@@ -858,7 +839,7 @@ module Render =
     let answer beholder (asked: string) (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
-        match Commands.words asked |> List.map (fun word -> word.ToLowerInvariant()) with
+        match Commands.lowered asked with
         | "peek" :: rest -> peeking beholder rest session
         | "pile" :: _ -> piling beholder session
         | _ ->
@@ -955,7 +936,7 @@ module Render =
 
         Block("What is being asked", puzzled @ said |> List.map Scene.says)
 
-    let rules = Block("The rules", [ Written help ])
+    let rules = Scene.rules help
 
     // --- a table still filling up -----------------------------------------------------------
 

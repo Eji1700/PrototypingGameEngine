@@ -28,9 +28,10 @@ module Invoked =
     /// Whether a `dotnet run` from here would run *this* program.
     ///
     /// Any project at all used to be enough, and it stopped being enough the moment there was
-    /// more than one project to be standing in. There are six now - the engine, a game apiece,
-    /// and the one that offers all four - so a clone's root holds a project that `dotnet run`
-    /// would run and it is not the game whose executable somebody just started from there.
+    /// more than one project to be standing in. There are eight now - the engine, a game
+    /// apiece, and the one that offers them all - so a clone's root holds a project that
+    /// `dotnet run` would run and it is not the game whose executable somebody just started
+    /// from there.
     /// `dotnet run -- play 5` printed by `Turncoats.exe` in that folder is an instruction that
     /// runs, and runs something else, which is worse than one that does not run at all.
     ///

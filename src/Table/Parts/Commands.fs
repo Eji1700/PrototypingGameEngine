@@ -61,6 +61,15 @@ module Commands =
         text.Split([| ' '; '\t'; ByteOrderMark |], StringSplitOptions.RemoveEmptyEntries)
         |> List.ofArray
 
+    /// The same, in the case a reader matches on.
+    ///
+    /// Every parser here and in every game reads its words this way and none of them could
+    /// sensibly do otherwise - what a player typed `NORTH` in is not part of what they meant -
+    /// so it is one word rather than the same `List.map` on the front of every `match` in the
+    /// program that reads a line.
+    let lowered text =
+        words text |> List.map (fun word -> word.ToLowerInvariant())
+
     let tryInt (text: string) =
         match Int32.TryParse text with
         | true, value -> Some value
@@ -94,7 +103,7 @@ module Commands =
     /// a person does to any game; what it *plays* is the game's, and comes in as the move to
     /// send. A game with none simply cannot be resigned, and says so.
     let read seats (resign: 'Move option) (typed: string) : Result<Command<'Move>, string> option =
-        match words typed |> List.map (fun word -> word.ToLowerInvariant()) with
+        match lowered typed with
         | [] -> Some(Ok Nothing)
         | [ "help" ]
         | [ "?" ] -> Some(Ok Help)

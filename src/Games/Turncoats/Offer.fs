@@ -35,16 +35,9 @@ module Offer =
     /// Public because a check may want to seat a skill that is not one of the three on offer
     /// - `Seating` below goes by the names a person can type, and a machine written to lose
     /// on purpose has no name to type.
-    let rec machine rival =
-        Choosing(fun session ->
-            match session with
-            | InPlay play -> Rival.plays play rival |> Option.map (fun (move, next) -> move, machine next)
-            | Finished _ -> None)
+    let machine rival = Machines.choosing Rival.taking rival
 
-    let private skill name =
-        match Rival.byName name with
-        | Ok skill -> Some skill
-        | Error _ -> None
+    let private skill name = Rival.byName name |> Result.toOption
 
     // --- how it is drawn -------------------------------------------------------------------
 

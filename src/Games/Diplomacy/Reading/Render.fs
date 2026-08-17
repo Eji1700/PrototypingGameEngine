@@ -58,8 +58,6 @@ module Render =
         let press =
             "'press france ...' sends a line to one power and to nobody else. 'press all ...' sends it to the table. Nothing in the rules makes anybody keep their word."
 
-    let nothingYet = "nothing yet"
-
     let private dash = "-"
 
     // --- who is playing -------------------------------------------------------------------------
@@ -429,10 +427,7 @@ module Render =
           "resign", "walk away; your units stand and are worn down"
           "quit", "leave; the game is written down and 'replay' takes it up again" ]
 
-    let commands =
-        verbs
-        |> List.map (fun (verb, says) -> $"  %-24s{verb} %s{says}")
-        |> String.concat "\n"
+    let commands = Scene.verbs verbs
 
     let help =
         String.concat
@@ -473,11 +468,6 @@ module Render =
     let private wordsFor beholder =
         Told.inWords (Words.saidTo beholder) Words.command
 
-    let private log beholder (model: Model<Move, Session, Notice>) =
-        match model.Log with
-        | [] -> [ Scene.quietly nothingYet ]
-        | notices -> notices |> List.rev |> List.map (wordsFor beholder >> Scene.says)
-
     // --- the whole screen ------------------------------------------------------------------------------------
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
@@ -498,7 +488,7 @@ module Render =
               )
               lastTime play
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, log beholder model) ]
+              Block(Blocks.log, Scene.log (wordsFor beholder) model) ]
 
     // --- the record ----------------------------------------------------------------------------------------
 
@@ -524,14 +514,9 @@ module Render =
               Scene.cell Tone.Plainly (askedFor beholder current entry)
               Scene.cell Tone.Quiet (entry.Told |> List.map (wordsFor beholder) |> String.concat " ") ]
 
-        match Journal.entries model.Journal with
-        | [] -> Block("The record", [ Scene.quietly nothingYet ])
-        | entries ->
-            Block(
-                "The record",
-                [ Aligned(entries |> List.map entry)
-                  Scene.quietly (heading beholder (Model.state model)) ]
-            )
+        Journal.entries model.Journal
+        |> List.map entry
+        |> Scene.record (heading beholder (Model.state model))
 
     // --- the one thing this game can be asked -------------------------------------------------------------------
 
@@ -611,7 +596,7 @@ module Render =
                   ""
                   "Ask 'borders vie' for what a piece in Vienna could reach, or 'where vie' for what is standing there." ]
 
-        match Commands.words (asked.ToLowerInvariant()) with
+        match Commands.lowered asked with
         | [ "borders"; word ] ->
             match named word with
             | Ok province -> borders province
@@ -622,7 +607,7 @@ module Render =
             | Error why -> lost why
         | _ -> lost "That is not a question this game knows."
 
-    let rules = Block("The rules", [ Written help ])
+    let rules = Scene.rules help
 
     // --- a table still filling up -------------------------------------------------------------------------------
 

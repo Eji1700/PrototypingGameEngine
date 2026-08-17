@@ -32,8 +32,6 @@ module Render =
         let rule =
             "A living cell with two or three neighbours lives on. An empty one with exactly three comes alive. Everything else is empty next time round. The edges are joined, so what leaves one side arrives at the other."
 
-    let nothingYet = "nothing yet"
-
     // --- the heading ---------------------------------------------------------------------
     //
     // Whose turn it is, at a game where it is always the same one, is not worth a line. What
@@ -54,21 +52,13 @@ module Render =
 
     // --- the board ---------------------------------------------------------------------------
 
-    /// One row, as spans - and runs of the same tone gathered into one span each.
-    ///
-    /// Gathered rather than a span to a cell because a board is four hundred and sixteen cells
-    /// and is drawn afresh every time anybody looks at it. What comes out is a handful of runs
-    /// per row, which is what the text of a row *is*.
+    /// One row, as spans - and runs of the same tone gathered into one span each by
+    /// `Scene.runs`, because a board of four hundred and sixteen cells drawn afresh every time
+    /// anybody looks at it is not four hundred and sixteen spans.
     let private row world cells =
         cells
         |> List.map (fun cell -> if World.alive cell world then Ink.Living, Tone.Slot Ink.Key else Ink.Empty, Tone.Quiet)
-        |> List.fold
-            (fun spans (glyph, tone) ->
-                match spans with
-                | (span: Span) :: rest when span.Tone = tone -> { span with Text = span.Text + glyph } :: rest
-                | _ -> { Text = glyph; Tone = tone } :: spans)
-            []
-        |> List.rev
+        |> Scene.runs
 
     /// The board: a column of rows, each with its number beside it, under a line of column
     /// letters.
@@ -142,20 +132,10 @@ module Render =
           "help", "every command, at length"
           "quit", "leave; the record is written and can be replayed" ]
 
-    let commands =
-        verbs
-        |> List.map (fun (verb, says) -> $"  %-14s{verb} %s{says}")
-        |> String.concat "\n"
+    let commands = Scene.verbs verbs
 
     /// A paragraph as lines short enough for either terminal reader.
-    ///
-    /// Broken here rather than left whole because a page of rules is `Written`, which means
-    /// laid out already: the reader counting characters into columns will not break it, and
-    /// the one building panels breaks it again at whatever width the panel came out - so a
-    /// paragraph written to the width of a screen comes out of the second as a column of
-    /// scraps. Narrower than both, and neither has anything left to do to it.
-    let private wrapped text =
-        Scene.wrap 66 text |> String.concat "\n"
+    let private wrapped text = Scene.paragraph 66 text
 
     let help =
         String.concat
@@ -179,11 +159,6 @@ module Render =
 
     let wording = Told.inWords Words.said Words.command
 
-    let private log (model: Model<Move, World, Notice>) =
-        match model.Log with
-        | [] -> [ Scene.quietly nothingYet ]
-        | notices -> notices |> List.rev |> List.map (wording >> Scene.says)
-
     // --- the whole screen ---------------------------------------------------------------
 
     let board margins _ (model: Model<Move, World, Notice>) =
@@ -199,7 +174,7 @@ module Render =
                   [ Block(Blocks.run, standing world @ [ Scene.noted margins Notes.rule ])
                     Block(Blocks.onwards, onwards) ]
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, log model) ]
+              Block(Blocks.log, Scene.log wording model) ]
 
     // --- the rest of what a player reads --------------------------------------------------
 
@@ -209,14 +184,9 @@ module Render =
               Scene.cell Tone.Plainly (Words.command entry.Asked)
               Scene.cell Tone.Plainly (entry.Told |> List.map wording |> String.concat " ") ]
 
-        match Journal.entries model.Journal with
-        | [] -> Block("The record", [ Scene.quietly nothingYet ])
-        | entries ->
-            Block(
-                "The record",
-                [ Aligned(entries |> List.map entry)
-                  Scene.quietly (heading (Model.state model)) ]
-            )
+        Journal.entries model.Journal
+        |> List.map entry
+        |> Scene.record (heading (Model.state model))
 
     /// What the rule is about to do with one cell, and why.
     ///
@@ -263,7 +233,7 @@ module Render =
         | Some cell -> Block(Blocks.board, [ Scene.says (Words.rejection (NoSuchCell cell)) ])
         | None -> Block(Blocks.board, [ Scene.says $"'{asked}' is not a cell. Ask about one by name - 'why f7'." ])
 
-    let rules = Block("The rules", [ Written help ])
+    let rules = Scene.rules help
 
     // --- a table still filling up -----------------------------------------------------------
     //
@@ -274,22 +244,10 @@ module Render =
 
     // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that.
-    ///
-    /// One line, and it is the one thing about this board a general reader could not know. Rows
-    /// of aligned cells are laid out for a table of counts beside names, which wants air between
-    /// its lines; a board is a picture, and air between the lines of a picture pulls it into a
-    /// column of stripes. The page is already in a face where every character is the same width,
-    /// so that half of it is had for nothing.
-    ///
-    /// Everything else on the page - the blocks, the buttons, the notes - is a scene's and is
-    /// styled once at `Page`.
-    let private sheet =
-        """
-.rows .row > span { padding-bottom: 0; line-height: 1.15; }
-"""
-
+    /// This game's own rules of drawing, and no more than that - which here is none at all.
+    /// The board is a grid of aligned rows and everything else on the page - the blocks, the
+    /// buttons, the notes - is a scene's, so all of it is styled at `Page`.
     let shell =
         { Title = "Life"
-          Sheet = sheet
+          Sheet = Page.tightRows
           Placeholder = "a cell to turn it on - 'f7' - or 'step 10' to run it on, or 'help'" }

@@ -12,8 +12,6 @@ open TCModel.Table
 /// file and no list of the ways of saying quit.
 module Parse =
 
-    let private words = Commands.words
-
     let private tryInt = Commands.tryInt
 
     let private color (text: string) =
@@ -91,7 +89,7 @@ module Parse =
     /// exactly the vocabulary this game invented - which is the whole of what a second game
     /// has to write for itself.
     let line (text: string) : Result<Command<Move>, string> =
-        match words text |> List.map (fun word -> word.ToLowerInvariant()) with
+        match Commands.lowered text with
         | [ ("recruit" | "r"); c; r ] -> recruit c r
         | ("battle" | "b") :: c :: target :: driven -> battle c target driven
         | [ ("march" | "m"); c; from; into ] -> march c from into "1"

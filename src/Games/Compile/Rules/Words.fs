@@ -498,28 +498,24 @@ module Words =
     /// A message written the way a player types it. The record is kept in the same words the
     /// prompt takes, so a game can be read back and played again without a second language
     /// standing between the two.
-    let command msg =
-        match msg with
-        | Make(Take taken) -> $"draft {Protocol.key taken}"
-        | Make(Arrange protocols) ->
-            let said = protocols |> List.map Protocol.key |> String.concat " "
-            $"arrange {said}"
-        | Make(Play(played, where, FaceUp)) -> $"play {Card.key played} {where}"
-        | Make(Play(played, where, FaceDown)) -> $"play {Card.key played} {where} down"
-        | Make Refresh -> "refresh"
-        | Make(Choose(TheCard chosen)) -> $"choose {Card.key chosen}"
-        | Make(Choose(TheLine line)) -> $"choose line {line}"
-        | Make(Choose Yes) -> "yes"
-        | Make(Choose No) -> "no"
-        | Make(Choose TheFirst) -> "first"
-        | Make(Choose TheSecond) -> "second"
-        | Make Resign -> "resign"
-        | Undo -> "undo"
-        | Redo -> "redo"
-        | Restart(None, None) -> "restart"
-        | Restart(None, Some seed) -> $"restart {seed}"
-        | Restart(Some players, None) -> $"players {players}"
-        | Restart(Some players, Some seed) -> $"players {players} {seed}"
+    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
+    /// engine's words and are written once, by the engine, in `Msg.written`.
+    let command =
+        Msg.written (function
+            | Take taken -> $"draft {Protocol.key taken}"
+            | Arrange protocols ->
+                let said = protocols |> List.map Protocol.key |> String.concat " "
+                $"arrange {said}"
+            | Play(played, where, FaceUp) -> $"play {Card.key played} {where}"
+            | Play(played, where, FaceDown) -> $"play {Card.key played} {where} down"
+            | Refresh -> "refresh"
+            | Choose(TheCard chosen) -> $"choose {Card.key chosen}"
+            | Choose(TheLine line) -> $"choose line {line}"
+            | Choose Yes -> "yes"
+            | Choose No -> "no"
+            | Choose TheFirst -> "first"
+            | Choose TheSecond -> "second"
+            | Resign -> "resign")
 
     /// What this game itself said, and the whole of what it has to say for itself.
     let said =

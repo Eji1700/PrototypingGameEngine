@@ -135,15 +135,12 @@ module Offer =
 
     // --- the machines ------------------------------------------------------------------------
 
-    /// One of this game's rivals as the engine takes a machine: a function from where the game
-    /// stands to what it plays, carrying its own generator inside it.
-    let rec machine rival =
-        Choosing(fun session -> Rival.plays session rival |> Option.map (fun (move, next) -> move, machine next))
+    /// One of this game's rivals as the engine takes a machine. What choosing *is* is
+    /// `Rival.plays` and is this game's; tying it into a machine that carries its own
+    /// generator between turns is the same knot at every game, and is the engine's.
+    let machine rival = Machines.choosing Rival.plays rival
 
-    let private skill name =
-        match Rival.byName name with
-        | Ok skill -> Some skill
-        | Error _ -> None
+    let private skill name = Rival.byName name |> Result.toOption
 
     // --- how it is drawn -----------------------------------------------------------------------
 

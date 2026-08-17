@@ -1,16 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- All four games in one program, which is what a clone of this repository runs.
+  <!-- All six games in one program, which is what a clone of this repository runs.
 
        Each game is its own executable now - `src/Games/Turncoats` builds `Turncoats`, and
-       so on down - and this is the fifth, the one that offers a list and asks which. It is
+       so on down - and this is the seventh, the one that offers a list and asks which. It is
        here rather than gone because a repository is not a release: every line in the README
-       is a `dotnet run` from this directory, and somebody reading it wants all four games
-       without publishing four files first.
+       is a `dotnet run` from this directory, and somebody reading it wants every game without
+       publishing six files first.
 
        It owns two files and nothing else, and the two are the whole difference between a
-       program with one game in it and a program with four: the list, and the screen that
-       asks. Everything either of them does is `Play`'s, shared with the four doors that do
+       program with one game in it and a program with six: the list, and the screen that
+       asks. Everything either of them does is `Play`'s, shared with the six doors that do
        not have to ask. -->
 
   <PropertyGroup>

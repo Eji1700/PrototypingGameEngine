@@ -129,9 +129,7 @@ module Parse =
         // `vie-tri` and `vie - tri` are the same order, and a player who leaves the spaces out
         // has not made a mistake. Done after press and before anything else, so it is the one
         // place the shape of a line is tidied up.
-        let words =
-            Commands.words (typed.Replace("-", " - ").Replace(">", " - "))
-            |> List.map (fun word -> word.ToLowerInvariant())
+        let words = Commands.lowered (typed.Replace("-", " - ").Replace(">", " - "))
 
         match words with
         | [ "commit" ]

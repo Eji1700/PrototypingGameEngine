@@ -27,8 +27,6 @@ module Render =
         let moving =
             "One square a turn, and you may go any way but back into your own neck. Eating a piece of food adds a segment, and the next piece lands somewhere else at once."
 
-    let nothingYet = "nothing yet"
-
     // --- the heading ---------------------------------------------------------------------
 
     let heading beholder session =
@@ -50,22 +48,10 @@ module Render =
     /// food is.
     let private standing play cell =
         match Session.snakes play |> List.tryFind (fun (_, snake) -> Snake.covers cell snake) with
-        | Some(seat, snake) when not (Snake.isAlive snake) -> Ink.Wreck, Tone.Quiet
+        | Some(_, snake) when not (Snake.isAlive snake) -> Ink.Wreck, Tone.Quiet
         | Some(seat, snake) when Snake.head snake = cell -> Ink.head seat, Tone.Slot(Ink.key seat)
         | Some(seat, _) -> Ink.body seat, Tone.Slot(Ink.key seat)
         | None -> if play.Food = Some cell then Ink.Food, Tone.Slot Ink.food.Key else Ink.Empty, Tone.Quiet
-
-    /// Runs of the same tone gathered into one span each, so a board of three hundred squares
-    /// is a handful of spans per row rather than three hundred.
-    let private gathered spans =
-        spans
-        |> List.fold
-            (fun runs (glyph: string, tone) ->
-                match runs with
-                | (span: Span) :: rest when span.Tone = tone -> { span with Text = span.Text + glyph } :: rest
-                | _ -> { Text = glyph; Tone = tone } :: runs)
-            []
-        |> List.rev
 
     let private wall =
         Scene.cell Tone.Quiet ("+" + String.replicate Board.Width "-" + "+")
@@ -76,15 +62,12 @@ module Render =
     /// square outside them is a death, and a board that stopped at its own edge would leave a
     /// player to work out where the edge was by dying at it.
     let private grid play =
+        let side = "|", Tone.Quiet
+
         Aligned(
             [ [ wall ] ]
             @ (Board.rows
-               |> List.map (fun row ->
-                   [ gathered (
-                         [ ("|", Tone.Quiet) ]
-                         @ (row |> List.map (standing play))
-                         @ [ ("|", Tone.Quiet) ]
-                     ) ]))
+               |> List.map (fun row -> [ Scene.runs ([ side ] @ (row |> List.map (standing play)) @ [ side ]) ]))
             @ [ [ wall ] ]
         )
 
@@ -139,16 +122,10 @@ module Render =
           "resign", "stop your snake, but write the game down"
           "quit", "leave; the record is written and can be replayed" ]
 
-    let commands =
-        verbs
-        |> List.map (fun (verb, says) -> $"  %-14s{verb} %s{says}")
-        |> String.concat "\n"
+    let commands = Scene.verbs verbs
 
-    /// A paragraph as lines short enough for either terminal reader: the one counting
-    /// characters will not break a page of rules, and the one building panels breaks it again
-    /// at whatever width the panel came out.
-    let private wrapped text =
-        Scene.wrap 66 text |> String.concat "\n"
+    /// A paragraph as lines short enough for either terminal reader.
+    let private wrapped text = Scene.paragraph 66 text
 
     let help =
         String.concat
@@ -172,11 +149,6 @@ module Render =
 
     let wording = Told.inWords Words.said Words.command
 
-    let private log (model: Model<Move, Session, Notice>) =
-        match model.Log with
-        | [] -> [ Scene.quietly nothingYet ]
-        | notices -> notices |> List.rev |> List.map (wording >> Scene.says)
-
     // --- the whole screen ---------------------------------------------------------------
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
@@ -189,7 +161,7 @@ module Render =
                   [ Block(Blocks.snakes, [ snakes beholder session; Scene.noted margins Notes.moving ])
                     Block(Blocks.onwards, onwards) ]
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, log model) ]
+              Block(Blocks.log, Scene.log wording model) ]
 
     // --- the rest of what a player reads --------------------------------------------------
 
@@ -199,14 +171,9 @@ module Render =
               Scene.cell Tone.Plainly $"{Words.player entry.Actor}: {Words.command entry.Asked}"
               Scene.cell Tone.Plainly (entry.Told |> List.map wording |> String.concat " ") ]
 
-        match Journal.entries model.Journal with
-        | [] -> Block("The record", [ Scene.quietly nothingYet ])
-        | entries ->
-            Block(
-                "The record",
-                [ Aligned(entries |> List.map entry)
-                  Scene.quietly (heading beholder (Model.state model)) ]
-            )
+        Journal.entries model.Journal
+        |> List.map entry
+        |> Scene.record (heading beholder (Model.state model))
 
     /// What is one square that way, asked before committing to it.
     ///
@@ -253,7 +220,7 @@ module Render =
             )
         | _ -> Block(Blocks.board, [ Scene.says $"'{asked}' is not a way to look. Say 'why east', or 'why up'." ])
 
-    let rules = Block("The rules", [ Written help ])
+    let rules = Scene.rules help
 
     // --- a table still filling up -----------------------------------------------------------
 
@@ -261,17 +228,10 @@ module Render =
 
     // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that.
-    ///
-    /// Rows of aligned cells are laid out for a table of counts beside names, which wants air
-    /// between its lines. A board is a picture, and air between the lines of a picture pulls it
-    /// into a column of stripes.
-    let private sheet =
-        """
-.rows .row > span { padding-bottom: 0; line-height: 1.15; }
-"""
-
+    /// This game's own rules of drawing, and no more than that - which here is none at all.
+    /// The board is a grid of aligned rows, and the one thing that needs saying about one of
+    /// those is said by the page itself.
     let shell =
         { Title = "Snake"
-          Sheet = sheet
+          Sheet = Page.tightRows
           Placeholder = "a way to go - 'north', 'e', 'up' - or 'go' to keep going, or 'help'" }

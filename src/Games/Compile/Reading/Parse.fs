@@ -58,7 +58,7 @@ module Parse =
 
     /// The whole of what this game reads.
     let line typed =
-        match Commands.words typed |> List.map (fun word -> word.ToLowerInvariant()) with
+        match Commands.lowered typed with
         | [ "draft"; taken ]
         | [ "take"; taken ] -> drafting taken
 

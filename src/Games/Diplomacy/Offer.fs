@@ -9,12 +9,12 @@ open TCModel.Diplomacy
 /// This game, filled into both seams. One value, and it is the only thing the rest of the
 /// program is handed.
 ///
-/// Worth reading beside the other two, because the three of them together are the argument for
-/// the seams being where they are. One has a map, hidden bags and a generator; one has nine
-/// squares and nothing hidden at all; and this one has no chance in it whatsoever, seven seats,
-/// three kinds of phase, and every player writing at the same time in secret. What they fill in
-/// is the same record, and the timeline, the record on disk, the seats and their tokens, the
-/// menu, the colour screen, the command line, the wire and the browser were all written once.
+/// Worth reading beside the others, because together they are the argument for the seams being
+/// where they are. One has a map, hidden bags and a generator; one has nine squares and nothing
+/// hidden at all; and this one has no chance in it whatsoever, seven seats, three kinds of
+/// phase, and every player writing at the same time in secret. What they fill in is the same
+/// record, and the timeline, the record on disk, the seats and their tokens, the menu, the
+/// colour screen, the command line, the wire and the browser were all written once.
 module Offer =
 
     // --- the engine's seam ------------------------------------------------------------------------
@@ -40,13 +40,12 @@ module Offer =
 
     // --- the machines ----------------------------------------------------------------------------------
 
-    let rec machine rival =
-        Choosing(fun session -> Rival.plays session rival |> Option.map (fun (move, next) -> move, machine next))
+    /// One of this game's rivals as the engine takes a machine. What choosing *is* is
+    /// `Rival.plays` and is this game's; tying it into a machine that carries its own
+    /// generator between turns is the same knot at every game, and is the engine's.
+    let machine rival = Machines.choosing Rival.plays rival
 
-    let private skill name =
-        match Rival.byName name with
-        | Ok skill -> Some skill
-        | Error _ -> None
+    let private skill name = Rival.byName name |> Result.toOption
 
     // --- how it is drawn ---------------------------------------------------------------------------------
 
@@ -72,10 +71,10 @@ module Offer =
               Turn = Session.turn
               Over = Session.isOver
               Seats = fun _ -> Seats
-              // Not one thing at this game is drawn, dealt or shuffled - it is the only one of
-              // the three here with no chance in it at all, and the seed does nothing but tell
-              // the machines how to break their ties. Saying so plainly is more honest than
-              // reaching for a clock the rest of this program is careful not to touch.
+              // Not one thing at this game is drawn, dealt or shuffled - the seed does nothing
+              // here but tell the machines how to break their ties. Saying so plainly is more
+              // honest than reaching for a clock the rest of this program is careful not to
+              // touch.
               Reseed = fun _ -> 0UL }
 
           Name = "diplomacy"

@@ -498,27 +498,13 @@ module Rival =
 
     let all = [ easy; medium; hard; deep ]
 
-    let names = all |> List.map (fun skill -> skill.Name) |> String.concat ", "
+    let names = Machines.named (fun skill -> skill.Name) all
 
-    let byName (name: string) =
-        let wanted = name.ToLowerInvariant()
+    let byName name =
+        Machines.byName (fun skill -> skill.Name) all name
 
-        match all |> List.tryFind (fun skill -> skill.Name = wanted) with
-        | Some skill -> Ok skill
-        | None -> Error $"'{name}' is not a machine I have. There is {names}."
-
-    /// Seat the machines named - one entry per seat, in dealing order, naming the skill or
-    /// nobody - each with a generator of its own drawn from the deal and from where the seat
-    /// sits, so that moving a machine along a seat hands it the generator that seat has
-    /// always had.
+    /// Seat the machines named. Which seats there are is this game's answer - two, dealt in
+    /// order - and everything else about it is the engine's.
     let seating (seed: uint64) sitting =
-        Session.seats
-        |> List.indexed
-        |> List.choose (fun (place, seat) ->
-            sitting
-            |> List.tryItem place
-            |> Option.flatten
-            |> Option.map (fun skill ->
-                seat,
-                { Skill = skill
-                  Rng = Rng.ofSeed (seed + uint64 place) }))
+        Machines.seating Session.seats seed sitting
+        |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

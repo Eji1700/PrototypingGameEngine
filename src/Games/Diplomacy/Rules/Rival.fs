@@ -1,6 +1,10 @@
 namespace TCModel.Diplomacy
 
 open TCModel.Common
+open TCModel.Engine
+// Last, so this game's own names win: an explicit open outranks the enclosing namespace, and
+// the engine's `Journal` carries a field name this game already uses.
+open TCModel.Diplomacy
 
 /// How well a machine plays.
 ///
@@ -339,27 +343,13 @@ module Rival =
 
     let all = [ easy; medium; hard ]
 
-    let names = all |> List.map (fun skill -> skill.Name) |> String.concat ", "
+    let names = Machines.named (fun skill -> skill.Name) all
 
-    let byName (name: string) =
-        let wanted = name.ToLowerInvariant()
+    let byName name =
+        Machines.byName (fun skill -> skill.Name) all name
 
-        match all |> List.tryFind (fun skill -> skill.Name = wanted) with
-        | Some skill -> Ok skill
-        | None -> Error $"'{name}' is not a machine I have. There is {names}."
-
-    /// Seat the machines named - one entry per seat, in dealing order, naming the skill or
-    /// nobody - each with a generator of its own drawn from the deal and from where the seat
-    /// sits, so that moving a machine along a seat hands it the generator that seat has always
-    /// had.
+    /// Seat the machines named. Which seats there are is this game's answer - a power each,
+    /// in the order the board lists them - and everything else about it is the engine's.
     let seating (seed: uint64) sitting =
-        Power.all
-        |> List.indexed
-        |> List.choose (fun (seat, power) ->
-            sitting
-            |> List.tryItem seat
-            |> Option.flatten
-            |> Option.map (fun skill ->
-                Power.seatOf power,
-                { Skill = skill
-                  Rng = Rng.ofSeed (seed + uint64 seat) }))
+        Machines.seating (Power.all |> List.map Power.seatOf) seed sitting
+        |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

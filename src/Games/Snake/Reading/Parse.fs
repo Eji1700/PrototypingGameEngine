@@ -29,7 +29,7 @@ module Parse =
     /// worth taking. A record is written in the compass, so it reads the same whichever a
     /// player typed.
     let rec line typed =
-        match Commands.words typed |> List.map (fun word -> word.ToLowerInvariant()) with
+        match Commands.lowered typed with
         | [ "north" ]
         | [ "n" ]
         | [ "up" ] -> way North

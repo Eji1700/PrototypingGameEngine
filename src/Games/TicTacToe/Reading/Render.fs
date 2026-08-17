@@ -40,8 +40,6 @@ module Render =
         let winning =
             "Three in a row wins: along a row, down a column, or corner to corner."
 
-    let nothingYet = "nothing yet"
-
     // --- the heading ---------------------------------------------------------------------
 
     /// Whose turn it is, or how it ended. Every screen opens with this line, so which of the
@@ -114,10 +112,7 @@ module Render =
           "resign", "give the game up, but write it down"
           "quit", "leave; the game is written down and 'replay' takes it up again" ]
 
-    let commands =
-        verbs
-        |> List.map (fun (verb, says) -> $"  %-12s{verb} %s{says}")
-        |> String.concat "\n"
+    let commands = Scene.verbs verbs
 
     let help =
         String.concat
@@ -139,11 +134,6 @@ module Render =
     /// there is one wording and every seat gets it.
     let wording = Told.inWords Words.said Words.command
 
-    let private log (model: Model<Move, Session, Notice>) =
-        match model.Log with
-        | [] -> [ Scene.quietly nothingYet ]
-        | notices -> notices |> List.rev |> List.map (wording >> Scene.says)
-
     // --- the whole screen ---------------------------------------------------------------
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
@@ -158,7 +148,7 @@ module Render =
                   [ Block(Blocks.board, [ grid (Session.board session); Scene.noted margins Notes.board ])
                     Block(Blocks.players, [ players beholder session; Scene.noted margins Notes.winning ]) ]
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, log model) ]
+              Block(Blocks.log, Scene.log wording model) ]
 
     // --- the rest of what a player reads --------------------------------------------------
 
@@ -168,14 +158,9 @@ module Render =
               Scene.cell Tone.Plainly $"{Words.player entry.Actor}: {Words.command entry.Asked}"
               Scene.cell Tone.Plainly (entry.Told |> List.map wording |> String.concat " ") ]
 
-        match Journal.entries model.Journal with
-        | [] -> Block("The record", [ Scene.quietly nothingYet ])
-        | entries ->
-            Block(
-                "The record",
-                [ Aligned(entries |> List.map entry)
-                  Scene.quietly (heading beholder (Model.state model)) ]
-            )
+        Journal.entries model.Journal
+        |> List.map entry
+        |> Scene.record (heading beholder (Model.state model))
 
     /// Nothing here needs explaining, and saying so is better than pretending there is a
     /// question. A game whose whole position is nine squares in plain sight has nowhere for
@@ -185,7 +170,7 @@ module Render =
 
     let answer = Block("The board", [ Scene.says nothingToExplain ])
 
-    let rules = Block("The rules", [ Written help ])
+    let rules = Scene.rules help
 
     // --- a table still filling up -----------------------------------------------------------
     //

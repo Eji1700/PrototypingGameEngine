@@ -98,17 +98,14 @@ module Words =
     /// A message written the way a player types it. The record is kept in the same words the
     /// prompt takes, so a game can be read back and played again without a second language
     /// standing between the two.
-    let command msg =
-        match msg with
-        | Make(Go way) -> direction way
-        | Make Onward -> "go"
-        | Make Resign -> "resign"
-        | Undo -> "undo"
-        | Redo -> "redo"
-        | Restart(None, None) -> "restart"
-        | Restart(None, Some seed) -> $"restart {seed}"
-        | Restart(Some players, None) -> $"players {players}"
-        | Restart(Some players, Some seed) -> $"players {players} {seed}"
+    ///
+    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
+    /// engine's words and are written once, by the engine, in `Msg.written`.
+    let command =
+        Msg.written (function
+            | Go way -> direction way
+            | Onward -> "go"
+            | Resign -> "resign")
 
     /// What this game itself said, and the whole of what it has to say for itself.
     let said =

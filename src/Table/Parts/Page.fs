@@ -120,6 +120,22 @@ module Page =
     /// every line it sends.
     let nothingTyped = { Line = "" }
 
+    /// A `Shell.Sheet` for a game whose board is drawn as rows of aligned cells rather than
+    /// as walled ones.
+    ///
+    /// Rows of aligned cells are laid out for a table of counts beside names, which wants air
+    /// between its lines. A board drawn that way is a picture, and air between the lines of a
+    /// picture pulls it into a column of stripes. The page is already in a face where every
+    /// character is the same width, so the other half of it is had for nothing.
+    ///
+    /// Offered here because it is a fact about the page's own layout rather than about any
+    /// board: two games had found the same line by hand, and a third drawing its board the
+    /// same way would have found it again.
+    let tightRows =
+        """
+.rows .row > span { padding-bottom: 0; line-height: 1.15; }
+"""
+
     // --- the small change ------------------------------------------------------------
 
     /// An attribute, with its value escaped.

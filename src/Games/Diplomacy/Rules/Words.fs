@@ -93,20 +93,17 @@ module Words =
             $"build {(Kind.letter kind).ToLowerInvariant()} {at}"
 
     /// A message written the way a player types it, which is what a record is made of.
-    let command msg =
-        match msg with
-        | Make(Give(at, says)) -> order at says
-        | Make(Take at) -> $"cancel {code at}"
-        | Make Commit -> "commit"
-        | Make(Whisper(None, text)) -> $"press all {text}"
-        | Make(Whisper(Some heard, text)) -> $"press {Power.key heard} {text}"
-        | Make Resign -> "resign"
-        | Undo -> "undo"
-        | Redo -> "redo"
-        | Restart(None, None) -> "restart"
-        | Restart(None, Some seed) -> $"restart {seed}"
-        | Restart(Some players, None) -> $"players {players}"
-        | Restart(Some players, Some seed) -> $"players {players} {seed}"
+    ///
+    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
+    /// engine's words and are written once, by the engine, in `Msg.written`.
+    let command =
+        Msg.written (function
+            | Give(at, says) -> order at says
+            | Take at -> $"cancel {code at}"
+            | Commit -> "commit"
+            | Whisper(None, text) -> $"press all {text}"
+            | Whisper(Some heard, text) -> $"press {Power.key heard} {text}"
+            | Resign -> "resign")
 
     // --- what came of them -------------------------------------------------------------------------
 

@@ -9,12 +9,12 @@ open TCModel.Life
 /// This game, filled into both seams. One value, and it is the only thing the rest of the
 /// program is handed.
 ///
-/// Worth reading beside the other three, because it is the one that argues with them. The
-/// others are games in the ordinary sense: two or more people, turns taken in order, somebody
-/// wins. This one has a single seat, no opponent, no winning, and a position that changes
-/// because a rule says so rather than because anybody chose it - and it fills in the same two
-/// records, unchanged, and gets the timeline, the record on disk, the replay, the seats, the
-/// menu, the command line, the wire and all three screens for nothing.
+/// Worth reading beside the others, because it is the one that argues with them. They are
+/// games in the ordinary sense: two or more people, turns taken in order, somebody wins. This
+/// one has a single seat, no opponent, no winning, and a position that changes because a rule
+/// says so rather than because anybody chose it - and it fills in the same two records,
+/// unchanged, and gets the timeline, the record on disk, the replay, the seats, the menu, the
+/// command line, the wire and all three screens for nothing.
 module Offer =
 
     // --- the engine's seam -----------------------------------------------------------------

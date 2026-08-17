@@ -123,9 +123,6 @@ module Options =
         | [] -> Some(Ok Same)
         | _ -> None
 
-    let private lower (text: string) =
-        Commands.words text |> List.map (fun word -> word.ToLowerInvariant())
-
     // --- the menu ------------------------------------------------------------------------------
 
     /// What each page is for, in one line, said here rather than on the page itself: a menu row
@@ -158,7 +155,7 @@ module Options =
           Backs = Some "done" }
 
     let choose (text: string) : Result<Step, string> =
-        let words = lower text
+        let words = Commands.lowered text
 
         match wayOut words with
         | Some out -> out
@@ -203,7 +200,7 @@ module Options =
           Backs = Some "done" }
 
     let chooseAudio (text: string) : Result<Step, string> =
-        let words = lower text
+        let words = Commands.lowered text
 
         match wayOut words with
         | Some out -> out
@@ -282,7 +279,7 @@ module Options =
     /// called 'view' to colour - which is true, and no help at all to somebody who typed
     /// exactly what the screen told them to.
     let chooseVideo palette (text: string) : Result<Step, string> =
-        let words = lower text
+        let words = Commands.lowered text
 
         match wayOut words with
         | Some out -> out
@@ -345,7 +342,7 @@ module Options =
     /// taking the same line.
     let chooseGame (ways: (string * string) list) (text: string) : Result<Step, string> =
         let names = ways |> List.map fst
-        let words = lower text
+        let words = Commands.lowered text
         let listed = String.concat ", " names
 
         let named name =

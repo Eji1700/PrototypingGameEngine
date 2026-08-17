@@ -15,3 +15,25 @@ type Msg<'Move> =
     /// Abandon this game and deal a fresh one. Anything left unsaid is carried over from
     /// the game in progress.
     | Restart of players: int option * seed: uint64 option
+
+module Msg =
+
+    /// A message as the line a player would have typed for it, given the game's own words
+    /// for its own moves.
+    ///
+    /// Which is what a record is made of, so the three cases the engine owns are written
+    /// here for the same reason the type has them. A line is read back through `Commands`,
+    /// which takes `undo`, `redo` and `restart` before a game sees it at all - so a game
+    /// spelling them out for itself is a game that could spell them differently from the
+    /// only reader that will ever have to take them back. Six games had written the same
+    /// six lines, and one of them wrong would have been a record that replayed as a
+    /// different game.
+    let written move msg =
+        match msg with
+        | Make move' -> move move'
+        | Undo -> "undo"
+        | Redo -> "redo"
+        | Restart(None, None) -> "restart"
+        | Restart(None, Some seed) -> $"restart {seed}"
+        | Restart(Some players, None) -> $"players {players}"
+        | Restart(Some players, Some seed) -> $"players {players} {seed}"
