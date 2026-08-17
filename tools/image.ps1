@@ -62,6 +62,28 @@ function Quietly {
     finally { $ErrorActionPreference = $before }
 }
 
+# The same care, for the commands whose output is worth watching.
+#
+# `docker build` writes its whole progress report to stderr - every layer, on the way to
+# succeeding - so under `Stop` the first line of a *working* build ends the script. That is
+# not the same trap as the one above and it caught this file anyway: the cleanup calls were
+# wrapped and the two commands that matter were not.
+function Loudly {
+    $before = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+
+    try {
+        # `Out-Host` and not the pipeline, so that what comes back from here is the exit code
+        # and nothing else. `docker run -d` prints the container's id on success, and a
+        # function that returned that *and* the code hands back a two-element array - which
+        # compares unequal to zero, and reads as a container that would not start when what
+        # actually happened is that it started perfectly well.
+        & $args[0] @($args[1..($args.Count - 1)]) | Out-Host
+        $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $before }
+}
+
 # Anything left from a previous run answers instead of what this one builds, which reads as
 # the new image working when it is the old one that is.
 Quietly docker rm -f $container
@@ -69,41 +91,16 @@ Quietly docker rm -f $container
 try {
     "Building $Tag from $Game for $Runtime..."
 
-    docker build -t $Tag --build-arg GAME=$Game --build-arg RUNTIME=$Runtime $root
-    if ($LASTEXITCODE -ne 0) { throw "the image would not build" }
+    $built = Loudly docker build -t $Tag --build-arg GAME=$Game --build-arg RUNTIME=$Runtime $root
+    if ($built -ne 0) { throw "the image would not build" }
 
     # No word at the door, because this is a check and not a table anybody is playing at - and
     # `--open` is what the image does when nobody says otherwise, so it is what is worth
     # checking. A house with a code is checked by `smoke.ps1`, in a browser, where a door can
     # actually be knocked on.
-    docker run -d --name $container -p "${Port}:5000" $Tag | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "the image would not start" }
+    $started = Loudly docker run -d --name $container -p "${Port}:5000" $Tag
+    if ($started -ne 0) { throw "the image would not start" }
 
-    # Wait for the house rather than guess how long a container takes. A request to a port
-    # nothing is listening on fails in a way that reads like the house refusing.
-    $up = $false
-
-    foreach ($try in 1..60) {
-        try {
-            $probe = New-Object Net.Sockets.TcpClient
-            $probe.Connect("localhost", $Port)
-            $up = $probe.Connected
-            $probe.Close()
-        }
-        catch { $up = $false }
-
-        if ($up) { break }
-        Start-Sleep -Seconds 1
-    }
-
-    Report "the image comes up and listens" $up "nothing answered on $Port after a minute"
-    if (-not $up) { throw "there is nothing to check" }
-
-    # Bound to every address inside the container rather than to its loopback. This is the one
-    # that cannot be checked from inside the image and is the usual way a container serves
-    # nothing at all: `-p` forwards to the container's address, and a server listening on
-    # 127.0.0.1 in there is listening on an address the forwarding never reaches.
-    #
     # `Invoke-WebRequest` and not `HttpClient`, because this runs on a Linux runner under
     # PowerShell 7 as well as on somebody's Windows machine under 5.1, and `Add-Type
     # -AssemblyName System.Net.Http` is one of the things that is not the same on both. A
@@ -122,8 +119,31 @@ try {
         }
     }
 
-    $front = Fetch "http://localhost:$Port/"
+    # Wait for the *house*, and not for the port - which is the whole of what is different
+    # about waiting on a container.
+    #
+    # Every other script in this folder waits by opening a socket, and that is right when the
+    # thing being waited for is the thing that binds. It is wrong here: `-p` puts a proxy on
+    # the host port the moment the container starts, and that proxy accepts a connection
+    # straight away and holds it until something inside is listening. So a socket check passes
+    # instantly, against a container whose runtime has not finished starting - and then every
+    # request fails, the log is empty, and eight checks report an image that is perfectly fine
+    # as broken. Which is exactly what happened the first time this was run.
+    $front = @{ Code = 0; Said = "" }
 
+    foreach ($try in 1..60) {
+        $front = Fetch "http://localhost:$Port/"
+        if ($front.Code -ne 0) { break }
+        Start-Sleep -Seconds 1
+    }
+
+    Report "the image comes up and answers" ($front.Code -ne 0) "nothing answered on $Port after a minute"
+    if ($front.Code -eq 0) { throw "there is nothing to check" }
+
+    # Bound to every address inside the container rather than to its loopback. This is the one
+    # that cannot be checked from inside the image and is the usual way a container serves
+    # nothing at all: `-p` forwards to the container's address, and a server listening on
+    # 127.0.0.1 in there is listening on an address the forwarding never reaches.
     Report "and serves its front page through the forwarded port" ($front.Code -eq 200) "it answered $($front.Code)"
     Report "which offers a way to open a table" ($front.Said -match '/open\?players=') "the page carried no way to open one"
     Report "and says which game the house is of" ($front.Said -match '<h1>') "there was no heading on it"
@@ -137,7 +157,7 @@ try {
     Report "and the browser is sent to a board of its own" ($opened.Said -match 'id="screen"') "what came back was not a board page"
 
     $after = Fetch "http://localhost:$Port/"
-    Report "which the house then lists" ($after.Said -match '/table/') "the front page listed no table"
+    Report "which the house then lists" ($after.Said -match "/at/") "the front page listed no table"
 
     # And that it says what it is for. An image whose log does not say where to point a browser
     # is an image somebody has to read this file to use.

@@ -1054,11 +1054,17 @@ What that catches is the set of things that do not fail at build: a `WORKDIR` th
 user cannot write to, an entry point that does not pass its arguments on, and a port bound to
 the container's loopback and therefore to nothing at all.
 
-**It was written without ever being built** — there was no Docker on the machine at the time,
-and both files say so in their first lines. The part that did not need Docker was checked
-then: a published game, copied alone into an empty directory and started there, serves a house
-with no settings file, no project beside it and nothing else in the folder, and calls itself
-by the name it was published under. Those are the assumptions the image rests on.
+It has been built and run since, and two of the three things it was written blind about were
+right: `/data` is writable by the image's own user, and the entry point passes its arguments
+on. The third was not — not in the image, but in the script checking it.
+
+**Waiting for a container is not waiting for a port.** Every other script here waits by
+opening a socket, which is right when the thing being waited for is the thing that binds.
+`-p` puts a proxy on the host port the moment the container starts, and that proxy accepts a
+connection immediately and holds it until something inside is listening — so a socket check
+passes instantly against a container whose runtime has not finished starting, every request
+after it fails, the log reads empty, and eight checks call a perfectly good image broken. It
+waits for the house to *answer* now.
 
 | | terminal | browser |
 | --- | --- | --- |

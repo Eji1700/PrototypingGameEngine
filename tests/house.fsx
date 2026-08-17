@@ -407,6 +407,92 @@ report
          it.Swept() |> ignore
          (it.At opened.Id).IsSome)
 
+// --- and something that does the sweeping -----------------------------------------------
+//
+// `Swept` is thoroughly checked above and was, until this, never called by anything: the
+// timer that calls it lived four lines inside the web host, where no check could reach it, so
+// a rule that was certain and a house that would grow for ever were one missing line apart.
+//
+// Milliseconds rather than the five minutes a real house uses, and a real clock rather than
+// the stopped one - a table has to actually become old for this to mean anything.
+
+let private quickly = TimeSpan.FromMilliseconds 40.0
+
+let private impatient () =
+    House(hosting (), (fun () -> DateTime.Now), (fun () -> Guid.NewGuid().ToString "N"), { Unused = quickly; Finished = quickly })
+
+report
+    "a house sweeps on its own, without anybody asking it to"
+    (1, 0)
+    (let it = impatient ()
+     it.Opens(twoPeople, Some 42UL, None) |> ignore
+     let before = List.length it.Listed
+
+     use _ = it.Sweeping(quickly, ignore)
+     Threading.Thread.Sleep 600
+
+     before, List.length it.Listed)
+
+report
+    "and says what it took away, so a house that forgets a game says so out loud"
+    true
+    (let it = impatient ()
+     it.Opens(twoPeople, Some 42UL, None) |> ignore
+     let heard = ResizeArray<string>()
+
+     use _ = it.Sweeping(quickly, (fun gone -> heard.AddRange gone))
+     Threading.Thread.Sleep 600
+
+     heard.Count >= 1)
+
+// The other half of the same line, and the one worth being sure of: a table somebody is at is
+// not swept by a timer any more than by a hand. The rule says so and is checked above; this
+// says the timer asks the rule rather than deciding for itself.
+report
+    "but a table with somebody sitting at it is left alone however often the sweeping happens"
+    1
+    (let it = impatient ()
+
+     match it.Opens(twoPeople, Some 42UL, None) with
+     | Error said -> failwith said
+     | Ok opened ->
+         opened.Table.Sits("one", "tok-one", None, AtATerminal, "plain", "") |> ignore
+
+         use _ = it.Sweeping(quickly, ignore)
+         Threading.Thread.Sleep 600
+
+         List.length it.Listed)
+
+// --- and taking a house's games back up ---------------------------------------------------
+//
+// `Resumes` is checked above, one record at a time. What `--fill` adds is the sweep of `logs/`
+// that finds them, which is what makes a restart a pause rather than a loss - so it is worth
+// checking that the records a house writes are the records a house can find again.
+
+report
+    "the records a house wrote are the ones it would find on the way back up"
+    true
+    (let written = leftBehind ()
+
+     let found =
+         Transcript.saved ()
+         |> List.filter (fun record -> record.Game = Some (hosting ()).Name)
+         |> List.map (fun record -> record.Path)
+
+     written
+     |> List.forall (fun path -> found |> List.exists (fun other -> other.EndsWith(IO.Path.GetFileName path))))
+
+report
+    "and taking every one of them up fills a house with them"
+    true
+    (let written = leftBehind ()
+     let it = house ()
+
+     let taken = written |> List.choose (fun path -> it.Resumes path |> Result.toOption)
+
+     List.length taken = List.length written
+     && List.length it.Listed = List.length written)
+
 swept ()
 
 report "and the checks take their own records away again" [] (ours ())

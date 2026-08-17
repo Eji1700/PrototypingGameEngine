@@ -181,3 +181,28 @@ type House(hosting: Hosting, now: unit -> DateTime, naming: unit -> string, keep
 
             tables <- staying
             going |> List.map (fun opened -> opened.Id))
+
+    /// And something to do the sweeping, because otherwise nothing does.
+    ///
+    /// Here rather than beside the web host, and that is the whole reason it moved: a timer
+    /// started inside `Server.house` is four lines no check can reach, sitting between a rule
+    /// that is thoroughly checked and a house that would quietly grow for ever if the two were
+    /// never joined up. Started here, a check can hand in a span of milliseconds and watch a
+    /// table go without anybody asking for it.
+    ///
+    /// `told` is handed whatever went, and is called only when something did - a house saying
+    /// "swept nothing" every five minutes for a week is a log nobody reads.
+    ///
+    /// Handed back rather than kept, because what starts a timer should be what stops it. A
+    /// process that runs until somebody closes it never will, which is the ordinary case and
+    /// is why nothing here does it for them.
+    member this.Sweeping(every: TimeSpan, told: string list -> unit) =
+        let broom = new Timers.Timer(every.TotalMilliseconds, AutoReset = true)
+
+        broom.Elapsed.Add(fun _ ->
+            match this.Swept() with
+            | [] -> ()
+            | gone -> told gone)
+
+        broom.Start()
+        broom :> IDisposable

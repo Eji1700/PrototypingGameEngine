@@ -373,5 +373,15 @@ Two decisions taken while building it:
   whether `/data` is writable by the image's `app` user and whether the entry point's
   `exec "$@"` shell passes arguments and signals as intended — neither of which fails at build
   time, which is why `image.ps1` exists.
-- **`--fill` has no check**, and the sweep timer is verified only as far as `Housekeeping`
-  goes: nothing watches it actually fire in a live house.
+- ~~**`--fill` and the sweep timer have no checks.**~~ Both do now.
+
+  The timer **moved** to get one. It was four lines inside `Server.house`, sitting between a
+  rule that was thoroughly checked and a house that would grow for ever, and no check could
+  reach it. `House.Sweeping(every, told)` starts it and hands it back, so `house.fsx` can pass
+  a span of forty milliseconds and a real clock and watch a table go without anybody asking —
+  and watch one with somebody sitting at it stay.
+
+  `--fill` is checked where it can only be checked: a house started in a folder of its own,
+  played at until it writes a record, stopped, and started again in the same folder. It offers
+  the game back. Started *without* `--fill` in that same folder it comes up holding nothing,
+  which is the other half of the claim and the half a container depends on.

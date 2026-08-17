@@ -737,15 +737,12 @@ module Server =
         // Nothing else calls this, so something has to. A timer rather than a sweep on every
         // request: what it costs is a walk of a short list, and what it buys is a house that
         // does not grow while nobody is looking at it.
-        let broom =
-            new Timers.Timer(TimeSpan.FromMinutes(5.0).TotalMilliseconds, AutoReset = true)
-
-        broom.Elapsed.Add(fun _ ->
-            match home.Swept() with
-            | [] -> ()
-            | gone -> printfn "  Swept %d table(s) nobody was at." (List.length gone))
-
-        broom.Start()
+        //
+        // Never stopped, because this process runs until somebody closes it. `Sweeping` hands
+        // the timer back all the same, which is what lets a check start one with a span of
+        // milliseconds and put it down again.
+        home.Sweeping(TimeSpan.FromMinutes 5.0, (fun gone -> printfn "  Swept %d table(s) nobody was at." (List.length gone)))
+        |> ignore
 
         printfn ""
         printfn "=== A house of %s ===" hosting.Title

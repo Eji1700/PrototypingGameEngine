@@ -214,6 +214,96 @@ try {
 
     if ($inn -and -not $inn.HasExited) { try { Stop-Process -Id $inn.Id -Force } catch {} }
 
+    # --- and a house that was stopped and started again -----------------------------------
+    #
+    # `--fill` is the whole of what makes a restart a pause rather than a loss: a house holds
+    # nothing that is not also on disk, so coming back up is reading `logs/` and offering what
+    # it finds. `house.fsx` checks the reading; this checks that a house started fresh, in a
+    # folder with a game in it, actually offers that game to a browser.
+    #
+    # In a folder of its own, because the point is what a house finds in `logs/` and a check
+    # that ran here would find every game this repository has ever recorded.
+
+    ""
+    "Stopping a house with a game in it, and starting another in its place..."
+
+    Stop-Tables
+    Start-Sleep -Milliseconds 500
+
+    $fillPort = $Port + 2
+    $box = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-fill-$PID"
+    Remove-Item -Recurse -Force $box -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $box | Out-Null
+
+    $filling = @("run", "--project", $root, "--")
+    if ($Game) { $filling += $Game }
+    $filling += @("house", "--port", "$fillPort", "--open")
+
+    try {
+        # A house, a table, and a move played at it - which is what puts a record on disk. A
+        # table nobody has moved at writes nothing, the journal being empty, so a check that
+        # only opened one would be checking that `--fill` finds nothing.
+        $first = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $box -FilePath "dotnet" -ArgumentList $filling
+        Wait-ForPort $fillPort 120
+
+        Invoke-WebRequest "http://localhost:$fillPort/open?players=2" -UseBasicParsing -TimeoutSec 30 | Out-Null
+        $listed = Invoke-WebRequest "http://localhost:$fillPort/" -UseBasicParsing -TimeoutSec 30
+        $name = [regex]::Match($listed.Content, '/at/([a-z0-9-]+)').Groups[1].Value
+
+        $atFill = "run --project ""$root"" --"
+        if ($Game) { $atFill += " $Game" }
+        $atFill += " join localhost:$fillPort --table $name"
+
+        $five = Start-Console "dotnet" $atFill $box
+        $consoles += $five
+        Wait-For "a console at the house to be seated" 60 { (Told $five) -match "You are at seat 1" } | Out-Null
+
+        $six = Start-Console "dotnet" $atFill $box
+        $consoles += $six
+        Wait-For "the table to fill" 60 { (Told $six) -match "Turn 1" } | Out-Null
+
+        Types $five $m.Line
+        Wait-For "the move to reach the other console" 60 { (Told $six) -match $m.Heard } | Out-Null
+
+        # Down it goes, with the game only on disk.
+        Close-Console $five
+        Close-Console $six
+        if (-not $first.HasExited) { try { Stop-Process -Id $first.Id -Force } catch {} }
+        Start-Sleep -Seconds 2
+
+        $kept = @(Get-ChildItem (Join-Path $box "logs") -Filter *.log -ErrorAction SilentlyContinue)
+        Report "a house's table leaves a record behind it" ($kept.Count -ge 1) "the folder held $($kept.Count) records"
+
+        # And up again in the same folder, this time told to look.
+        $again = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $box -FilePath "dotnet" -ArgumentList ($filling + "--fill")
+        Wait-ForPort $fillPort 120
+
+        $back = Invoke-WebRequest "http://localhost:$fillPort/" -UseBasicParsing -TimeoutSec 30
+        $tables = ([regex]::Matches($back.Content, '/at/[a-z0-9-]+')).Count
+
+        Report "a house started with --fill offers the games it finds in logs/" ($tables -ge 1) "the front page listed $tables tables"
+
+        if (-not $again.HasExited) { try { Stop-Process -Id $again.Id -Force } catch {} }
+        Start-Sleep -Seconds 1
+
+        # And one started without it comes up empty, which is the other half of the claim: a
+        # container meant to come up with nothing in it should come up with nothing in it.
+        $bare = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $box -FilePath "dotnet" -ArgumentList $filling
+        Wait-ForPort $fillPort 120
+
+        $empty = Invoke-WebRequest "http://localhost:$fillPort/" -UseBasicParsing -TimeoutSec 30
+        $none = ([regex]::Matches($empty.Content, '/at/[a-z0-9-]+')).Count
+
+        Report "and one started without it comes up holding nothing" ($none -eq 0) "the front page listed $none tables"
+
+        if (-not $bare.HasExited) { try { Stop-Process -Id $bare.Id -Force } catch {} }
+    }
+    finally {
+        Start-Sleep -Milliseconds 500
+        Remove-Item -Recurse -Force $box -ErrorAction SilentlyContinue
+    }
+
+
 
     ""
     if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }
