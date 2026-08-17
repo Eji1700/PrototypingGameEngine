@@ -7,16 +7,22 @@ module TCModel.Games
 ///
 /// In the order they are offered. The first is what somebody who says nothing gets.
 ///
-/// Four entries and four games. It was five entries and four games until the settings screen
-/// grew a page for a game's own choices: Compile was in this list twice, once plain and once
-/// with its optional rule, so the picker asked which game and then asked the same question
-/// again in different words. A game offers its ways itself now, and this list is a list of
-/// games again.
+/// Six entries and six games. It was five entries and four games until the settings screen grew
+/// a page for a game's own choices: Compile was in this list twice, once plain and once with its
+/// optional rule, so the picker asked which game and then asked the same question again in
+/// different words. A game offers its ways itself now, and this list is a list of games again.
+///
+/// The last two are the ones that argue with the rest. Life is not a game of turns at all - one
+/// seat, no opponent, nothing to win - and Snake is the same rules at a table of one and a table
+/// of four. Both sit in this list exactly like the others, which is the whole of what their
+/// being here proves.
 let all =
     [ Play.chosen TCModel.Turncoats.Offer.ways TCModel.Turncoats.Offer.playable
       Play.chosen TCModel.TicTacToe.Offer.ways TCModel.TicTacToe.Offer.playable
       Play.chosen TCModel.Diplomacy.Offer.ways TCModel.Diplomacy.Offer.playable
-      Play.chosen TCModel.Compile.Offer.ways TCModel.Compile.Offer.playable ]
+      Play.chosen TCModel.Compile.Offer.ways TCModel.Compile.Offer.playable
+      Play.chosen TCModel.Life.Offer.ways TCModel.Life.Offer.playable
+      Play.chosen TCModel.Snake.Offer.ways TCModel.Snake.Offer.playable ]
 
 /// The one a line that named no game is about. There is always at least one game, so this
 /// is a list that cannot be empty rather than an answer that might not be there.

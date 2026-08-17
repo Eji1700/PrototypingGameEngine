@@ -41,7 +41,7 @@
 param(
     [ValidateSet("both", "portable", "standalone")]
     [string]$Shape = "both",
-    [ValidateSet("all", "TCModel", "Turncoats", "TicTacToe", "Diplomacy", "Compile")]
+    [ValidateSet("all", "TCModel", "Turncoats", "TicTacToe", "Diplomacy", "Compile", "Life", "Snake")]
     [string]$Program = "all",
     # Empty means this machine's own.
     [string]$Runtime = "",
@@ -90,12 +90,14 @@ $programs = @(
     @{ Name = "TicTacToe"; Project = "src/Games/TicTacToe/TicTacToe.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.grid" }
     @{ Name = "Diplomacy"; Project = "src/Games/Diplomacy/Diplomacy.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
     @{ Name = "Compile"; Project = "src/Games/Compile/Compile.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
+    @{ Name = "Life"; Project = "src/Games/Life/Life.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15" }
+    @{ Name = "Snake"; Project = "src/Games/Snake/Snake.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15" }
 ) | Where-Object { $Program -eq "all" -or $_.Name -eq $Program }
 
-# How many sit down at each, because not every game takes two: Diplomacy is seven and
-# Compile is two, and a line that asks a game for a table it does not deal is a failed check
-# that says nothing about publishing.
-$seats = @{ TCModel = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2 }
+# How many sit down at each, because not every game takes two: Diplomacy is seven, Compile is
+# two, and Life is one - and a line that asks a game for a table it does not deal is a failed
+# check that says nothing about publishing.
+$seats = @{ TCModel = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2; Life = 1; Snake = 2 }
 
 # --- what a published file has to be able to do -------------------------------------------
 

@@ -40,10 +40,13 @@ $scripts = @(
     "ruling", "outcome", "actions", "history", "knowledge"
     "lobby", "house", "solo", "view", "html", "reach", "cli"
     "properties", "rival"
-    # The other three games, last, because most of what they check is that everything above
-    # them works for a game it was not written for. Diplomacy is the slow one: it plays a few
-    # thousand machine moves out and adjudicates every season of them.
-    "tictactoe", "diplomacy", "compile"
+    # The other five games, last, because most of what they check is that everything above
+    # them works for a game it was not written for. The two slow ones are here: Diplomacy
+    # plays a few thousand machine moves out and adjudicates every season of them, and Snake
+    # plays a dozen whole games out with a machine that counts the room every step leaves it.
+    # Life is the odd one: one seat, no opponent and no ending, which is the hardest thing the
+    # two seams are asked to hold.
+    "tictactoe", "diplomacy", "compile", "life", "snake"
 )
 
 if ($Only) {

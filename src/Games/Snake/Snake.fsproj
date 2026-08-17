@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The sixth game, and the first whose table is any size from one to four with the same
+       rules either way. Alone it is the arcade game and the score is what you ate; at a table
+       of more it is the same board with somebody else's snake on it, and the last one moving
+       has won. Nothing above the seam is told which of those it is. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <SelfContained>false</SelfContained>
+    <AssemblyName>Snake</AssemblyName>
+    <RootNamespace>TCModel.Snake</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup Label="How it is played">
+    <Compile Include="Rules/Board.fs" />
+    <Compile Include="Rules/Snakes.fs" />
+    <Compile Include="Rules/Session.fs" />
+    <Compile Include="Rules/Turn.fs" />
+    <Compile Include="Rules/Words.fs" />
+    <!-- After the turn, because a machine asks the rules what is one square that way rather
+         than keeping an opinion of its own about walls. -->
+    <Compile Include="Rules/Rival.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="How it is read">
+    <Compile Include="Reading/Ink.fs" />
+    <Compile Include="Reading/Parse.fs" />
+    <Compile Include="Reading/Render.fs" />
+    <Compile Include="Offer.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="And the door">
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../TCModel.Engine.fsproj" />
+  </ItemGroup>
+
+</Project>

@@ -33,6 +33,8 @@
     <ProjectReference Include="src/Games/TicTacToe/TicTacToe.fsproj" />
     <ProjectReference Include="src/Games/Diplomacy/Diplomacy.fsproj" />
     <ProjectReference Include="src/Games/Compile/Compile.fsproj" />
+    <ProjectReference Include="src/Games/Life/Life.fsproj" />
+    <ProjectReference Include="src/Games/Snake/Snake.fsproj" />
   </ItemGroup>
 
 </Project>

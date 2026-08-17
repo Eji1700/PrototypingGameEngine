@@ -1,4 +1,4 @@
-# TCModel — an engine for turn-based games, and four games in it
+# TCModel — an engine for turn-based games, and six games in it
 
 Answer seven questions about how a game is *played* and fourteen about how it is *read*, and
 you are handed the rest: a history to walk back through, a record that replays, seats and
@@ -15,11 +15,14 @@ README of its own:
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
+| [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
+| [**Snake**](src/Games/Snake/README.md) | 1 to 4 | One square a turn, eat the star, and do not run into anything. Alone, or four at once |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
 dotnet run -- tictactoe play 2  # or say which, and everything after it is read by that game
 dotnet run -- diplomacy play 7  # seven powers, and no dice anywhere in it
+dotnet run -- life play 1       # one seat, no opponent, and nothing to win
 ```
 
 Written in F# as a Model-View-Update loop. The core is pure: a game deals itself from a seed
@@ -60,6 +63,26 @@ It went in a piece at a time over many commits — the table, then the numbers g
 that resolves rules text, then ninety cards one shape at a time — which makes it the one honest
 test of the other claim this file makes: that a game can be **added to**, rather than only added,
 without anything above it moving. Nothing did, once.
+
+**And a fifth, which is not a game of turns at all.** [Life](src/Games/Life/README.md) has one
+seat, no opponent, nothing to win, no ending, and a position that changes because a rule says so
+rather than because anybody chose it. Four games of two or more people taking turns against each
+other do not test "generic in the game" very hard; this one fills in the same two records,
+unchanged, and gets the timeline, the record, the replay, the shared verbs, the menu, the command
+line, the wire and all three screens for nothing. What it turned up is three places where code
+that had been right for four games had never been handed a one: ["1 players", a clause about
+machines at a game with none, and a block that loses its
+name](src/Games/Life/README.md#what-it-turned-up).
+
+**And a sixth, whose table is any size with the same rules either way.**
+[Snake](src/Games/Snake/README.md) is the arcade game with the hurry taken out of it: one square
+a turn, and the one decision it was always about — which of three squares to be standing on
+next. Alone it is the arcade game and the score is what you ate; at a table of four it is the
+same board with somebody else's snake on it and the last one moving has won, and nothing above
+the seam is told which of those it is. It is also the first game here whose generator is used
+*through* a game rather than only at the deal — a piece of food is drawn every time one is
+eaten — so it is the one that says whether "a seed and a list of messages reproduce a game
+exactly" survives a game that keeps drawing.
 
 **Using it** — [Running](#running) ·
 [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
@@ -145,6 +168,8 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
+| [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
+| [**Snake**](src/Games/Snake/README.md) | 1 to 4 | One square a turn, eat the star, and do not run into anything. Alone, or four at once |
 
 Everything below this line is about the program rather than about any of them.
 
@@ -353,7 +378,7 @@ gold rather than a fourth hue that could be mistaken for a stone.
 Three pages because there are three kinds of question. **Video** is how a board reaches your
 eyes. **Audio** is how it reaches your ears, which today is one bell and a question about
 whether you want it. **Game** is whatever this particular game lets you settle about itself,
-which for three of these four games is nothing at all.
+which for five of these six games is nothing at all.
 
 The split is not decoration. Before it there was one screen with a view row and a colour row
 on it, and every new kind of question would have gone on the end of the same list until it was
@@ -376,8 +401,8 @@ sitting in, so it is asked once, kept above all the games, and every game picks 
 
 #### Game
 
-The page a game answers for itself, and the reason `Games.all` is four entries rather than
-five. Compile can be played with an optional rule in it, and that used to be a second game in
+The page a game answers for itself, and the reason `Games.all` is six entries rather than
+seven. Compile can be played with an optional rule in it, and that used to be a second game in
 the picker — so the front door asked which game and then asked the same question again in
 different words. It is one game with two ways of being played now:
 
@@ -1046,7 +1071,7 @@ on.
 doing rather than on anybody's own machine: what ships is a Linux image and the runner is
 Linux, so what CI builds is the thing rather than a Windows box's idea of it. It runs
 [image.ps1](tools/image.ps1) — the same checks a person runs, not a second set written in
-shell — against two of the four games, because one would build an image and prove nothing
+shell — against two of the five games, because one would build an image and prove nothing
 about `--build-arg GAME`, which is the only thing that differs between them and therefore the
 only thing that can be wrong.
 
@@ -1482,7 +1507,7 @@ above ever sees.
 let main argv = TCModel.Play.only Offer.ways argv
 ```
 
-That line is the same at all four games, and its being the same is the fair test of the two
+That line is the same at all six games, and its being the same is the fair test of the two
 seams: by the time a game is a `Playable` there is nothing left for a way in to decide.
 
 **5. And one line in [Games.fs](src/Games.fs)**, if it is also to appear in the program that
@@ -1698,10 +1723,12 @@ that `#load` them by path did not change either.
 | [src/Games/TicTacToe/TicTacToe.fsproj](src/Games/TicTacToe/TicTacToe.fsproj) | " |
 | [src/Games/Diplomacy/Diplomacy.fsproj](src/Games/Diplomacy/Diplomacy.fsproj) | " |
 | [src/Games/Compile/Compile.fsproj](src/Games/Compile/Compile.fsproj) | " |
-| [TCModel.fsproj](TCModel.fsproj) | All four in one program, which asks which. What a clone runs |
+| [src/Games/Life/Life.fsproj](src/Games/Life/Life.fsproj) | " |
+| [src/Games/Snake/Snake.fsproj](src/Games/Snake/Snake.fsproj) | " |
+| [TCModel.fsproj](TCModel.fsproj) | All five in one program, which asks which. What a clone runs |
 
 A game's own executable is one game, one port and nothing else in the image, which is what
-goes in a container. `TCModel` is what somebody who wants all four downloads once, and what
+goes in a container. `TCModel` is what somebody who wants all six downloads once, and what
 every `dotnet run` line in this README is.
 
 **`src/Common`** — generic, and knows nothing about the game.
@@ -1780,6 +1807,9 @@ The games never mention each other, and nothing above them names any of them unt
 | [Turncoats](src/Games/Turncoats/README.md#the-files) | 21 | a map, hidden bags, a generator, four kinds of move, three ways of being won, and three views written out by hand |
 | [Noughts and crosses](src/Games/TicTacToe/README.md#the-files) | 10 | nine squares, nothing hidden, and its screens described once |
 | [Diplomacy](src/Games/Diplomacy/README.md#the-files) | 13 | seven seats, no chance at all, three kinds of phase, and a map of three hundred borders |
+| [Compile](src/Games/Compile/README.md#the-files) | 17 | a deck each, ninety cards of rules text, a draft, and a game that is three games in a row |
+| [Life](src/Games/Life/README.md#the-files) | 8 | one seat, no opponent, no ending, and a board of four hundred cells drawn as rows rather than as cells |
+| [Snake](src/Games/Snake/README.md#the-files) | 10 | one to four seats on one board, a generator that keeps drawing, and a machine that cannot see the end of the game |
 
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.
@@ -1793,14 +1823,14 @@ to call.
 | File | Role |
 | --- | --- |
 | [Play.fs](src/Play.fs) | The above, ending in `Chosen` — and `Play.only`, which is what `main` is at a game's own executable |
-| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all four: `Play.only Offer.ways argv` |
+| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all six: `Play.only Offer.ways argv` |
 | [Games.fs](src/Games.fs) | The games there are, and the only file in the program that names more than one |
 | [Program.fs](src/Program.fs) | Which game a line is about, the screen that asks when nothing says, and nothing else |
 
 A game's door being one line is the fair test of the two seams. By the time a game is a
 `Playable` there is nothing left for a way in to decide: what a line means, what the menu
 offers, where a record goes and how far a table reaches are all settled above it, generically,
-and none of it is written four times.
+and none of it is written six times.
 
 ### Keeping invalid states out
 
@@ -2096,17 +2126,24 @@ dotnet fsi tests/diplomacy.fsx  # the third game - the adjudication cases every 
 dotnet fsi tests/compile.fsx    # the fourth game - the draft, the lines, the deal, that a
                                 #   hand is on nobody else's screen, and that eighteen cards
                                 #   stay eighteen wherever they are
+dotnet fsi tests/life.fsx       # the fifth game - Conway's rule against the shapes that test
+                                #   it, and one seat, no opponent and no ending going through
+                                #   the same two seams as the rest
+dotnet fsi tests/snake.fsx      # the sixth game - the three ways a snake stops, the square its
+                                #   own tail is leaving, a table of one and a table of four, and
+                                #   a machine that counts the room a step leaves it
 ```
 
-**Four harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
-loaded file by its basename, and all four games have a `Turn.fs` and a `Words.fs` - which
+**Six harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
+loaded file by its basename, and all six games have a `Turn.fs` and a `Words.fs` - which
 compile happily side by side in one project and cannot be loaded into one script. So
 [Checks.fsx](tests/Checks.fsx) keeps score and loads nothing at all, and
 [Whole.fsx](tests/Whole.fsx), [Noughts.fsx](tests/Noughts.fsx),
-[Europe.fsx](tests/Europe.fsx) and [Compiled.fsx](tests/Compiled.fsx) each load the same stack
-in the project's own order with one game on the end of it. The thirteen scripts above the last
-three used to keep a hand-ordered `#load` list apiece; they had already drifted, which is the
-same disease the seams are for.
+[Europe.fsx](tests/Europe.fsx), [Compiled.fsx](tests/Compiled.fsx),
+[Living.fsx](tests/Living.fsx) and [Slither.fsx](tests/Slither.fsx) each load the same stack in
+the project's own order with one game on the end of it. The thirteen scripts above the last five
+used to keep a hand-ordered `#load` list apiece; they had already drifted, which is the same
+disease the seams are for.
 
 Two more, which want a process rather than a value:
 
@@ -2255,24 +2292,24 @@ pwsh tools/publish.ps1 -Program Turncoats  # just the one game
 pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
 ```
 
-Five programs come out: one per game, and `TCModel`, which has all four in it and asks
+Seven programs come out: one per game, and `TCModel`, which has all six in it and asks
 which. A game's own file is one game, one port and nothing else — which is what goes in a
-container — and `TCModel` is what somebody who wants all four downloads once.
+container — and `TCModel` is what somebody who wants all six downloads once.
 
 | | size | wants |
 | --- | --- | --- |
 | `portable` | 6.1 – 7.2 MB | the ASP.NET Core 10 runtime installed |
 | `standalone` | ~105 MB | nothing at all |
 
-The checks below are run against each of the five, and they are not the same lines at each: a
-game's own file takes `serve 2` and the one with four games in it takes `tictactoe serve 2`.
+The checks below are run against each of the seven, and they are not the same lines at each: a
+game's own file takes `serve 2` and the one with six games in it takes `tictactoe serve 2`.
 That difference is the whole of what publishing separately changed, so it is checked rather
 than assumed — `Turncoats.exe` printing `Turncoats turncoats play 2` is a line that runs and
 then refuses, which is worse than one that does not run at all.
 
 **Publishing passes `-p:SelfContained` rather than `--self-contained`, and the difference is
 load-bearing.** The second sets the property on the project named and on nothing else, so
-publishing `TCModel` portable left the four games it references self-contained and the SDK
+publishing `TCModel` portable left the games it references self-contained and the SDK
 refused the mixture outright (NETSDK1151). A `-p:` on the command line is a global property:
 it reaches every project in the graph and overrides what each says for itself, which is
 exactly what "this whole publish is one shape" means.

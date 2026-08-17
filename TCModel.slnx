@@ -5,6 +5,8 @@
   <Folder Name="/src/Games/">
     <Project Path="src/Games/Compile/Compile.fsproj" />
     <Project Path="src/Games/Diplomacy/Diplomacy.fsproj" />
+    <Project Path="src/Games/Life/Life.fsproj" />
+    <Project Path="src/Games/Snake/Snake.fsproj" />
     <Project Path="src/Games/TicTacToe/TicTacToe.fsproj" />
     <Project Path="src/Games/Turncoats/Turncoats.fsproj" />
   </Folder>

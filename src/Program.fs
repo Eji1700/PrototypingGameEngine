@@ -35,11 +35,14 @@ let private picked argv =
 // the command line takes.
 
 /// How many may sit down at one, said the way the seat list says it.
+///
+/// One is a case rather than a number in a sentence, and it is here because there is a game
+/// with one seat now: "1 players" reads as a bug in the list, and it was.
 let private seating (game: Play.Chosen) =
-    if game.Fewest = game.Most then
-        $"{game.Fewest} players"
-    else
-        $"{game.Fewest} to {game.Most} players"
+    match game.Fewest, game.Most with
+    | 1, 1 -> "1 player"
+    | fewest, most when fewest = most -> $"{fewest} players"
+    | fewest, most -> $"{fewest} to {most} players"
 
 let private picking: Keys.Screen =
     { Title = "Which game?"

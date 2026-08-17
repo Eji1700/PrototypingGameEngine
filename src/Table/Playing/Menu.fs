@@ -76,7 +76,7 @@ module Menu =
             [ for players in game.Fewest .. game.Most ->
                   Keys.sends
                       (Some(char (int '0' + players)))
-                      $"{players} players"
+                      (if players = 1 then "1 player" else $"{players} players")
                       ""
                       $"seats {Seating.line (Seating.here players)}" ]
           Note =
@@ -321,7 +321,12 @@ module Menu =
               $"one, 'serve {fewest}' to read it in a browser, 'seats {fewest}' to lay it out"
               $"first. The short ways still hold: '{game.Fewest}' for a game of {game.Fewest},"
               $"'{game.Fewest} 42' for that same game again, 'serve {game.Fewest}',"
-              $"'host {game.Fewest}', 'vs <skill>...' for {machines},"
+              // A game the program has no way of playing itself is not offered a line for
+              // seating one. The clause used to be written whatever the game said, and at a
+              // game with no machines it came out as "'vs <skill>...' for ,".
+              (match game.Skills with
+               | [] -> $"'host {game.Fewest}',"
+               | _ -> $"'host {game.Fewest}', 'vs <skill>...' for {machines},")
               $"'join <address> [word]', 'continue', 'replay <file>',"
               $"'view <{Playable.namesFor AtATerminal game}>',"
               (if behind then "'settings', 'rules', 'back', 'quit'." else "'settings', 'rules', 'quit'.") ]
