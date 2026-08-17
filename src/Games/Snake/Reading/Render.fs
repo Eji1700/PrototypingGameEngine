@@ -121,6 +121,17 @@ module Render =
               Scene.cell Tone.Quiet standing ])
         |> Aligned
 
+    /// Where the clock is wound to, and how to wind it.
+    ///
+    /// One quiet line, and it stays on the screen while the board is moving - which is the point
+    /// of it being a line of its own rather than a note. A player who thinks the game is too
+    /// slow is entitled to find out what to do about it without stopping the game to read the
+    /// box that would have told them.
+    let private clock play =
+        match play.Pace with
+        | Turns -> Blank
+        | Clock -> Scene.quietly $"clock at speed {play.Speed} of {Session.Fastest} - 'faster' and 'slower', or + and -"
+
     /// What a player does over and over, as controls. Each carries the line it would type, so
     /// a reader with buttons draws buttons and one without writes out the words.
     ///
@@ -138,17 +149,30 @@ module Render =
               Does("west", "west", Tone.Plainly)
               Does("east", "east", Tone.Plainly)
               Does("south", "south", Tone.Plainly)
-              Does("go", "go", Tone.Plainly) ]
+              Does("go", "go", Tone.Plainly)
+              Scene.quietly "and another board"
+              Does("restart", "restart", Tone.Plainly) ]
         | Clock ->
             let mine =
                 if List.contains beholder play.Seats then beholder else Session.foremost play
 
             let letter = Words.letter mine
 
-            Scene.quietly $"turning {Words.player mine}"
-            :: [ for way in [ North; West; East; South ] ->
-                     let line = $"{letter} {Words.direction way}"
-                     Does(line, line, Tone.Plainly) ]
+            [ yield Scene.quietly $"turning {Words.player mine}"
+
+              for way in [ North; West; East; South ] do
+                  let line = $"{letter} {Words.direction way}"
+                  yield Does(line, line, Tone.Plainly)
+
+              yield Scene.quietly "and the clock"
+              yield Does("slower", "slower", Tone.Plainly)
+              yield Does("faster", "faster", Tone.Plainly)
+
+              // Dealing another is the engine's own word rather than this game's, and it is
+              // offered here for the same reason the two above are: at a game that has just
+              // ended, "again" is the only thing anybody wants, and a page has no key for it.
+              yield Scene.quietly "and another board"
+              yield Does("restart", "restart", Tone.Plainly) ]
 
     // --- what a player may type ----------------------------------------------------------
 
@@ -162,9 +186,18 @@ module Render =
           | Clock ->
               yield "arrows, wasd", "turn your snake - the arrows are A's, wasd are B's"
               yield "north, n, up", "the same, typed (and 'b north' for somebody else's)"
+              yield "+ and -", $"wind the clock up or down ('faster', 'slower')"
+              yield "speed 7", $"straight to a notch, from {Session.Slowest} to {Session.Fastest}"
               yield "space", "hold the clock while you think; space again to go on"
 
           yield "why east", "what is one square that way, before you commit to it"
+
+          yield
+              "restart",
+              match pace with
+              | Clock -> "another board - or 'r', once the clock has stopped"
+              | Turns -> "another board, dealt fresh"
+
           yield "undo, redo", "walk the game back and forward"
           yield "history", "the record so far"
           yield "notes", "hide the writing that explains the board"
@@ -237,7 +270,12 @@ module Render =
             [ Heading(heading beholder session)
               Block(Blocks.board, [ grid (Session.play session); Scene.noted margins Notes.board ])
               Beside
-                  [ Block(Blocks.snakes, [ snakes beholder session; Scene.noted margins (Notes.moving pace) ])
+                  [ Block(
+                        Blocks.snakes,
+                        [ snakes beholder session
+                          clock (Session.play session)
+                          Scene.noted margins (Notes.moving pace) ]
+                    )
                     // The ways to go are a list of lines a player could type, so they belong
                     // with the box that lists the rest of them - which is what makes them go
                     // away while a clock is running. A browser has them on, and they are its
@@ -337,7 +375,13 @@ module Render =
           "8", "d north"
           "4", "d west"
           "5", "d south"
-          "6", "d east" ]
+          "6", "d east"
+          // The clock. Four spellings for two keys, because a browser says `+` for one of them
+          // only while shift is down and `=` for the same key without it.
+          "+", "faster"
+          "=", "faster"
+          "-", "slower"
+          "_", "slower" ]
 
     let shell pace =
         { Title = "Snake"

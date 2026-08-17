@@ -98,6 +98,17 @@ module Parse =
         | [ "go" ]
         | [ "beat" ]
         | [ "tick" ] -> Ok(Send(Make Beat))
+        // How fast the clock is wanted. `+` and `-` are here because they are what the keys
+        // send, and a key sends a line - so the shortest way to say this is a line too.
+        | [ "faster" ]
+        | [ "quicker" ]
+        | [ "+" ] -> Ok(Send(Make Faster))
+        | [ "slower" ]
+        | [ "-" ] -> Ok(Send(Make Slower))
+        | [ "speed"; notch ] ->
+            match Commands.tryInt notch with
+            | Some notch -> Ok(Send(Make(Speed notch)))
+            | None -> Error $"'{notch}' is not a speed. They run from {Session.Slowest} to {Session.Fastest}."
         | [ word ] ->
             match direction word with
             | Some way -> Ok(Send(Make(Steer(Seat.at 1, way))))

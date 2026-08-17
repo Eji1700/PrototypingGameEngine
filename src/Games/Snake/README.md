@@ -62,9 +62,17 @@ there](../../../README.md). What this game adds is four ways to go, at two paces
 | `north` (`n`, `up`) | the same, typed. A bare direction is A's |
 | `b north` | somebody else's, by the letter it is drawn with |
 | `go` | one beat, said out loud — for a console that cannot press anything |
+| `+` and `-` | wind the clock up or down a notch (`faster`, `slower`) |
+| `speed 7` | straight to a notch, from 1 to 9 |
 | space | hold the clock while you think - and read everything the running screen leaves off |
+| `r` | deal another board, once the clock has stopped (`restart`, which every game here takes) |
 | Enter | type a whole line, with the clock held while you do |
 | Esc | put it down |
+
+`r` only answers while the game is held or over, and that is the whole of the guard it needs: a
+key meant for a snake in the middle of a run would otherwise sweep the game away, and a game
+swept away by a mistyped key is a game nobody types a key at again. Typing `restart` works at any
+moment, as it does at every game here.
 
 **While the clock is running you get the board and nothing else** - the heading, the board, the
 score and the last few lines of what was said. The writing that explains the board, the box
@@ -112,8 +120,24 @@ snake.
 - two heads that pick the same square **both** stop, because neither of them got there first;
 - and a snake that stops on a beat still leaves its body there for whoever is still going.
 
-The pace itself is a rule: it opens at 320ms a beat and quickens by 8ms a piece eaten, down to a
-floor of 110ms — about as fast as somebody can still be said to be steering.
+**How fast it goes is yours to set**, from the first beat or in the middle of a run: `+` and `-`
+wind the clock a notch, `speed 7` goes straight to one, and the board says which notch it is on
+while it runs. Nine notches, 40ms apart:
+
+| notch | 1 | 2 | 3 | 4 | **5** | 6 | 7 | 8 | 9 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| a beat | 380ms | 340ms | 300ms | 260ms | **220ms** | 180ms | 140ms | 100ms | 60ms |
+
+On top of the notch, the game quickens by 8ms for every piece the longest snake has eaten - a
+board that ran at one speed for ever would be a board with nothing to fear on it - down to a
+floor of 50ms.
+
+**The notch is in the position, not in a setting**, which is the one surprising thing about it. A
+clock could hardly be more obviously "how this is being read" — except that what a game hands the
+table is `Every: 'State -> TimeSpan`, so the only way the game can have an opinion is for the
+state to hold one. Which turns out to be the right place anyway: winding it up is a move, so it
+goes into the record, it replays, and it can be taken back. It does not outlive the game, though:
+a `restart` deals a fresh board at notch 5.
 
 ```
 +------------------------+

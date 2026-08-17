@@ -28,28 +28,38 @@ module Offer =
     /// How long a table leaves between beats, which is the whole of what makes this the arcade
     /// game rather than a game of turns.
     ///
-    /// It quickens as the longest snake on the board eats, because a game that ran at one speed
-    /// for ever would be a game with nothing to fear in it - and it stops quickening at a tenth
-    /// of a second, which is about as fast as a person can still be said to be steering.
+    /// Two things move it, and they are not the same kind of thing. **The notch** is what a
+    /// player asked for - nine of them, wound with `faster` and `slower` or with + and - - and
+    /// it is in the position, so it is a move, it is in the record, and it replays. **The
+    /// eating** is the game itself getting harder, because a board that ran at one speed for
+    /// ever would be a board with nothing to fear on it.
+    ///
+    /// Milliseconds live here rather than in the game, and that is the split worth keeping: the
+    /// game holds a number from one to nine, and what one of those is worth in time is a fact
+    /// about clocks and about how fast a person can still be said to be steering.
     [<Literal>]
-    let private Slowest = 320
+    let private Slackest = 420
 
     [<Literal>]
-    let private Quickest = 110
+    let private PerNotch = 40
 
     [<Literal>]
     let private PerPiece = 8
 
+    [<Literal>]
+    let private Quickest = 50
+
     let private every session =
+        let play = Session.play session
+
         let eaten =
-            Session.play session
-            |> Session.snakes
+            Session.snakes play
             |> List.map (fun (_, snake) -> snake.Eaten)
             |> function
                 | [] -> 0
                 | all -> List.max all
 
-        System.TimeSpan.FromMilliseconds(float (max Quickest (Slowest - PerPiece * eaten)))
+        System.TimeSpan.FromMilliseconds(float (max Quickest (Slackest - PerNotch * play.Speed - PerPiece * eaten)))
 
     /// Which key turns which snake, as the line it stands for.
     ///
@@ -78,6 +88,12 @@ module Offer =
         | System.ConsoleKey.NumPad4 -> turning "d" "west"
         | System.ConsoleKey.NumPad5 -> turning "d" "south"
         | System.ConsoleKey.NumPad6 -> turning "d" "east"
+        // And the clock, which is the one thing here that is not a snake. Both spellings of
+        // each, because a keyboard has two of them and nobody looks at which one they hit.
+        | System.ConsoleKey.OemPlus
+        | System.ConsoleKey.Add -> Some "faster"
+        | System.ConsoleKey.OemMinus
+        | System.ConsoleKey.Subtract -> Some "slower"
         | _ -> None
 
     // --- what this game says is wrong with itself --------------------------------------------

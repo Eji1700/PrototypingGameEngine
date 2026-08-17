@@ -443,7 +443,58 @@ report "and the arcade one does" true snake.Pulse.IsSome
 
 report "its beat is the move the checks above have been folding by hand" Beat pulse.Beat
 
-report "it opens at about a third of a second" true (pulse.Every(standing ticking) > TimeSpan.FromMilliseconds 250.0)
+// --- how fast it is wanted ---------------------------------------------------------------------
+//
+// The notch is in the position and the milliseconds are in the pulse, and that split is what
+// these are about: the game says "seven of nine", and what seven is worth in time is settled
+// where the clock is.
+
+let private wound moves = played racing moves ticking
+
+let private beat model =
+    (pulse.Every(standing model)).TotalMilliseconds
+
+report "a fresh game opens in the middle of the range" 5 (play ticking).Speed
+
+report "which is about a fifth of a second" true (beat ticking > 200.0 && beat ticking < 240.0)
+
+report "winding it up shortens the beat" true (beat (wound [ Faster ]) < beat ticking)
+
+report "and down lengthens it" true (beat (wound [ Slower ]) > beat ticking)
+
+report "a notch can be asked for outright" 9 (play (wound [ Speed 9 ])).Speed
+
+report "and the quickest is quick" true (beat (wound [ Speed 9 ]) < 100.0)
+
+report "and the slowest is not" true (beat (wound [ Speed 1 ]) > 350.0)
+
+report
+    "a speed nobody has is refused, and says what there is"
+    true
+    (toldBy snake (wound [ Speed 12 ])
+     |> List.exists (mentions "The clock winds from 1 to 9"))
+
+// Asking for the notch it is already on, and asking for quicker at the quickest, are both what
+// somebody leaning on a key is asking for - answered with nothing at all rather than with a line
+// of the log per press.
+
+report "asking for the speed it is already at changes nothing" (standing ticking) (standing (wound [ Speed 5 ]))
+
+report "and says nothing" [] (toldBy snake (wound [ Speed 5 ]))
+
+report "nor does winding past the end of the range" (standing (wound [ Speed 9 ])) (standing (wound [ Speed 9; Faster ]))
+
+report
+    "the eating quickens it too, on top of the notch"
+    true
+    (beat (wound [ Speed 5 ]) > beat (feeding (Board.along East (headOf 1 ticking)) (wound [ Speed 5 ]) |> beaten 1))
+
+report "but never past the floor" true (beat (wound [ Speed 9 ]) >= 50.0)
+
+report
+    "and winding the clock is a move like any other, so it can be taken back"
+    5
+    (play (Update.update racing Undo (wound [ Speed 9 ]))).Speed
 
 /// A snake that has eaten that many pieces, which is the only thing the pace depends on.
 let private fed pieces =
@@ -465,9 +516,9 @@ let private fed pieces =
 report "and quickens as the snake eats" true (pulse.Every(fed 10) < pulse.Every(fed 0))
 
 report
-    "but not past a tenth of a second, which is as fast as anybody is still steering"
+    "but not past the floor, which is as fast as anybody is still steering"
     true
-    (pulse.Every(fed 500) > TimeSpan.FromMilliseconds 100.0)
+    (pulse.Every(fed 500) >= TimeSpan.FromMilliseconds 50.0)
 
 // The keys are the other half of it, and they are held to the one rule every control in this
 // program is held to: a key stands for a line, and the line is one the game itself reads.
@@ -518,7 +569,11 @@ report
        ConsoleKey.NumPad8
        ConsoleKey.NumPad4
        ConsoleKey.NumPad5
-       ConsoleKey.NumPad6 ]
+       ConsoleKey.NumPad6
+       ConsoleKey.OemPlus
+       ConsoleKey.Add
+       ConsoleKey.OemMinus
+       ConsoleKey.Subtract ]
      |> List.choose keyed
      |> List.filter (fun line -> Result.isError (reads snake line)))
 
@@ -810,7 +865,11 @@ report
        ConsoleKey.NumPad8
        ConsoleKey.NumPad4
        ConsoleKey.NumPad5
-       ConsoleKey.NumPad6 ]
+       ConsoleKey.NumPad6
+       ConsoleKey.OemPlus
+       ConsoleKey.Add
+       ConsoleKey.OemMinus
+       ConsoleKey.Subtract ]
      |> List.choose keyed
      |> List.sort)
 
@@ -822,12 +881,20 @@ let private posted (markup: string) =
 
 let private buttons = posted (asPage.Board Margins.all (seat 1) pair)
 
-report "the board offers a button for each way to turn your own snake" [ "a north"; "a west"; "a east"; "a south" ] buttons
+report
+    "the board offers a button for each way to turn your own snake, two for the clock, and one to deal another"
+    [ "a north"; "a west"; "a east"; "a south"; "slower"; "faster"; "restart" ]
+    buttons
 
 report
     "and the second player's board offers theirs"
-    [ "b north"; "b west"; "b east"; "b south" ]
+    [ "b north"; "b west"; "b east"; "b south"; "slower"; "faster"; "restart" ]
     (posted (asPage.Board Margins.all (seat 2) pair))
+
+// `restart` is the engine's word rather than this game's, and a control carrying it is held to
+// the same rule as any other: it has to be a line the program takes.
+
+report "and the one that is the engine's word is read like anybody's" (Ok "restart") (reads snake "restart")
 
 report
     "and every one of them types a line the program takes"

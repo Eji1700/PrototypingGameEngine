@@ -88,6 +88,7 @@ module Words =
         | Went(who, way) -> $"{player who} goes {direction way}."
         | Ate(who, pieces, grown) -> $"{player who} eats - {eaten pieces} now, and {segments grown} once it has grown."
         | Turned(who, way) -> $"{player who} turns {direction way}."
+        | Wound notch -> $"The clock is wound to {notch} of {Session.Fastest}."
         | Stopped(who, how) -> $"{player who} {fate how}."
         | GameEnded over -> $"The game is over: {ending over}."
 
@@ -97,6 +98,8 @@ module Words =
             $"A snake cannot turn back into its own neck, and {direction way} is the way this one came. The other three are open."
         | HasStopped who -> $"{player who} has stopped. Nothing steers it now."
         | NoSuchSnake who -> $"There is no {player who} at this table."
+        | NoSuchSpeed said ->
+            $"Speed {said}? The clock winds from {Session.Slowest} to {Session.Fastest} - or say 'faster' and 'slower', which is what + and - do."
         | NotThisPace why -> $"Not at this way of playing: {why}."
 
     /// A message written the way a player types it. The record is kept in the same words the
@@ -116,6 +119,9 @@ module Words =
             | Onward
             | Beat -> "go"
             | Steer(seat, way) -> $"{letter seat} {direction way}"
+            | Faster -> "faster"
+            | Slower -> "slower"
+            | Speed notch -> $"speed {notch}"
             | Resign -> "resign")
 
     /// What this game itself said, and the whole of what it has to say for itself.

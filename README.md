@@ -1493,7 +1493,12 @@ type Pulse<'Move, 'State> =
       Pressed: ConsoleKeyInfo -> string option }   // a key, as the line it stands for
 ```
 
-Nothing in the timeline, the record, the seats or the screens changed for it. What that buys:
+Nothing in the timeline, the record, the seats or the screens changed for it. `Every` takes the
+state rather than being a number, which is what lets a game quicken as it goes *and* lets a
+player wind the clock themselves: Snake keeps a notch from one to nine in its own position, so
+`faster` is an ordinary move — in the record, replayed off it, and undoable like any other.
+
+What that buys:
 
 - **The record is every beat**, so a real-time game replays to the square it was saved on. There
   is no timing in the file and none is needed — the clock only ever decided *when* a move was
@@ -1511,6 +1516,7 @@ Three tables drive it, and each is a handful of lines because a beat is a move:
 | where | what keeps the time | what it calls |
 | --- | --- | --- |
 | a terminal | a loop that draws, watches the clock and polls for keys ([Play.fs](src/Play.fs)) | `Solo.beaten` |
+| | *space holds it, `r` deals another, Enter types a line, Esc leaves - and a game that is over is read as a held one, so the clock comes back the moment a fresh board is dealt* | |
 | a browser | a timer beside the table it serves ([Server.fs](src/Net/Server.fs)) | `Aside.Beats` |
 | a house of tables | one timer, each table on its own beat ([House.fs](src/Net/House.fs)) | `Table.Beats` |
 

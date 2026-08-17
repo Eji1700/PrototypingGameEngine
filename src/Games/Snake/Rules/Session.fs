@@ -48,6 +48,16 @@ type Play =
         /// both are what "how long has this been going" means at that pace.
         Turn: int
         Pace: Pace
+        /// How fast the clock is wanted, from 1 to 9 - and *not* how long a beat is, which is
+        /// milliseconds and is the table's business.
+        ///
+        /// In the position rather than in a setting, and that is the one surprising thing about
+        /// it. A clock could hardly be more obviously "how this is being read" - except that
+        /// what a game hands the table is `Every: 'State -> TimeSpan`, so the only way the game
+        /// can have an opinion is for the state to hold one. Which turns out to be the right
+        /// place anyway: winding it up is a move like any other, so it goes into the record, it
+        /// replays, it can be taken back, and a record says how fast it was being played.
+        Speed: int
         Rng: Rng
     }
 
@@ -66,6 +76,20 @@ module Session =
     /// loud.
     [<Literal>]
     let Most = 4
+
+    /// How fast the clock may be wound, as notches rather than as milliseconds: a player asks
+    /// for a game that is quicker, not for one that is two hundred and twenty. What a notch
+    /// comes to in time is settled where the clock is, which is `Offer`.
+    [<Literal>]
+    let Slowest = 1
+
+    [<Literal>]
+    let Fastest = 9
+
+    /// Where it starts. Middling on purpose - the range is only worth having if the ordinary
+    /// game is somewhere a player would want to move away from in both directions.
+    [<Literal>]
+    let Ordinary = 5
 
     let play =
         function
@@ -140,6 +164,7 @@ module Session =
                   ToPlay = List.head seats
                   Turn = 1
                   Pace = pace
+                  Speed = Ordinary
                   Rng = Rng.ofSeed seed }
         )
 

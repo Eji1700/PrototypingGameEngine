@@ -22,12 +22,19 @@ type Move =
     | Steer of seat: PlayerId * way: Direction
     /// And the beat: every snake still moving takes one square, at once.
     | Beat
+    /// Wind the clock up or down a notch, or straight to a number. Three moves rather than one
+    /// because a key can only ever mean "quicker" - what that comes to depends on where it
+    /// already is, and a parser has no state to work that out from.
+    | Faster
+    | Slower
+    | Speed of notch: int
     | Resign
 
 type Happening =
     | Went of PlayerId * Direction
     | Ate of PlayerId * eaten: int * grown: int
     | Turned of PlayerId * Direction
+    | Wound of notch: int
     | Stopped of PlayerId * Fate
     | GameEnded of Ending
 
@@ -37,6 +44,7 @@ type Refusal =
     /// A snake that has stopped is steered by nobody, including whoever was steering it.
     | HasStopped of PlayerId
     | NoSuchSnake of PlayerId
+    | NoSuchSpeed of said: int
     /// A move that belongs to the other way of playing this game.
     | NotThisPace of said: string
 
@@ -299,9 +307,35 @@ module Turn =
 
         // --- and a game on a clock ----------------------------------------------------------
 
-        | InPlay play, (Steer _ | Beat) when play.Pace = Turns ->
+        | InPlay play, (Steer _ | Beat | Faster | Slower | Speed _) when play.Pace = Turns ->
             None,
             [ Refused(NotThisPace "this way of playing takes a step when you say a direction, and waits for you in between") ]
+
+        // --- winding the clock ----------------------------------------------------------------
+        //
+        // The clock is the table's, and how fast it is wanted is the game's - which is what this
+        // is: a notch, kept in the position, that the pulse reads off it.
+
+        | InPlay play, Speed notch when notch < Session.Slowest || notch > Session.Fastest -> None, [ Refused(NoSuchSpeed notch) ]
+
+        // Asking for the speed it is already at, and asking for quicker at the quickest, are the
+        // same thing: nothing to do. Said with silence rather than a refusal, because both are
+        // what a player leaning on a key is asking for, and a line of the log per press is a log
+        // with the game pushed off the top of it - the screen says which notch it is on.
+        | InPlay play, Speed notch when notch = play.Speed -> None, []
+        | InPlay play, Faster when play.Speed = Session.Fastest -> None, []
+        | InPlay play, Slower when play.Speed = Session.Slowest -> None, []
+
+        | InPlay play, (Faster | Slower | Speed _ as winding) ->
+            let notch =
+                match winding with
+                | Faster -> play.Speed + 1
+                | Slower -> play.Speed - 1
+                | Speed notch -> notch
+                // Nothing else reaches here: the three above are the whole of this case.
+                | _ -> play.Speed
+
+            Some(InPlay { play with Speed = notch }), [ Happened(Wound notch) ]
 
         | InPlay play, Beat ->
             let played, told = beating play

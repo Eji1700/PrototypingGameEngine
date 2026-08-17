@@ -156,10 +156,11 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
 
     /// What the table itself does with a press, which is the same at any game that has a
     /// clock: hold it, put it down, or say something longer than a key.
-    let (|Typing|Holding|Leaving'|Steering|) (key: ConsoleKeyInfo) =
+    let (|Typing|Holding|Restarting|Leaving'|Steering|) (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> Typing
         | ConsoleKey.Spacebar -> Holding
+        | ConsoleKey.R -> Restarting
         | ConsoleKey.Escape -> Leaving'
         | _ -> Steering
 
@@ -167,7 +168,18 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
     /// how tall the last screen was - which is all the redrawing below needs to write over it
     /// rather than clearing the terminal and painting it again.
     let rec spin holding wanted drawn said solo =
-        let showing = if holding then wanted else Margins.none
+        // A game that is over is a game standing still, and is read like a held one: the clock
+        // is not consulted, and the writing and the box of commands come back. Which they must -
+        // there is nothing left to follow, and what somebody wants at that moment is exactly the
+        // box that says how to walk it back or deal another.
+        //
+        // Read here rather than handed off to the loop above, and that is a fix rather than a
+        // tidy-up: handing off meant `restart` at the end of a game dealt a fresh one into a
+        // loop that waits for lines, so the new game never moved again and the only way back to
+        // a clock was to leave and come in again.
+        let over = Solo.isOver solo
+        let still = holding || over
+        let showing = if still then wanted else Margins.none
         let solo = Solo.reading Keyboard showing solo
 
         let screen =
@@ -176,21 +188,14 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
                 [ yield (Solo.board Keyboard solo |> Option.defaultValue "")
                   yield! said
                   yield
-                      if holding then
-                          "  (held) space to go on - Enter to type a line - Esc to put it down"
+                      if over then
+                          "  (over) r to deal another - Enter to type a line - Esc to put it down"
+                      elif holding then
+                          "  (held) space to go on - r to deal another - Enter to type a line - Esc to put it down"
                       else
                           "  space to hold and read the rest - Enter to type a line - Esc to put it down" ]
 
         let drawn = Screens.redrawn drawn screen
-
-        if Solo.isOver solo then
-            // The clock stops with the game, and the ordinary prompt comes back - so a game
-            // that has just ended can be read, walked back through and saved like any other.
-            // The margins come back with it: there is nothing left to follow, and the box that
-            // says how to walk it back is exactly what somebody wants now.
-            Screens.cleared ()
-            loop rings sitters said (Solo.reading Keyboard wanted solo)
-        else
 
         /// A line, from wherever it came: a key that stands for one, or one typed at the
         /// prompt. Answered exactly as the ordinary loop answers it.
@@ -202,7 +207,7 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             let answered = tell rings posts @ errand (Solo.game solo) sitters doing
 
             let wanted =
-                if holding then Solo.margins Keyboard next |> Option.defaultValue wanted else wanted
+                if still then Solo.margins Keyboard next |> Option.defaultValue wanted else wanted
 
             match doing with
             | Leaving _ ->
@@ -211,11 +216,11 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             | Carrying
             | Keeping _ -> spin holding wanted drawn answered next
 
-        // Held, the clock is simply not consulted - the game stands still and a press still
-        // steers, which is what anybody stopping to think wants.
+        // Held or over, the clock is simply not consulted - the game stands still and a press
+        // still steers, which is what anybody stopping to think wants.
         let due =
             DateTime.UtcNow
-            + (if holding then TimeSpan.FromDays 1.0 else pulse.Every(Model.state (Solo.model solo)))
+            + (if still then TimeSpan.FromDays 1.0 else pulse.Every(Model.state (Solo.model solo)))
 
         match Screens.awaiting due with
         | None ->
@@ -225,6 +230,13 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             match key with
             | Leaving' -> heard holding "quit" solo
             | Holding -> spin (not holding) wanted drawn said solo
+            // Dealing another is a line every game knows, so this is a shortcut for typing it
+            // and not a fifth thing the table can do. Only where the game is standing still,
+            // which is the whole of the guard it needs: an `r` meant for a snake in the middle
+            // of a run would otherwise sweep the game away, and a game swept away by a
+            // mistyped key is a game nobody would type a key at again.
+            | Restarting when still -> heard holding "restart" solo
+            | Restarting -> spin holding wanted drawn said solo
             | Typing ->
                 printf "> "
 
@@ -237,6 +249,10 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
                     // moment in this loop where a clear costs nothing to follow.
                     Screens.cleared ()
                     heard holding line solo
+            // A game that is over takes no moves, and the engine says so - once per press, into
+            // a log that would be nothing else. Left alone here instead: the board says it is
+            // over and the line under it says what to do about that.
+            | Steering when over -> spin holding wanted drawn said solo
             | Steering ->
                 match pulse.Pressed key with
                 | Some line -> heard holding line solo
