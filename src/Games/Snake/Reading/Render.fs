@@ -218,6 +218,15 @@ module Render =
 
     let wording = Told.inWords Words.said Words.command
 
+    /// The last few lines of the log rather than the last twelve.
+    ///
+    /// A board with nothing round it is what a player gets while the clock is running, and the
+    /// log is the one block left that grows: a dozen lines of "Snake A turns north" push the
+    /// board up the screen a line at a time and make a moving picture out of the wrong half of
+    /// it. Held, or at a game of turns, the lot is there to read.
+    let private lately (margins: Margins) lines =
+        if margins = Margins.none then lines |> List.skip (max 0 (List.length lines - 3)) else lines
+
     // --- the whole screen ---------------------------------------------------------------
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
@@ -229,9 +238,14 @@ module Render =
               Block(Blocks.board, [ grid (Session.play session); Scene.noted margins Notes.board ])
               Beside
                   [ Block(Blocks.snakes, [ snakes beholder session; Scene.noted margins (Notes.moving pace) ])
-                    Block(Blocks.onwards, onwards beholder session) ]
+                    // The ways to go are a list of lines a player could type, so they belong
+                    // with the box that lists the rest of them - which is what makes them go
+                    // away while a clock is running. A browser has them on, and they are its
+                    // buttons; a terminal at a game that does not wait has them off, and what
+                    // is left on the screen is the board, the score and what was said.
+                    Scene.offering margins Blocks.onwards (onwards beholder session) ]
               Scene.listing margins Blocks.commands (commands pace)
-              Block(Blocks.log, Scene.log wording model) ]
+              Block(Blocks.log, lately margins (Scene.log wording model)) ]
 
     // --- the rest of what a player reads --------------------------------------------------
 

@@ -69,6 +69,62 @@ module Screens =
             printf "Press any key."
             System.Console.ReadKey true |> ignore
 
+    /// Draw a screen over the one before it, and say how tall it was.
+    ///
+    /// `Clear` and print is what every other screen here does, and at a game that does not wait
+    /// it is what makes one unplayable: clearing three times a second is three flashes a second
+    /// of an empty terminal, and what a player is trying to follow is a board that moves one
+    /// square in between. So this writes over what is already there instead - home the cursor,
+    /// pad every line out to the width so nothing of the last screen shows through the end of a
+    /// shorter one, and blank whatever the last screen had below this one.
+    ///
+    /// How tall the last one was comes in and goes out rather than being kept here, because
+    /// this file has no business remembering a screen: two games drawn in one process would be
+    /// two heights, and a value handed back cannot be the wrong one.
+    ///
+    /// Every part of it is allowed to fail. A console that will not say how wide it is, or will
+    /// not put its cursor back, is a console this scrolls in - which is how it read before any
+    /// of this.
+    let redrawn (before: int) (text: string) =
+        let width =
+            try
+                max 20 (System.Console.WindowWidth - 1)
+            with _ ->
+                80
+
+        let lines = text.Replace("\r\n", "\n").Split '\n'
+
+        let room =
+            try
+                System.Console.WindowHeight
+            with _ ->
+                0
+
+        // A screen taller than the window scrolls as it is written, so the top of it is no
+        // longer the top of the terminal and writing the next one from the corner would lay it
+        // over the middle of this one. Nothing can be done about the scrolling - the screen is
+        // simply bigger than the window - so this falls back to what every other screen here
+        // does, which is at least always right.
+        if room > 0 && lines.Length >= room then
+            cleared ()
+        else
+            try
+                System.Console.SetCursorPosition(0, 0)
+            with _ ->
+                ()
+
+        let over = System.Text.StringBuilder()
+
+        for line in lines do
+            over.AppendLine(if line.Length >= width then line else line.PadRight width)
+            |> ignore
+
+        for _ in lines.Length .. before - 1 do
+            over.AppendLine(System.String(' ', width)) |> ignore
+
+        printf "%s" (over.ToString())
+        lines.Length
+
     /// A key, or the time being up - whichever comes first.
     ///
     /// The one thing in this program that watches a clock, and it is nine lines in the file

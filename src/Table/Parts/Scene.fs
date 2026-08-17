@@ -182,6 +182,17 @@ module Scene =
     let listing (margins: Margins) title text =
         if margins.Commands then Block(title, [ Written text ]) else Blank
 
+    /// The same decision, for a block made of scenes rather than of text laid out already - a
+    /// row of controls, say.
+    ///
+    /// A control is a line a player could type, drawn as a button by a reader that has buttons,
+    /// so a block of them is the same kind of thing as the box that lists what may be typed:
+    /// scaffolding round the board rather than the board. Which matters most at a game that
+    /// does not wait, where the board is redrawn several times a second and everything beside
+    /// it is something the eye has to skip.
+    let offering (margins: Margins) title body =
+        if margins.Commands then Block(title, body) else Blank
+
     /// A line's words, with the tones dropped. For a reader that draws no colour, and for
     /// working out how wide a thing is.
     let plainText (line: Line) =

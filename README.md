@@ -1514,6 +1514,15 @@ Three tables drive it, and each is a handful of lines because a beat is a move:
 | a browser | a timer beside the table it serves ([Server.fs](src/Net/Server.fs)) | `Aside.Beats` |
 | a house of tables | one timer, each table on its own beat ([House.fs](src/Net/House.fs)) | `Table.Beats` |
 
+**A terminal draws less of it while it is moving.** Every screen here is drawn with
+[margins](#how-the-board-is-shown) - the writing that explains the board, and the box listing
+what can be typed - and at three beats a second those are two blocks being repainted under a
+board that has moved by one square, which is a screen nobody can follow. So a running clock is
+the same thing as the margins being off, and holding it puts back whatever that player had
+chosen. Nor is the terminal cleared per beat: [Screens.redrawn](src/Table/Parts/Screens.fs)
+writes the new screen over the old one and blanks whatever is left below it, because clearing
+three times a second is three flashes a second of an empty window.
+
 Two rules the tables keep that the game does not know about: **a game nobody is watching does
 not beat** — a browser table is dealt when the process starts and read when somebody opens the
 page, and a clock running in between plays the whole game into an empty room — and at a hosted

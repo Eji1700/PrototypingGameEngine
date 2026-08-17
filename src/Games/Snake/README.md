@@ -62,9 +62,17 @@ there](../../../README.md). What this game adds is four ways to go, at two paces
 | `north` (`n`, `up`) | the same, typed. A bare direction is A's |
 | `b north` | somebody else's, by the letter it is drawn with |
 | `go` | one beat, said out loud — for a console that cannot press anything |
-| space | hold the clock while you think; space again to go on |
+| space | hold the clock while you think - and read everything the running screen leaves off |
 | Enter | type a whole line, with the clock held while you do |
 | Esc | put it down |
+
+**While the clock is running you get the board and nothing else** - the heading, the board, the
+score and the last few lines of what was said. The writing that explains the board, the box
+listing what can be typed and the list of ways to turn are all for somebody who has stopped to
+read them, and redrawing them three times a second under a board that has moved makes a screen
+nobody can follow. Space puts them back, because holding the clock is exactly the moment you
+wanted them. It is the same `notes` and `commands` setting either way, and saying either of
+those while held is what you get back next time you hold.
 
 **A step at a time**, a direction *is* a step:
 

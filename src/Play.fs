@@ -138,6 +138,14 @@ let rec private loop rings sitters said solo =
 /// can be pressed here that could not have been typed, which is the same bargain a button on a
 /// page makes.
 ///
+/// **The board and nothing else while it is running.** The writing that explains the board and
+/// the box listing what can be typed are for somebody who has stopped to read them, and at three
+/// beats a second they are two blocks of text being redrawn under a board that has moved - which
+/// is a screen nobody can follow. So the clock running is the same thing as the margins being
+/// off, and holding it puts back whatever that player had chosen. It is the player's own
+/// setting either way: `notes` and `commands` still mean what they mean, and what they mean is
+/// what comes back when the game stops to let you read.
+///
 /// Falls back to the ordinary loop the moment the game is over, and starts there instead where
 /// there is nobody at the keyboard to press anything: a game piped in from a file plays its
 /// beats by asking for them in words, and comes out the same game.
@@ -155,38 +163,53 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         | ConsoleKey.Escape -> Leaving'
         | _ -> Steering
 
-    let rec spin holding said solo =
-        Screens.cleared ()
-        Solo.board Keyboard solo |> Option.iter (printf "%s")
-        show said
+    /// `wanted` is what this player reads with when the game is standing still, and `drawn` is
+    /// how tall the last screen was - which is all the redrawing below needs to write over it
+    /// rather than clearing the terminal and painting it again.
+    let rec spin holding wanted drawn said solo =
+        let showing = if holding then wanted else Margins.none
+        let solo = Solo.reading Keyboard showing solo
 
-        printfn
-            "%s"
-            (if holding then
-                 "  (held) space to go on - Enter to type a line - Esc to put it down"
-             else
-                 "  space to hold - Enter to type a line - Esc to put it down")
+        let screen =
+            String.concat
+                Environment.NewLine
+                [ yield (Solo.board Keyboard solo |> Option.defaultValue "")
+                  yield! said
+                  yield
+                      if holding then
+                          "  (held) space to go on - Enter to type a line - Esc to put it down"
+                      else
+                          "  space to hold and read the rest - Enter to type a line - Esc to put it down" ]
+
+        let drawn = Screens.redrawn drawn screen
 
         if Solo.isOver solo then
             // The clock stops with the game, and the ordinary prompt comes back - so a game
             // that has just ended can be read, walked back through and saved like any other.
-            // Whatever the last beat had to say goes with it, which is where the line saying
-            // the record was written lands.
-            loop rings sitters said solo
+            // The margins come back with it: there is nothing left to follow, and the box that
+            // says how to walk it back is exactly what somebody wants now.
+            Screens.cleared ()
+            loop rings sitters said (Solo.reading Keyboard wanted solo)
         else
 
         /// A line, from wherever it came: a key that stands for one, or one typed at the
         /// prompt. Answered exactly as the ordinary loop answers it.
+        ///
+        /// What the player reads with is taken back off the table afterwards, because `notes`
+        /// and `commands` are lines like any other and this is where saying one lands.
         let heard holding line solo =
             let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
             let answered = tell rings posts @ errand (Solo.game solo) sitters doing
+
+            let wanted =
+                if holding then Solo.margins Keyboard next |> Option.defaultValue wanted else wanted
 
             match doing with
             | Leaving _ ->
                 show answered
                 Solo.model next
             | Carrying
-            | Keeping _ -> spin holding answered next
+            | Keeping _ -> spin holding wanted drawn answered next
 
         // Held, the clock is simply not consulted - the game stands still and a press still
         // steers, which is what anybody stopping to think wants.
@@ -197,23 +220,33 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         match Screens.awaiting due with
         | None ->
             let next, posts, doing = Solo.beaten solo
-            spin holding (tell rings posts @ errand (Solo.game solo) sitters doing) next
+            spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) next
         | Some key ->
             match key with
             | Leaving' -> heard holding "quit" solo
-            | Holding -> spin (not holding) said solo
+            | Holding -> spin (not holding) wanted drawn said solo
             | Typing ->
                 printf "> "
 
                 match Console.ReadLine() with
                 | null -> heard holding "quit" solo
-                | line -> heard holding line solo
+                | line ->
+                    // What was typed is sitting on the screen under the board, so the next one
+                    // starts from an empty terminal rather than being written over the top of
+                    // it. Once, where somebody has just stopped to type - which is the one
+                    // moment in this loop where a clear costs nothing to follow.
+                    Screens.cleared ()
+                    heard holding line solo
             | Steering ->
                 match pulse.Pressed key with
                 | Some line -> heard holding line solo
-                | None -> spin holding said solo
+                | None -> spin holding wanted drawn said solo
 
-    if Screens.steering () then spin false said solo else loop rings sitters said solo
+    if Screens.steering () then
+        Screens.cleared ()
+        spin false (Solo.margins Keyboard solo |> Option.defaultValue Margins.all) 0 said solo
+    else
+        loop rings sitters said solo
 
 /// Deal a game. The rules are the only thing that can refuse, and they say why in words, so
 /// a count that came from a person is answered in their own rather than swallowed - and this

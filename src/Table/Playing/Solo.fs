@@ -194,6 +194,24 @@ module Solo =
     let board console solo =
         readingAt console solo |> Option.map (boardFor solo)
 
+    /// How much of the writing round the board one console is reading with.
+    ///
+    /// Asked for by the loop that drives a game which does not wait: while the clock is running
+    /// it draws the board and nothing else, and while it is held it puts back whatever that
+    /// player had chosen. Which means it has to be able to find out what they chose - `notes
+    /// off` is theirs to say, and a loop that remembered its own answer would quietly overrule
+    /// them.
+    let margins console solo =
+        readingAt console solo |> Option.map (fun reading -> reading.Margins)
+
+    /// The same console, reading with more or less round the board. Nothing about the game
+    /// changes, so nobody else is told and nothing is drawn: whatever asked for this is about
+    /// to draw the board itself.
+    let reading console margins solo =
+        match readingAt console solo with
+        | Some reading -> withReading console { reading with Margins = margins } solo
+        | None -> solo
+
     /// Draw everybody watching. Anything that moves the game ends this way, because two
     /// people looking at one hot seat are looking at the same game.
     let private drawAll solo =
