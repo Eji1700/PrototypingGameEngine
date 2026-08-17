@@ -76,6 +76,10 @@ let private launches =
 
     let code = Gen.elements [ None; Some "kbd4-9mtx-7rfp" ]
 
+    // Which table of a house, or none at a process holding one. Named the way a house names
+    // them, which is the same minting the door words use.
+    let table = Gen.elements [ None; Some "kbd4-9mtx-7rfp"; Some "7rfp-kbd4-9mtx" ]
+
     let path = Gen.elements [ "logs/one.log"; "C:/Games/My Records/last night.log" ]
 
     // How far a table can be reached, said every way the program can write one. These are in
@@ -129,8 +133,12 @@ let private launches =
         [ starting |> Gen.map Launch.Play
           Gen.zip starting reach |> Gen.map Launch.Serve
           Gen.zip hosting reach |> Gen.map Launch.Host
-          Gen.zip (Gen.zip address token) code
-          |> Gen.map (fun ((address, token), code) -> Launch.Join(address, token, code)) ]
+          Gen.zip (Gen.zip address token) (Gen.zip code table)
+          |> Gen.map (fun ((address, token), (code, table)) -> Launch.Join(address, token, code, table))
+          // A house says how far it reaches and whether to look in `logs/` on the way up, and
+          // nothing else - there being no game to open. Both halves are in here for the same
+          // reason every other line is: it is written out and has to come back the same.
+          Gen.zip reach (Gen.elements [ true; false ]) |> Gen.map Launch.House ]
     |> Arb.fromGen
 
 // --- what the program writes, the program reads ----------------------------------------------
@@ -141,8 +149,16 @@ holds
 
 report
     "a line still carrying the runner in front of it is read all the same"
-    (Ok(Launch.Join("greg-pc", Some "a1b2c3", None)))
+    (Ok(Launch.Join("greg-pc", Some "a1b2c3", None, None)))
     (Launch.read playing [ "dotnet"; "run"; "--"; "join"; "greg-pc"; "--token"; "a1b2c3" ])
+
+// The table a house holds, named on the line rather than buried in the address. `Reach.endpoint`
+// puts this program's own path onto whatever address it is given, so a name typed into the
+// address would be a path that replaced the hub's rather than one hanging off it.
+report
+    "a console can say which table of a house it means"
+    (Ok(Launch.Join("greg-pc", None, None, Some "kbd4-9mtx-7rfp")))
+    (Launch.read playing [ "join"; "greg-pc"; "--table"; "kbd4-9mtx-7rfp" ])
 
 report
     "a line that says nothing to open is refused, saying what there is to open"

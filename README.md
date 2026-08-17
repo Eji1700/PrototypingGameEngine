@@ -987,12 +987,20 @@ is playing.
 This is what goes in a container: one program, one port, one game, several games of it at
 once. It is what the per-game executables were split apart *for*.
 
-**Browsers, for now.** A console at a terminal reaches a table through a SignalR hub that
-the framework builds from a type named in a route, so a house needs one that works out which
-table a connection is for. That is the piece of this program that has broken silently before
-— a console that negotiates, connects, and is dropped without a word — so it is worth doing
-on its own. Until then a house says nothing about `join`, and `host` is still how a terminal
-is given a table.
+**A terminal joins one by name**, which the list on that page shows beside each table:
+
+```powershell
+dotnet run -- join greg-pc --table kbd4-9mtx-7rfp
+```
+
+The name is a word on the line rather than part of the address, because an address is a thing
+this program puts its *own* path onto — a name typed in there would replace the hub's path
+instead of hanging off it. The hub is the very same hub a single hosted table uses; all that
+differs is that it works out **which** table a connection is for, off the route it negotiated
+at, and turns away a name it does not know rather than dropping that console without a word.
+
+A browser and a terminal sit at one of a house's tables exactly as they do at a hosted one,
+and neither can tell which it found.
 
 **One door, not two.** Everything in a house is behind the same word: the list, opening a
 table, and every board. A table with a second word of its own was considered and is the wrong

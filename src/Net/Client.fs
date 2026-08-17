@@ -74,8 +74,17 @@ module Client =
     /// `rings` is the Audio page's answer, handed in rather than read here for the reason
     /// everything else about how a game is read is handed in: this file knows about a wire and
     /// a keyboard, and nothing about what somebody settled on.
-    let join game given resuming code rings (chosen: View<_, _, _>) =
-        match Reach.endpoint Protocol.Path given with
+    /// `table` is which of a house's tables to sit at, and nothing at a process holding one.
+    /// It is a word rather than part of the address because `Reach.endpoint` takes an address
+    /// and puts this program's own path on it - a name typed into the address instead would be
+    /// a path that replaced the hub's rather than hanging off it.
+    let join game given resuming code table rings (chosen: View<_, _, _>) =
+        let where =
+            match table with
+            | Some name -> $"{Protocol.Path}/{name}"
+            | None -> Protocol.Path
+
+        match Reach.endpoint where given with
         | Error problem ->
             eprintfn "%s" problem
             1
@@ -142,7 +151,7 @@ module Client =
                 // a player is told to type is something the program is certain to accept -
                 // including the word at the door, which they would otherwise have to
                 // remember they had been given.
-                printfn "  %s" (Launch.written game (Launch.Join(given, Some mine, code)))
+                printfn "  %s" (Launch.written game (Launch.Join(given, Some mine, code, table)))
         )
         |> ignore
 

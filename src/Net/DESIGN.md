@@ -333,8 +333,24 @@ Two decisions taken while building it:
 
 ### What is left
 
-- **Terminal consoles at a house** — the hub that resolves which table a connection is for.
-  The one piece here that has broken silently before, so: with `wire.ps1` watching.
+- ~~**Terminal consoles at a house.**~~ Done, and `wire.ps1` was watching — which was the whole
+  point, because it failed the first time and could not have failed anywhere else.
+
+  The hub holds a **question** rather than a table: `Finding` answers "which table is this
+  connection for", the same way at a hosted table every time and off the route at a house. A
+  name a house does not know is answered with nothing, and the console is *told* — the failure
+  this arrangement produced before was a console that negotiated, connected, and was dropped in
+  silence.
+
+  **The bug it caught was a routing collision.** The browser's board page and the hub had both
+  been mapped at `GET /table/{id}`; both registrations are legal, the first match wins, and the
+  page won. So a console negotiated successfully, was told where to connect, and was handed a
+  page of HTML where its transport should have been — reporting "the server disconnected before
+  the handshake could be started", which sounds like anything except two routes fighting. The
+  page lives at `/at/{id}` now and the wire keeps `/table/{id}`.
+
+  It was invisible from the outside twice over: the house clears its log providers, so the
+  server said nothing at all until that was turned off.
 - ~~**A container.**~~ Written, and built by the build machine rather than by anybody's own —
   which is the right place for it, the image being a Linux one and the runner being Linux.
   `image.ps1` is the checks and CI is what runs them, against two games so that

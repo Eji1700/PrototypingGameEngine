@@ -565,11 +565,17 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
     /// start now. What a stage is called and how a seat count reads are the house's answers;
     /// what a row looks like is this one's.
     type Row =
-        { Where: string
-          Stage: string
-          Seats: string
-          Sitters: string
-          Spare: bool }
+        {
+            Where: string
+            /// What the table is called, which a person at a terminal has to be able to read and
+            /// type. A browser follows the link and never sees it; a console is told `--table`
+            /// and this is the word that goes after it.
+            Name: string
+            Stage: string
+            Seats: string
+            Sitters: string
+            Spare: bool
+        }
 
     /// A house's front page: the tables there are, and the sizes one can be opened at.
     ///
@@ -586,6 +592,9 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                 [ Attr.class' (if row.Spare then "spare" else "taken") ]
                 [ Elem.a [ Attr.href row.Where; Attr.class' "types" ] [ Text.enc (if row.Spare then "sit down" else "look on") ]
                   Elem.span [] [ Text.enc $"{row.Stage} - {row.Seats}" ]
+                  // The name in plain sight, because it is the whole of what somebody at a
+                  // terminal needs and the link they cannot click carries it invisibly.
+                  Elem.span [ Attr.class' "quiet" ] [ Text.enc row.Name ]
                   note row.Sitters ]
 
         renderHtml (

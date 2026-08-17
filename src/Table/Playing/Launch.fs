@@ -38,7 +38,7 @@ type Launch =
     | Host of Start * reach: Reach
     /// Sit down at somebody else's table, resuming a seat if a token says which, and saying
     /// the word at the door if that table has one.
-    | Join of address: string * token: string option * code: string option
+    | Join of address: string * token: string option * code: string option * table: string option
     /// Open a house: no game dealt, and a page listing the ones that are.
     ///
     /// It says how far it reaches like everything else that opens a port, and it says nothing
@@ -170,6 +170,12 @@ type JoinArgs =
     | [<MainCommand; ExactlyOnce>] Address of address: string
     | [<AltCommandLine("-t")>] Token of token: string
     | Code of code: string
+    // `AtTable` and not `Table`, with the flag spelt out. A union case is in scope wherever
+    // its type is opened, and `Table` is a name Spectre.Console has for the thing it draws
+    // grids with - so the obvious spelling of this case turned every `Table` in a game's
+    // renderer into a command-line argument and broke three files that had nothing to do
+    // with joining anything.
+    | [<CustomCommandLine("--table")>] AtTable of name: string
     | View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
 
@@ -179,6 +185,7 @@ type JoinArgs =
             | Address _ -> "the machine hosting the table: a name, an address, or a whole URL"
             | Token _ -> "come back to the seat this token claimed, after dropping off"
             | Code _ -> "the word at that table's door, if it has one"
+            | AtTable _ -> "which table, at a house that is holding several; one table needs no name"
             | View _ -> "how the board is drawn - see the list below"
             | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
 
@@ -426,12 +433,13 @@ module Launch =
                       @ [ if filling then yield HouseArgs.Fill ]
                   )
               ) ]
-        | Launch.Join(address, token, code) ->
+        | Launch.Join(address, token, code, table) ->
             [ Join(
                   joining.ToParseResults(
                       [ JoinArgs.Address address ]
                       @ (token |> Option.toList |> List.map JoinArgs.Token)
                       @ (code |> Option.toList |> List.map JoinArgs.Code)
+                      @ (table |> Option.toList |> List.map JoinArgs.AtTable)
                   )
               ) ]
 
@@ -463,8 +471,15 @@ module Launch =
     /// Said out in full, because `Name` is a field on a good many things that are in scope
     /// here - Argu's own description of an argument among them - and inference would
     /// cheerfully pick one of those.
-    let written (game: Playable<_, _, _>) launch =
-        $"{Invoked.opening game.Name} {write launch}"
+    /// The same, for something that knows a game's name and is not holding the game.
+    ///
+    /// A house is that: its whole point is that the types stopped a file ago, so it has a
+    /// name and no `Playable` to take one off. And a name is all this ever wanted - the line
+    /// below reads one field.
+    let writtenFor (name: string) launch =
+        $"{Invoked.opening name} {write launch}"
+
+    let written (game: Playable<_, _, _>) launch = writtenFor game.Name launch
 
     // --- and words as a launch ----------------------------------------------------------
 
@@ -705,7 +720,8 @@ module Launch =
                     Launch.Join(
                         args.GetResult JoinArgs.Address,
                         args.TryGetResult JoinArgs.Token,
-                        args.TryGetResult JoinArgs.Code
+                        args.TryGetResult JoinArgs.Code,
+                        args.TryGetResult JoinArgs.AtTable
                     ),
                     view
             // The short way of saying `play --from <file>`, which is how people already ask

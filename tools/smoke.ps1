@@ -782,14 +782,14 @@ try {
         $opened = Invoke-InPage "http://localhost:$housePort$($f.opens[0])" $opening
         $o = $opened.value
 
-        Report "opening a table sends the browser to a table of its own" ($o.where -like "/table/*") "it landed on '$($o.where)'"
+        Report "opening a table sends the browser to a table of its own" ($o.where -like "/at/*") "it landed on '$($o.where)'"
 
         # Read from the board page itself, with its stream still open, because that is the only
         # moment at which anybody is at it: a console that leaves a table still filling up gives
         # its seat back, so a check that went to the front page to look would be reading the
         # house after the browser had got up.
         Report "and a board arrives there over the stream, in place of the placeholder" ($o.drew -ne "") "the page still read 'Sitting down...'"
-        Report "the table it dealt is listed at the house" ($o.front -match "/table/") "the front page linked to no table"
+        Report "the table it dealt is listed at the house" ($o.front -match "/at/") "the front page linked to no table"
 
         $said = (($o.front -replace '<[^>]+>', ' ') -replace '\s+', ' ').Trim()
         Report "and the house says somebody is sitting at it" ($said -match "1 of 2 seated") "the front page read '$said'"

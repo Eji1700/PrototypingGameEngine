@@ -212,7 +212,9 @@ let private hostFor game view rings reach (model, sitters, stamp) =
             None
         else
             Some(fun () ->
-                match Client.join game (Reach.at reach "localhost") None (Reach.word reach) rings view with
+                // No table named: this is the host sitting down at the one table its own
+                // process is holding, which is the case that has no name to give.
+                match Client.join game (Reach.at reach "localhost") None (Reach.word reach) None rings view with
                 // The console got up, and the table it got up from is this process. It
                 // goes on standing - a player leaving their seat is not the same as
                 // closing the room - so what is left is to say so, where before there
@@ -452,7 +454,7 @@ let private starting settled choice =
     | Menu.Host(sitters, seed, reach) ->
         dealing sitters seed
         |> Result.map (fun table -> Done(hostFor game view settled.Rings (reach |> Option.defaultWith Reach.fresh) table))
-    | Menu.Join(address, code) -> Ok(Done(Client.join game address None code settled.Rings view))
+    | Menu.Join(address, code) -> Ok(Done(Client.join game address None code None settled.Rings view))
     | Menu.Replay path ->
         takeUp game path
         |> Result.map (fun (model, sitters, stamp) -> Play(settled, model, sitters, stamp |> Option.defaultWith (stamping game)))
@@ -674,7 +676,7 @@ let private opening settled launch =
             play settled sitters stamp model)
     | Launch.Serve(start, reach) -> table Here start |> onward (serveFor game view.Palette reach)
     | Launch.Host(start, reach) -> table Elsewhere start |> onward (hostFor game view settled.Rings reach)
-    | Launch.Join(address, token, code) -> Client.join game address token code settled.Rings view
+    | Launch.Join(address, token, code, table) -> Client.join game address token code table settled.Rings view
     // A house deals its own tables, so there is no game to open here and nothing to hand it.
     // Which way each table is played is settled when somebody opens one, not once for the
     // whole house - that being the point of a house rather than four of them.

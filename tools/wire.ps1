@@ -1,4 +1,4 @@
-# Open a table and sit down at it over the actual wire.
+﻿# Open a table and sit down at it over the actual wire.
 #
 # `tests/lobby.fsx` checks what a table *decides* - who may sit, who may act, who may see -
 # and does it on a value, with no socket anywhere near. `smoke.ps1` checks what a browser
@@ -130,6 +130,90 @@ try {
     Report "a console that types quit is told it is up from the table" ($second -match "You are up from the table") "it was told nothing about getting up"
     Report "and told the seat is kept for it" ($second -match "Your seat is kept") "it was not told what becomes of the seat"
     Report "and stops, rather than sitting at a prompt nothing answers" $left "it was still running 30 seconds later"
+
+    # --- and the same table, at a house -------------------------------------------------
+    #
+    # The gap this file was written about, one layer out. A house holds several tables, so the
+    # hub cannot be handed one when it is registered - it has to work out which table a
+    # connection meant, off the route it negotiated at. That is the same machinery that broke
+    # silently the first time and could only be seen by joining a table, so it is joined here.
+    #
+    # Two consoles rather than one, because a house that seated the *first* console at the
+    # right table and the second at whichever came to hand would look perfectly well from one.
+
+    ""
+    "Opening a house, dealing a table at it, and sitting two consoles down..."
+
+    Stop-Tables
+    Start-Sleep -Milliseconds 500
+
+    $housePort = $Port + 1
+
+    $housed = @("run", "--project", $root, "--")
+    if ($Game) { $housed += $Game }
+    $housed += @("house", "--port", "$housePort", "--open")
+
+    $inn = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $housed
+    Wait-ForPort $housePort 120
+
+    # A table dealt the way anybody deals one - by asking the house for it - and its name read
+    # off the list the house draws. Nothing here knows a name in advance: the house mints them,
+    # and a check that made one up would be checking a house that does not exist.
+    $dealt = Invoke-WebRequest "http://localhost:$housePort/open?players=2" -UseBasicParsing -TimeoutSec 30
+    $listed = Invoke-WebRequest "http://localhost:$housePort/" -UseBasicParsing -TimeoutSec 30
+    $name = [regex]::Match($listed.Content, '/at/([a-z0-9-]+)').Groups[1].Value
+
+    Report "a house deals a table when asked for one" ([int]$dealt.StatusCode -eq 200) "it answered $([int]$dealt.StatusCode)"
+    Report "and gives it a name a person could read out" ($name -ne "") "the list carried no table"
+
+    if ($name) {
+        $atHouse = "run --project ""$root"" --"
+        if ($Game) { $atHouse += " $Game" }
+        $atHouse += " join localhost:$housePort --table $name"
+
+        $three = Start-Console "dotnet" $atHouse
+        $consoles += $three
+
+        Wait-For "a console to be seated at the house's table" 60 { (Told $three) -match "You are at seat 1" } | Out-Null
+
+        $four = Start-Console "dotnet" $atHouse
+        $consoles += $four
+
+        Wait-For "a second console to be seated at the same table" 60 { (Told $four) -match "You are at seat 2" } | Out-Null
+
+        Wait-For "the house's table to fill and draw both a board" 60 {
+            ((Told $three) -match "Turn 1") -and ((Told $four) -match "Turn 1")
+        } | Out-Null
+
+        Types $three $m.Line
+
+        Wait-For "the move to reach the other console" 60 { (Told $four) -match $m.Heard } | Out-Null
+
+        $atThree = Told $three
+        $atFour = Told $four
+
+        Report "a console can sit down at a table a house dealt" ($atThree -match "You are at seat 1") "it was never seated"
+        Report "and the next is given the next seat at that same table" ($atFour -match "You are at seat 2") "the second was not seated"
+        Report "both are drawn a board once it is full" (($atThree -match "Turn 1") -and ($atFour -match "Turn 1")) "one saw a board: $($atThree -match 'Turn 1'); two saw one: $($atFour -match 'Turn 1')"
+        Report "and a move made at one reaches the other, through the house" ($atFour -match $m.Heard) "the move never arrived"
+
+        # A name the house has never heard of. This is the case a hub that quietly picked the
+        # first table it had would pass, and it is the failure mode that cost this file its
+        # existence: a console negotiating, connecting, and being dropped without a word.
+        $nowhere = "run --project ""$root"" --"
+        if ($Game) { $nowhere += " $Game" }
+        $nowhere += " join localhost:$housePort --table no-such-table"
+
+        $lost = Start-Console "dotnet" $nowhere
+        $consoles += $lost
+
+        Wait-For "the console at no table to be told so" 60 { (Told $lost) -match "no table by that name" } | Out-Null
+
+        Report "a console naming a table that is not there is told so rather than dropped" ((Told $lost) -match "no table by that name") "it was told '$((Told $lost) -replace '\s+', ' ')'"
+    }
+
+    if ($inn -and -not $inn.HasExited) { try { Stop-Process -Id $inn.Id -Force } catch {} }
+
 
     ""
     if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }

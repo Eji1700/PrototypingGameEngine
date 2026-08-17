@@ -41,14 +41,55 @@ module Wire =
             | Nudged -> console.SendAsync Protocol.Call.Nudged)
         |> Task.WhenAll
 
+/// Which table a connection is for.
+///
+/// One question with two answers, and it is asked rather than assumed because the hub below
+/// is built by the framework from a type named in a route and cannot be handed a table when
+/// it is registered. A process hosting one table answers the same way every time; a house
+/// reads the route and looks the name up, and answers `None` for a name it does not know -
+/// a link kept from a table that has since been swept away.
+///
+/// An interface rather than a function, because what registers it is a container that goes
+/// by type.
+type Finding =
+    abstract At: HttpContext -> Table option
+
 /// The wire itself: it turns a call into a change and a change back into calls, and
 /// knows nothing else about the game.
-type TableHub(table: Table, pages: Browser.Pages) =
+///
+/// Not generic, for the reason `Table` gives at length, and not holding a table either: it
+/// holds the *question*. A house has several and which one a connection means is written in
+/// the address it negotiated at, which is a thing only its own request can say.
+type TableHub(finding: Finding, pages: Browser.Pages) =
     inherit Hub()
 
     let deliver (clients: IHubCallerClients) posts = Wire.deliver clients pages posts
 
+    /// The table this connection is at, or nothing.
+    ///
+    /// Read per call rather than kept from the first one. A hub is made afresh for every
+    /// call anyway - that is what the framework does with them - so there is nowhere to keep
+    /// it that would not be a lie about how long it had been true.
+    member private this.Theirs: Table option =
+        match this.Context.GetHttpContext() with
+        | null -> None
+        | ctx -> finding.At ctx
+
+    /// A console that arrived at a table which is not there, told so in the same words a
+    /// full table uses and then let go. Saying nothing would leave it negotiated, connected
+    /// and waiting on a board that is never coming - which is the exact failure this whole
+    /// arrangement has produced once before.
+    member private this.Nowhere() : Task =
+        task {
+            do! this.Clients.Caller.SendAsync(Protocol.Call.TurnedAway, box "There is no table by that name here.")
+            this.Context.Abort()
+        }
+
     member this.Join(token: string, view: string, palette: string) =
+        match this.Theirs with
+        | None -> this.Nowhere()
+        | Some table ->
+
         let resuming = if String.IsNullOrWhiteSpace token then None else Some token
 
         // A fresh token is minted out here and handed in, so the lobby stays a value:
@@ -58,10 +99,14 @@ type TableHub(table: Table, pages: Browser.Pages) =
         |> deliver this.Clients
 
     member this.Say(line: string) =
-        table.Said(this.Context.ConnectionId, line) |> deliver this.Clients
+        match this.Theirs with
+        | None -> this.Nowhere()
+        | Some table -> table.Said(this.Context.ConnectionId, line) |> deliver this.Clients
 
     override this.OnDisconnectedAsync(_) =
-        table.Left this.Context.ConnectionId |> deliver this.Clients
+        match this.Theirs with
+        | None -> Task.CompletedTask
+        | Some table -> table.Left this.Context.ConnectionId |> deliver this.Clients
 
 module Server =
 
@@ -93,9 +138,10 @@ module Server =
     /// What a player is told to type, and what they are told to open. Both written from the
     /// declaration the command line is read by, so what is read out to somebody is something
     /// this program is certain to accept.
-    let private takeSeatAt game reach where =
+    /// `table` is which of a house's this is, and nothing at a process holding one.
+    let private takeSeatAt game reach table where =
         [ ""
-          $"    {Launch.written game (Launch.Join(where, None, Reach.word reach))}"
+          $"    {Launch.written game (Launch.Join(where, None, Reach.word reach, table))}"
           ""
           $"  or open {Reach.opened reach where} in a browser."
           "" ]
@@ -286,9 +332,18 @@ module Server =
         builder.Logging.ClearProviders() |> ignore
         builder.Services.AddSignalR(waiting) |> ignore
         // Registered as what the wire asks for rather than as what it is: the hub takes a
-        // `Table`, and a container asked for a closed generic it was never given would drop
+        // `Finding`, and a container asked for a closed generic it was never given would drop
         // every console that tried to sit down.
-        builder.Services.AddSingleton<Table>(held) |> ignore
+        //
+        // One table, so the question has one answer however it is asked. A house registers a
+        // `Finding` that reads the route instead, and the hub cannot tell the difference -
+        // which is the whole reason it asks rather than being handed a table.
+        builder.Services.AddSingleton<Finding>(
+            { new Finding with
+                member _.At _ = Some(held :> Table) }
+        )
+        |> ignore
+
         builder.Services.AddSingleton<Browser.Pages> pages |> ignore
         listening builder reach
 
@@ -353,13 +408,19 @@ module Server =
             | 1, mine ->
                 printfn "  %d of these seats are yours. This console takes one; the others are taken" mine
                 printfn "  from another terminal on this machine, by running:"
-                takeSeatAt game reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+
+                takeSeatAt game reach None (Reach.at reach "localhost")
+                |> List.iter (printfn "%s")
             | _, 1 ->
                 printfn "  One of these seats is yours, at this machine. Take it by running:"
-                takeSeatAt game reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+
+                takeSeatAt game reach None (Reach.at reach "localhost")
+                |> List.iter (printfn "%s")
             | _, mine ->
                 printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
-                takeSeatAt game reach (Reach.at reach "localhost") |> List.iter (printfn "%s")
+
+                takeSeatAt game reach None (Reach.at reach "localhost")
+                |> List.iter (printfn "%s")
 
         if theirs > 0 then
             if theirs = 1 then
@@ -367,7 +428,7 @@ module Server =
             else
                 printfn "  %d are somebody else's, from their own machines. Each of them runs:" theirs
 
-            takeSeatAt game reach (Reach.told reach |> Option.defaultValue "<address>")
+            takeSeatAt game reach None (Reach.told reach |> Option.defaultValue "<address>")
             |> List.iter (printfn "%s")
 
             printfn "  Both sit down at this one table, which is at:"
@@ -478,23 +539,27 @@ module Server =
 
     // --- a house of them ----------------------------------------------------------------
 
-    /// How a table of a house is addressed. One place, because the page that links to a table
-    /// and the route that answers for one have to agree and are written twenty lines apart.
-    let private tableAt (id: string) = $"/table/{id}"
+    /// Where a *browser* goes for one of a house's tables. One place, because the page that
+    /// links to a table and the route that answers for one are written a hundred lines apart.
+    ///
+    /// Not `/table/{id}`, and that is worth the sentence it costs. The hub lives there - a
+    /// console dials `Protocol.Path` with the table's name on the end of it - and a page
+    /// mapped at the same address wins the `GET`, so a console negotiated, was told where to
+    /// connect, and was handed a page of HTML where its transport should have been. What it
+    /// reports then is "the server disconnected before the handshake could be started", which
+    /// sounds like anything at all except two routes fighting over one address.
+    ///
+    /// Nothing complains: both registrations are legal and the first match wins. It was found
+    /// by joining a table, which is now the second time that has been the only way to find
+    /// something in this file.
+    let private tableAt (id: string) = $"/at/{id}"
 
     /// A house: several games of this one, listed on a page, dealt as people ask for them.
     ///
-    /// Browsers only, and that is a limit worth stating rather than leaving to be discovered.
-    /// A console at a terminal reaches a table through a SignalR hub, and a hub is found by
-    /// the framework from a type named in a route - so a house wants a hub that resolves
-    /// *which* table a connection is for, and hub activation is the one piece of this program
-    /// that has already broken silently once. It is worth doing on its own with the wire
-    /// tests watching. Until then a house says nothing about `join`, and `host` is still how
-    /// a terminal is given a table.
-    ///
     /// What a house does *not* do is add a second way to play. Every board it serves is drawn
-    /// by the same `Browser` handlers a single hosted table uses, against the same `Table`;
-    /// all a house adds is a front door and a name in a cookie.
+    /// by the same `Browser` handlers and the same hub a single hosted table uses, against the
+    /// same `Table`; all a house adds is a front door, a name in a cookie, and a name in the
+    /// hub's route.
     let house (hosting: Hosting) reach filling =
         let builder = WebApplication.CreateBuilder()
 
@@ -511,14 +576,43 @@ module Server =
         let pages = Browser.Pages()
 
         builder.Logging.ClearProviders() |> ignore
+        builder.Services.AddSignalR(waiting) |> ignore
+        builder.Services.AddSingleton<Browser.Pages> pages |> ignore
+
+        // Which table a console meant, read off the route it negotiated at. The hub is the
+        // very same hub a single hosted table uses; all that differs is the answer to this.
+        //
+        // A name nobody knows here is answered with nothing rather than with the first table
+        // to hand, and the hub turns that console away in words. A link kept from a table
+        // that has since been swept is exactly this case, and it is not an error - it is a
+        // game that is over.
+        builder.Services.AddSingleton<Finding>(
+            { new Finding with
+                member _.At ctx =
+                    match ctx.Request.RouteValues.TryGetValue "id" with
+                    | true, id -> home.At(string id) |> Option.map (fun opened -> opened.Table)
+                    | _ -> None }
+        )
+        |> ignore
+
         listening builder reach
 
         let app = builder.Build()
         guarded app drawn reach
 
+        // The hub, at a route with the table's name in it. `Protocol.Path` is where a console
+        // looks and `Client.join` puts the name on the end of it, so the two ends are written
+        // from one constant and a house cannot come to disagree with the consoles dialling it.
+        app.MapHub<TableHub>(Protocol.Path + "/{id}") |> ignore
+
         /// The table this browser is reading, if it is reading one that is still here.
         let theirs (ctx: HttpContext) =
             Browser.tableOf ctx |> Option.bind home.At
+
+        // The hub's own clients rather than a caller's, for the reason the hosted table gives:
+        // a move made in a browser has to reach the terminals at that table, and there is no
+        // call in progress to borrow them from.
+        let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
 
         /// What a page does at a table, which is what a page does at any table: the same four
         /// functions the one-table host builds, over whichever table this browser is at.
@@ -528,7 +622,11 @@ module Server =
                     opened.Table.Sits(console, Guid.NewGuid().ToString "N", None, InABrowser, view, palette)
               Said = fun console line -> opened.Table.Said(console, line)
               Gone = fun console -> opened.Table.Left console
-              Deliver = fun posts -> posts |> List.iter (Browser.send pages) }
+              // Through the wire and not straight to the pages, which it was while a house
+              // served browsers alone. A table in a house can have a terminal at it now, and a
+              // page that delivered only to pages would move the game under a console that
+              // was never told.
+              Deliver = fun posts -> Wire.deliver hub.Clients pages posts |> ignore }
 
         /// A page whose table has gone - swept away, or a link kept from a house that has been
         /// restarted since. Sent back to the front rather than shown an error: the table is
@@ -553,6 +651,7 @@ module Server =
                     home.Listed
                     |> List.map (fun (opened, standing) ->
                         { Page.Where = tableAt opened.Id
+                          Page.Name = opened.Id
                           Page.Stage =
                             match standing.Stage with
                             | Lobby.Filling -> "waiting"
@@ -659,6 +758,13 @@ module Server =
 
         printfn ""
         printfn "  Whoever opens a table there reads its address out to whoever is playing."
+        printfn ""
+        printfn "  A player at a terminal joins one by name, which the list on that page shows:"
+        printfn ""
+
+        printfn
+            "    %s"
+            (Launch.writtenFor hosting.Name (Launch.Join(Reach.at reach "localhost", None, Reach.word reach, Some "<table>")))
 
         match Reach.word reach with
         | Some word -> printfn "  The word at the door is %s." word
