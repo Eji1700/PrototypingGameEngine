@@ -335,9 +335,22 @@ Two decisions taken while building it:
 
 - **Terminal consoles at a house** — the hub that resolves which table a connection is for.
   The one piece here that has broken silently before, so: with `wire.ps1` watching.
-- **A container.** The reason the games were split into their own executables, and now
-  deliverable: browser play works end to end. It wants a Dockerfile over the portable publish,
-  configuration from the environment rather than argv, and a volume for `logs/` — which is
-  where records live and where `--fill` reads a house back from.
+- ~~**A container.**~~ Written, and **not built** — there is no Docker on the machine this was
+  written on. The [Dockerfile](../../Dockerfile) and [image.ps1](../../tools/image.ps1) say so
+  in their own first lines.
+
+  One decision worth keeping: **configuration is the command line, not the environment.** The
+  design note above asked for env vars; that was wrong for the same reason a second door was.
+  This program has one language for what to open and how far it reaches, and `TCMODEL_PORT`
+  beside `--port` is a second one to keep in step for ever. The entry point is the game, the
+  command is a default, and `docker run turncoats house --code hunter2` is how it is
+  configured.
+
+  What *was* verified without Docker is the set of assumptions the image rests on: a published
+  game, alone in an empty directory, serves a house with no settings file and no project beside
+  it, and calls itself by the name it was published under. The two things left to find out are
+  whether `/data` is writable by the image's `app` user and whether the entry point's
+  `exec "$@"` shell passes arguments and signals as intended — neither of which fails at build
+  time, which is why `image.ps1` exists.
 - **`--fill` has no check**, and the sweep timer is verified only as far as `Housekeeping`
   goes: nothing watches it actually fire in a live house.

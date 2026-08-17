@@ -76,7 +76,7 @@ without anything above it moving. Nothing did, once.
 [What a third game found](#what-a-third-game-found)
 
 **The code** — [How it is put together](#how-it-is-put-together) · [Layout](#layout) ·
-[A house of them](#a-house-of-them) · [Tests](#tests) · [One file each](#one-file-each) · [Tooling](#tooling)
+[A house of them](#a-house-of-them) · [In a container](#in-a-container) · [Tests](#tests) · [One file each](#one-file-each) · [Tooling](#tooling)
 
 ## Running
 
@@ -1010,6 +1010,38 @@ every other game writes, so a game swept off the list is still one you can take 
 The rules behind all of that are values and are checked as values —
 [house.fsx](tests/house.fsx) asks them about tables that do not exist at ages that have not
 happened. [DESIGN.md](src/Net/DESIGN.md) is how it was built and what it cost.
+
+### In a container
+
+```powershell
+docker build -t turncoats .
+docker build -t tictactoe --build-arg GAME=TicTacToe .
+docker run -p 5000:5000 -v tcmodel-logs:/data/logs turncoats
+docker run -p 5000:5000 turncoats house --code hunter2     # a word at the door
+docker run -p 5000:5000 turncoats host 3 --open            # one table, not a house
+```
+
+**The command line is the configuration, and there is deliberately no second way to say any
+of it.** This program has one language for what to open and how far it reaches — the one a
+person types, and the one it writes back out. A set of `TCMODEL_*` environment variables
+would be a second, to be kept in step with the first for ever. So the entry point is the game
+and the command is a default anybody may replace, which is what the lines above are doing.
+
+`/data/logs` is the one directory worth keeping. Records go there, and a house takes its
+games back up from exactly those files — so the volume is the difference between a restart
+being a pause and being a loss. Nothing else in the image is worth a byte: there is no
+database, no state directory, and no settings file. A container comes up having settled
+nothing, which is what `Settings.none` has always meant and is now something a house relies
+on.
+
+**Nothing here has been built.** There is no Docker on the machine this was written on, so
+the [Dockerfile](Dockerfile) and [image.ps1](tools/image.ps1) were reasoned about rather than
+run — which is the opposite of how everything else in this repository was arrived at, and is
+said plainly in both files. What *was* checked is the part that does not need Docker: a
+published game, copied alone into an empty directory and started there, serves a house with
+no settings file, no project beside it and nothing else in the folder, and calls itself by
+the name it was published under. Those are the assumptions the image rests on. The image
+itself is somebody's first afternoon.
 
 | | terminal | browser |
 | --- | --- | --- |

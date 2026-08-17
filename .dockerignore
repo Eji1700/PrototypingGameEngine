@@ -1,0 +1,37 @@
+# What the build does not need, and mostly must not have.
+#
+# The Dockerfile copies the whole tree, because restoring one game means restoring the engine
+# under it and a project reference is a graph. This is what keeps that honest: without it the
+# build context carries every binary already built on this machine, every file ever published
+# from it, and the whole git history - which is slow, and worse than slow, because a stale
+# `obj/` from a different runtime is exactly the sort of thing that builds and then behaves
+# oddly.
+
+.git
+.github
+.vs
+.vscode
+.idea
+
+# Built here rather than in the image, and for a different runtime than the image wants.
+**/bin
+**/obj
+publish
+
+# Somebody's own games and somebody's own answers. A record is a game a person played and a
+# settings file is how they like to read one; neither belongs to an image, and a house given
+# either would come up holding a stranger's evening.
+logs
+settings.txt
+colours.txt
+colors.txt
+
+# Read by people, not by the compiler.
+**/*.md
+LICENSE
+
+# The tools are for a machine with a clone on it. The image builds one project with one line.
+tools
+tests
+Dockerfile
+.dockerignore
