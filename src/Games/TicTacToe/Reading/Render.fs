@@ -197,4 +197,7 @@ module Render =
     let shell =
         { Title = "Noughts and crosses"
           Sheet = sheet
-          Placeholder = "click a square, or type its number - 1 to 9, or 'help'" }
+          Placeholder = "click a square, or type its number - 1 to 9, or 'help'"
+          // A game of turns is read by somebody who is typing, so the page leaves their
+          // keys alone.
+          Keys = [] }

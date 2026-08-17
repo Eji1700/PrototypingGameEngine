@@ -2,26 +2,43 @@ namespace TCModel.Snake
 
 open TCModel.Engine
 
-/// Everything a player may ask this game to do: go a way, go on the way you were going, or
-/// stop.
+/// Everything a player may ask this game to do.
 ///
-/// There is no move that does not move. Which is the shape of this game rather than a gap in
-/// it - a snake that stood still would be a snake that could wait out the board.
+/// Five, and they fall into two halves, one per pace. At a game of turns a direction *is* a
+/// step and the player takes one when they say so; on a clock a direction only turns the head
+/// and the beat is what moves anybody - so `Steer` says which snake, because at a table where
+/// nobody is waiting for anybody there is no such thing as whose turn it is.
+///
+/// One type for both, because they are one game. A move belonging to the other pace is refused
+/// in words rather than left out of the type: the two ways write different records and read
+/// different lines, and the one thing that must not happen is a line from one quietly meaning
+/// something at the other.
 type Move =
+    /// A game of turns: one square that way, now.
     | Go of Direction
-    /// Straight on, which is what a player wanting the same thing again means and would
-    /// otherwise have to remember for themselves.
+    /// The same, the way you are already facing.
     | Onward
+    /// On a clock: turn that snake's head, and nothing else. It moves when the beat does.
+    | Steer of seat: PlayerId * way: Direction
+    /// And the beat: every snake still moving takes one square, at once.
+    | Beat
     | Resign
 
 type Happening =
     | Went of PlayerId * Direction
     | Ate of PlayerId * eaten: int * grown: int
+    | Turned of PlayerId * Direction
     | Stopped of PlayerId * Fate
     | GameEnded of Ending
 
-/// The one thing this game refuses, and the only rule of it nobody thinks of as a rule.
-type Refusal = CannotTurnBack of Direction
+type Refusal =
+    /// The one rule of this game nobody thinks of as a rule.
+    | CannotTurnBack of Direction
+    /// A snake that has stopped is steered by nobody, including whoever was steering it.
+    | HasStopped of PlayerId
+    | NoSuchSnake of PlayerId
+    /// A move that belongs to the other way of playing this game.
+    | NotThisPace of said: string
 
 /// What this game has to say, and the whole of it. Nothing about undo, nothing about a line
 /// nobody could read: those are the engine's and are said once, above, in words that suit any
@@ -113,6 +130,107 @@ module Turn =
         | Some ending -> Some(Finished(played, ending)), told @ [ Happened(GameEnded ending) ]
         | None -> Some(InPlay(Session.onwards played)), told
 
+    // --- and the same thing on a clock -------------------------------------------------------
+
+    /// The beat: every snake still moving takes one square, at once.
+    ///
+    /// At once is the whole of the difference, and it costs three rules a game of turns never
+    /// needed. Every tail that was going to move counts as gone, so four snakes can follow each
+    /// other round a ring and none of them is bitten by a square that was about to be empty. Two
+    /// heads that pick the same square both stop, because neither of them got there first. And a
+    /// snake that stops on this beat still leaves its body where it fell, for whoever is still
+    /// going to run into afterwards.
+    ///
+    /// The order the snakes are asked in decides only one thing, and it is worth saying which:
+    /// two heads reaching the same piece of food on the same beat. The one nearer the front of
+    /// the table eats it - somebody has to, and a rule that fed both would be a rule that put
+    /// two pieces of food on the board out of one.
+    let private beating play =
+        let moving = Session.living play
+
+        let headed =
+            moving
+            |> List.map (fun seat ->
+                let snake = Session.snakeAt seat play
+                seat, Board.along snake.Facing (Snake.head snake))
+
+        let eater =
+            headed
+            |> List.tryFind (fun (_, target) -> play.Food = Some target)
+            |> Option.map fst
+
+        /// Whether this snake keeps its tail through the beat, which is what decides whether the
+        /// square the tail is on is somewhere anybody may move into.
+        let growing seat =
+            let snake = Session.snakeAt seat play
+            snake.Growing > 0 || eater = Some seat
+
+        /// Every square that will still have something on it once the beat is done.
+        let standing =
+            Session.snakes play
+            |> List.collect (fun (seat, snake) ->
+                if Snake.isAlive snake && not (growing seat) then Snake.behind snake else snake.Body)
+            |> Set.ofList
+
+        /// What stopped this one, if anything did.
+        let fate seat target =
+            if not (Board.holds target) then
+                Some HitWall
+            elif Set.contains target standing then
+                Session.snakes play
+                |> List.tryPick (fun (other, snake) ->
+                    let body =
+                        if Snake.isAlive snake && not (growing other) then Snake.behind snake else snake.Body
+
+                    if List.contains target body then Some other else None)
+                |> Option.map (fun other -> if other = seat then HitItself else HitAnother other)
+                |> Option.orElse (Some HitItself)
+            else
+                headed
+                |> List.tryPick (fun (other, theirs) -> if other <> seat && theirs = target then Some(HitAnother other) else None)
+
+        let stopping =
+            headed
+            |> List.choose (fun (seat, target) -> fate seat target |> Option.map (fun how -> seat, how))
+
+        let told = stopping |> List.map (fun (seat, how) -> Happened(Stopped(seat, how)))
+
+        let snakes =
+            headed
+            |> List.fold
+                (fun snakes (seat, _) ->
+                    let snake = Session.snakeAt seat play
+
+                    match stopping |> List.tryFind (fst >> (=) seat) with
+                    | Some(_, how) -> Map.add seat (Snake.stopped how snake) snakes
+                    | None ->
+                        let moved = Snake.moved snake.Facing snake
+                        Map.add seat (if eater = Some seat then Snake.fed moved else moved) snakes)
+                play.Snakes
+
+        let played =
+            { play with
+                Snakes = snakes
+                Turn = play.Turn + 1 }
+
+        // Nothing is said about a snake that simply moved. A beat two or three times a second
+        // would fill the log with a line per snake per beat and push everything worth reading
+        // off the top of it - and the board is right there, already showing it.
+        let eaten =
+            match eater with
+            | Some seat when not (stopping |> List.exists (fst >> (=) seat)) ->
+                let snake = Session.snakeAt seat played
+                [ Happened(Ate(seat, snake.Eaten, Snake.length snake + snake.Growing)) ]
+            | Some _
+            | None -> []
+
+        let played =
+            if eater.IsSome && not (List.isEmpty eaten) then Session.feeding played else played
+
+        { played with
+            ToPlay = Session.foremost played },
+        told @ eaten
+
     /// What the engine asks of a game: a move and where it stands, and the position it left
     /// along with whatever there is to say.
     ///
@@ -120,11 +238,35 @@ module Turn =
     /// say why. A refusal is something this game *says*, not something that breaks it, which
     /// is what lets every table above be a fold.
     let asked move session =
+        /// Whatever a move left, said as the engine wants it: the position, and an ending if
+        /// that was one.
+        let ending play told =
+            match Session.finished play with
+            | Some over -> Some(Finished(play, over)), told @ [ Happened(GameEnded over) ]
+            | None -> Some(InPlay play), told
+
         match session, move with
         // The engine refuses moves after the game is over and says so itself, so this is
         // unreachable rather than wrong. Answered all the same, because a total function is
         // cheaper than an argument about which of two files is guarding it.
         | Finished _, _ -> None, []
+
+        // Giving up means the same thing at both paces and comes to something different at
+        // each, which is exactly what putting a game down is: at a game of turns it is your
+        // own snake, and at a game on a clock - where the others are not waiting on you and
+        // never were - it is the whole board.
+        | InPlay play, Resign when play.Pace = Clock ->
+            let stopping = Session.living play
+
+            let stopped =
+                { play with
+                    Snakes =
+                        stopping
+                        |> List.fold
+                            (fun snakes seat -> Map.add seat (Snake.stopped GaveUp (Session.snakeAt seat play)) snakes)
+                            play.Snakes }
+
+            ending stopped (stopping |> List.map (fun seat -> Happened(Stopped(seat, GaveUp))))
 
         | InPlay play, Resign ->
             let seat = play.ToPlay
@@ -136,8 +278,13 @@ module Turn =
             let told = [ Happened(Stopped(seat, GaveUp)) ]
 
             match Session.finished stopped with
-            | Some ending -> Some(Finished(stopped, ending)), told @ [ Happened(GameEnded ending) ]
+            | Some over -> Some(Finished(stopped, over)), told @ [ Happened(GameEnded over) ]
             | None -> Some(InPlay(Session.onwards stopped)), told
+
+        // --- a game of turns --------------------------------------------------------------
+
+        | InPlay play, (Go _ | Onward) when play.Pace = Clock ->
+            None, [ Refused(NotThisPace "a direction is a turn of the head here, and the beat is what moves anybody") ]
 
         | InPlay play, Onward -> taking play.ToPlay (Session.snakeAt play.ToPlay play).Facing play
 
@@ -149,3 +296,36 @@ module Turn =
             None, [ Refused(CannotTurnBack direction) ]
 
         | InPlay play, Go direction -> taking play.ToPlay direction play
+
+        // --- and a game on a clock ----------------------------------------------------------
+
+        | InPlay play, (Steer _ | Beat) when play.Pace = Turns ->
+            None,
+            [ Refused(NotThisPace "this way of playing takes a step when you say a direction, and waits for you in between") ]
+
+        | InPlay play, Beat ->
+            let played, told = beating play
+            ending played told
+
+        | InPlay play, Steer(seat, _) when not (List.contains seat play.Seats) -> None, [ Refused(NoSuchSnake seat) ]
+
+        | InPlay play, Steer(seat, _) when not (Snake.isAlive (Session.snakeAt seat play)) -> None, [ Refused(HasStopped seat) ]
+
+        | InPlay play, Steer(seat, way) when way = Direction.opposite (Session.snakeAt seat play).Facing ->
+            None, [ Refused(CannotTurnBack way) ]
+
+        // Turning to where it already points is not a refusal and not a move: it is what a
+        // player leaning on a key is asking for, and the honest answer to it is nothing at all.
+        // Answered as a position that did not change, so it stays out of the timeline - a
+        // record of a game held at three beats a second has enough in it already.
+        | InPlay play, Steer(seat, way) when way = (Session.snakeAt seat play).Facing -> None, []
+
+        | InPlay play, Steer(seat, way) ->
+            let snake = Session.snakeAt seat play
+
+            Some(
+                InPlay
+                    { play with
+                        Snakes = Map.add seat { snake with Facing = way } play.Snakes }
+            ),
+            [ Happened(Turned(seat, way)) ]

@@ -126,6 +126,10 @@ module Offer =
                     { Skill = rival.Skill.Name
                       Plays = machine rival })
 
+          // A game of turns: nothing happens here until somebody says so.
+          Pulse = None
+
+
           Page = Html.shell
           Views = views }
 

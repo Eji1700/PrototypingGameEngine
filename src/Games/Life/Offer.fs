@@ -138,6 +138,10 @@ module Offer =
           Skills = []
           Seating = fun _ _ _ -> []
 
+          // A game of turns: nothing happens here until somebody says so.
+          Pulse = None
+
+
           Page = Render.shell
           Views = Readers.views scenes }
 

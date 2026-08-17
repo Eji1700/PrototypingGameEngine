@@ -443,4 +443,7 @@ body { --half: 7.5rem; }
     let shell =
         { Title = "Turncoats"
           Sheet = sheet
-          Placeholder = "type a move - r b 5, b r 8, m g 8 5 2, help" }
+          Placeholder = "type a move - r b 5, b r 8, m g 8 5 2, help"
+          // A game of turns is read by somebody who is typing, so the page leaves their
+          // keys alone.
+          Keys = [] }

@@ -303,6 +303,55 @@ module Server =
         app.MapPost(Page.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
         |> ignore
 
+    /// Keep a table that does not wait in time.
+    ///
+    /// A timer, a beat, and whatever the beat came to sent to whoever is reading - and that is
+    /// the whole of real time on this side of the wire. What a beat *is* belongs to the game,
+    /// when one is due comes back with the last one, and the table has already folded it under
+    /// its own lock by the time anything here has it in hand.
+    ///
+    /// One shot at a time rather than a repeating timer, and rescheduled by each beat, because
+    /// a game may quicken as it goes - and because a repeating timer with a slow beat behind it
+    /// stacks up beats it never delivered.
+    ///
+    /// Kept alive by the table it is beating for: it is disposed when the process is, which for
+    /// something that stands until Ctrl+C is the same moment.
+    let private keeping (first: TimeSpan) (beats: unit -> Post list * TimeSpan) deliver =
+        let held = ref None
+
+        let due (wait: TimeSpan) =
+            match held.Value with
+            | Some(timer: Threading.Timer) -> timer.Change(wait, Threading.Timeout.InfiniteTimeSpan) |> ignore
+            | None -> ()
+
+        let beat _ =
+            // A beat that threw would stop the clock and leave the table standing still with
+            // nothing said about why, so it is caught here - one lost beat is a stutter, and
+            // the next one is already scheduled.
+            let wait =
+                try
+                    let posts, wait = beats ()
+                    deliver posts
+                    wait
+                with _ ->
+                    TimeSpan.FromSeconds 1.0
+
+            due wait
+
+        let timer =
+            new Threading.Timer(
+                Threading.TimerCallback beat,
+                null,
+                Threading.Timeout.InfiniteTimeSpan,
+                Threading.Timeout.InfiniteTimeSpan
+            )
+
+        held.Value <- Some timer
+        // Started only once the slot holds it, so that a game with a very short beat cannot
+        // fire before there is anything for it to reschedule.
+        due first
+        timer
+
     /// Open a table and wait at it. Blocks until the host stops the process, which is
     /// how a table is closed: there is no move for closing one, because no player at it
     /// has the standing to close it on everybody else.
@@ -374,6 +423,16 @@ module Server =
         // A hosted table settles nothing about colour on anybody's behalf: a console says
         // what it wants when it joins, and so does a page.
         serving app drawn sitting pages
+
+        // And the clock, for a game that does not wait. It beats into an empty room from the
+        // moment the table opens, and `Lobby.beaten` is what makes that harmless: nothing
+        // moves until every seat is taken, so a table sitting open for an hour is a table
+        // whose game has not started rather than one that played itself out unwatched.
+        let clock =
+            game.Pulse
+            |> Option.map (fun pulse ->
+                keeping (pulse.Every(Model.state model)) (held :> Table).Beats (fun posts ->
+                    Wire.deliver hub.Clients pages posts |> ignore))
 
         let seats = game.Rules.Seats(Model.state model)
         let mine, theirs = Seating.awaited sitters
@@ -458,20 +517,25 @@ module Server =
 
         printfn ""
 
-        match playing with
-        | None ->
-            app.Run()
-            0
-        | Some playing ->
-            // Started rather than run, so that there is a table for the console below to sit
-            // down at - `Start` comes back when the port is answering and not before. And
-            // waited on afterwards rather than stopped, because a player leaving their seat
-            // is not the same as closing the room: whoever else is here is still playing, and
-            // the table stands until Ctrl+C as it always did.
-            app.Start()
-            playing ()
-            app.WaitForShutdown()
-            0
+        let waited =
+            match playing with
+            | None ->
+                app.Run()
+                0
+            | Some playing ->
+                // Started rather than run, so that there is a table for the console below to
+                // sit down at - `Start` comes back when the port is answering and not before.
+                // And waited on afterwards rather than stopped, because a player leaving their
+                // seat is not the same as closing the room: whoever else is here is still
+                // playing, and the table stands until Ctrl+C as it always did.
+                app.Start()
+                playing ()
+                app.WaitForShutdown()
+                0
+
+        // Held until the table is done with, for the reason `serve`'s is.
+        clock |> Option.iter (fun timer -> timer.Dispose())
+        waited
 
     /// Play a game here, in a browser, with nobody else involved.
     ///
@@ -507,6 +571,15 @@ module Server =
 
         serving app drawn sitting pages
 
+        // A game that does not wait keeps its own time here rather than in the page. The
+        // browser is sent a board per beat down the stream it already had open, exactly as it
+        // is sent one per move - which is why this is four lines and not a second way of
+        // playing: a beat is a move, and a page has always been told about those.
+        let clock =
+            game.Pulse
+            |> Option.map (fun pulse ->
+                keeping (pulse.Every(Model.state (Solo.model solo))) aside.Beats (List.iter (Browser.send pages)))
+
         let seats = game.Rules.Seats(Model.state (Solo.model solo))
 
         printfn ""
@@ -535,6 +608,10 @@ module Server =
         printfn ""
 
         app.Run()
+        // Held to the end so the clock is not swept away while the table it beats for is
+        // still standing. `Run` returns when the process is stopping, and a timer that had
+        // been collected before then would leave a game that quietly stopped moving.
+        clock |> Option.iter (fun timer -> timer.Dispose())
         0
 
     // --- a house of them ----------------------------------------------------------------
@@ -742,6 +819,12 @@ module Server =
         // the timer back all the same, which is what lets a check start one with a span of
         // milliseconds and put it down again.
         home.Sweeping(TimeSpan.FromMinutes 5.0, (fun gone -> printfn "  Swept %d table(s) nobody was at." (List.length gone)))
+        |> ignore
+
+        // And the same again for the clock, at a house whose game does not wait. Every table
+        // beats on its own time - a house of snake is several boards running at whatever speed
+        // the snake at each has got to - so all this settles is how often the house looks.
+        home.Beating(TimeSpan.FromMilliseconds 40.0, (fun posts -> Wire.deliver hub.Clients pages posts |> ignore))
         |> ignore
 
         printfn ""

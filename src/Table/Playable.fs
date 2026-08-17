@@ -1,6 +1,44 @@
 namespace TCModel.Table
 
+open System
 open TCModel.Engine
+
+/// A game that does not wait for anybody.
+///
+/// Every other game in this program is a game of turns: nothing happens until somebody types,
+/// and a table left alone for an hour is a table where nothing has happened for an hour. A
+/// game with one of these is not like that. The position moves on a clock, and what a player
+/// types only steers it.
+///
+/// It is here rather than in `Rules`, and that is the whole design of it. Nothing about *when*
+/// is a rule of any game: a beat is a move like every other move, folded by the same `update`,
+/// written into the same record and replayed off it exactly. The clock only decides when one
+/// is asked for - so a real-time game is still a fold, still replays to the square it was
+/// saved on, and is still checked without a clock anywhere near it.
+///
+/// Which is also why the tables keep the time rather than the game. There are three of them -
+/// a terminal, a browser, a table over a wire - and a game that kept its own would either be
+/// keeping three or be a game only one of them could play.
+[<NoComparison; NoEquality>]
+type Pulse<'Move, 'State> =
+    {
+        /// How long to leave before the next beat, from where the game stands. A function
+        /// rather than a number, because quickening as it goes is most of what makes an
+        /// arcade game one.
+        Every: 'State -> TimeSpan
+
+        /// What a table plays when the time is up.
+        Beat: 'Move
+
+        /// What a single key press means, as the line it stands for.
+        ///
+        /// The same bargain a control on a page makes, and made here for the same reason: a
+        /// game that does not wait cannot ask for a line and a newline, so keys are how it is
+        /// really played - and a key that stands for a line cannot mean something the parser
+        /// has never heard of. `None` is a key this game has no use for, and the table is
+        /// free to have its own.
+        Pressed: ConsoleKeyInfo -> string option
+    }
 
 /// A machine at a seat: how it plays, and the word for how well it plays.
 ///
@@ -86,6 +124,15 @@ type Playable<'Move, 'State, 'Notice> =
         /// or nobody - each with a generator of its own drawn from the deal, so that the same
         /// table dealt twice plays the same twice.
         Seating: uint64 -> string option list -> 'State -> (PlayerId * Seated<'Move, 'State>) list
+
+        /// Whether this game waits for anybody, and what it does when it does not.
+        ///
+        /// `None` at a game of turns, which is nearly all of them - and the field is here
+        /// rather than assumed so that the tables ask the game rather than the other way
+        /// round. Nothing in the timeline, the record, the seats or the screens changes for a
+        /// game that has one: a beat is a move, and everything above this line was already
+        /// generic in what a move is.
+        Pulse: Pulse<'Move, 'State> option
 
         /// What this game brings to a browser: a name for the tab, its own rules of drawing,
         /// and what the empty prompt suggests. The page itself is not the game's.

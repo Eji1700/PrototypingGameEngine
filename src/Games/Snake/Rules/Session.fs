@@ -12,6 +12,19 @@ type Ending =
     | LastMoving of PlayerId
     | NobodyMoving
 
+/// Which way this table is being played, and the only thing that differs between the two.
+///
+/// `Turns` is a game of turns like every other game in this program: a snake moves when the
+/// person playing it says so, one at a time, round the table. `Clock` is the arcade game: the
+/// snakes move together whenever the beat comes round, and what anybody types only turns them.
+///
+/// The rules underneath are the same rules. A step is a step, the wall is the wall, and the
+/// square your own tail is leaving is yours either way - which is why this is a word in the
+/// state rather than two games in two folders.
+type Pace =
+    | Turns
+    | Clock
+
 /// A game still going: the snakes, the food, whose turn it is, and the generator the next
 /// piece of food will come from.
 ///
@@ -27,8 +40,14 @@ type Play =
         Seats: PlayerId list
         /// Nothing at all only if there is nowhere left to put any.
         Food: Cell option
+        /// Whose turn it is at a game of turns. At a game on a clock it is nobody's, and this
+        /// is the first snake still moving - which is what the record writes down as having
+        /// asked for the beat, and what a screen with one seat to mark marks.
         ToPlay: PlayerId
+        /// Turns round the table, or beats. The two are the same count read two ways, and
+        /// both are what "how long has this been going" means at that pace.
         Turn: int
+        Pace: Pace
         Rng: Rng
     }
 
@@ -107,7 +126,7 @@ module Session =
                 { Row = row
                   Column = Board.Width - Snake.Length }
 
-    let dealt players seed =
+    let dealt pace players seed =
         let seats = [ for place in 1..players -> Seat.at place ]
 
         let snakes =
@@ -120,6 +139,7 @@ module Session =
                   Food = None
                   ToPlay = List.head seats
                   Turn = 1
+                  Pace = pace
                   Rng = Rng.ofSeed seed }
         )
 
@@ -168,6 +188,16 @@ module Session =
             { play with
                 ToPlay = play.Seats[index]
                 Turn = (if index <= at then play.Turn + 1 else play.Turn) }
+
+    /// The first snake still moving.
+    ///
+    /// Who the record writes down as having asked for a beat, at a pace where nobody's turn it
+    /// is - and the seat a screen with one to mark marks. Somebody has to be named: a record
+    /// says who asked for every move in it, and "the clock" is not a seat at the table.
+    let foremost play =
+        match living play with
+        | seat :: _ -> seat
+        | [] -> play.ToPlay
 
     /// Whether that was the end of it: nobody left moving, or - at a table of more than one -
     /// exactly one left, who has therefore won.

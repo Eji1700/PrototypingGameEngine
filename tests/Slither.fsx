@@ -63,8 +63,13 @@
 
 open TCModel.Table
 
-/// The game these checks are about.
+/// The game these checks are about, at the pace everybody means by the name: the arcade one,
+/// where the snakes move on a clock and what you type only steers.
 let snake = TCModel.Snake.Offer.playable
+
+/// And the same game with the clock taken out of it - a step when you say so, which is the way
+/// four people play it round one keyboard and the way the machines play it.
+let turns = TCModel.Snake.Offer.ways |> List.item 1
 
 let standard = Playable.standard snake
 

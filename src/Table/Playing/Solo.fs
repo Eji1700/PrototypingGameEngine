@@ -264,6 +264,41 @@ module Solo =
             Watchers = solo.Watchers |> List.filter (fst >> (<>) console) },
         []
 
+    // --- a move nobody typed ----------------------------------------------------------------
+
+    /// The clock came round: play this game's own beat, and draw everybody watching.
+    ///
+    /// The whole of what a game that does not wait adds to this table, and it is four lines -
+    /// because a beat is a move like any other. It goes through the same `update`, lands in
+    /// the same record, is answered by the machines the same way and is drawn to the same
+    /// people. What it does not do is nudge anybody: a nudge is for a turn that has come round
+    /// unasked, and at a table where the game moves on its own that would be every beat.
+    ///
+    /// Nothing at all at a game that waits, at one that has finished, or at one nobody is
+    /// looking at.
+    ///
+    /// That last is not a nicety. A table served to a browser is dealt when the process starts
+    /// and read when somebody opens the page, and a clock running in between is a clock that
+    /// plays the whole game into an empty room - open the page and the snake has already hit
+    /// the wall. So the game starts when somebody arrives to watch it, and stops if they all
+    /// go, which is what anybody would expect of a board they are the only one looking at.
+    let beaten solo =
+        match solo.Game.Pulse with
+        | Some pulse when not (isOver solo) && not (List.isEmpty solo.Watchers) ->
+            let next =
+                answering
+                    { solo with
+                        Model = Update.update (rules solo) (Make pulse.Beat) solo.Model }
+
+            next,
+            drawAll next,
+            // A game that has just ended on a beat is written down where it ended, the same
+            // as one the machines played out: there may be nobody about to type the line
+            // that would have saved it.
+            (if isOver next then Keeping(next.Model, next.Stamp, false) else Carrying)
+        | Some _
+        | None -> solo, [], Carrying
+
     // --- a typed line ---------------------------------------------------------------------
 
     /// A line typed at one console, and what everybody watching is shown as a result.

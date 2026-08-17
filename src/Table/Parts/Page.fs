@@ -21,6 +21,19 @@ type Shell =
         /// What the empty prompt suggests. A page is often the first way somebody meets a
         /// game, and an empty box says nothing about what may be typed into it.
         Placeholder: string
+
+        /// What a key press means on the page: the browser's own name for the key, and the
+        /// line it stands for.
+        ///
+        /// Empty at a game that waits for a line, which is nearly all of them - somebody
+        /// reading a game of turns is typing, and a page that stole their keys would be a
+        /// page they could not type at. A game that does not wait has the opposite problem:
+        /// pressing left has to mean left before the sentence is finished, and the box is not
+        /// where the game is being played.
+        ///
+        /// Lines, like every other control on the page, so a key cannot ask for something the
+        /// parser would not take.
+        Keys: (string * string) list
     }
 
 /// The page a browser is served, less the game.
@@ -451,6 +464,41 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
         { RequestOptions.Defaults with
             OpenWhenHidden = true }
 
+    /// Steering with the keys, for a game that does not wait for a sentence.
+    ///
+    /// The third and last hand-written script on the page, and the only one that carries
+    /// anything of a game - which it does as data rather than as behaviour: a table of the
+    /// browser's own key names against the lines this game already reads. What it does with
+    /// one is what the buttons do with a click, at the same address, so a key cannot ask for
+    /// anything a button could not.
+    ///
+    /// Nothing at all where the game has no keys, and that is the ordinary case: somebody
+    /// reading a game of turns is typing, and a page that stole their arrow keys would be a
+    /// page they could not type at. Even here, a press inside the box is left alone - the
+    /// prompt is still the way to say the longer things.
+    let private steering (keys: (string * string) list) =
+        match keys with
+        | [] -> ""
+        | keys ->
+            let table =
+                keys
+                |> List.map (fun (key, line) -> $"'{key}':'{Uri.EscapeDataString line}'")
+                |> String.concat ","
+
+            String.concat
+                ""
+                [ $"const steer={{{table}}};"
+                  "addEventListener('keydown',e=>{"
+                  // A press while somebody is typing belongs to what they are typing. Asked as
+                  // a question rather than with an `and`, which is two characters markup would
+                  // rather read as the start of something escaped - the same reason the two
+                  // scripts above are written the way they are.
+                  "const at=document.activeElement;"
+                  "const typing=at?at.tagName==='INPUT'||at.tagName==='TEXTAREA':false;"
+                  "if(typing)return;"
+                  "const line=steer[e.key];if(!line)return;e.preventDefault();"
+                  $"fetch('{Say}?line='+line,{{method:'POST'}}).catch(()=>{{}})}})" ]
+
     /// The page itself: a shell with two empty slots in it, and a line of typing at the
     /// bottom.
     ///
@@ -527,7 +575,8 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                         // themselves to things further up the page and have to find them
                         // there: a button, and the corner the table's news lands in.
                         Elem.script [] [ Text.raw answering ]
-                        Elem.script [] [ Text.raw holding ] ] ]
+                        Elem.script [] [ Text.raw holding ]
+                        Elem.script [] [ Text.raw (steering shell.Keys) ] ] ]
         )
 
     /// The door, for somebody who arrived at a table without the word for it.

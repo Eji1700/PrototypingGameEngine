@@ -966,4 +966,7 @@ module Render =
     let shell =
         { Title = "Compile"
           Sheet = sheet
-          Placeholder = "a protocol to draft it, or a card and a line - 'fire-3 2', or 'help'" }
+          Placeholder = "a protocol to draft it, or a card and a line - 'fire-3 2', or 'help'"
+          // A game of turns is read by somebody who is typing, so the page leaves their
+          // keys alone.
+          Keys = [] }

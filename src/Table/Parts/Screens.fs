@@ -69,6 +69,28 @@ module Screens =
             printf "Press any key."
             System.Console.ReadKey true |> ignore
 
+    /// A key, or the time being up - whichever comes first.
+    ///
+    /// The one thing in this program that watches a clock, and it is nine lines in the file
+    /// whose whole job is touching things. Everything above it is a fold: a game that does
+    /// not wait says how long a table should leave between beats, the table plays one when
+    /// this says nobody pressed anything, and the beat is a move like every other move.
+    ///
+    /// Polled rather than waited on, because a console cannot be asked for a key *until* a
+    /// moment. The wait is short enough that a key feels immediate and long enough that a
+    /// game running at three or four beats a second is not a core spinning.
+    let awaiting (until: System.DateTime) =
+        let rec waiting () =
+            if System.Console.KeyAvailable then
+                Some(System.Console.ReadKey true)
+            elif System.DateTime.UtcNow >= until then
+                None
+            else
+                System.Threading.Thread.Sleep 8
+                waiting ()
+
+        waiting ()
+
     /// Ask a screen for a line.
     ///
     /// What comes back is a line in the words a person would have typed, so on the other side

@@ -276,6 +276,28 @@ module Lobby =
 
     let private just console said = [ { To = console; Say = said } ]
 
+    // --- a move nobody typed ------------------------------------------------------------
+
+    /// The clock came round: play this game's own beat, and draw the whole table.
+    ///
+    /// The same four lines as the local table's, and for the same reason - a beat is a move,
+    /// and everything here was already generic in what a move is. Nobody is nudged, because
+    /// a nudge is for a turn that arrived unasked and at a table that does not wait that
+    /// would be every beat; and nothing happens at all until everybody has sat down, which is
+    /// the one thing this table has that the local one does not. A clock running while a seat
+    /// is still empty would play the game out in front of whoever arrived first.
+    let beaten lobby =
+        match lobby.Game.Pulse with
+        | Some pulse when everyoneHere lobby && not ((rules lobby).Over(standing lobby)) ->
+            let next =
+                answering
+                    { lobby with
+                        Model = Update.update (rules lobby) (Make pulse.Beat) lobby.Model }
+
+            next, drawAll next
+        | Some _
+        | None -> lobby, []
+
     // --- taking a seat ----------------------------------------------------------------
 
     /// Take a seat, or come back to one already taken.
@@ -461,9 +483,14 @@ module Lobby =
 
             // Only the player whose turn it is may move. This is the one rule a single
             // keyboard never needed, because there was only ever one pair of hands.
+            //
+            // Unless the game does not wait for anybody, in which case there is no such thing
+            // as somebody else's turn: everybody is steering at once and the clock is what
+            // moves the position. A game with a pulse says so by having one, so this is asked
+            // of the game rather than settled here.
             let active = (rules lobby).Active(standing lobby)
 
-            if seat.Player <> active then
+            if lobby.Game.Pulse.IsNone && seat.Player <> active then
                 told $"It is {lobby.Game.Seat active}'s turn."
             else
                 // And whoever the machine is between this player and their next turn answers

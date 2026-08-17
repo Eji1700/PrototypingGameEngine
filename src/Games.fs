@@ -13,9 +13,9 @@ module TCModel.Games
 /// different words. A game offers its ways itself now, and this list is a list of games again.
 ///
 /// The last two are the ones that argue with the rest. Life is not a game of turns at all - one
-/// seat, no opponent, nothing to win - and Snake is the same rules at a table of one and a table
-/// of four. Both sit in this list exactly like the others, which is the whole of what their
-/// being here proves.
+/// seat, no opponent, nothing to win - and Snake does not wait for anybody: its board moves on a
+/// clock and what a player presses only steers it. Both sit in this list exactly like the
+/// others, which is the whole of what their being here proves.
 let all =
     [ Play.chosen TCModel.Turncoats.Offer.ways TCModel.Turncoats.Offer.playable
       Play.chosen TCModel.TicTacToe.Offer.ways TCModel.TicTacToe.Offer.playable

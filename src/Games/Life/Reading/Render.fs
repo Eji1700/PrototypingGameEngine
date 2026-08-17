@@ -250,4 +250,7 @@ module Render =
     let shell =
         { Title = "Life"
           Sheet = Page.tightRows
-          Placeholder = "a cell to turn it on - 'f7' - or 'step 10' to run it on, or 'help'" }
+          Placeholder = "a cell to turn it on - 'f7' - or 'step 10' to run it on, or 'help'"
+          // A game of turns is read by somebody who is typing, so the page leaves their
+          // keys alone.
+          Keys = [] }

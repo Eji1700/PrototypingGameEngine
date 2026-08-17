@@ -1,5 +1,6 @@
 namespace TCModel.Net
 
+open System
 open TCModel.Engine
 open TCModel.Table
 
@@ -36,6 +37,15 @@ type Table =
     abstract Said: console: string * line: string -> Post list
 
     abstract Left: console: string -> Post list
+
+    /// The clock came round at a table that does not wait: play the beat, say what everybody
+    /// is to be shown, and say how long to leave before the next one.
+    ///
+    /// On the interface rather than on the one class that has a clock, because a house holds
+    /// tables it knows nothing else about and would otherwise have to ask what kind each one
+    /// was. A table whose game waits answers with nothing to say and a long wait, and whatever
+    /// is keeping the time can go back to sleep.
+    abstract Beats: unit -> Post list * TimeSpan
 
     /// What this table looks like from the door: how far along it is, how many seats are
     /// going spare, and who is at the ones that are not.
@@ -88,6 +98,21 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
 
         member this.Left console = this.Change(Lobby.left console)
 
+        // The beat and the wait are taken together, under one lock, because they are one
+        // question: how the game stands after this beat is what says when the next one is due,
+        // and a clock that read the state again afterwards could be reading a game two moves
+        // further on. A game that waits answers with nothing and a minute, which is a clock
+        // that has nothing to do and does not spin asking.
+        member this.Beats() =
+            lock gate (fun () ->
+                match (Lobby.game lobby).Pulse with
+                | None -> [], TimeSpan.FromMinutes 1.0
+                | Some pulse ->
+                    let next, posts = Lobby.beaten lobby
+                    lobby <- next
+                    keep (Lobby.model next)
+                    posts, pulse.Every(Model.state (Lobby.model next)))
+
         // Under the gate like every other reading of the lobby, and it has to be: the slot is
         // written by whichever thread last moved the game, and a description read beside that
         // write is a description of neither state.
@@ -128,6 +153,27 @@ type Aside<'Move, 'State, 'Notice>
             |> Result.defaultValue (Playable.plainest shown palette game)
 
         this.Change(Solo.watching console { Margins = Margins.all; View = view })
+
+    /// The clock came round: the beat, what everybody is shown, and how long to leave before
+    /// the next one - taken together under one lock, for the reason `Held.Beats` gives.
+    ///
+    /// A game that ends on a beat is written down here rather than by whatever is keeping the
+    /// time. Nobody typed the move that ended it, so there is no line to answer and nowhere to
+    /// say where the file went; a page is told the game is over by the board it is sent.
+    member _.Beats() =
+        lock gate (fun () ->
+            match (Solo.game solo).Pulse with
+            | None -> [], TimeSpan.FromMinutes 1.0
+            | Some pulse ->
+                let next, posts, doing = Solo.beaten solo
+                solo <- next
+
+                match doing with
+                | Keeping(model, stamp, _) -> keep model stamp |> ignore
+                | Carrying
+                | Leaving _ -> ()
+
+                posts, pulse.Every(Model.state (Solo.model next)))
 
     member _.Said(console, line) =
         lock gate (fun () ->

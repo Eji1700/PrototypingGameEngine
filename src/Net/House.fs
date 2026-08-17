@@ -1,6 +1,9 @@
 namespace TCModel.Net
 
 open System
+// For `Post`, which is what a table hands back and the only thing from that layer this file
+// names. Nothing here has met a socket and nothing here draws a board.
+open TCModel.Table
 
 /// One table in a house: the table itself, and the three things the house knows about it that
 /// the table does not.
@@ -111,6 +114,11 @@ type House(hosting: Hosting, now: unit -> DateTime, naming: unit -> string, keep
     let gate = obj ()
     let mutable tables: Opened list = []
 
+    /// When each table is next due a beat, against its name. Empty at a house of a game that
+    /// waits, and empty for a table nobody has beaten yet - which is read as "now", so a table
+    /// opened between two sweeps of the clock does not sit still until the next one.
+    let mutable due: Map<string, DateTime> = Map.empty
+
     /// Kept once here rather than at both ways in, which are otherwise the same three lines.
     let holding way table =
         let opened =
@@ -181,6 +189,51 @@ type House(hosting: Hosting, now: unit -> DateTime, naming: unit -> string, keep
 
             tables <- staying
             going |> List.map (fun opened -> opened.Id))
+
+    /// Beat every table that is due one, and say what came of each.
+    ///
+    /// A house of a game that does not wait is a house where several boards are moving at
+    /// once, each on its own clock: two snakes at two tables run at whatever speed the snake
+    /// at that table has got to. So when a table is next due comes back from the table itself
+    /// with the beat, and is kept here against its name.
+    ///
+    /// A table that has been swept away simply stops being asked - the list is read afresh
+    /// each time round - and a house of a game that waits answers a minute for everything and
+    /// costs a lock a minute per table.
+    member _.Beat(at: DateTime) =
+        let asking = lock gate (fun () -> tables)
+
+        asking
+        |> List.collect (fun opened ->
+            let ready =
+                lock gate (fun () ->
+                    due
+                    |> Map.tryFind opened.Id
+                    |> Option.forall (fun (when': DateTime) -> at >= when'))
+
+            if not ready then
+                []
+            else
+                let posts, wait = opened.Table.Beats()
+                lock gate (fun () -> due <- Map.add opened.Id (at + wait) due)
+                posts)
+
+    /// And something to keep the time, for a house whose game does not wait.
+    ///
+    /// Here rather than beside the web host for the reason `Sweeping` is: a timer started
+    /// inside `Server.house` is lines no check can reach. `every` is how often the house looks
+    /// rather than how often a table beats - a table says that for itself - so it wants to be
+    /// short enough that the shortest beat lands near where it was asked for.
+    member this.Beating(every: TimeSpan, deliver: Post list -> unit) =
+        let clock = new Timers.Timer(every.TotalMilliseconds, AutoReset = true)
+
+        clock.Elapsed.Add(fun _ ->
+            match this.Beat(now ()) with
+            | [] -> ()
+            | posts -> deliver posts)
+
+        clock.Start()
+        clock :> IDisposable
 
     /// And something to do the sweeping, because otherwise nothing does.
     ///

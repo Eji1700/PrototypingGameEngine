@@ -1,6 +1,6 @@
 # TCModel — an engine for turn-based games, and six games in it
 
-Answer seven questions about how a game is *played* and fourteen about how it is *read*, and
+Answer seven questions about how a game is *played* and fifteen about how it is *read*, and
 you are handed the rest: a history to walk back through, a record that replays, seats and
 tokens, a machine to play one of them, three ways of drawing a board, a command line, a menu,
 a browser, and a table with the players at different keyboards. None of that is written twice
@@ -16,7 +16,7 @@ README of its own:
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
 | [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
-| [**Snake**](src/Games/Snake/README.md) | 1 to 4 | One square a turn, eat the star, and do not run into anything. Alone, or four at once |
+| [**Snake**](src/Games/Snake/README.md) | 1 to 4 | The arcade game, on a clock: the snakes move on their own and quicken as they eat, and you only steer |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
@@ -74,15 +74,19 @@ that had been right for four games had never been handed a one: ["1 players", a 
 machines at a game with none, and a block that loses its
 name](src/Games/Life/README.md#what-it-turned-up).
 
-**And a sixth, whose table is any size with the same rules either way.**
-[Snake](src/Games/Snake/README.md) is the arcade game with the hurry taken out of it: one square
-a turn, and the one decision it was always about — which of three squares to be standing on
-next. Alone it is the arcade game and the score is what you ate; at a table of four it is the
-same board with somebody else's snake on it and the last one moving has won, and nothing above
-the seam is told which of those it is. It is also the first game here whose generator is used
-*through* a game rather than only at the deal — a piece of food is drawn every time one is
-eaten — so it is the one that says whether "a seed and a list of messages reproduce a game
-exactly" survives a game that keeps drawing.
+**And a sixth, which does not wait for anybody.** [Snake](src/Games/Snake/README.md) is the
+arcade game: the snakes move on their own, quicker as they eat, and what you press only steers.
+It is the one that has no business working on a pure fold, and the point of it is that it does —
+[a beat is a move](#a-game-that-does-not-wait), the game says how long a table should leave
+between them, and the tables keep the time. Everything a game of turns gets, it gets: a record
+that replays beat for beat with no clock involved, `undo` that walks back through beats, and
+every one of its rules checked by folding beats by hand. It is also the first game here whose
+generator is used *through* a game rather than only at the deal — a piece of food is drawn every
+time one is eaten — so it is the one that says whether "a seed and a list of messages reproduce
+a game exactly" survives a game that keeps drawing.
+
+It offers the same board a step at a time as well (`snake-turns`), which is where its machines
+live and where four people can play it round one keyboard.
 
 **Using it** — [Running](#running) ·
 [Taking it back, and writing it down](#taking-it-back-and-writing-it-down) ·
@@ -94,6 +98,7 @@ exactly" survives a game that keeps drawing.
 [Playing against the program](#playing-against-the-program)
 
 **The seams** — [A game-shaped hole](#a-game-shaped-hole) · [The second seam](#the-second-seam) ·
+[A game that does not wait](#a-game-that-does-not-wait) ·
 [Adding a game](#adding-a-game) ·
 [What a second game found](#what-a-second-game-found) ·
 [What a third game found](#what-a-third-game-found)
@@ -169,7 +174,7 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
 | [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
-| [**Snake**](src/Games/Snake/README.md) | 1 to 4 | One square a turn, eat the star, and do not run into anything. Alone, or four at once |
+| [**Snake**](src/Games/Snake/README.md) | 1 to 4 | The arcade game, on a clock: the snakes move on their own and quicken as they eat, and you only steer |
 
 Everything below this line is about the program rather than about any of them.
 
@@ -1471,6 +1476,51 @@ so no list holds all of them — [Play.fs](src/Play.fs) ends in a plain interfac
 parameters at all, implemented by closing over a game. That is where the types stop, which
 is what makes [Games.fs](src/Games.fs) a three-line list.
 
+### A game that does not wait
+
+Everything above assumes a game of turns: nothing happens until somebody types, and a table left
+alone for an hour is a table where nothing has happened for an hour. An arcade game is the one
+shape that looks like it needs something else — and it does not, which is what
+[Snake](src/Games/Snake/README.md) is here to say.
+
+**A beat is a move.** The game says what its beat is and how long a table should leave between
+them; the tables keep the time. One field on the second seam, `None` at every game of turns:
+
+```fsharp
+type Pulse<'Move, 'State> =
+    { Every: 'State -> TimeSpan          // from where the game stands, so it may quicken
+      Beat: 'Move                        // an ordinary move, folded by the ordinary update
+      Pressed: ConsoleKeyInfo -> string option }   // a key, as the line it stands for
+```
+
+Nothing in the timeline, the record, the seats or the screens changed for it. What that buys:
+
+- **The record is every beat**, so a real-time game replays to the square it was saved on. There
+  is no timing in the file and none is needed — the clock only ever decided *when* a move was
+  asked for.
+- **`undo` walks back through beats** like any other move.
+- **Every rule of it is checked without a clock.** [snake.fsx](tests/snake.fsx) folds beats by
+  hand; if any of it needed a timer, the seam would be in the wrong place.
+- **A key is a line.** The same bargain [a control on a page](#a-screen-described-once) makes:
+  a key press stands for a line the game already reads, so nothing can be pressed that could not
+  have been typed, and the four hands at one keyboard — arrows, `wasd`, `ijkl`, the number pad —
+  send `a north` and `b north` rather than a private language.
+
+Three tables drive it, and each is a handful of lines because a beat is a move:
+
+| where | what keeps the time | what it calls |
+| --- | --- | --- |
+| a terminal | a loop that draws, watches the clock and polls for keys ([Play.fs](src/Play.fs)) | `Solo.beaten` |
+| a browser | a timer beside the table it serves ([Server.fs](src/Net/Server.fs)) | `Aside.Beats` |
+| a house of tables | one timer, each table on its own beat ([House.fs](src/Net/House.fs)) | `Table.Beats` |
+
+Two rules the tables keep that the game does not know about: **a game nobody is watching does
+not beat** — a browser table is dealt when the process starts and read when somebody opens the
+page, and a clock running in between plays the whole game into an empty room — and at a hosted
+table **nothing beats until every seat is taken**. And whose turn it is stops being a question:
+a table whose game has a pulse lets anybody move at any time, because there is no turn to be out
+of.
+
 ### Adding a game
 
 A folder, two records, and a line. Nothing above the game is touched, and nothing above the
@@ -1809,7 +1859,7 @@ The games never mention each other, and nothing above them names any of them unt
 | [Diplomacy](src/Games/Diplomacy/README.md#the-files) | 13 | seven seats, no chance at all, three kinds of phase, and a map of three hundred borders |
 | [Compile](src/Games/Compile/README.md#the-files) | 17 | a deck each, ninety cards of rules text, a draft, and a game that is three games in a row |
 | [Life](src/Games/Life/README.md#the-files) | 8 | one seat, no opponent, no ending, and a board of four hundred cells drawn as rows rather than as cells |
-| [Snake](src/Games/Snake/README.md#the-files) | 10 | one to four seats on one board, a generator that keeps drawing, and a machine that cannot see the end of the game |
+| [Snake](src/Games/Snake/README.md#the-files) | 10 | a clock, one to four seats on one board, a generator that keeps drawing, and a machine that cannot see the end of the game |
 
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.

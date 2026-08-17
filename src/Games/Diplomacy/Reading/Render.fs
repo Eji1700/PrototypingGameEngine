@@ -633,4 +633,7 @@ module Render =
     let shell =
         { Title = "Diplomacy"
           Sheet = sheet
-          Placeholder = "an order - 'vie - tri', 'bud s vie - tri' - then 'commit'. Or 'help'." }
+          Placeholder = "an order - 'vie - tri', 'bud s vie - tri' - then 'commit'. Or 'help'."
+          // A game of turns is read by somebody who is typing, so the page leaves their
+          // keys alone.
+          Keys = [] }

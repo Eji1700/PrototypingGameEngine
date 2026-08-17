@@ -123,6 +123,98 @@ let rec private loop rings sitters said solo =
     | null -> heard "quit"
     | line -> heard line
 
+/// The same keyboard, at a game that does not wait for it.
+///
+/// The loop above asks for a line and the game waits while it is typed. This one does not: it
+/// draws, watches the clock, and plays the game's own beat whenever the time is up - so what a
+/// player presses is steering rather than stepping, and a board left alone goes on without
+/// them. Which is the whole of what "real time" means here, and it is *all* that is different:
+/// the beat is an ordinary move, folded by the same `Solo`, written into the same record, and
+/// replayed off it beat for beat with no clock involved at all.
+///
+/// Keys rather than lines, because a game running at three a second cannot ask for a newline.
+/// The table's own three come first - Enter to type a whole line, space to hold the clock, Esc
+/// to put it down - and everything else is the game's, as the line it stands for. So nothing
+/// can be pressed here that could not have been typed, which is the same bargain a button on a
+/// page makes.
+///
+/// Falls back to the ordinary loop the moment the game is over, and starts there instead where
+/// there is nobody at the keyboard to press anything: a game piped in from a file plays its
+/// beats by asking for them in words, and comes out the same game.
+let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
+    let show lines =
+        for line in lines do
+            printf "%s" (line + Environment.NewLine)
+
+    /// What the table itself does with a press, which is the same at any game that has a
+    /// clock: hold it, put it down, or say something longer than a key.
+    let (|Typing|Holding|Leaving'|Steering|) (key: ConsoleKeyInfo) =
+        match key.Key with
+        | ConsoleKey.Enter -> Typing
+        | ConsoleKey.Spacebar -> Holding
+        | ConsoleKey.Escape -> Leaving'
+        | _ -> Steering
+
+    let rec spin holding said solo =
+        Screens.cleared ()
+        Solo.board Keyboard solo |> Option.iter (printf "%s")
+        show said
+
+        printfn
+            "%s"
+            (if holding then
+                 "  (held) space to go on - Enter to type a line - Esc to put it down"
+             else
+                 "  space to hold - Enter to type a line - Esc to put it down")
+
+        if Solo.isOver solo then
+            // The clock stops with the game, and the ordinary prompt comes back - so a game
+            // that has just ended can be read, walked back through and saved like any other.
+            // Whatever the last beat had to say goes with it, which is where the line saying
+            // the record was written lands.
+            loop rings sitters said solo
+        else
+
+        /// A line, from wherever it came: a key that stands for one, or one typed at the
+        /// prompt. Answered exactly as the ordinary loop answers it.
+        let heard holding line solo =
+            let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
+            let answered = tell rings posts @ errand (Solo.game solo) sitters doing
+
+            match doing with
+            | Leaving _ ->
+                show answered
+                Solo.model next
+            | Carrying
+            | Keeping _ -> spin holding answered next
+
+        // Held, the clock is simply not consulted - the game stands still and a press still
+        // steers, which is what anybody stopping to think wants.
+        let due =
+            DateTime.UtcNow
+            + (if holding then TimeSpan.FromDays 1.0 else pulse.Every(Model.state (Solo.model solo)))
+
+        match Screens.awaiting due with
+        | None ->
+            let next, posts, doing = Solo.beaten solo
+            spin holding (tell rings posts @ errand (Solo.game solo) sitters doing) next
+        | Some key ->
+            match key with
+            | Leaving' -> heard holding "quit" solo
+            | Holding -> spin (not holding) said solo
+            | Typing ->
+                printf "> "
+
+                match Console.ReadLine() with
+                | null -> heard holding "quit" solo
+                | line -> heard holding line solo
+            | Steering ->
+                match pulse.Pressed key with
+                | Some line -> heard holding line solo
+                | None -> spin holding said solo
+
+    if Screens.steering () then spin false said solo else loop rings sitters said solo
+
 /// Deal a game. The rules are the only thing that can refuse, and they say why in words, so
 /// a count that came from a person is answered in their own rather than swallowed - and this
 /// no longer has to know what it is that refuses, which is a fair test of the seam.
@@ -623,9 +715,17 @@ let private play settled sitters stamp model =
             { Margins = Margins.all
               View = settled.View }
 
+    let said = kept @ tell settled.Rings posts
+
     // Under the first board, the same as everything after it - which for the one line said here,
     // who the machine is, is the only place it would ever be read.
-    loop settled.Rings sitters (kept @ tell settled.Rings posts) solo |> ignore
+    //
+    // Which of the two loops is the game's own answer and nothing else's: a game that waits is
+    // asked for a line, and one that does not is drawn on a clock and steered with keys.
+    match game.Pulse with
+    | Some pulse -> racing settled.Rings sitters said pulse solo |> ignore
+    | None -> loop settled.Rings sitters said solo |> ignore
+
     0
 
 /// Act on what a command line asked for.
