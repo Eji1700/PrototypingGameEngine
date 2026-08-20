@@ -16,6 +16,9 @@ module Rival =
     let private ways snake =
         Direction.all |> List.filter (fun way -> way <> Direction.opposite snake.Facing)
 
+    /// How many squares are still reachable after taking a step - a flood fill out from where the
+    /// head would land, over everything no body is standing on. This is what tells a snake it is
+    /// about to shut itself into a pocket, which walking one square ahead never can.
     let private room play seat direction =
         let snake = Session.snakeAt seat play
         let start = Board.along direction (Snake.head snake)
@@ -40,6 +43,10 @@ module Rival =
 
         if not (Board.holds start) || Set.contains start blocked then 0 else fill Set.empty [ start ]
 
+    /// What a step is worth, as a tuple compared left to right: first whether the room it leaves
+    /// is at least the snake's own length, then whether it eats, then how much nearer the food it
+    /// gets, and only then the room itself. So room outranks food - a hard rival will pass food up
+    /// to keep somewhere to go.
     let private worth skill play seat direction =
         match Turn.ahead seat direction play with
         | Wall
@@ -70,6 +77,9 @@ module Rival =
             open'
             |> List.choose (fun way -> worth rival.Skill play seat way |> Option.map (fun worth -> way, worth))
 
+        // `Slips` is a percentage: that often, the rival takes any legal step rather than the best
+        // one it can see. It is what separates the skills, since the reckoning below is the same
+        // for all of them.
         let slip, rng = Rng.intBelow 100 rival.Rng
 
         let wanted =

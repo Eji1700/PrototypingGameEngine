@@ -26,6 +26,8 @@ module Offer =
     [<Literal>]
     let private Quickest = 50
 
+    /// How long until the next beat. The speed notch is what a player sets, and the longest snake on
+    /// the board quickens it further, so a game that has been going a while tightens on its own.
     let private every session =
         let play = Session.play session
 

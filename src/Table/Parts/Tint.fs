@@ -25,6 +25,9 @@ module Tint =
           @"(?<tableYou>\(you\))"
           @"(?<tableActive>->)" ]
 
+    /// A game's own patterns and the ones every board shares, compiled into one alternation of
+    /// named groups - so the text is walked once and the first pattern to match a piece of it wins.
+    /// The text is escaped before the rules run, so a board that draws a '[' does not become markup.
     let markup (marking: Marking) =
         let rules =
             Regex(String.concat "|" (ours @ marking.Patterns), RegexOptions.Multiline ||| RegexOptions.Compiled)
@@ -54,6 +57,8 @@ module Tint =
         console.Write what
         writer.ToString()
 
+    // Rendered far wider than any terminal, because this is painting a line of text rather than
+    // laying out a screen: Spectre would otherwise wrap it to a width nothing here has asked for.
     let painter marking =
         let markup = markup marking
 

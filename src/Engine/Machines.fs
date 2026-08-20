@@ -21,6 +21,11 @@ module Machines =
         | Some skill -> Ok skill
         | None -> Error $"'{name}' is not a machine I have. There is {named nameOf all}."
 
+    /// Which seats the machines take, and the generator each of them draws from.
+    ///
+    /// The generator is the deal's seed offset by where the seat sits, so a game against
+    /// machines replays exactly like any other, and moving a machine along one seat hands it
+    /// the stream that seat has always had.
     let seating (seats: PlayerId list) (seed: uint64) (sitting: 'Skill option list) =
         seats
         |> List.indexed
@@ -60,6 +65,9 @@ module Machines =
                 let next = Update.update rules (Make move) model
                 let rivals = withRival seat rival rivals
 
+                // A move the rules refused leaves the timeline where it was. Stopping there
+                // rather than asking the same rival again is what keeps a machine that
+                // cannot play from spinning between one person's move and their next.
                 if Timeline.movesMade next.Timeline = Timeline.movesMade model.Timeline then
                     next, rivals
                 else

@@ -61,6 +61,10 @@ module Rival =
         | Theirs
         | Anyone -> gain
 
+    /// A rough price on what a command does, for a rival that reads card text rather than just
+    /// counting values. The numbers only have to rank one card against another: what matters is that
+    /// deleting the other side's card is worth more than deleting your own, that a command turned
+    /// back on you is worth its own negative, and that a maybe is never worth less than nothing.
     let rec private weighing command =
         match command with
         | Draw(Just n) -> 3 * n
@@ -192,6 +196,9 @@ module Rival =
         | Whether inner -> Some(Choose(if weighing inner > 0 then Yes else No))
         | OneOf(first, second) -> Some(Choose(if weighing second > weighing first then TheSecond else TheFirst))
 
+    /// The board as it would stand after a move, with the rival answering its own questions along the
+    /// way - a card that asks something mid-resolution would otherwise leave the game stopped and the
+    /// position unfinished. Only `deep` pays for this.
     let private after seat move session =
         let rec settle session fuel =
             if fuel = 0 then

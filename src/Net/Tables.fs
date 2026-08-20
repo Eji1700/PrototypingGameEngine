@@ -16,6 +16,10 @@ type Table =
 
     abstract Standing: Lobby.Standing
 
+/// A lobby behind a lock, and the record written out after every change.
+///
+/// Everything below this is immutable and knows nothing about who else is at the table; this is the
+/// one place where several consoles meet, so it is the one place that has to take a turn at a time.
 type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: Model<'Move, 'State, 'Notice> -> unit) =
     let gate = obj ()
     let mutable lobby = opening

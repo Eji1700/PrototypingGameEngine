@@ -73,6 +73,8 @@ module Palette =
     let private sayable (name: string) =
         name <> "" && name |> Seq.forall Char.IsLetter
 
+    // Words up to a '#' that is not a colour, so a line may carry a comment after it and '#b7410e'
+    // is still read as what it is.
     let private saying (line: string) =
         line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
         |> Array.toList

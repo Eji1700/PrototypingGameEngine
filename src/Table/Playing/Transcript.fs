@@ -124,6 +124,8 @@ module Transcript =
         | parts when parts.Length > clockParts -> Some(String.Join("-", parts[clockParts..]))
         | _ -> None
 
+    /// The stamp, seats and seed out of a record's file name, read from the right - the stamp itself
+    /// has dashes in it, and so may the game's name, so only the last two parts can be counted on.
     let filed (path: string) =
         match
             Path.GetFileNameWithoutExtension(path: string).Split '-'
@@ -160,6 +162,9 @@ module Transcript =
                 |> Result.map (fun model ->
                     model, reading.Sitters, stampOf path reading.Players reading.Seed, List.length reading.Moves))
 
+    /// How much of what is already on disk the new record agrees with, and what is left to write. A
+    /// game is saved after every move, and a game that has only gone forward writes the same bytes
+    /// again with more on the end - so the common case is an append rather than a rewrite.
     let private shared (existing: string) pieces =
         let rec walk at rest =
             match rest with
@@ -172,6 +177,8 @@ module Transcript =
 
         walk 0 pieces
 
+    // Written beside and moved over, so a record is never half-written: an interruption leaves either
+    // the game as it stood before or the game as it stands now, and not something in between.
     let private replace path (text: string) =
         let beside = path + ".writing"
         File.WriteAllText(beside, text)

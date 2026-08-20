@@ -35,6 +35,8 @@ function Start-Console($program, $arguments, $in) {
     $console = New-Object Diagnostics.Process
     $console.StartInfo = $psi
 
+    # Output is collected on the event thread as it arrives, so the list has to be one both threads
+    # can touch. Reading the stream instead would block whichever of them asked.
     $said = [Collections.ArrayList]::Synchronized((New-Object Collections.ArrayList))
 
     $heard =

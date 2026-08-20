@@ -119,6 +119,8 @@ module Turn =
             else
                 let placed = Placed.laid face card
 
+                // `ending` goes on the bottom of the pile and `laying` on the top, so the card is
+                // played and everything it sets off runs before the turn is closed out.
                 let session, told =
                     { session with
                         Field =

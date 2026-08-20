@@ -2,6 +2,9 @@ namespace TCModel.Common
 
 type Rng = private Rng of state: uint64
 
+// SplitMix64. The state walks by a fixed odd stride and every value handed out is that state
+// put through a finalising mix, so two seeds one apart still give unrelated streams - which
+// is what lets a seat take its generator from `seed + place`.
 module Rng =
 
     [<Literal>]
@@ -21,4 +24,8 @@ module Rng =
             invalidArg (nameof exclusiveMax) "Upper bound must be positive."
 
         let value, rng = next rng
+
+        // Folding by remainder leaves a slight bias towards the low end for bounds that do
+        // not divide 2^64. At the sizes anything here shuffles or picks from, that is far
+        // below what a game could show.
         int (value % uint64 exclusiveMax), rng

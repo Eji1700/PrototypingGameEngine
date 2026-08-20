@@ -112,6 +112,9 @@ module Session =
             | [] -> Seat.at 1
 
 
+    /// How many steps a province is from the nearest of a power's home centres, walked over land and
+    /// sea alike. Only used to order units for removal, so somewhere unreachable answering 99 is
+    /// exactly right: it goes first.
     let private fromHome power province =
         let homes = Atlas.homesOf power |> Set.ofList
 
@@ -135,6 +138,9 @@ module Session =
 
         walk (Set.singleton province) [ province ] 0
 
+    /// Which units go when a power owes removals and has not said which. Furthest from home first,
+    /// fleets before armies at the same distance, and the province code to settle the rest - so it
+    /// is the same list every time and a replay comes out the same.
     let private givenUp power position howMany =
         Position.unitsOf power position
         |> List.sortBy (fun piece ->
@@ -192,6 +198,8 @@ module Session =
             | [ only ] -> Some(LastStanding only)
             | _ -> None
 
+    /// Opening a stage, with every power that has nothing to do in it already sealed. A power with no
+    /// retreat to make is not waited on, and a stage nobody is waited on for passes straight through.
     let private entering stage play =
         let play =
             { play with
@@ -209,6 +217,11 @@ module Session =
     let private nextAfter season =
         if season = Spring then Moving Autumn else Building
 
+    /// Working the game forward from a stage everybody has sealed. It loops rather than settling one
+    /// stage and stopping, because settling one often opens another that nobody has anything to say
+    /// in - a season with no dislodgements skips the retreats, a winter where every power is square
+    /// skips the building - and the game should come back to the players at the next stage that
+    /// actually wants them.
     let rec private through play (told: Passing list) =
         match decided play with
         | Some finish -> Finished(play, finish), List.rev told
@@ -287,6 +300,7 @@ module Session =
                     Removed = removed },
                 Moving Spring
 
+        // Centres change hands on the autumn count only, which is to say on the way into a winter.
         let resolved, passing =
             if next = Building then
                 let after, changed, goneOut = harvested resolved

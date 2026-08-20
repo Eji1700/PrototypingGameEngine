@@ -19,6 +19,8 @@ module Housekeeping =
         { Unused = TimeSpan.FromHours 1.0
           Finished = TimeSpan.FromDays 1.0 }
 
+    /// Whether a table can be swept away. Never while anybody is reading it, and never while a game is
+    /// being played - only one nobody ever sat down at, or one that finished a day ago.
     let spent keeping (age: TimeSpan) (standing: Lobby.Standing) =
         if standing.Reading > 0 then
             false
@@ -29,6 +31,8 @@ module Housekeeping =
             | Lobby.Filling
             | Lobby.Underway -> false
 
+    // Tables somebody could sit down at first, then ones filling, then games under way, then finished
+    // ones - and newest first within each. Somebody arriving at the page wants a seat.
     let private rank (standing: Lobby.Standing) =
         match standing.Stage with
         | Lobby.Filling when standing.Sat < standing.Places - standing.Machines -> 0
@@ -88,6 +92,8 @@ type House(hosting: Hosting, now: unit -> DateTime, naming: unit -> string, keep
             tables <- staying
             going |> List.map (fun opened -> opened.Id))
 
+    /// Beat whichever tables are due. Each keeps its own next time, so a house of games running at
+    /// different speeds is driven by one clock ticking faster than any of them.
     member _.Beat(at: DateTime) =
         let asking = lock gate (fun () -> tables)
 

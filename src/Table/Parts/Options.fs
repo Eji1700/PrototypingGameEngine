@@ -39,6 +39,8 @@ module Options =
         |> inRows
         |> List.mapi (fun i row -> sprintf "%-11s%s" (if i = 0 then "Colours:" else "") row)
 
+    // What the left and right arrows send on a row that turns through a list of names: the next one
+    // along, coming round at either end.
     let private stepping said (all: string list) standing step =
         match List.length all with
         | 0 -> said standing

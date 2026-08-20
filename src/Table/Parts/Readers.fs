@@ -8,6 +8,12 @@ module Readers =
     let private hush = Palette.slate
 
 
+    // Drawing a `Walled` grid as a honeycomb rather than as a table.
+    //
+    // Spectre can draw a table, but not one whose rows are offset by half a cell and whose cells
+    // join up where they belong to the same region. So this lays the whole thing out as a grid of
+    // characters, works out every join from what is on either side of it, and hands back rows of
+    // spans - which both the coloured and the plain readers can then print.
     module private Comb =
 
         type Facet =
@@ -67,6 +73,7 @@ module Readers =
                     | Patch _ -> true
                     | _ -> false))
 
+        // The line-drawing character for a join, from which of the four ways a wall runs out of it.
         let box up down left right =
             match up, down, left, right with
             | true, true, true, true -> '┼'
@@ -84,6 +91,7 @@ module Readers =
             | false, false, false, false -> ' '
             | false, false, _, _ -> '─'
 
+        // The same, for a terminal that is only promised ASCII.
         let bare up down left right =
             match up, down, left, right with
             | false, false, false, false -> ' '
@@ -91,6 +99,11 @@ module Readers =
             | _, _, false, false -> '|'
             | _ -> '+'
 
+        /// Lay the rows out and draw them.
+        ///
+        /// Every cell is the same size, and a row's `Shift` is counted in halves of one - which is
+        /// what lets a row sit between the two above it. So the cell width is forced odd, making
+        /// the width with its right-hand wall even, and half of that a whole number of characters.
         let lay glyph across (rows: Course list) : Line list =
             let laid =
                 rows
@@ -128,6 +141,8 @@ module Readers =
                 | Some facet -> facet.Here
                 | None -> false
 
+            // Two cells of the same shape are one region drawn across several cells, so no wall is
+            // drawn between them and text laid in one may run through the other.
             let joined (one: Facet option) (other: Facet option) =
                 match one, other with
                 | Some one, Some other when one.Here && other.Here ->
@@ -185,6 +200,8 @@ module Readers =
                 |> Option.defaultValue Tone.Quiet
 
 
+            // The whole drawing as characters and their tones: a wall line above each row of cells,
+            // and one more under the last of them.
             let picture =
                 Array.init (deep * (tall + 1) + 1) (fun _ -> Array.create width (' ', Tone.Quiet))
 
@@ -256,6 +273,8 @@ module Readers =
 
                                     column <- column + 1)
 
+            // Back from characters to spans: trailing blanks are dropped and runs of one tone are
+            // gathered up, so a line comes out as a handful of spans rather than one span a letter.
             picture
             |> Array.toList
             |> List.map (fun line ->

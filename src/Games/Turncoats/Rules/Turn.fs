@@ -67,6 +67,11 @@ module Turn =
               Ending = ending
               Turn = play.Turn }
 
+    /// Handing on, and the one way the game ends of its own accord: `Negotiations` counts how many
+    /// turns in a row nobody did anything on the board. Any real action resets it, so the game only
+    /// closes when the whole table has passed in turn. A player with an empty bag has no turn to
+    /// take, and their skipped turn counts the same as a negotiation - otherwise a table of empty
+    /// hands would go round for ever.
     let private endTurn negotiated (play: Play) =
         let rec handOver play events =
             if play.Negotiations >= Game.playerCount play.Game then

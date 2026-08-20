@@ -3,12 +3,25 @@ namespace TCModel.Compile
 open TCModel.Common
 open TCModel.Engine
 
+// Carrying out what the cards say.
+//
+// `session.Pile` is a stack of work still to do, and everything here is written in terms of
+// pushing onto it: the head is what happens next, so a command that puts three things on the
+// pile has them happen in the order they were listed. `walk` takes the head off and runs it
+// until the pile is empty or the top of it is a question for a player, which is the only
+// thing that stops the machine and waits.
 module Resolving =
 
+    // Cards that put more work on the pile than they take off can loop - one flipping another
+    // that flips it back. Nothing in the printed text should, but a miscount in a card would
+    // hang the table rather than misplay a turn, so the walk is given a step count and stops.
     [<Literal>]
     let private Runaway = 500
 
 
+    /// Every card on the table the selector names. The clauses read as one long "and": a
+    /// selector is written by adding conditions to `Select.any`, so an unset field means the
+    /// card text said nothing about that and everything passes it.
     let private onTable actor selector (source: Source) session =
         let field = session.Field
 
@@ -131,6 +144,9 @@ module Resolving =
             Stacks = side.Stacks |> Map.add line (Side.stack line side |> List.filter ((<>) placed))
             Discard = placed.Card :: side.Discard }
 
+    /// Putting a card into a line. What was on top of that line speaks first: its `WhenCovered`
+    /// goes on the pile ahead of the `Placing`, so the card gets to say its piece while it is
+    /// still the uncovered one.
     let laying seat placed line from session =
         let interrupting =
             match Stack.uncovered (Side.stack line (Session.side seat session)) with
@@ -163,6 +179,8 @@ module Resolving =
 
     let private carriedOut (source: Source) command target session =
         match command, target with
+        // As with covering: the card's `WhenFlipped` is pushed ahead of the `Turning`, so it
+        // speaks from the face it is being turned off.
         | Flip _, OnTable(seat, line, placed) ->
             let interrupting =
                 (Printed.on placed.Card).WhenFlipped
@@ -260,6 +278,9 @@ module Resolving =
             | Opposing _ -> Session.other source.Owner
             | _ -> source.Owner
 
+        // `Done` is how much the command just carried out actually did, and `Chose` is what it
+        // picked. Both are read by whatever comes after: `IfYouDo` gates on `Done`, `Times`
+        // can count from it, and a selector can ask for the card that was chosen.
         let nothingDone session = { session with Done = 0; Chose = None }
         let doneIt session = { session with Done = 1 }
 
@@ -274,6 +295,8 @@ module Resolving =
         match command with
         | Opposing inner -> resolve inner { source with Owner = actor } session
 
+        // The gate is pushed under the command it gates on, so by the time it is reached the
+        // command has run and left its tally in `Done`.
         | IfYouDo(first, rest) ->
             { session with
                 Pile = Run(first, source) :: Gate(rest, source) :: session.Pile },
@@ -342,6 +365,7 @@ module Resolving =
                         @ session.Pile },
                 []
 
+        // Once outright, and then a `Repeating` under it that keeps asking for another.
         | OneOrMore inner ->
             { session with
                 Pile = Run(inner, source) :: Repeating(inner, source, 0) :: session.Pile },
@@ -355,6 +379,8 @@ module Resolving =
                     Pile = List.replicate n (Run(inner, source)) @ session.Pile },
                 []
 
+        // Straight to the bottom of the line, under everything already there - so unlike every
+        // other way of playing a card, this one covers nothing and wakes nothing up.
         | UnderThis face ->
             let taken, side, rng = Side.drawnFrom (Session.side actor session) session.Rng
 
@@ -433,6 +459,8 @@ module Resolving =
             else
                 nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
 
+        // A choice is only put to a player if both halves could actually do something; if only
+        // one could, that one just happens. Drawing and refreshing always can.
         | Either(first, second) ->
             let live inner =
                 match inner with
@@ -548,6 +576,8 @@ module Resolving =
         | Swap ->
             let order = (Session.side actor session).Order
 
+            // Orders that differ from the standing one in exactly two places, which is to say
+            // every way of swapping one pair and leaving the third protocol where it is.
             let swapped =
                 Protocol.orders order
                 |> List.filter (fun each -> List.zip each order |> List.filter (fun (a, b) -> a <> b) |> List.length = 2)
@@ -644,6 +674,9 @@ module Resolving =
             Field = field
             Rng = rng }
 
+    /// Compiling one line. Both sides' stacks in that line are swept away either way; what
+    /// differs is whether the protocol is new - a line compiled a second time takes a card off
+    /// the top of the other player's deck instead of counting again.
     let private compileLine seat line (session, told) =
         match Side.protocolOn line (Session.side seat session) with
         | None -> session, told
@@ -801,6 +834,9 @@ module Resolving =
                 | Some placed when Placed.isFaceUp placed -> [ seat, line, placed.Card ]
                 | _ -> []))
 
+    /// Cards showing face up and uncovered that were not showing last time round. `Revealed`
+    /// is what was showing when the walk last looked, so a card speaks its `Shown` text once
+    /// when it comes into view and not again until it has been out of view and come back.
     let private lookAgain session =
         let showing = shownNow session.Field
         let now = showing |> List.map (fun (_, _, card) -> card) |> Set.ofList
@@ -821,6 +857,8 @@ module Resolving =
             session, told
         else
 
+        // Newly uncovered cards speak before anything already on the pile, so a card revealed
+        // by the work in hand gets its say before the rest of that work carries on.
         match lookAgain session with
         | (_ :: _) as fresh, session ->
             let pushed =
@@ -847,6 +885,8 @@ module Resolving =
 
         match session.Pile with
         | [] -> session, told
+        // A question at the head of the pile stops the walk. It stays there until the player
+        // answers, and `choosing` takes it off again.
         | Ask _ :: _ -> session, told
 
         | Run(command, source) :: rest ->
@@ -894,6 +934,8 @@ module Resolving =
         | Turning(seat, placed, line) :: rest ->
             let stack = Side.stack line (Session.side seat session)
 
+            // The card's own `WhenFlipped` ran first and may have deleted or moved it. If it
+            // is no longer where it was, there is nothing left to turn over.
             if not (List.contains placed stack) then
                 walk (fuel - 1) { session with Pile = rest } told
             else
@@ -955,6 +997,8 @@ module Resolving =
                 (told
                  @ [ Happened(Refreshed(seat, List.length before.Hand, List.length after.Hand)) ])
 
+        // The cache check asks for one discard at a time and puts itself back under the
+        // question, so it comes round again and again until the hand is down to size.
         | Trimming :: rest ->
             let seat = session.ToPlay
             let hand = (Session.side seat session).Hand
@@ -981,6 +1025,9 @@ module Resolving =
                         Pile = asking :: Trimming :: rest }
                     (told @ [ Happened(OverTheLimit(seat, over)) ])
 
+        // "One or more": ask again as long as the last one did something and there is still
+        // something to do it to. The running tally goes back into `Done` at the end, so a
+        // later `IfYouDo` sees how many were carried out rather than just the last one.
         | Repeating(inner, source, tally) :: rest ->
             if session.Done = 0 then
                 walk
@@ -1029,6 +1076,8 @@ module Resolving =
 
     let settle session told = walk Runaway session told
 
+    /// The end of a turn, put on the *bottom* of the pile - everything the move itself sets off
+    /// runs first, and these three are what is left once it has all settled.
     let ending session =
         { session with
             Pile = session.Pile @ [ Trimming; Closing; EndTurn ] }

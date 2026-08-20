@@ -58,6 +58,8 @@ module Pile =
     let toColors pile =
         toCounts pile |> List.collect (fun (color, n) -> List.replicate n color)
 
+    // A pile is counts rather than a bag of stones, so drawing one at random means treating those
+    // counts as one run and walking to whichever colour the index falls in.
     let private colorAt index pile =
         let rec walk remaining colors =
             match colors with

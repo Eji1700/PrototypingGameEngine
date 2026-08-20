@@ -38,6 +38,8 @@ try {
                 -ArgumentList @("fsi", "tests/$name.fsx") `
                 -RedirectStandardOutput "$out\$name.out" -RedirectStandardError "$out\$name.err"
 
+            # Touching Handle is what makes ExitCode readable later: without it PowerShell never
+            # opens one, and the exit code of a process started this way comes back empty.
             $null = $p.Handle
 
             $entry = [pscustomobject]@{ Name = $name; Process = $p; Clock = [Diagnostics.Stopwatch]::StartNew(); Seconds = 0 }

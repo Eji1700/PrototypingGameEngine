@@ -371,6 +371,9 @@ module Atlas =
         | Fleet -> { At = id; Coast = coast }
 
 
+    // Army borders are read as provinces and fleet borders as locations, because which coast a
+    // fleet stands on changes where it can go next: `spa/nc` and `spa/sc` are one province and two
+    // different sets of neighbours.
     let private edgesOf declaredBorders reading =
         declaredBorders
         |> List.choose (fun (from, into) -> reading from |> Option.map (fun key -> key, into |> List.choose reading))
@@ -400,6 +403,10 @@ module Atlas =
     let walkable from into = armyReach from |> List.contains into
 
 
+    // The map, drawn as rows of hexes. Each row starts at an offset counted in halves of a cell and
+    // its cells sit two apart, so a row offset by an odd number nestles between the one above it. A
+    // province named in several neighbouring cells is drawn as one shape covering all of them, and
+    // "." is a hole. `problems` checks the shape this makes against the borders actually declared.
     let private places =
         [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
           -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
@@ -728,6 +735,8 @@ module Atlas =
           row + 1, here - 1
           row + 1, here + 1 ]
 
+    // Rows are shifted to whatever offset each was written with, so the whole map is slid east until
+    // the furthest-west cell sits at nothing and no row has to be drawn at a negative column.
     let layout =
         let westmost = placedCells |> List.collect id |> List.map snd |> List.min
 

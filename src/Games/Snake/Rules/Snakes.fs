@@ -36,6 +36,8 @@ module Snake =
     let behind snake =
         snake.Body |> List.truncate (length snake - 1)
 
+    // The body is laid out backwards from the head, so a snake starts already pointing the way
+    // it is facing rather than having to unfold on its first step.
     let dealt facing head =
         let back = Direction.opposite facing
 
@@ -45,6 +47,8 @@ module Snake =
           Eaten = 0
           Fate = None }
 
+    // The tail is dropped unless the snake is still growing, which is what makes eating show as
+    // length: the head goes on either way, and for a few steps afterwards nothing comes off.
     let moved direction snake =
         { snake with
             Body =

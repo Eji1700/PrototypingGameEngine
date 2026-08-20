@@ -26,6 +26,10 @@ module Rival =
             | Some _ -> 8
             | None -> 6
 
+    /// How far every province is from the nearest centre this power does not already own, worked out
+    /// once by spreading outwards from all of them at once rather than by searching from each unit.
+    /// `Sight` then says how far out a rival can actually feel this, which is most of what separates
+    /// the skills.
     let private nearness power position =
         let wanted =
             Atlas.centres
@@ -55,6 +59,8 @@ module Rival =
         spread (wanted |> List.map (fun centre -> centre, 0) |> Map.ofList) wanted 1
 
 
+    // Where this power's other units have already been sent. Orders are written one unit at a time,
+    // so without this two of them would be sent at the same province and bounce off each other.
     let private spokenFor power play =
         play.Written
         |> Map.toList
@@ -145,6 +151,8 @@ module Rival =
         play.Beaten
         |> List.filter (fun beaten -> beaten.Piece.Power = power && not (Map.containsKey beaten.From play.Written))
 
+    // What to build: armies inland, and at a coast a fleet if this power is short of them. England
+    // always takes the fleet, having nowhere to walk to.
     let private raising power position province =
         let mine = Position.unitsOf power position
 

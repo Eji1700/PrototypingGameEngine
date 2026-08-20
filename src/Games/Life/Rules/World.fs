@@ -36,6 +36,8 @@ module World =
 
     let settled world = Grid.step world.Cells = world.Cells
 
+    // A pattern that flips between two states: the generation before last is where it stands now.
+    // `Behind` keeps only two, which is enough for this and not enough for longer periods.
     let beating world =
         match world.Behind with
         | _ :: before :: _ -> before = world.Cells

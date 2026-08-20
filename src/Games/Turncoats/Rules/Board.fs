@@ -120,6 +120,9 @@ module Board =
 
     let areAdjacent one other = neighbours one |> Set.contains other
 
+    // How the map is drawn: each row starts at an offset and its regions sit two apart, so a
+    // column is measured in halves of a cell and a row indented by an odd number of them sits
+    // between the regions above it. That is what makes the layout read as a honeycomb.
     let private places =
         [ 2, [ 2; 1 ]; 1, [ 3; 4 ]; 0, [ 5; 6; 7 ]; 1, [ 8; 9; 10 ]; 2, [ 11; 12 ] ]
 
@@ -133,6 +136,9 @@ module Board =
 
     let private asPair one other = min one other, max one other
 
+    // Which regions the drawing puts side by side: two apart along a row, or one apart between
+    // rows. `problems` checks this against the borders actually declared, so a map that draws two
+    // regions touching when they do not is caught rather than left to mislead a player.
     let private drawnBorders =
         Set.ofList
             [ for row in placed do

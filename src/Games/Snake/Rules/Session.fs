@@ -76,6 +76,8 @@ module Session =
                 Rng = rng }
 
 
+    // Seats are spread evenly down the board and face inwards from alternate sides, so no snake
+    // opens pointing at a wall or at another snake's starting square.
     let private start players place =
         let row = (place + 1) * Board.Height / (players + 1)
 
@@ -125,6 +127,8 @@ module Session =
     let reseed session = Rng.next (play session).Rng |> fst
 
 
+    /// Hand on to the next snake still moving. Wrapping past the end of the seats is what counts
+    /// as a turn, so a turn is one round of whoever is left rather than a fixed number of moves.
     let onwards play =
         let count = List.length play.Seats
         let at = play.Seats |> List.findIndex ((=) play.ToPlay)

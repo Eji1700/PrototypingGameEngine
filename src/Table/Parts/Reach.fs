@@ -54,6 +54,9 @@ module Reach =
         |> Seq.toArray
         |> String
 
+    /// Whether two words at the door are the same one. Compared in fixed time so that how long the
+    /// answer takes says nothing about how much of the word was right, and with the grouping dashes
+    /// and the case thrown away first, so a word read out over the phone can be typed back any way.
     let same (held: string) (given: string) =
         let held = Text.Encoding.UTF8.GetBytes(plainly held)
         let given = Text.Encoding.UTF8.GetBytes(plainly given)
@@ -175,6 +178,9 @@ module Reach =
 
         words |> List.fold folded (Ok ajar)
 
+    /// The address a console dials, from whatever a person typed. A bare name is taken as http and
+    /// given the usual port, since somebody who names a machine means the one this program opens;
+    /// a whole URL is taken at its word, port and all.
     let endpoint (path: string) (given: string) =
         let said = given.Trim()
         let spoken = said.Contains "://"

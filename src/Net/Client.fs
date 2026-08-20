@@ -9,6 +9,9 @@ open TCModel.Table
 
 module Client =
 
+    // Backing off by doubling up to half a minute, and then trying at that for as long as the console
+    // is left running. A table that is restarted while somebody is away should still be there when
+    // they come back to the keyboard.
     type private Patient() =
         interface IRetryPolicy with
             member _.NextRetryDelay(context: RetryContext) =
@@ -109,6 +112,8 @@ module Client =
             show ""
             Task.CompletedTask)
 
+        // The connection comes back with a new id, so the table has no idea it is the same console.
+        // Sitting down again with the token it was given is what claims the same seat back.
         connection.add_Reconnected (fun _ ->
             printfn ""
             printfn "Back at the table."

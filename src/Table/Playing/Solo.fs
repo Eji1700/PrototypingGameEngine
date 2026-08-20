@@ -59,6 +59,8 @@ module Solo =
             Model = model
             Rivals = rivals }
 
+    /// Undo and redo walk past the machine's moves as well as your own. One step back would otherwise
+    /// only take back what the machine last played, and hand the turn straight back to it.
     let rec private walking msg solo =
         if not (Machines.holds (rules solo) solo.Rivals solo.Model) then
             solo

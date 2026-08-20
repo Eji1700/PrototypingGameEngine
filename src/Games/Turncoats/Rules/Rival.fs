@@ -29,6 +29,8 @@ module Rival =
     let private backing bag =
         StoneColor.all |> List.maxBy (fun color -> Pile.count color bag)
 
+    /// What the board is worth to whoever is backing `backed`, as a lead over the best of the other
+    /// two colours rather than as a bare count - a colour is only winning relative to its rivals.
     let private appraise weights backed position bag =
         let ruled = Ruling.standings position
         let axe = Position.stones Board.axe position
@@ -43,6 +45,8 @@ module Rival =
             |> List.sumBy (fun region ->
                 let standing = Position.stones region.Id position
 
+                // Clamped, so that piling a colour into one region it already rules cannot pass for
+                // progress. It is worth a nudge to be ahead somewhere, and no more than a nudge.
                 max -Reach (min Reach (over (fun color -> Pile.count color standing))))
 
         weights.Land * over (fun color -> ruled[color])
@@ -53,6 +57,8 @@ module Rival =
         - weights.Spare * (Pile.total bag - Pile.count backed bag)
 
 
+    /// Every way of taking `wanted` stones out of the colours standing there, as a list of colours
+    /// each time. Used to offer a battle every combination of casualties it could drive out.
     let rec private choosing wanted standing =
         match wanted, standing with
         | 0, _ -> [ [] ]
@@ -120,6 +126,9 @@ module Rival =
         | Resign -> None
 
 
+    /// The game as it will stand for the next player, with their bag taken to be everything this
+    /// one cannot see. Bags are hidden, so looking a move ahead means guessing at one - and the
+    /// unseen pool is the honest guess, since it is exactly what the rival might hold.
     let private handedOn me game =
         let unseen = (Knowledge.seenBy me game).Unseen
 
@@ -153,6 +162,9 @@ module Rival =
                 | [] -> Some(worth game.Position me.Bag)
                 | spare :: _ -> Some(worth game.Position (me.Bag |> Pile.remove spare 1 |> Pile.add backed 1))
 
+        // One reply deep: play the move, then take the worst the next player could leave us. What
+        // makes `hard` different from `medium`, and why only the few best moves are looked at this
+        // way - every move against every reply is more positions than a turn is worth.
         let answered move =
             match trying move game with
             | None -> None

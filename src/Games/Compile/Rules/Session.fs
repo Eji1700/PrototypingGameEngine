@@ -85,6 +85,9 @@ module Session =
     let arranging session =
         seats |> List.tryFind (fun seat -> (side seat session).Order |> List.isEmpty)
 
+    /// Whose turn it is to say something - which during a card's resolution is whoever the card is
+    /// asking, not whoever is playing. A question stops the game wherever it stands, including in
+    /// the middle of the other player's turn.
     let active session =
         match asking session with
         | Some question -> question.Chooser

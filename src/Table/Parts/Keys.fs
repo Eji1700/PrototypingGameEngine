@@ -50,9 +50,12 @@ module Keys =
           Pick = Types text
           Turns = None }
 
+    // Rows are numbered from 1 as they are read, so the tenth is 0 and there is no eleventh.
     let nth n =
         if n > 9 then None else Some(char (int '0' + ((n + 1) % 10)))
 
+    // Moving off either end comes round to the other. The doubled modulo is to bring a negative
+    // remainder back round, which .NET's does not do.
     let moved by at (screen: Screen) =
         match List.length screen.Rows with
         | 0 -> 0
@@ -100,6 +103,8 @@ module Keys =
         | Sent
         | Ignored
 
+    /// What a keypress means. Once anything has been typed the letter keys are letters again, so
+    /// w, a, s and d only steer a screen nobody is typing a line into.
     let pressed typing (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> if typing then Sent else Picked
@@ -159,6 +164,8 @@ module Keys =
                     { Stack = (under, 0) :: standing.Stack
                       Buffer = "" }
 
+        // Backing out of the innermost screen; from the outermost there is nowhere to go, so it
+        // answers with whatever line the screen said stands for leaving it, if any.
         let out () =
             match standing.Stack with
             | [ _ ] ->
@@ -194,6 +201,9 @@ module Keys =
             match here () with
             | Some row -> taking row
             | None -> Steering standing
+
+        // Right on a row that has nothing to turn through takes it, so a screen of plain rows can
+        // still be walked with one hand on the arrows.
         | Turned by ->
             match
                 here ()

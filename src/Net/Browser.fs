@@ -36,6 +36,11 @@ module Browser =
         | Piece of html: string
         | Doing of script: string
 
+    /// The pages currently reading, and the token each of them was given for its seat.
+    ///
+    /// A page that reloads opens a second stream before the first has noticed it is gone, so opening
+    /// one for a console that already has one closes the old one rather than leaving both writing to
+    /// a browser that is only listening to the newer.
     type Pages() =
         let gate = obj ()
         let streams = Dictionary<string, Channel<Frame>>()
@@ -213,6 +218,8 @@ module Browser =
     [<Literal>]
     let private Enough = 50
 
+    // A page that is broken enough to report an error is usually broken enough to report it over and
+    // over. The count is never reset, so a run prints a handful and then says nothing.
     let private complained = ref 0
 
     let amiss (ctx: HttpContext) =
@@ -249,6 +256,8 @@ module Browser =
                 | true, given when given.Count > 0 -> String.Join(" ", given.ToArray())
                 | _ -> ""
 
+            // A stream is only useful if what is written to it goes out at once, which means turning
+            // off buffering here and asking any nginx in front not to add its own.
             ctx.Features.Get<IHttpResponseBodyFeature>()
             |> Option.ofObj
             |> Option.iter (fun body -> body.DisableBuffering())
@@ -274,6 +283,10 @@ module Browser =
 
                 let mutable waiting = channel.Reader.WaitToReadAsync(ctx.RequestAborted).AsTask()
 
+                // Whichever comes first: something to send, or the heartbeat falling due. A quiet
+                // stream still has to say something now and again, or a proxy between here and the
+                // browser closes it as idle. The timer is cancelled either way so that a busy stream
+                // does not leave one behind on every pass.
                 while reading do
                     use beat = CancellationTokenSource.CreateLinkedTokenSource ctx.RequestAborted
                     let! settled = Task.WhenAny(waiting, Task.Delay(Beat, beat.Token))

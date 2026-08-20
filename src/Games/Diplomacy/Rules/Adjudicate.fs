@@ -29,6 +29,13 @@ type Resolution =
       Retreats: Retreating list
       Contested: Set<ProvinceId> }
 
+// Working out a season of orders.
+//
+// Orders are circular: whether one move succeeds can depend on whether another does, and
+// that other one can depend back on the first. So rather than ordering the work, every
+// question is answered lazily, and a question that comes back round to itself is answered by
+// guessing - twice, once false and once true. Agreeing answers settle it; disagreeing ones
+// mean the orders form a ring, and `breakTheRing` says what a ring does.
 module Adjudicate =
 
     type private Doing =
@@ -38,6 +45,8 @@ module Adjudicate =
         | HelpsMove of who: ProvinceId * into: ProvinceId
         | Carries of who: ProvinceId * into: ProvinceId
 
+    /// Where a province's question stands: never asked, standing on a guess that something
+    /// further down the chain leaned on, or answered for good.
     type private Status =
         | Untouched
         | Guessing of bool
@@ -50,6 +59,8 @@ module Adjudicate =
             | None
             | Some Holds -> Stands
             | Some(MoveTo into) ->
+                // An army sent somewhere it cannot walk to is asking to be carried. Whether
+                // any fleet actually carries it is `crossingExists`, later and lazily.
                 let walks = Atlas.canGo piece.Kind piece.Where into.At
                 Marches(into, piece.Kind = Army && not walks)
             | Some(SupportHold who) -> HoldsUp who
@@ -98,6 +109,8 @@ module Adjudicate =
             | true, held -> held
             | _ -> Untouched
 
+        // `waiting` is the stack of provinces that answered on a guess since some mark.
+        // Forgetting them drops those answers so they are worked out again from scratch.
         let forget mark =
             for index in mark .. waiting.Count - 1 do
                 status.Remove waiting[index] |> ignore
@@ -117,15 +130,20 @@ module Adjudicate =
                 let first = adjudicate province
 
                 if waiting.Count = mark then
+                    // Nothing leaned on the guess, so the answer stands on its own.
                     status[province] <- Settled first
                     first
                 elif waiting[mark] <> province then
+                    // A guess was leaned on, but not this province's - the chain runs deeper.
+                    // Hand the answer up and let whoever owns that guess settle it.
                     status[province] <- Guessing first
 
                     if not (waiting.Contains province) then waiting.Add province
 
                     first
                 else
+                    // This province's own guess was leaned on, so work it out again the other
+                    // way round. Two guesses agreeing means the guess never mattered.
                     forget mark
                     status[province] <- Guessing true
                     let second = adjudicate province
@@ -138,6 +156,11 @@ module Adjudicate =
                         breakTheRing mark
                         resolve province
 
+        /// The orders from `mark` on answer differently depending on what they are assumed to
+        /// answer, which is a ring of moves each waiting on the next. A ring of plain moves
+        /// all goes through - a circle of units may rotate. A ring with a convoy in it is
+        /// broken at the convoy instead: those fleets are taken as swamped, which is what
+        /// stops a fleet carrying the very attack that would dislodge it.
         and breakTheRing mark =
             let ring = [ for index in mark .. waiting.Count - 1 -> waiting[index] ]
 
@@ -168,6 +191,10 @@ module Adjudicate =
         and overrunAt province =
             headingFor province |> List.exists (fun (from, _, _) -> resolve from)
 
+        /// Whether a support holds up. An attack from anywhere other than the province being
+        /// supported cuts it; an attack from the supported province itself does not, since a
+        /// unit cannot cut the support aimed at it. An attack that never arrives - a convoy
+        /// with no water under it - is no attack at all.
         and supportStands province direction =
             let ours = powerAt province
 
@@ -185,6 +212,9 @@ module Adjudicate =
             | Marches(into, true) -> crossingExists province into.At
             | _ -> true
 
+        /// Whether water actually runs from `from` to `into`: a walk out from the coast over
+        /// the fleets ordered to carry this army that hold their own orders. Only fleets that
+        /// survive are stepped through, so a chain broken anywhere strands the army.
         and crossingExists from into =
             let carriers =
                 plan
@@ -222,6 +252,8 @@ module Adjudicate =
                 | _ -> false)
             |> List.length
 
+        /// Two units walking straight at each other, which neither may do - unless one of them
+        /// is coming by sea, in which case they pass and the ordinary counting applies.
         and headToHead province into =
             match pieceAt into with
             | None -> false
@@ -230,6 +262,10 @@ module Adjudicate =
                 | Some back -> back.At = province && not (isCarried province) && not (isCarried into)
                 | None -> false
 
+        /// How hard a move pushes at whatever is in the way. A unit that is itself leaving
+        /// counts as gone, so a whole column may step forward at once. Attacking your own unit
+        /// is worth nothing at all, and support given by the power being attacked does not
+        /// count towards driving out its own piece.
         and pushOf province =
             match destinationOf province with
             | None -> 0
@@ -254,11 +290,14 @@ module Adjudicate =
                     | Some sitting -> 1 + helpFor province into.At (fun giver -> giver <> Some sitting.Power)
                     | None -> 1 + helpFor province into.At (fun _ -> true)
 
+        /// What a unit coming the other way in a head-to-head is worth against this one.
         and standOf province =
             match destinationOf province with
             | None -> 0
             | Some into -> 1 + helpFor province into.At (fun _ -> true)
 
+        /// What holds a province against an attack: nothing if it is empty, nothing if the unit
+        /// there is leaving, otherwise itself plus whoever is holding it up.
         and gripOn province =
             match pieceAt province with
             | None -> 0
@@ -275,6 +314,8 @@ module Adjudicate =
                            | _ -> false)
                        |> List.length)
 
+        /// What a rival move into the same province is worth as a spoiler. A move that will
+        /// lose a head-to-head is no spoiler, so the winner is not bounced by the unit it beat.
         and blockOf province =
             match destinationOf province with
             | None -> 0
@@ -326,6 +367,8 @@ module Adjudicate =
                     |> List.tryFind (fun (_, into, _) -> into.At = province)
                     |> Option.map (fun (attacker, _, byWater) -> province, piece, attacker, byWater))
 
+        // Provinces two or more moves tried for and nobody reached. A bounce leaves the ground
+        // disputed, and nothing may retreat into it this season.
         let contested =
             movers
             |> List.map (fun (_, into, _) -> into.At)
@@ -355,6 +398,10 @@ module Adjudicate =
                     walked
                     |> List.fold (fun units (province, piece) -> Map.add province piece units) staying }
 
+        // Where a dislodged unit could go: somewhere it can reach, standing empty once the
+        // season has settled, not left disputed by a bounce, and not straight back at whoever
+        // pushed it out - unless that attacker came by sea, in which case the province it came
+        // from was never on the way.
         let retreats =
             pushedOut
             |> List.map (fun (province, piece, attacker, byWater) ->
@@ -409,6 +456,8 @@ module Adjudicate =
                 | Some(MoveTo into) when who.Options |> List.contains into -> Some(who, into)
                 | _ -> None)
 
+        // Retreats are made at once and nothing supports them, so two units wanting the same
+        // province both fail: neither goes anywhere and both are taken off the board.
         let crowded =
             going
             |> List.countBy (fun (_, into) -> into.At)

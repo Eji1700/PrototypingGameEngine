@@ -39,6 +39,8 @@ type Ahead =
 
 module Turn =
 
+    /// Whose body is on a square, if anyone's. A snake's own last cell does not count unless it
+    /// is growing, because by the time the head arrives the tail has stepped out of it.
     let private into seat target growing play =
         Session.snakes play
         |> List.tryPick (fun (other, snake) ->
@@ -100,6 +102,13 @@ module Turn =
         | None -> Some(InPlay(Session.onwards played)), told
 
 
+    /// One tick of the clock, with every living snake stepping at once.
+    ///
+    /// Simultaneous movement is why this cannot be the one-at-a-time `stepping` run in a loop.
+    /// Every head is worked out against the board as it stood at the start of the beat, so two
+    /// snakes walking into the same square both stop, and a snake following another's tail
+    /// lives because that tail is leaving in this same beat. Only the first head to reach the
+    /// food eats it.
     let private beating play =
         let moving = Session.living play
 

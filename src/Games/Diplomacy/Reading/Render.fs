@@ -84,6 +84,9 @@ module Render =
         | Waters -> Blocks.sea
 
 
+    // A province drawn across several hexes should carry its unit and its ownership letter in only one
+    // of them, or the map reads as though there were several. This picks the first cell each province
+    // appears in, going along the rows.
     let private seatOfEach =
         Atlas.layout
         |> List.mapi (fun row (_, cells) -> cells |> List.mapi (fun step cell -> (row, step), cell))

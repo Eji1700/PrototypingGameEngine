@@ -45,6 +45,8 @@ module Outcome =
             |> List.filter (fun color -> color <> winning)
             |> List.sumBy (fun color -> Pile.count color player.Bag)
 
+        // The last tie-break: whoever would have acted soonest. Counted from the seat after the one
+        // that just played, so it settles every time rather than leaving two players level.
         let waiting =
             Table.fromNext game.Table
             |> List.mapi (fun place player -> player.Id, place)

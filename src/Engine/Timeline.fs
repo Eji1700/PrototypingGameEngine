@@ -20,6 +20,8 @@ module Timeline =
         | [] -> timeline.Dealt
         | step :: _ -> step.After
 
+    // Making a move throws away whatever had been taken back: the game only ever has one
+    // future, and it is the one just played into.
     let advance move state timeline =
         { timeline with
             Made = { Move = move; After = state } :: timeline.Made

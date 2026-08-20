@@ -11,6 +11,8 @@ type Journal<'Move, 'Notice> =
     private
         { Players: int
           Seed: uint64
+          // Newest first, since writing is the common case; `entries` puts them back into
+          // the order they were played.
           Written: Entry<'Move, 'Notice> list }
 
 module Journal =

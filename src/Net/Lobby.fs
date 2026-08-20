@@ -3,6 +3,9 @@ namespace TCModel.Net
 open TCModel.Engine
 open TCModel.Table
 
+/// Who has a seat. `Taken` with no console is somebody who is sitting there but whose connection has
+/// gone - the seat is held for them and nobody else may take it, and the token is what brings them
+/// back to it.
 type Occupant =
     | Empty
     | Taken of token: string * console: string option
@@ -240,6 +243,9 @@ module Lobby =
             lobby, drawAll lobby
 
 
+    /// What a networked table will not do, and why. Undo is the interesting one: walking a game back
+    /// in front of several players would show somebody a position they were meant to have seen only
+    /// their own side of.
     let private refused =
         function
         | Undo
@@ -315,6 +321,8 @@ module Lobby =
             | Some why -> told why
             | None ->
 
+            // A game on a clock takes what anybody says whenever they say it - steering a snake is not
+            // taking a turn. A game that goes by turns only takes it from whoever is to play.
             let active = (rules lobby).Active(standing lobby)
 
             if lobby.Game.Pulse.IsNone && seat.Player <> active then

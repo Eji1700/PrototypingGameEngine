@@ -66,6 +66,8 @@ module Protocol =
 
     let names = all |> List.map key |> String.concat ", "
 
+    /// Every order the protocols could be laid in. Three protocols, so six of them - small
+    /// enough to hand a player the whole list to choose from.
     let rec orders protocols =
         match protocols with
         | [] -> [ [] ]

@@ -69,6 +69,12 @@ let rec private loop rings sitters said solo =
     | null -> heard "quit"
     | line -> heard line
 
+/// Playing a game that runs on a clock at this keyboard, drawn over itself as it goes.
+///
+/// The loop waits for either a keypress or the next beat, whichever comes first. Holding stops the
+/// clock by waiting a day instead of an interval, and only while it is held - or the game is over -
+/// are the notes and the list of commands drawn, since a board redrawn several times a second has no
+/// room for them and nobody could read them anyway.
 let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
     let show lines =
         for line in lines do

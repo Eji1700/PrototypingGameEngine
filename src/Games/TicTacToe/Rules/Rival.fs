@@ -19,9 +19,18 @@ module Rival =
         | Drawn -> 0
         | Abandoned who -> if who = mark then -1 else 1
 
+    // Outside the range a real position scores, so a side starting from one of these takes the first
+    // move it looks at. `Worst` doubles as the score for a move the rules refuse, which is one no
+    // side would ever choose.
     let private Worst = -2
     let private Best = 2
 
+    /// What the position is worth to `mark` with both sides playing on, cut off at `depth` - which
+    /// is what makes the skills differ, since the search itself is the same for all of them. Depth
+    /// running out scores nothing rather than guessing.
+    ///
+    /// Alpha-beta: alpha is the best the side to move has already secured elsewhere, beta the best
+    /// the other side has. Once they cross, the rest of this branch cannot be chosen and is dropped.
     let rec private forced depth mark alpha beta session =
         match session with
         | Finished(_, ending) -> worth mark ending

@@ -285,6 +285,10 @@ module Launch =
                |> List.collect (fun skill -> rival |> Option.toList |> List.map (fun name -> name skill)))
         | Start.Saved path -> [ from path ]
 
+    // The other way round: a `Launch` back into the arguments that would have produced it, so the
+    // program can print the exact line somebody types to join the table it has just opened, or to
+    // come back to the seat they were sitting in. Written through the parser rather than by hand so
+    // that the two cannot drift apart.
     let private arguments launch =
         match launch with
         | Launch.Play start ->
@@ -559,6 +563,8 @@ module Launch =
             | None -> return! Error "That does not say what to open. Say 'play', 'serve', 'host', 'house', 'join' or 'replay'."
         }
 
+    // A line copied off the screen may still have `dotnet run --` on the front of it, which is how the
+    // program says its own name from a source directory. Dropping those leaves the arguments.
     let taken game (given: string seq) =
         let words =
             given

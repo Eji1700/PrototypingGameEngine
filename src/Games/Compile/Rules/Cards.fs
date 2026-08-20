@@ -8,6 +8,8 @@ module Card =
 
     let values = [ 0..6 ]
 
+    // Every protocol is missing one value, so a protocol is six cards rather than seven. Most of
+    // them go without the 6; three go without something else instead and keep it.
     let private without =
         function
         | Gravity -> 3
@@ -45,10 +47,14 @@ type Face =
     | FaceDown
 
 type Placed =
-    { Card: Card
-      Face: Face
+    {
+        Card: Card
+        Face: Face
 
-      Seen: bool }
+        /// Whether the other side has ever had this card face up in front of them. A card turned
+        /// face down again is still one they know, and the board is drawn to them accordingly.
+        Seen: bool
+    }
 
 module Placed =
 
@@ -101,6 +107,8 @@ module Deck =
         let n, rng = Rng.intBelow (List.length cards) rng
         List.item n cards, List.removeAt n cards, rng
 
+    // Drawing one at a time out of what is left, which is a Fisher-Yates shuffle written the
+    // long way round because the deck is a list.
     let shuffled cards rng =
         let rec draw taken left rng =
             match left with

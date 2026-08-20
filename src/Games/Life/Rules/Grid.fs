@@ -42,6 +42,8 @@ module Grid =
         | _ -> None
 
 
+    // The grid wraps, so the edges join and a glider walks off one side and back in the other.
+    // The doubled modulo is to bring a negative remainder back round, which .NET's does not do.
     let private round' n bound = ((n - 1) % bound + bound) % bound + 1
 
     let neighbours cell =
@@ -52,6 +54,9 @@ module Grid =
                           { Row = round' (cell.Row + down) Height
                             Column = round' (cell.Column + across) Width } ]
 
+    /// One generation. Counted by tallying the neighbours of the living rather than by walking
+    /// every square, so the work is in what is alive: a cell that no living cell touches never
+    /// appears in the tally, and could not have come to life anyway.
     let step (cells: Cells) : Cells =
         let around =
             cells

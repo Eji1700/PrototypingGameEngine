@@ -190,6 +190,10 @@ type Question =
       Because: Asker
       Wanting: Wanting }
 
+/// One piece of work on the pile. Most of these exist because something has to happen between
+/// two commands rather than inside one: a card is only really placed once whatever it covers
+/// has spoken, a `Gate` only opens once the command under it has run, and a turn only ends
+/// once everything the last move set off has finished.
 type Pending =
     | Run of Command * Source
     | Ask of Question

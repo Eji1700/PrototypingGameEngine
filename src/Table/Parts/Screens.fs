@@ -30,6 +30,10 @@ module Screens =
             printf "Press any key."
             System.Console.ReadKey true |> ignore
 
+    /// Draw over what is already on the screen rather than clearing it first, which is what keeps a
+    /// board that is redrawn several times a second from flickering. Every line is padded out to the
+    /// width and any line the last drawing used and this one does not is blanked, so nothing is left
+    /// behind. Answers with how many lines it drew, to be passed back in next time.
     let redrawn (before: int) (text: string) =
         let width =
             try
@@ -77,6 +81,8 @@ module Screens =
 
         waiting ()
 
+    /// A screen to steer with the arrows - unless input is coming from somewhere that has no keys to
+    /// press, in which case the screen is printed once and a line is read.
     let asking (says: string -> string) said screen at =
         let rec steer standing =
             let showing, index = Keys.facing standing

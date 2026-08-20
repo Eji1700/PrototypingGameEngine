@@ -138,6 +138,9 @@ module Render =
             )
 
 
+    /// One line's stack of cards. Depth 0 is the uncovered one, which is the only card that reads its
+    /// whole text - the rest are drawn small, since all that is still doing anything is their top box.
+    /// `newestLast` turns the drawing over for the side of the board that is read from the far edge in.
     let private stack tone reading newestLast cards =
         match cards with
         | [] -> Tile(None, Tone.Quiet, [ Scene.quietly "-" ])

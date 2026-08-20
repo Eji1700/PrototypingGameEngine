@@ -239,6 +239,8 @@ module Menu =
         let digits (word: string) =
             word <> "" && word |> Seq.forall System.Char.IsDigit
 
+        // 'via' separates who is playing from how far the table reaches, so one typed line can say
+        // both: "play you joins via port:5001 word:abc".
         let apart words =
             match words |> List.tryFindIndex (fun word -> word = "via") with
             | None -> Ok(words, None)

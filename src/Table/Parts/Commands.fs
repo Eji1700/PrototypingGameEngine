@@ -19,6 +19,8 @@ type Command<'Move> =
 
 module Commands =
 
+    // Split on the byte order mark as well as on spaces: a saved record or a settings file written
+    // by another program can open with one, and it would otherwise glue itself to the first word.
     let private ByteOrderMark = char 0xFEFF
 
     let words (text: string) =

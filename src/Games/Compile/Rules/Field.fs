@@ -66,6 +66,8 @@ module Side =
 
     let arranged order side = { side with Order = order }
 
+    // An empty deck is the discard pile shuffled back. A deck that is empty with nothing
+    // discarded stays empty, and whoever asked gets less than they wanted.
     let private restocked side rng =
         if List.isEmpty side.Deck && not (List.isEmpty side.Discard) then
             let deck, rng = Deck.shuffled side.Discard rng
@@ -96,6 +98,8 @@ module Side =
             Discard = side.Hand @ side.Discard }
         |> fun side -> drawing Deck.HandSize side rng
 
+    // A stack is held newest first, so its head is the card on top - the uncovered one, and the
+    // only one whose ongoing text is read as an uncovered card's.
     let played placed line side =
         { side with
             Hand = side.Hand |> List.filter ((<>) placed.Card)
@@ -172,6 +176,9 @@ module Field =
     let facingLines seat card field =
         Lines.all |> List.filter (fun line -> allows seat card line field)
 
+    /// Whether the other side has forbidden this play, and why. "Cannot play here" is read from
+    /// their side of this line only; "must play face down" is read from anywhere on their side,
+    /// since it is not about a particular line.
     let barred seat line face field =
         let theirs = across seat line field
 
@@ -190,6 +197,9 @@ module Field =
         |> List.tryFind (fun seat -> List.contains card.Protocol (side seat field).Drafted)
 
 
+    /// What a line is worth to a seat. Face-down cards count as two unless something of yours
+    /// says otherwise, your own ongoing text adds, and the other side's takes away. It cannot
+    /// go below nothing.
     let valueOn seat line field =
         let mine = Side.stack line (side seat field)
         let ours = Side.rulesOn line (side seat field)

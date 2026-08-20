@@ -144,6 +144,9 @@ module Server =
                          ||| ForwardedHeaders.XForwardedHost)
                 )
 
+            // Whoever said --behind is telling us there is a proxy in front, and we have no way to
+            // know its address, so the forwarded headers are taken at their word. That is only safe
+            // because it was asked for: a table with nothing in front of it never gets here.
             forwarded.KnownIPNetworks.Clear()
             forwarded.KnownProxies.Clear()
             app.UseForwardedHeaders forwarded |> ignore
@@ -152,6 +155,10 @@ module Server =
         | Ajar -> ()
         | Locked _ ->
 
+            // Two buckets, and a wrong answer has to get past both: one per address, so that guessing
+            // at the word is slow, and one across everything, so that guessing from many addresses at
+            // once is slow too. Only wrong answers are counted - the right word passes straight
+            // through and play is never rate limited.
             let caller =
                 PartitionedRateLimiter.Create<HttpContext, string>(fun ctx ->
                     let whoever =
@@ -194,6 +201,10 @@ module Server =
         app.MapPost(Page.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
         |> ignore
 
+    /// The clock a real-time game runs on. A one-shot timer that sets itself again from what the last
+    /// beat asked for, rather than a repeating one - so a game that changes speed is followed, and two
+    /// beats can never overlap however long one of them takes. A beat that throws waits a second and
+    /// carries on rather than stopping the table.
     let private keeping (first: TimeSpan) (beats: unit -> Post list * TimeSpan) deliver =
         let held = ref None
 
@@ -571,6 +582,8 @@ module Server =
         home.Sweeping(TimeSpan.FromMinutes 5.0, (fun gone -> printfn "  Swept %d table(s) nobody was at." (List.length gone)))
         |> ignore
 
+        // The house beats faster than any game does; each table is asked only when its own next beat
+        // has come round, which `House.Beat` keeps track of.
         home.Beating(TimeSpan.FromMilliseconds 40.0, (fun posts -> Wire.deliver hub.Clients pages posts |> ignore))
         |> ignore
 
