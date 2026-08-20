@@ -2,17 +2,10 @@ namespace TCModel.Snake
 
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace, and
-// the command line's argument types carry names this game already uses.
 open TCModel.Snake
 
-/// Every screen this game has, described once - and the three ways of reading one come back
-/// from `Readers` already written.
 module Render =
 
-    /// What each part of the screen is called. Named rather than written out, because the
-    /// readers draw them and a block renamed in one place would look like a block that had
-    /// gone missing.
     module Blocks =
         let board = "The board"
         let snakes = "The snakes"
@@ -24,8 +17,6 @@ module Render =
         let board =
             "Your snake is its own letter, small along the body and capital at the head. The food is a star, and the wall is the edge - there is nothing on the other side of it."
 
-        /// Two, because there are two paces and the difference between them is exactly what a
-        /// note is for: at one the board waits for you, and at the other it does not.
         let moving =
             function
             | Turns ->
@@ -33,13 +24,10 @@ module Render =
             | Clock ->
                 "The snakes move on their own, together, and quicken as they eat. A direction only turns a head - and never back into its own neck. Eating adds a segment, and the next piece lands somewhere else at once."
 
-    // --- the heading ---------------------------------------------------------------------
 
     let heading beholder session =
         match session with
         | InPlay play when play.Pace = Clock ->
-            // Nobody is to play, so what the line above the board is for is the two things a
-            // player glances up at: how long this has been going, and how they are doing.
             let mine =
                 match play.Seats |> List.tryFind ((=) beholder) with
                 | Some seat -> Some(seat, Session.snakeAt seat play)
@@ -61,14 +49,7 @@ module Render =
             $"Turn {play.Turn} - {Words.seated yours play.ToPlay} to play, {Words.segments (Snake.length snake)} and facing {Words.direction snake.Facing}"
         | Finished(play, over) -> $"The game is over: {Words.scored play over}"
 
-    // --- the board -----------------------------------------------------------------------
 
-    /// What is standing on one square, as a glyph and the colour it is drawn in.
-    ///
-    /// The order is the one thing here that is a rule rather than a picture: a snake is asked
-    /// about before the food, because a snake lying across the food is a thing that can happen
-    /// and a board that drew the star through it would be a board that lied about where the
-    /// food is.
     let private standing play cell =
         match Session.snakes play |> List.tryFind (fun (_, snake) -> Snake.covers cell snake) with
         | Some(_, snake) when not (Snake.isAlive snake) -> Ink.Wreck, Tone.Quiet
@@ -79,11 +60,6 @@ module Render =
     let private wall =
         Scene.cell Tone.Quiet ("+" + String.replicate Board.Width "-" + "+")
 
-    /// The board, walls and all.
-    ///
-    /// The walls are drawn because they are part of the game rather than part of the frame: a
-    /// square outside them is a death, and a board that stopped at its own edge would leave a
-    /// player to work out where the edge was by dying at it.
     let private grid play =
         let side = "|", Tone.Quiet
 
@@ -94,10 +70,7 @@ module Render =
             @ [ [ wall ] ]
         )
 
-    // --- who is playing --------------------------------------------------------------------
 
-    /// Every seat, with an arrow at whoever is to play and the reader's own marked: how long
-    /// each snake is, what it has eaten, and how it stopped if it has.
     let private snakes beholder session =
         let play = Session.play session
 
@@ -110,9 +83,7 @@ module Render =
                 | Some fate -> Words.fate fate
                 | None -> $"facing {Words.direction snake.Facing}"
 
-            [ // An arrow at whoever is to play, and none at all on a clock: there, everybody is
-              // to play at once and an arrow would be pointing at nothing.
-              Scene.cell
+            [ Scene.cell
                   Tone.Yours
                   (if play.Pace = Turns && seat = play.ToPlay && not (Session.isOver session) then "->" else "")
               Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (Words.seated yours seat)
@@ -121,24 +92,11 @@ module Render =
               Scene.cell Tone.Quiet standing ])
         |> Aligned
 
-    /// Where the clock is wound to, and how to wind it.
-    ///
-    /// One quiet line, and it stays on the screen while the board is moving - which is the point
-    /// of it being a line of its own rather than a note. A player who thinks the game is too
-    /// slow is entitled to find out what to do about it without stopping the game to read the
-    /// box that would have told them.
     let private clock play =
         match play.Pace with
         | Turns -> Blank
         | Clock -> Scene.quietly $"clock at speed {play.Speed} of {Session.Fastest} - 'faster' and 'slower', or + and -"
 
-    /// What a player does over and over, as controls. Each carries the line it would type, so
-    /// a reader with buttons draws buttons and one without writes out the words.
-    ///
-    /// On a clock they are the reader's own snake's - `b north` and not `north` - because at a
-    /// table where nobody is waiting for anybody, a control that steered whoever happened to be
-    /// first would steer the wrong snake for three players out of four. The board knows who is
-    /// reading it; the parser cannot, and should not have to.
     let private onwards beholder session =
         let play = Session.play session
 
@@ -168,16 +126,10 @@ module Render =
               yield Does("slower", "slower", Tone.Plainly)
               yield Does("faster", "faster", Tone.Plainly)
 
-              // Dealing another is the engine's own word rather than this game's, and it is
-              // offered here for the same reason the two above are: at a game that has just
-              // ended, "again" is the only thing anybody wants, and a page has no key for it.
               yield Scene.quietly "and another board"
               yield Does("restart", "restart", Tone.Plainly) ]
 
-    // --- what a player may type ----------------------------------------------------------
 
-    /// The commands, short. `help` has them at length, and both are written from this list so
-    /// neither can quietly grow a command the other has never heard of.
     let private verbs pace =
         [ match pace with
           | Turns ->
@@ -215,7 +167,6 @@ module Render =
 
     let commands pace = Scene.verbs (verbs pace)
 
-    /// A paragraph as lines short enough for either terminal reader.
     let private wrapped text = Scene.paragraph 66 text
 
     let help pace =
@@ -247,20 +198,12 @@ module Render =
               "COMMANDS"
               commands pace ]
 
-    // --- the log ---------------------------------------------------------------------------
 
     let wording = Told.inWords Words.said Words.command
 
-    /// The last few lines of the log rather than the last twelve.
-    ///
-    /// A board with nothing round it is what a player gets while the clock is running, and the
-    /// log is the one block left that grows: a dozen lines of "Snake A turns north" push the
-    /// board up the screen a line at a time and make a moving picture out of the wrong half of
-    /// it. Held, or at a game of turns, the lot is there to read.
     let private lately (margins: Margins) lines =
         if margins = Margins.none then lines |> List.skip (max 0 (List.length lines - 3)) else lines
 
-    // --- the whole screen ---------------------------------------------------------------
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
@@ -276,16 +219,10 @@ module Render =
                           clock (Session.play session)
                           Scene.noted margins (Notes.moving pace) ]
                     )
-                    // The ways to go are a list of lines a player could type, so they belong
-                    // with the box that lists the rest of them - which is what makes them go
-                    // away while a clock is running. A browser has them on, and they are its
-                    // buttons; a terminal at a game that does not wait has them off, and what
-                    // is left on the screen is the board, the score and what was said.
                     Scene.offering margins Blocks.onwards (onwards beholder session) ]
               Scene.listing margins Blocks.commands (commands pace)
               Block(Blocks.log, lately margins (Scene.log wording model)) ]
 
-    // --- the rest of what a player reads --------------------------------------------------
 
     let history beholder (model: Model<Move, Session, Notice>) =
         let entry (entry: Entry<Move, Notice>) =
@@ -297,18 +234,10 @@ module Render =
         |> List.map entry
         |> Scene.record (heading beholder (Model.state model))
 
-    /// What is one square that way, asked before committing to it.
-    ///
-    /// The one thing at this game worth asking and the one thing a board cannot quite show: a
-    /// player can see the square, and what they want to know is what the *rules* will make of
-    /// it - which is the difference between a wall and a tail that will have moved by the time
-    /// they get there.
     let answer beholder asked (model: Model<Move, Session, Notice>) =
         let session = Model.state model
         let play = Session.play session
 
-        // Asked of the seat reading rather than the seat to play, because a player waiting on
-        // three other snakes is entitled to look at their own board while they wait.
         let seat = if List.contains beholder play.Seats then beholder else play.ToPlay
 
         let snake = Session.snakeAt seat play
@@ -344,21 +273,10 @@ module Render =
 
     let rules pace = Scene.rules (help pace)
 
-    // --- a table still filling up -----------------------------------------------------------
 
     let waiting = Scene.waiting Words.seated
 
-    // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that - which here is none at all.
-    /// The board is a grid of aligned rows, and the one thing that needs saying about one of
-    /// those is said by the page itself.
-    ///
-    /// The keys are the other half of what a browser needs at a pace that does not wait. Four
-    /// hands' worth, the same four the terminal has, each saying which snake it turns - so a
-    /// page and a console are steered the same way and neither of them can send a line the
-    /// parser would refuse. A game of turns hands over none, and the browser leaves the keys to
-    /// whoever is typing.
     let private hands =
         [ "ArrowUp", "a north"
           "ArrowLeft", "a west"
@@ -376,8 +294,6 @@ module Render =
           "4", "d west"
           "5", "d south"
           "6", "d east"
-          // The clock. Four spellings for two keys, because a browser says `+` for one of them
-          // only while shift is down and `=` for the same key without it.
           "+", "faster"
           "=", "faster"
           "-", "slower"

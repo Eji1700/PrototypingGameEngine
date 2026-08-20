@@ -1,42 +1,7 @@
 namespace TCModel.Table
 
-/// The settings: a short menu, and a page behind each row of it.
-///
-/// There are three pages because there are three kinds of question, and telling them apart is
-/// most of what this file is for. **Video** is how a board reaches your eyes - the way it is
-/// drawn and what colour everything is in. **Audio** is how it reaches your ears, which today
-/// is one bell and a question about whether you want it. **Game** is whatever this particular
-/// game lets you settle about itself, which for most games is nothing at all and for one is
-/// which of its rules are in play.
-///
-/// The split is not decoration. Before it there was one screen with a view row and a colour
-/// row on it, and every new kind of question would have gone on the end of the same list until
-/// it was a list nobody could read. A menu with pages behind it has room, and - more to the
-/// point - it has somewhere obvious to put the next thing, which is the whole of what "settled
-/// in one place" is worth.
-///
-/// Pure, like the rest of this layer. It says what the screens read like and what a typed line
-/// means, and leaves the reading and the writing to whoever is running them - keeping the
-/// settings is a thing these screens *ask for* and never do, which is what lets the whole of
-/// it be checked without a disk.
-///
-/// Nothing here paints anything. The screens are written in the board's own words - whatever
-/// the game said its slots show - and go out through the view like every other screen, which
-/// colours those words as it would on a board. So what a player is shown while choosing is
-/// exactly what they will get once they have.
-///
-/// And nothing here has met a game. Which slots there are came from the game and travel in the
-/// palette; the ways of drawing and the ways of playing come in as lists of names. So these
-/// are the same screens at every game and the words on them are never the same twice.
 module Options =
 
-    /// Which page is being read, and the word that opens it.
-    ///
-    /// A type rather than three functions with three names, because the menu has to be able to
-    /// hand one back without knowing what is behind it, and because the compiler should be the
-    /// thing that notices when a fourth page is added and somewhere has not been taught to open
-    /// it. `Audio` is first for the reason it is first on the screen: it is the shortest page,
-    /// and a menu that opens with its longest entry reads like a list with an afterthought.
     type Page =
         | Audio
         | Video
@@ -50,38 +15,17 @@ module Options =
             | Video -> "video"
             | Game -> "game"
 
-    /// What a typed line at any of these screens came to.
-    ///
-    /// One type for all four screens rather than one apiece, and that is worth a sentence: the
-    /// three ways out - keep it, ask again, go back - are the same three at every page, and
-    /// three copies of them would be three places to fix the day a fourth is wanted. What only
-    /// one page can say, only one page returns; nothing checks that, and nothing has to, because
-    /// the page that would have to return it is the only one whose reader can build it.
     [<NoComparison; NoEquality>]
     type Step =
-        /// From the menu: open that page.
         | Opening of Page
-        /// Video: this colour, for that slot.
         | Changed of Palette
-        /// Video: read it this way from here on. A name rather than a view, because which views
-        /// there are is the game's answer and this screen has never met the game - so it is
-        /// checked where the view is built, and refused there in the same words.
         | Drawn of string
-        /// Audio: ring, or do not.
         | Ringing of bool
-        /// Game: play it this way. A name, for the same reason `Drawn` carries one.
         | Playing of string
-        /// Keep all of it for next time. What "all of it" is, is whatever the screens are
-        /// showing when this is said, so there is nothing here to remember and nothing that
-        /// can be kept which was not on a screen a moment before.
         | Keep
-        /// Nothing was typed, so the screen simply asks again.
         | Same
-        /// Back one: to the menu from a page, and to the game's menu from the menu.
         | Done
 
-    /// The colours on offer, a handful to a line, because nineteen names in a row is not a
-    /// list anybody reads. However many there are - a colours file may have made it more.
     let private offered =
         let rec inRows names =
             match names with
@@ -95,12 +39,6 @@ module Options =
         |> inRows
         |> List.mapi (fun i row -> sprintf "%-11s%s" (if i = 0 then "Colours:" else "") row)
 
-    /// One thing walked one step along a list it is somewhere in, as the line that says so.
-    ///
-    /// Every row that turns - the view, the bell, each colour, the way of playing - is the same
-    /// shape of question asked over and over, so it is answered once: where the thing standing
-    /// now is in the list, one step on from there, and round the ends. Nothing is remembered
-    /// between presses, because where it stands now is read off what the screen was built from.
     let private stepping said (all: string list) standing step =
         match List.length all with
         | 0 -> said standing
@@ -110,8 +48,6 @@ module Options =
 
             said all[((at + step) % count + count) % count]
 
-    /// The three ways out, which every page below reads the same way. Read before anything a
-    /// page invented, so no page can quietly redefine `done`.
     let private wayOut words =
         match words with
         | [ "done" ]
@@ -123,14 +59,7 @@ module Options =
         | [] -> Some(Ok Same)
         | _ -> None
 
-    // --- the menu ------------------------------------------------------------------------------
 
-    /// What each page is for, in one line, said here rather than on the page itself: a menu row
-    /// that does not say what is behind it is a row you have to open to find out about.
-    ///
-    /// The Game row says how many choices this game is offering, because "nothing to settle" is
-    /// worth knowing from the menu. Most games say nothing, and being told so on the row is
-    /// better than being shown an empty page.
     let screen (settles: int) : Keys.Screen =
         let game =
             match settles with
@@ -163,8 +92,6 @@ module Options =
             match words with
             | [ "audio" ] -> Ok(Opening Audio)
             | [ "video" ]
-            // The page was called the settings screen when it was the only one, and a word
-            // somebody has in their fingers is a word worth still taking.
             | [ "colours" ]
             | [ "colors" ] -> Ok(Opening Video)
             | [ "game" ]
@@ -172,13 +99,7 @@ module Options =
             | word :: _ -> Error $"I don't know how to '{word}'. Say 'audio', 'video', 'game', 'save', or 'done'."
             | [] -> Ok Same
 
-    // --- audio ---------------------------------------------------------------------------------
 
-    /// One row, and it is a real one rather than a place kept for later: the table already
-    /// rings when the turn comes round and nobody asked for it, and until now there was no way
-    /// to say you would rather it did not.
-    ///
-    /// There will be more here. What there will not be is a second place to put it.
     let audio (ringing: bool) : Keys.Screen =
         let said = if ringing then "on" else "off"
 
@@ -213,19 +134,7 @@ module Options =
             | word :: _ -> Error $"I don't know how to '{word}'. Say 'bell on', 'bell off', 'save', or 'done'."
             | [] -> Ok Same
 
-    // --- video ---------------------------------------------------------------------------------
 
-    /// The page this whole file used to be.
-    ///
-    /// `views` is what this game can be drawn as and `drawn` is which of them is doing the
-    /// drawing, both handed in - a screen that asked the game would be a screen that knew there
-    /// was one.
-    ///
-    /// Left and right walk one row through what it has to choose from. There is nothing to
-    /// remember between presses: what a slot is drawn in now is in the palette this was built
-    /// from, so the step is read off that and the line says the whole of the change - and
-    /// because the screen comes straight back in the new palette, the sample beside the name
-    /// changes under the cursor as it is walked.
     let video (views: string list) (drawn: string) palette : Keys.Screen =
         let slots = Palette.slots palette
         let colours = Palette.shades |> List.map (fun shade -> shade.Name)
@@ -271,13 +180,6 @@ module Options =
                 "picks up unless it was saved at one of them." ]
           Backs = Some "done" }
 
-    /// A typed line as a step. A view has its own word, two words are a colour for something,
-    /// and the rest are the ways out.
-    ///
-    /// `view` is read before the two-word case below it and has to be: 'view rich' is two
-    /// words like any other, and read as a colour it would come back saying there is nothing
-    /// called 'view' to colour - which is true, and no help at all to somebody who typed
-    /// exactly what the screen told them to.
     let chooseVideo palette (text: string) : Result<Step, string> =
         let words = Commands.lowered text
 
@@ -292,18 +194,7 @@ module Options =
             | word :: _ -> Error $"I don't know how to '{word}'. Say '<what> <colour>', 'view <name>', 'save', or 'done'."
             | [] -> Ok Same
 
-    // --- game ----------------------------------------------------------------------------------
 
-    /// The ways this game can be played, and which of them is being played now.
-    ///
-    /// `ways` is a name and a sentence apiece, handed in like everything else here: a screen
-    /// that could ask the game which ways there are would be a screen that had met one.
-    ///
-    /// This is the one page whose answer is not merely about reading. A game played with an
-    /// optional rule in it is a different game, and the record says so - each way has a name of
-    /// its own and that name is what goes in the deal line - so a record still replays into
-    /// exactly the game it came out of, whatever this page was last left saying. What is
-    /// settled here is what a *new* game is dealt as, and nothing about an old one.
     let game (ways: (string * string) list) (playing: string) : Keys.Screen =
         let names = ways |> List.map fst
 
@@ -337,9 +228,6 @@ module Options =
                   sprintf "%-11s%s" "Played:" (String.concat ", " names) ]
           Backs = Some "done" }
 
-    /// A name on its own is that way, because that is what the rows send; `plays <name>` says
-    /// the same thing and is what the settings file holds, so the file and the screen go on
-    /// taking the same line.
     let chooseGame (ways: (string * string) list) (text: string) : Result<Step, string> =
         let names = ways |> List.map fst
         let words = Commands.lowered text

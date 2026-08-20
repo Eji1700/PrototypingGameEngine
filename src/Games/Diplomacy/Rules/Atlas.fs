@@ -1,29 +1,15 @@
 namespace TCModel.Diplomacy
 
-/// What a province is made of underfoot, which is the whole of what decides who may stand
-/// there: an army on land, a fleet at sea, and either of them on a coast.
 type Terrain =
     | Inland
     | Coastal
     | Sea
 
-/// Whether a province is worth holding at the end of a year.
-///
-/// Thirty-four of the seventy-five are, and twenty-two of those thirty-four begin the game
-/// belonging to somebody. A power builds at its own home centres and nowhere else, which is
-/// why "home of" is part of what a province *is* rather than something the position keeps:
-/// Berlin is German whoever has an army sitting in it.
 type Centre =
     | NotACentre
     | Neutral
     | Home of Power
 
-/// Which part of the map, for a screen that has to show seventy-five provinces without
-/// becoming a wall.
-///
-/// Not a rule - nothing in the game asks which region a province is in - but it is how
-/// everybody who plays this talks about the board, and a board grouped the way it is talked
-/// about is a board that can be read.
 type Region =
     | TheIsles
     | Iberia
@@ -39,16 +25,8 @@ type Region =
     | Africa
     | Waters
 
-/// One province, by the three letters everybody who plays this writes it as.
-///
-/// Private, so the only ids in circulation are ones the table below minted. A line typed at
-/// the prompt becomes one through `Atlas.byCode` or does not become one at all, which is what
-/// stops a misspelt province reaching the rules as anything but a refusal.
 type ProvinceId = private ProvinceId of string
 
-/// Where a piece stands: a province, and which of its coasts where the province has more than
-/// one. `None` for the coast everywhere else, and that is not a missing answer - it is the
-/// answer, because a province with one coastline has nothing to choose between.
 type Location = { At: ProvinceId; Coast: Coast option }
 
 type Province =
@@ -58,38 +36,20 @@ type Province =
       Centre: Centre
       Region: Region }
 
-/// The board: seventy-five provinces, and the two graphs over them.
-///
-/// Two graphs, because there are two kinds of piece and they do not travel the same map. An
-/// army walks between land provinces; a fleet sails between waters and along coasts, and on
-/// the three provinces with two coastlines it is the coast rather than the province that has
-/// neighbours. Neither graph is derivable from the other and both are declared.
-///
-/// **Declared in full at both ends rather than once and mirrored.** Turncoats names a border
-/// from one end and symmetrises it, which is right for twenty-three edges written by hand.
-/// This map has more than three hundred, and the thing that goes wrong at that size is a typo
-/// - so both ends are written out and `problems` checks they agree. A mirrored table cannot
-/// disagree with itself and so cannot catch anything; a doubled one can, and does.
 module Atlas =
 
-    // --- the provinces ------------------------------------------------------------------------
 
-    /// Code, name, terrain, what it is worth, and where it is on the board. The one place the
-    /// board is written down.
     let private declared =
-        [ // The British Isles
-          "cly", "Clyde", Coastal, NotACentre, TheIsles
+        [ "cly", "Clyde", Coastal, NotACentre, TheIsles
           "edi", "Edinburgh", Coastal, Home England, TheIsles
           "lvp", "Liverpool", Coastal, Home England, TheIsles
           "yor", "Yorkshire", Coastal, NotACentre, TheIsles
           "wal", "Wales", Coastal, NotACentre, TheIsles
           "lon", "London", Coastal, Home England, TheIsles
 
-          // Iberia
           "por", "Portugal", Coastal, Neutral, Iberia
           "spa", "Spain", Coastal, Neutral, Iberia
 
-          // France
           "bre", "Brest", Coastal, Home France, FranceAnd
           "pic", "Picardy", Coastal, NotACentre, FranceAnd
           "par", "Paris", Inland, Home France, FranceAnd
@@ -97,11 +57,9 @@ module Atlas =
           "gas", "Gascony", Coastal, NotACentre, FranceAnd
           "mar", "Marseilles", Coastal, Home France, FranceAnd
 
-          // The Low Countries
           "bel", "Belgium", Coastal, Neutral, TheLowCountries
           "hol", "Holland", Coastal, Neutral, TheLowCountries
 
-          // Germany
           "ruh", "Ruhr", Inland, NotACentre, GermanyAnd
           "kie", "Kiel", Coastal, Home Germany, GermanyAnd
           "ber", "Berlin", Coastal, Home Germany, GermanyAnd
@@ -109,13 +67,11 @@ module Atlas =
           "sil", "Silesia", Inland, NotACentre, GermanyAnd
           "pru", "Prussia", Coastal, NotACentre, GermanyAnd
 
-          // Scandinavia
           "den", "Denmark", Coastal, Neutral, Scandinavia
           "nwy", "Norway", Coastal, Neutral, Scandinavia
           "swe", "Sweden", Coastal, Neutral, Scandinavia
           "fin", "Finland", Coastal, NotACentre, Scandinavia
 
-          // Russia
           "stp", "St Petersburg", Coastal, Home Russia, RussiaAnd
           "lvn", "Livonia", Coastal, NotACentre, RussiaAnd
           "mos", "Moscow", Inland, Home Russia, RussiaAnd
@@ -123,7 +79,6 @@ module Atlas =
           "ukr", "Ukraine", Inland, NotACentre, RussiaAnd
           "sev", "Sevastopol", Coastal, Home Russia, RussiaAnd
 
-          // Austria and its marches
           "boh", "Bohemia", Inland, NotACentre, AustriaAnd
           "gal", "Galicia", Inland, NotACentre, AustriaAnd
           "tyr", "Tyrolia", Inland, NotACentre, AustriaAnd
@@ -131,7 +86,6 @@ module Atlas =
           "bud", "Budapest", Inland, Home Austria, AustriaAnd
           "tri", "Trieste", Coastal, Home Austria, AustriaAnd
 
-          // Italy
           "pie", "Piedmont", Coastal, NotACentre, ItalyAnd
           "tus", "Tuscany", Coastal, NotACentre, ItalyAnd
           "ven", "Venice", Coastal, Home Italy, ItalyAnd
@@ -139,25 +93,21 @@ module Atlas =
           "apu", "Apulia", Coastal, NotACentre, ItalyAnd
           "nap", "Naples", Coastal, Home Italy, ItalyAnd
 
-          // The Balkans
           "ser", "Serbia", Inland, Neutral, TheBalkans
           "alb", "Albania", Coastal, NotACentre, TheBalkans
           "gre", "Greece", Coastal, Neutral, TheBalkans
           "bul", "Bulgaria", Coastal, Neutral, TheBalkans
           "rum", "Rumania", Coastal, Neutral, TheBalkans
 
-          // Turkey
           "con", "Constantinople", Coastal, Home Turkey, TurkeyAnd
           "ank", "Ankara", Coastal, Home Turkey, TurkeyAnd
           "smy", "Smyrna", Coastal, Home Turkey, TurkeyAnd
           "arm", "Armenia", Coastal, NotACentre, TurkeyAnd
           "syr", "Syria", Coastal, NotACentre, TurkeyAnd
 
-          // Africa
           "naf", "North Africa", Coastal, NotACentre, Africa
           "tun", "Tunis", Coastal, Neutral, Africa
 
-          // And the waters
           "nao", "North Atlantic Ocean", Sea, NotACentre, Waters
           "nwg", "Norwegian Sea", Sea, NotACentre, Waters
           "bar", "Barents Sea", Sea, NotACentre, Waters
@@ -178,22 +128,10 @@ module Atlas =
           "eas", "Eastern Mediterranean", Sea, NotACentre, Waters
           "bla", "Black Sea", Sea, NotACentre, Waters ]
 
-    /// The three provinces whose two coastlines face different waters, and which coasts they
-    /// are. Written out rather than read off the fleet table, so that the two can be checked
-    /// against each other: a coast that appears in one and not the other is a mistake, and
-    /// deriving either from the other is how it would go unnoticed.
     let private twoCoasted =
         [ "spa", [ North; South ]; "bul", [ East; South ]; "stp", [ North; South ] ]
 
-    // --- where an army may walk -----------------------------------------------------------------
 
-    /// Land to land, both ends written out. No sea appears here at all, and `problems` says so
-    /// if one ever does.
-    ///
-    /// Two provinces are missing from the rest of it on purpose: an army in Tunis may walk to
-    /// North Africa and nowhere else, so the land graph is in two pieces and Africa is the
-    /// small one. That is the map, not an omission, which is why the check below asks the two
-    /// graphs *together* to be connected and never asks it of this one alone.
     let private armyBorders =
         [ "cly", [ "edi"; "lvp" ]
           "edi", [ "cly"; "lvp"; "yor" ]
@@ -263,19 +201,9 @@ module Atlas =
           "naf", [ "tun" ]
           "tun", [ "naf" ] ]
 
-    // --- and where a fleet may sail --------------------------------------------------------------
 
-    /// Waters to waters, waters to coast, and coast to coast where two coastlines actually
-    /// meet. Both ends written out, and a coast named after a slash where the province has
-    /// two of them.
-    ///
-    /// Coast to coast is the half people forget. A fleet may sail from Rome to Naples because
-    /// their shores run into one another, and may not sail from Rome to Venice though the two
-    /// provinces border - the land between them is a land border and a fleet is not walking
-    /// it. So this is not the army table with the seas added; it is a different map.
     let private fleetBorders =
-        [ // The oceans and seas
-          "nao", [ "nwg"; "iri"; "mao"; "cly"; "lvp" ]
+        [ "nao", [ "nwg"; "iri"; "mao"; "cly"; "lvp" ]
           "nwg", [ "nao"; "bar"; "nth"; "nwy"; "cly"; "edi" ]
           "bar", [ "nwg"; "nwy"; "stp/nc" ]
           "iri", [ "nao"; "eng"; "mao"; "lvp"; "wal" ]
@@ -295,7 +223,6 @@ module Atlas =
           "eas", [ "ion"; "aeg"; "smy"; "syr" ]
           "bla", [ "bul/ec"; "rum"; "sev"; "arm"; "ank"; "con" ]
 
-          // And the shores
           "cly", [ "nao"; "nwg"; "edi"; "lvp" ]
           "edi", [ "nth"; "nwg"; "cly"; "yor" ]
           "lvp", [ "nao"; "iri"; "cly"; "wal" ]
@@ -353,7 +280,6 @@ module Atlas =
           "naf", [ "mao"; "wes"; "tun" ]
           "tun", [ "tys"; "ion"; "wes"; "naf" ] ]
 
-    // --- the board built from all that ------------------------------------------------------------
 
     let all =
         declared
@@ -364,7 +290,6 @@ module Atlas =
               Centre = centre
               Region = region })
 
-    /// The three letters, back out of an id. The only place the wrapper is taken off.
     let code (ProvinceId text) = text
 
     let private lookup =
@@ -372,15 +297,10 @@ module Atlas =
 
     let count = List.length all
 
-    /// A province by the three letters, if there is one. The only door in: a line typed at the
-    /// prompt becomes a `ProvinceId` here or stays a string.
     let byCode (text: string) =
         Map.tryFind (text.ToLowerInvariant()) lookup
         |> Option.map (fun province -> province.Id)
 
-    /// Everything known about one. Every id was minted above, so this is a total lookup on the
-    /// ids that exist - written with a fallback rather than an option because every caller has
-    /// an id in hand and none of them has anything useful to say about not finding it.
     let about id =
         Map.tryFind (code id) lookup
         |> Option.defaultValue
@@ -404,19 +324,13 @@ module Atlas =
 
     let isLand id = terrainOf id <> Sea
 
-    /// Every supply centre, in the order the board lists them.
     let centres =
         all |> List.filter (fun p -> p.Centre <> NotACentre) |> List.map (fun p -> p.Id)
 
-    /// The home centres of one power - the only places it may ever build.
     let homesOf power =
         all |> List.filter (fun p -> p.Centre = Home power) |> List.map (fun p -> p.Id)
 
-    // --- reading a location --------------------------------------------------------------------
 
-    /// A province by whatever a person typed: the three letters, or its name with the spaces
-    /// taken out. `stp` and `stpetersburg` are the same place, and a player who types the
-    /// second has not made a mistake worth correcting.
     let byWord (text: string) =
         let wanted = text.ToLowerInvariant()
 
@@ -439,14 +353,10 @@ module Atlas =
         parseCoast text
         |> Option.bind (fun (province, coast) -> byCode province |> Option.map (fun id -> { At = id; Coast = coast }))
 
-    /// A whereabouts by whatever a person typed: `stp/sc`, `spa/nc`, `vienna`, `tri`. The other
-    /// door in, and the one an order comes through.
     let spotBy (text: string) =
         parseCoast text
         |> Option.bind (fun (province, coast) -> byWord province |> Option.map (fun id -> { At = id; Coast = coast }))
 
-    /// The coasts a province has to choose between, which is two for three of them and none
-    /// for everybody else.
     let coastsOf id =
         twoCoasted
         |> List.tryFind (fun (c, _) -> c = code id)
@@ -455,15 +365,11 @@ module Atlas =
 
     let hasCoasts id = coastsOf id |> List.isEmpty |> not
 
-    /// Where a piece of that kind stands in a province, as a location. An army is never on a
-    /// coast even when the province has two, because an army standing in Spain is standing in
-    /// Spain; only a fleet has to say which water it is floating in.
     let standing kind id coast =
         match kind with
         | Army -> { At = id; Coast = None }
         | Fleet -> { At = id; Coast = coast }
 
-    // --- and the two graphs -----------------------------------------------------------------------
 
     let private edgesOf declaredBorders reading =
         declaredBorders
@@ -474,118 +380,26 @@ module Atlas =
 
     let private fleetMap = edgesOf fleetBorders locationOf
 
-    /// Where an army in that province may walk.
     let armyReach id =
         Map.tryFind id armyMap |> Option.defaultValue []
 
-    /// Where a fleet standing there may sail. Asked of a location rather than a province,
-    /// because on the three with two coasts that is the whole question.
     let fleetReach location =
         Map.tryFind location fleetMap |> Option.defaultValue []
 
-    /// Every place a piece of that kind, standing there, could be ordered to go.
     let reach kind location =
         match kind with
         | Army -> armyReach location.At |> List.map (fun id -> { At = id; Coast = None })
         | Fleet -> fleetReach location
 
-    /// Whether a piece of that kind standing there may move to that province at all - the
-    /// question every order has to answer, asked without caring which coast it would land on.
     let canGo kind location into =
         reach kind location |> List.exists (fun there -> there.At = into)
 
-    /// The ways in, for a fleet told to go somewhere with more than one shore: which coasts of
-    /// the destination it could actually reach from where it is.
     let waysInto kind location into =
         reach kind location |> List.filter (fun there -> there.At = into)
 
-    /// Whether an army could walk between two provinces, ignoring who is in the way. Used by
-    /// the machine to work out how far a centre is, and by nothing in the rules.
     let walkable from into = armyReach from |> List.contains into
 
-    // --- where they lie, so the board can be drawn as a board -------------------------------------
 
-    /// Rows north to south. Within a row the provinces stand two half-columns apart; each row is
-    /// offset an odd number of half-columns from the one above. So a province touches the two
-    /// beside it and two in each of the rows above and below - six shared sides, drawn as a
-    /// honeycomb, exactly the way the other game of maps here draws its twelve regions.
-    ///
-    /// `"."` is a cell with nothing in it, and there are four of them - all in one row, all in
-    /// the same place. A gap used to be load-bearing here: it was what kept two provinces that do
-    /// not border from being drawn side by side, and there were a good many. Once the map drew
-    /// every border there was, most of them were keeping nothing apart and were filled in.
-    ///
-    /// What is left is not a hole. It is **Switzerland**, which is not a province of this game
-    /// because nothing may ever enter it, and the five provinces round it - Marseilles, Burgundy,
-    /// Munich, Tyrolia, Piedmont - are exactly the five that ring Switzerland on the printed
-    /// board. `diplomacy.fsx` checks that, so a gap opened anywhere else is an accident and fails
-    /// rather than passing as scenery.
-    ///
-    /// **A province takes as many hexes as it needs, and that is the whole trick.** One hex a
-    /// province gives it six sides and no more, and provinces here have up to eleven neighbours -
-    /// which capped the first version of this map at about half the borders drawn. A region three
-    /// or four hexes across has sides to spare, so it can touch everything it really touches.
-    ///
-    /// **And it is the border table.** Turncoats' board is a patch of a triangular lattice, so
-    /// every one of its twenty-three borders can be drawn and `problems` insists every one of them
-    /// is - the picture *is* its border table. That was the thing this board was thought not to be
-    /// able to manage, and for a long time what was demanded here was one direction only: a side
-    /// drawn is a border, a border may go undrawn. It is both directions now. **Every side this
-    /// picture draws between two provinces is a real border, and every one of the two hundred and
-    /// six borders is drawn.** `problems` refuses a game either way round.
-    ///
-    /// A side between two hexes of the *same* province is not a border at all - it is the inside
-    /// of a country - so `problems` passes over those and looks only at where two different names
-    /// meet.
-    ///
-    /// Grown rather than drawn by hand: the regions were seeded a hex apiece at roughly the right
-    /// places and then spread outwards, a hex at a time, always into the space that met a
-    /// neighbour they had not met yet and never into one that would put them beside a province
-    /// they do not border. That is why some of the shapes are odd - the Norwegian Sea wraps round
-    /// the Barents, and the Ionian round the Eastern Mediterranean. Those are the shapes that make
-    /// the adjacencies come out right, and the adjacencies are what a map of this is *for*.
-    ///
-    /// What the grower could not do is back out of a corner. It only ever added a hex where one
-    /// was free and safe, so wherever the right answer was to take a hex away from somebody or to
-    /// move a province across, it simply stopped - and stopped somewhere that broke no rule and
-    /// made no sense. Those places have since been put right by hand, and each of them is a case
-    /// of that same failing.
-    ///
-    /// The Mid-Atlantic was the worst-served province on the board: it runs the whole west coast
-    /// of Europe and reached four provinces short. It now runs on down the western margin, round
-    /// the foot of Portugal and along the top of North Africa at one end and up past Ireland to
-    /// the North Atlantic at the other - which is where the Atlantic actually is - and it now
-    /// reaches every one of the ten provinces it borders. The map costs nothing for it: the
-    /// western margin was already open at every row it uses, so the board is not one column wider
-    /// than it was.
-    ///
-    /// The Barents had been left in the middle of the top row with the Norwegian Sea on both
-    /// sides of it, touching nothing else - a sea of no consequence at all, when the whole of what
-    /// it is for is that Russia's fleet comes out of St Petersburg into it. It sits at the top
-    /// right now, above Norway and St Petersburg with the Norwegian Sea to its west, and has all
-    /// three of the borders it really has. That freed the column between Edinburgh and Norway,
-    /// which is the Norwegian Sea in every atlas and is drawn as it now - so the Norwegian Sea
-    /// runs down to meet the North Sea, which it had never managed to touch.
-    ///
-    /// The Eastern Mediterranean was the Barents over again: one hex in the middle of the Ionian,
-    /// with Ionian on all six sides and none of the three provinces it exists to touch. It is at
-    /// the east end of the bottom row now, under Smyrna and Syria with the Aegean beside it, and
-    /// the Ionian - which is the biggest sea on the board and can afford it - runs along the rest.
-    ///
-    /// Burgundy and Munich were short of each other and of Ruhr, penned in by a row of Piedmont
-    /// that was doing nothing: three of Piedmont's six hexes touched only Piedmont and empty
-    /// space, and one of Tyrolia's was the same. Handing that row to Burgundy joins all three, and
-    /// what is left of it is the gap between France and Italy, which is the Alps and belongs there.
-    ///
-    /// Italy took two cells and no more. Rome had nowhere to reach Venice or Apulia from, and
-    /// Venice could get at neither Rome nor Tuscany. The cell between them went to Rome and
-    /// Piedmont's southern tip went to Venice, and with that every province in Italy - Rome,
-    /// Venice, Tuscany, Apulia, Naples, Piedmont - touches everything it borders.
-    ///
-    /// The last two were Armenia with Sevastopol and Moscow with St Petersburg, and they are the
-    /// reason the promise above is now made in both directions. Sevastopol takes one more hex east
-    /// of the Black Sea and Armenia one under it; St Petersburg runs down the far side of Livonia
-    /// on three cells that had nothing in them. With those the map draws every border there is.
     let private places =
         [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
           -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
@@ -877,23 +691,15 @@ module Atlas =
             "eas"
             "eas" ] ]
 
-    /// Every cell with the half-column it stands in, gaps and all.
     let private placedCells =
         places
         |> List.map (fun (start, cells) -> cells |> List.mapi (fun step code -> code, start + 2 * step))
 
-    /// The same with the gaps thrown away, which is what the borders are read off.
     let private placedPlaces =
         placedCells |> List.map (List.filter (fun (code, _) -> code <> "."))
 
     let private asPair one other = min one other, max one other
 
-    /// The borders this layout draws: two *different* provinces two half-columns apart in one
-    /// row, or one half-column apart in rows that touch. Every one of them had better be real.
-    ///
-    /// Two hexes of the same province share a side as well, and that side is not a border - it
-    /// is the inside of a country. Those are passed over rather than checked, which is the one
-    /// thing that lets a province be more than one hex.
     let private drawnBorders =
         Set.ofList
             [ for row in placedPlaces do
@@ -906,7 +712,6 @@ module Atlas =
                       for other, there in below do
                           if one <> other && abs (here - there) = 1 then yield asPair one other ]
 
-    /// Which hexes each province stands on, for the checks that ask about a region's shape.
     let private hexesOf =
         placedCells
         |> List.mapi (fun row cells -> cells |> List.map (fun (code, here) -> code, (row, here)))
@@ -915,7 +720,6 @@ module Atlas =
         |> List.groupBy fst
         |> List.map (fun (code, cells) -> code, cells |> List.map snd)
 
-    /// The six hexes around one: two beside it, and two in each of the rows above and below.
     let private around (row, here) =
         [ row, here - 2
           row, here + 2
@@ -924,8 +728,6 @@ module Atlas =
           row + 1, here - 1
           row + 1, here + 1 ]
 
-    /// The rows as a screen wants them: how far the row is shifted from the westmost cell on the
-    /// board, in half-columns, and then its cells in order - a province, or nothing at all.
     let layout =
         let westmost = placedCells |> List.collect id |> List.map snd |> List.min
 
@@ -935,30 +737,19 @@ module Atlas =
 
             start - westmost, row |> List.map (fun (code, _) -> if code = "." then None else byCode code))
 
-    // --- what could be wrong with all of it ------------------------------------------------------
 
-    /// What this game says is wrong with its own board, before anybody sits down to one.
-    ///
-    /// A map of seventy-five provinces and three hundred-odd borders, typed out by hand, will
-    /// have a mistake in it, and every one of these checks is a mistake that was actually
-    /// made while writing the tables above. The point of declaring both ends of every border
-    /// is that this list can catch them: a table mirrored from one end agrees with itself
-    /// however wrong it is.
     let problems =
         let codes = declared |> List.map (fun (code, _, _, _, _) -> code)
         let known = Set.ofList codes
 
         let named = List.map (fun (code, _, _, _, _) -> code) >> Set.ofList
 
-        /// Every code a border table mentions, coast and all stripped off.
         let mentioned table =
             table
             |> List.collect (fun (from: string, into) -> from :: into)
             |> List.map (fun text -> (text.Split '/')[0])
             |> Set.ofList
 
-        /// The two ends of every border in a table, as plain text, so that one can be looked
-        /// for in the other.
         let pairs table =
             table
             |> List.collect (fun (from, into) -> into |> List.map (fun there -> from, there))
@@ -989,9 +780,6 @@ module Atlas =
 
             walk Set.empty [ start ]
 
-        /// Both graphs at once, with the coasts flattened away - which is the only sense in
-        /// which this map is one map. Neither half is connected on its own: an army cannot
-        /// leave Africa and a fleet cannot enter Moscow.
         let together =
             let flatten table =
                 table
@@ -1002,8 +790,7 @@ module Atlas =
             |> List.groupBy fst
             |> List.map (fun (from, rows) -> from, rows |> List.collect snd |> List.distinct)
 
-        [ // --- the provinces themselves
-          if List.length codes <> List.length (List.distinct codes) then
+        [ if List.length codes <> List.length (List.distinct codes) then
               yield "the same province written down twice"
 
           if count <> 75 then yield $"{count} provinces, where the board has 75"
@@ -1025,14 +812,12 @@ module Atlas =
           if all |> List.exists (fun p -> p.Terrain = Sea && p.Centre <> NotACentre) then
               yield "a supply centre out at sea"
 
-          // --- the codes the border tables name
           for missing in Set.difference (mentioned armyBorders) known do
               yield $"an army border to '{missing}', which is not a province"
 
           for missing in Set.difference (mentioned fleetBorders) known do
               yield $"a fleet border to '{missing}', which is not a province"
 
-          // --- and whether they agree with each other
           for from, into in unmirrored armyBorders do
               yield $"{from} borders {into} by land, and {into} does not border {from}"
 
@@ -1045,7 +830,6 @@ module Atlas =
           if fleetBorders |> List.exists (fun (from, into) -> List.contains from into) then
               yield "a province bordering itself by sea"
 
-          // --- terrain against the graph a piece of that kind travels
           for code in mentioned armyBorders do
               if terrainOfCode code = Some Sea then
                   yield $"an army border at {code}, which is open sea"
@@ -1069,7 +853,6 @@ module Atlas =
               | Sea when not afloat -> yield $"{code} is open sea and borders nothing at all"
               | _ -> ()
 
-          // --- the three with two coastlines
           for province, coasts in twoCoasted do
               if not (Set.contains province known) then
                   yield $"'{province}' has two coasts and is not a province"
@@ -1095,27 +878,12 @@ module Atlas =
               | [| p; _ |] when twoCoasted |> List.exists (fst >> (=) p) -> ()
               | _ -> yield $"'{from}' names a coast of a province that has only one"
 
-          // --- and whether the whole thing hangs together
           let reachedTogether = reachedFrom "vie" together
 
           for code in codes do
               if not (Set.contains code reachedTogether) then
                   yield $"{code} cannot be reached from Vienna by any piece at all"
 
-          // --- and whether the map as drawn is the board
-          //
-          // Both directions: every side the picture draws is a border, and every border is
-          // drawn. Which is to say the picture *is* the border table, and a player who reads
-          // the map has read the whole truth about where a piece may go.
-          //
-          // It was one direction only for a long time, and the argument for that was sound
-          // while it lasted: a province here has up to eleven neighbours where a hexagon has six
-          // sides, so no map giving each province one hex could ever have drawn them all, and
-          // the honest thing was to promise the half that could be kept. What answered it was
-          // letting a province take as many hexes as its borders need, and then going back over
-          // the places the layout had settled for less. The second half of the promise is made
-          // here rather than described in a comment, so an edit that quietly drops a border
-          // fails before a game is dealt, in the words of the border it dropped.
           let laid = placedPlaces |> List.collect id |> List.map fst
 
           let touching =
@@ -1140,8 +908,6 @@ module Atlas =
               if not (List.contains code laid) then
                   yield $"{code} is on the board and nowhere on the map"
 
-          // A province may hold as many hexes as it needs, and they have to be one region. Two
-          // blobs a map apart both labelled Munich are two Munichs, whatever the tables say.
           for code, hexes in hexesOf do
               let held = Set.ofList hexes
 
@@ -1157,8 +923,6 @@ module Atlas =
                   if Set.count (walk Set.empty [ first ]) <> List.length hexes then
                       yield $"{code} is drawn on the map in more than one piece"
 
-          // A row whose cells do not alternate parity with the row above cannot share a side
-          // with it at all, which would be a map in two halves rather than one map.
           for above, below in List.pairwise placedCells do
               let parity row =
                   row |> List.map (snd >> abs >> (fun h -> h % 2)) |> List.distinct

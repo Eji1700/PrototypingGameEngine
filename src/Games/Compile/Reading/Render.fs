@@ -2,22 +2,10 @@ namespace TCModel.Compile
 
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace, and
-// the command line's argument types carry names this game already uses.
 open TCModel.Compile
 
-/// Every screen this game has, described once.
-///
-/// The board is the one thing here that is really this game's: two players sit opposite each
-/// other, so a line is read from the far side of the table inwards - their stack, the two
-/// protocols meeting in the middle, and then yours. A `Scene` says that much and nothing about
-/// what it looks like; `Readers` turns it into text, into panels and into a page, and the
-/// three cannot come to disagree about which way round the table is.
 module Render =
 
-    /// What each part of the screen is called. Named rather than written out, because the
-    /// readers draw them and a block renamed in one place would look like a block that had
-    /// gone missing.
     module Blocks =
         let draft = "The draft"
         let protocols = "Your protocols"
@@ -56,31 +44,12 @@ module Render =
         let hand =
             $"Say a card and a line to play it - 'fire-3 2'. Face up it is worth the number printed on it and may only go where its protocol is - either player's. Face down - 'fire-3 2 down' - it is worth {Placed.FaceDownValue} and goes anywhere, so a card you cannot use is never a dead card."
 
-    /// Who is waiting on an answer, in a phrase that will stand at the front of a sentence.
-    ///
-    /// Written once because three screens say it - the heading, the block that offers the
-    /// answers, and the one that says what is being asked - and a game stopped on a question
-    /// nobody can name looks exactly like a game that has hung.
     let private whoAsks =
         function
         | ACardSaying source -> Card.name source.Saying
         | TheControlComponent -> "The control component"
         | TheCacheCheck -> "The check cache phase"
 
-    // --- how wide a card is ------------------------------------------------------------------
-    //
-    // The measurements on this screen, and there are only these, because everything on it is a
-    // card: a stack in the field and a card in hand are the same thing drawn in two places, and
-    // a board where they were two different widths would be two boards.
-    //
-    // A card asks for `Across`, and its text is broken to `Room` - which is `Across` less the
-    // walls and the padding of the *two* boxes a line of it can end up inside, because a card in
-    // hand is a named tile holding three named tiles and a card on the table is only the three.
-    // `Room` is the deeper of the two, so both fit and neither is broken twice.
-    //
-    // The breaking is done here rather than left to whatever is drawing it, because a reader that
-    // lays a screen out by counting characters gives a cell the width of its widest line - and one
-    // long sentence would push every column on the board out to the width of that sentence.
 
     [<Literal>]
     let private Across = 28
@@ -88,44 +57,18 @@ module Render =
     [<Literal>]
     let private Room = 20
 
-    /// How many cards stand side by side. Three, because there are three lines and the hand
-    /// reads better under a field it lines up with.
     [<Literal>]
     let private PerRow = 3
 
-    /// A card's text as lines that will fit a box, quietly - it is what the card says rather
-    /// than something the game is saying now.
     let private inSmall said =
         said |> List.collect (Scene.wrap Room) |> List.map Scene.quietly
 
-    /// The three boxes printed on a card, **drawn whether or not there is anything in them**.
-    ///
-    /// An empty box is not nothing. A card played over another covers its middle and its bottom
-    /// and leaves its top showing, so which box a line is in is the difference between a rule
-    /// that survives being built on and one that does not - and a card drawn with the empty
-    /// boxes left out is a card whose one line could be any of the three. Drawn empty, a covered
-    /// card shows the two boxes a cover has silenced as the two boxes they are.
-    ///
-    /// Three tiles rather than a grid of three rows, and the reason is the reader rather than
-    /// the game: a grid gives every cell a line of air above and below it, which is what makes a
-    /// board of glyphs look like a board and what makes three boxes of prose look like a card
-    /// with nine blank lines in it. A named tile is a box that costs its own two walls and
-    /// nothing else, and the name is worth having anyway - it is the whole of what tells a
-    /// player which of the three an empty one is.
     let private boxed (top, middle, bottom) =
         [ "top", top; "middle", middle; "bottom", bottom ]
         |> List.map (fun (which, said) ->
-            // A space rather than nothing in an empty one. A box has to have something in it to
-            // be a box at all: a reader handed nothing draws a wall round nothing, which comes
-            // out as two corners and no name.
             Tile(Some which, Tone.Quiet, (if List.isEmpty said then [ Scene.quietly " " ] else inSmall said)))
 
-    // --- the heading -------------------------------------------------------------------------
 
-    /// Whose turn it is and what they are being asked for, or how it ended. Every screen opens
-    /// with this line, and at a game of three stages it is carrying more than usual: which
-    /// stage it is, is a thing a player has to be told rather than left to infer from what is
-    /// on the board.
     let heading beholder session =
         let seat = Session.active session
         let yours = seat = beholder
@@ -138,10 +81,7 @@ module Render =
         | None, Playing -> $"Turn {session.Turn} - {who} to play"
         | None, Done ending -> $"The game is over: {Words.ending ending}"
 
-    // --- the draft ---------------------------------------------------------------------------
 
-    /// What is left of the twelve, each one a control that types its own name - so what a
-    /// player clicks and what a player could have typed are one thing said once.
     let private pool protocols =
         match protocols with
         | [] -> Scene.quietly "none left"
@@ -162,10 +102,7 @@ module Render =
                     ))
             )
 
-    // --- setting the protocols against the lines ---------------------------------------------
 
-    /// Every order three protocols can be put in. Six of them, which is few enough to offer
-    /// whole rather than asking somebody to think of one.
     let private orders protocols =
         let rec walk items =
             match items with
@@ -200,33 +137,11 @@ module Render =
                     ))
             )
 
-    // --- the field ---------------------------------------------------------------------------
 
-    /// One stack, with everything in it saying as much as it is still allowed to say.
-    ///
-    /// `reading` is how a card is put into words for whoever is looking, which is the only
-    /// thing that differs between the two halves of the table: a card face down is a two to the
-    /// player across from it and a card they played to the player who played it.
-    ///
-    /// `newestLast` is which way up the pile is drawn, and it has to be settled here rather
-    /// than by whoever asks, because a stack is held newest first and that is what says which
-    /// card is uncovered. A caller that reversed the list before handing it over would be
-    /// handing over a pile whose top card is at the wrong end, and every card in it would then
-    /// be printed with the wrong half of its text.
     let private stack tone reading newestLast cards =
         match cards with
         | [] -> Tile(None, Tone.Quiet, [ Scene.quietly "-" ])
         | cards ->
-            // Only the top card of a stack is drawn as a card. Playing anything on a line - face
-            // up or face down, it makes no difference - covers the middle and the bottom of
-            // whatever was there, so the card underneath has one box left and no choice about
-            // which: everything a covered card still says is its top box, by definition. Three
-            // boxes for it would be one box of writing and two drawn to say *and these are the
-            // two you have already been told about*.
-            //
-            // A card face down is its back: a name, and not even that much. It says nothing out
-            // of any box, which is the one thing at this game worth something exactly because
-            // nobody can read it.
             let drawn depth placed =
                 let top, _, _ = Words.saying (depth = 0) placed
 
@@ -242,13 +157,6 @@ module Render =
             |> List.concat
             |> fun body -> Tile(None, tone, body)
 
-    /// The middle of a line: the two protocols that meet there, theirs above yours, in the
-    /// colours of whoever they belong to.
-    ///
-    /// Theirs is kept back until both are laid out. A card may be played face up against
-    /// *either* protocol on a line, so an order seen before you have chosen your own is worth a
-    /// great deal - which is why they go down face down and turn over together, and why this is
-    /// the one thing on this board drawn differently for the two people reading it.
     let private middle field (them, theirs) (you, yours) theirTone yourTone shown line =
         let facing side =
             Side.protocolOn line side
@@ -260,10 +168,6 @@ module Render =
             elif List.isEmpty theirs.Order then "not set"
             else Words.hidden
 
-        // What each stack is worth, beside the protocol it is being played towards, and where
-        // that leaves the line. The one piece of arithmetic in this game, so the board does it
-        // rather than the player - and "ready" is the whole of the warning a stack at ten gives
-        // the player who has to answer it.
         let against name tone seat side =
             let standing =
                 if Field.won seat line field then
@@ -287,15 +191,6 @@ module Render =
               against (facing yours) yourTone you yours ]
         )
 
-    /// The table as the reader is sitting at it: the other player's half across from them,
-    /// the protocols meeting in the middle, and their own half nearest.
-    ///
-    /// The two halves are read in opposite directions, and that is not a flourish. A stack is
-    /// a real pile on a real table growing away from the line it was played to, so the newest
-    /// card is the one nearest whoever played it - which on a screen with one player above the
-    /// line and the other below means the far stack is listed newest first and the near one
-    /// newest last. Drawing both the same way round would put one player's freshest card at
-    /// the other end of the table from them.
     let private field beholder session =
         let them = Session.other beholder
         let theirs = Session.side them session
@@ -303,8 +198,6 @@ module Render =
         let theirTone = Tone.Slot(Ink.key them)
         let yourTone = Tone.Slot(Ink.key beholder)
 
-        // Everything is on the table from the moment both orders are turned over, which is the
-        // moment the settling ends.
         let shown = Session.doing session <> TheProtocols
 
         Walled(
@@ -323,22 +216,10 @@ module Render =
               ) ]
         )
 
-    // --- who is playing, and what they are holding --------------------------------------------
 
-    /// Both seats, with an arrow at whoever is to act, and the three counts that are the whole
-    /// of what one player may know about the other's cards: how many are left, how many are
-    /// gone, and how many are in hand. What those cards *are* is not here, and that is the
-    /// point of counting them.
-    ///
-    /// Before the deal there are no cards to count, so it says what each has taken instead. A
-    /// row of three zeroes is not a fact about the game - it is a screen drawn for a stage it
-    /// is not in.
     let private players beholder session =
         let acting = Session.active session
 
-        // Whether there are cards at all, asked of the cards rather than of the stage: a game
-        // given up during the draft is `Done` with nothing dealt, and counting that as play
-        // would draw three zeroes under a game that never had a deck.
         let dealt =
             Session.seats
             |> List.exists (fun seat ->
@@ -354,8 +235,6 @@ module Render =
               Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (Words.seated yours seat)
 
               if dealt then
-                  // The score, first, because it is the only count here that is the game
-                  // rather than the housekeeping.
                   Scene.cell
                       (if Set.isEmpty side.Compiled then Tone.Quiet else Tone.Slot(Ink.key seat))
                       $"compiled {Set.count side.Compiled} of {Protocol.Each}"
@@ -364,9 +243,6 @@ module Render =
                   Scene.cell Tone.Quiet $"discard {List.length side.Discard}"
                   Scene.cell Tone.Quiet $"hand {List.length side.Hand}"
 
-              // Only in the game that has one, and only beside whoever is holding it - a column
-              // of blanks at a game without the rule would be a screen drawn for a rule it does
-              // not have.
               if Session.withControl session then
                   Scene.cell (Tone.Slot(Ink.key seat)) (if session.Control = HeldBy seat then "control" else "")
               else
@@ -377,38 +253,15 @@ module Render =
                        | drafted -> Words.order drafted) ])
         |> Aligned
 
-    // --- the hand ----------------------------------------------------------------------------
 
-    /// The reader's own cards, and only ever theirs. Each is a cell carrying every way that card
-    /// could be laid, because a card, a line and a face together are one move and a control has
-    /// to carry the whole of one.
-    ///
-    /// Face up is one button and not three: no protocol is drafted twice, so a card's protocol
-    /// sits on exactly one line and there is exactly one place it can go face up. Face down is
-    /// three, because face down goes anywhere. That asymmetry is the game's, and drawing it is
-    /// most of what makes the choice legible without reading a rule.
-    ///
-    /// And each of them says what it does. A hand drawn as five coloured names was a hand a
-    /// player had to have memorised to play from - the whole choice at this game is between the
-    /// number on a card and the words under it, and one of the two was not on the screen.
     let private hand beholder session =
         let side = Session.side beholder session
         let tone = Tone.Slot(Ink.key beholder)
 
-        // Face up only, and it is the only one worth a control. Face down is three more lines on
-        // every card in the hand to say the one thing that is true of every card in the hand -
-        // any of them, on any line, always - so it is said once in the note and once in the
-        // commands, and the card carries what is particular to it.
-        //
-        // Which is also why the caption says the verb. "up 2" was what this used to read, and
-        // under a card that now carries its own printed text it read as another line of it - a
-        // card that said "up 2" and meant nothing by it.
         let ways card =
             [ for line in Field.facingLines beholder card session.Field ->
                   Does($"play face up {line}", $"play {Card.key card} {line}", Tone.Plainly) ]
 
-        // Always offered, because refreshing is always an action - and when the hand is empty it
-        // is the only one, which is when a player most needs to be told it exists.
         let again =
             Tile(
                 Some "refresh",
@@ -418,10 +271,6 @@ module Render =
                   Scene.quietly "costs the turn" ]
             )
 
-        // No marker on the cards that say something: **every one of the ninety does**, so a star
-        // would be a star on all of them. What is printed is under the name instead, whole -
-        // `what fire-3` still says it at length, and now it says the same thing twice rather
-        // than being the only place to find it.
         let card' card =
             Tile(Some(Card.name card), tone, boxed (Words.boxes card) @ ways card)
 
@@ -435,13 +284,7 @@ module Render =
                 |> List.map Scene.squared
             )
 
-    // --- a card waiting on somebody ------------------------------------------------------------
 
-    /// What is being asked, and a control per card that would answer it.
-    ///
-    /// The one screen this game did not have until the pile went in, and the one it most needed:
-    /// a game stopped mid-effect looks exactly like a game that has hung, unless it says what it
-    /// is waiting for and who from.
     let private question beholder (asked: Question) =
         let yours = asked.Chooser = beholder
 
@@ -482,12 +325,6 @@ module Render =
                     | Either _
                     | Opposing _ -> "pick a card"
 
-                // **A card in somebody else's hand is not named.** A question can be a hand -
-                // "your opponent discards a card" stops on them and offers everything they are
-                // holding - and this block is drawn to both players, so it used to print the whole
-                // of the other hand on the board of whoever played the card. What the reader is
-                // owed is that there is a question and how big it is, which is exactly what
-                // somebody at a table would see: a hand held up, and no faces.
                 let choices =
                     targets
                     |> List.map (fun target ->
@@ -565,8 +402,6 @@ module Render =
 
                 $"say whether to {Words.printing inner}", choices
 
-            // Both halves are on the buttons rather than "first" and "second", because a player
-            // choosing between two commands should be reading the commands.
             | OneOf(first, second) ->
                 let choices =
                     [ Words.printing first, "first"; Words.printing second, "second" ]
@@ -589,10 +424,7 @@ module Render =
             [ Scene.says says
               Walled(20, choices |> List.chunkBySize 3 |> List.map Scene.squared) ]
 
-    // --- what a player may type ----------------------------------------------------------------
 
-    /// The commands, short. `help` has them at length, and both are written from this list so
-    /// neither can quietly grow a command the other has never heard of.
     let private verbs =
         [ "fire", "draft the Fire protocol (or 'draft fire')"
           "water dark fire", "set your three against lines 1, 2 and 3 (or 'arrange ...')"
@@ -645,27 +477,17 @@ module Render =
               "COMMANDS"
               commands ]
 
-    // --- the log ------------------------------------------------------------------------------
 
-    /// What the game has said lately, oldest first - and in the words that seat may hear it in.
-    /// One line of this is a secret before the protocols are turned over, so the log is read
-    /// per seat rather than written once, like everything else on this board.
     let wording = Told.inWords Words.said Words.command
 
     let private heardBy seat =
         Told.inWords (Words.saidTo seat) Words.command
 
-    // --- the whole screen -----------------------------------------------------------------------
 
-    /// One screen, and which parts of it there are depends on the stage: a draft has no field
-    /// worth drawing and a hand nobody has been dealt, and a screen padded out with empty
-    /// blocks is a screen that has to be read past.
     let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
         let stage =
-            // A card waiting on somebody outranks the stage, because until it is answered
-            // nothing else on this screen is something a player could act on.
             match Session.asking session, session.Stage with
             | Some asked, _ -> Block(Blocks.choosing, [ question beholder asked ])
             | None, Drafting left -> Block(Blocks.draft, [ pool left; Scene.noted margins Notes.draft ])
@@ -694,11 +516,6 @@ module Render =
                       Scene.noted margins Notes.compiling ]
                 )
 
-        // The two seats used to stand beside the stage, and they were the wrong two things to
-        // put side by side: the stage is the widest block on the screen now that a card says
-        // what it does, so half the room went to five short counts and every one of them came
-        // out broken over two lines. They are counts rather than a choice, so they go under the
-        // thing being chosen from and get the whole width to say themselves in one line each.
         Stack
             [ Heading(heading beholder session)
               table
@@ -707,14 +524,7 @@ module Render =
               Scene.listing margins Blocks.commands commands
               Block(Blocks.log, Scene.log (heardBy beholder) model) ]
 
-    // --- the rest of what a player reads --------------------------------------------------------
 
-    /// What somebody asked for, as much of it as the reader may know.
-    ///
-    /// The record is the whole truth of the game and a player is not owed the whole truth while
-    /// it is still being played. An order laid face down is nobody's business until both are
-    /// turned over - and the record would otherwise hand it straight over, having been careful
-    /// about it everywhere else.
     let private askedFor beholder session (entry: Entry<Move, Notice>) =
         match entry.Asked with
         | Make(Arrange _) when entry.Actor <> beholder && Session.doing session = TheProtocols ->
@@ -733,19 +543,7 @@ module Render =
         |> List.map entry
         |> Scene.record (heading beholder (Model.state model))
 
-    // --- looking under a card, and into the pile ------------------------------------------------
 
-    /// Every card lying face down that this reader may read, drawn as the card it is.
-    ///
-    /// **Two different pieces of knowledge, and only one of them is a secret.** Your own face-down
-    /// cards you know because you put them there; the board names them already, and this is where
-    /// what is *printed* on them can be read. Theirs you know only where you have already read it:
-    /// a card played face up and turned over since is a card both players have seen, and the game
-    /// remembers that on the card itself - see `Placed.Seen`.
-    ///
-    /// `peek` alone is your own side, which is the everyday question - *what did I put down there
-    /// four turns ago*. `peek all` is everything you are entitled to, which on most boards is the
-    /// same list and now and then is one card longer.
     let private peeking beholder rest session =
         let them = Session.other beholder
 
@@ -795,16 +593,6 @@ module Render =
                       Walled(Across, found |> List.chunkBySize PerRow |> List.map Scene.squared) ]
             )
 
-    /// What the game still has to do, in the order it will do it.
-    ///
-    /// The pile is the one thing about this game that is entirely real and entirely invisible: a
-    /// card that says *"delete a card. If you do, draw a card"* stops on the deletion, and the
-    /// question a player is staring at means something different depending on whether the draw is
-    /// still behind it. Everything on the board is the position; this is what is about to happen
-    /// to it.
-    ///
-    /// In resolution order, which is the order the list is already in - a pile is newest first,
-    /// and newest first *is* next first.
     let private piling beholder session =
         match session.Pile with
         | [] -> Block("The pile", [ Scene.quietly "nothing waiting - the game is not in the middle of anything" ])
@@ -824,18 +612,6 @@ module Render =
                   ) ]
             )
 
-    /// What is being asked for right now, and the lines that would answer it.
-    ///
-    /// A game of three stages is the one place this question has a real answer: the same board
-    /// takes a protocol at one moment and a card at the next, and nothing on it says which. So
-    /// this is also **where a line nobody could read is sent**, because *"'nonsense' is not a
-    /// protocol"* is a true sentence that stops being useful after the sixth move of the game -
-    /// and the parser cannot do better, having no idea where the game stands. It answers in
-    /// examples the reader could type as they stand, which is the only kind of help that is
-    /// worth anything at a game whose verbs change three times.
-    ///
-    /// `beholder` is who asked, and it is here because the answer is a hand: whoever typed the
-    /// line gets their own cards and nobody else's, the same rule the board keeps.
     let answer beholder (asked: string) (model: Model<Move, Session, Notice>) =
         let session = Model.state model
 
@@ -844,25 +620,14 @@ module Render =
         | "pile" :: _ -> piling beholder session
         | _ ->
 
-        // A card named is a card asked about. This is what `View.Answer` was put there for. The
-        // board prints what a card says where the card is lying, but only as much of it as that
-        // card is still allowed to say - so this stays the one place to read the whole of one,
-        // including the half a covering card has silenced and every card not on the table at all.
         let aboutACard =
             Commands.words asked
             |> List.tryPick (fun word -> Card.byName (word.ToLowerInvariant()))
 
         match aboutACard with
-        // Drawn as the card, boxes and all, rather than as three sentences in a row. It is the
-        // same three boxes the board draws, so a card looked up here and the same card lying on
-        // the table are recognisably one thing - and which box a line is in is half of what
-        // somebody asking about a card is asking.
         | Some card -> Block(Card.name card, boxed (Words.boxes card))
         | None ->
 
-        // A line that named nothing the game knows. Worth saying out loud before the rest,
-        // because the rest reads as a lecture if the reader has not been told why they got it -
-        // and worth *not* saying when somebody simply typed 'what' and asked.
         let puzzled =
             match Commands.words asked with
             | []
@@ -874,13 +639,6 @@ module Render =
         let side = Session.side seat session
         let yours = seat = beholder
 
-        /// Which lines this seat's cards could go face up on, as lines somebody could type.
-        /// The one thing about a hand that is not obvious from reading it: a card's protocol
-        /// may be facing a line on either side of the table, and on some turns neither.
-        /// All of them rather than a sample, because a sample is a list somebody has to check
-        /// against their hand to see what was left out. A hand is five, and every card has at
-        /// most one line its protocol faces - so this is five entries unless a card of theirs
-        /// has opened the board, and then the length of it is the news.
         let playable =
             side.Hand
             |> List.collect (fun card ->
@@ -889,8 +647,6 @@ module Render =
 
         let inPlay =
             if not yours then
-                // Never another player's cards, whatever they asked. This is the same rule the
-                // board keeps, and the reason this endpoint knows who is asking at all.
                 [ $"{Words.player seat} is to play, and what they are holding is theirs."
                   Notes.field ]
             elif List.isEmpty side.Hand then
@@ -907,8 +663,6 @@ module Render =
 
         let said =
             match Session.asking session, session.Stage with
-            // A card waiting on somebody outranks the stage, exactly as it does on the board:
-            // until it is answered there is nothing else anybody could type.
             | Some question, _ ->
                 [ if question.Chooser = beholder then
                       $"{whoAsks question.Because} is waiting on you: {Words.wanting question.Wanting}."
@@ -938,23 +692,10 @@ module Render =
 
     let rules = Scene.rules help
 
-    // --- a table still filling up -----------------------------------------------------------
 
     let waiting = Scene.waiting Words.seated
 
-    // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that.
-    ///
-    /// A cell here is a card - its name, its three boxes and every way it could be laid - so it
-    /// wants far more room than a board of squares would ask for, it fills from the top rather
-    /// than sitting in the middle, and its writing starts at the left edge of every line because
-    /// it is a paragraph and not a glyph.
-    ///
-    /// The last line is the one that is not a preference. A cell of a board is square by default,
-    /// which is right for the card and wrong for the three boxes inside it: a box has whatever
-    /// height its text needs, and a box holding nothing is a thin empty one rather than a square
-    /// of blank space the size of a card.
     let private sheet =
         """
 .grid { --cell: 15rem; }
@@ -967,6 +708,4 @@ module Render =
         { Title = "Compile"
           Sheet = sheet
           Placeholder = "a protocol to draft it, or a card and a line - 'fire-3 2', or 'help'"
-          // A game of turns is read by somebody who is typing, so the page leaves their
-          // keys alone.
           Keys = [] }

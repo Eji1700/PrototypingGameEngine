@@ -2,18 +2,14 @@ namespace TCModel.Turncoats
 
 open TCModel.Common
 
-/// The three kinds of stone, and so the three factions.
 type StoneColor =
     | Red
     | Blue
     | Green
 
 module StoneColor =
-    /// Canonical ordering, used wherever colours are listed or indexed.
     let all = [ Red; Blue; Green ]
 
-/// An immutable multiset of stones. Counts are always positive: a colour that is
-/// absent is simply not held, so a pile can never carry a negative or zero count.
 type Pile = private Pile of Map<StoneColor, int>
 
 module Pile =
@@ -37,7 +33,6 @@ module Pile =
     let remove color n pile =
         if n <= 0 then pile else withCount color (count color pile - n) pile
 
-    /// Remove `n` stones, or None when the pile does not hold that many.
     let tryTake color n pile =
         if count color pile >= n then Some(remove color n pile) else None
 
@@ -47,15 +42,12 @@ module Pile =
     let ofColors colors =
         colors |> Seq.fold (fun pile color -> add color 1 pile) empty
 
-    /// Everything in both piles.
     let merge (Pile counts) pile =
         counts |> Map.fold (fun pile color n -> add color n pile) pile
 
-    /// What is left of a pile once everything in the first is taken out of it.
     let without (Pile counts) pile =
         counts |> Map.fold (fun pile color n -> remove color n pile) pile
 
-    /// Counts in canonical colour order, omitting colours that are absent.
     let toCounts pile =
         StoneColor.all
         |> List.choose (fun color ->
@@ -63,12 +55,9 @@ module Pile =
             | 0 -> None
             | n -> Some(color, n))
 
-    /// The individual stones, in canonical colour order.
     let toColors pile =
         toCounts pile |> List.collect (fun (color, n) -> List.replicate n color)
 
-    /// The colour of the stone at `index` when the pile is laid out in canonical
-    /// order. Turns a uniform integer into a uniformly drawn stone.
     let private colorAt index pile =
         let rec walk remaining colors =
             match colors with
@@ -79,8 +68,6 @@ module Pile =
 
         walk index StoneColor.all
 
-    /// Draw a single stone uniformly at random, yielding it, the diminished pile,
-    /// and the generator to carry on with.
     let drawOne pile rng =
         match total pile with
         | 0 -> None, rng
@@ -89,7 +76,6 @@ module Pile =
             let color = colorAt index pile
             Some(color, remove color 1 pile), rng
 
-    /// Draw up to `n` stones at random, yielding the drawn stones and what is left.
     let draw n pile rng =
         let rec loop remaining drawn source rng =
             if remaining <= 0 then

@@ -2,8 +2,6 @@ namespace TCModel.Turncoats
 
 open TCModel.Engine
 
-/// Putting the game into English. The domain reports what happened in its own terms;
-/// everything a player actually reads is written here.
 module Words =
 
     let color =
@@ -27,67 +25,42 @@ module Words =
 
     let player playerId = $"Player {PlayerId.value playerId}"
 
-    /// A player as one screen names them, with the reader's own seat marked.
-    ///
-    /// Every view does this and the game is unreadable without it: over a network the seat
-    /// to play is very often not the seat reading, so "Player 3" alone leaves somebody
-    /// hunting for which one they are. Said here because it is the same mark on all of
-    /// them - the board, and the table still filling up.
     let seated yours playerId =
         player playerId + (if yours then " (you)" else "")
 
-    /// Ground nobody holds, and ground nobody holds outright. Both are read as a chart's
-    /// label and as the end of a sentence, so they are words rather than either.
     let unclaimed = "unclaimed"
 
     let tied = "tied"
 
-    /// A count of one colour, said the way a person would: "a Red stone", "3 Red stones".
-    /// Every sentence below that counts stones goes through here, because "1 stone(s)" is
-    /// a placeholder somebody forgot to finish, and it is read mid-game.
     let stonesOf n c =
         if n = 1 then $"a {color c} stone" else $"{n} {color c} stones"
 
-    /// The same for moves, for the one sentence that counts them.
     let moves n =
         if n = 1 then "1 move" else $"{n} moves"
 
-    /// Reads as "2 Red and 1 Green"; empty piles read as "nothing".
     let pile stones =
         match Pile.toCounts stones with
         | [] -> "nothing"
         | counts -> counts |> List.map (fun (c, n) -> $"{n} {color c}") |> String.concat " and "
 
-    /// The stones themselves, laid out for the board display.
     let stones pile =
         if Pile.isEmpty pile then
             "-"
         else
             pile |> Pile.toColors |> List.map (glyph >> string) |> String.concat " "
 
-    /// Stones counted rather than laid out, as "Rx4 Bx2", for where there are too many
-    /// to draw one by one.
     let counted pile =
         match Pile.toCounts pile with
         | [] -> "empty"
         | counts -> counts |> List.map (fun (c, n) -> $"{glyph c}x{n}") |> String.concat " "
 
-    /// A compact tally, as "Rx4 Bx2 (6)".
     let tally pile = $"{counted pile} ({Pile.total pile})"
 
-    /// Stones that may be out of sight: an open pile is tallied as usual, a closed one
-    /// gives up nothing but how many it holds.
     let sight =
         function
         | Open pile -> tally pile
         | Closed n -> $"closed ({n})"
 
-    /// Who rules a region, said outright.
-    ///
-    /// `Render.standingIn` writes the short form - ">R", "=BG" - because a region drawn on
-    /// a map has room for two characters and no more. This is the same thing for the views
-    /// that give a region a box with room to say it in words, which so far is the Flag and
-    /// the Axe standing on their own.
     let rule =
         function
         | RuledBy c -> color c
@@ -135,12 +108,6 @@ module Words =
             $"Settle the negotiation first: a stone must go back to the reserve, and the {color drawn} stone just drawn may be it."
         | NothingToSettle -> "There is no negotiation to settle."
 
-    /// A message written the way a player types it. The record is kept in the same
-    /// words the prompt takes, so a game can be read back and played again without a
-    /// second language standing between the two.
-    ///
-    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
-    /// engine's words and are written once, by the engine, in `Msg.written`.
     let command =
         let short color =
             (glyph color |> string).ToLowerInvariant()
@@ -157,25 +124,13 @@ module Words =
             | Settle c -> $"return {short c}"
             | Resign -> "resign")
 
-    /// What this game itself said - and the whole of what a game has to say for itself.
-    /// Everything the engine says about undo, redo and a line nobody could read is said once,
-    /// in `Playable`, in words that suit any game.
     let said =
         function
         | Happened e -> event e
         | Refused r -> rejection r
 
-    /// A whole notice as a screen reads it: this game's half in this game's words, the
-    /// engine's half in the engine's. Written out once in `Told.inWords` rather than copied
-    /// here, which is what it was before there was a second game to copy it into.
     let notice = Told.inWords said command
 
-    // --- what a notice says to the player reading it ------------------------------
-    //
-    // The record above keeps the whole truth of what happened, because it is the record.
-    // What follows is that same truth as it reaches one player at the table, which is
-    // less: a stone drawn from the reserve goes straight into a closed bag, so only the
-    // player who drew it ever sees its colour.
 
     let eventSeenBy beholder happening =
         match happening with
@@ -183,17 +138,12 @@ module Words =
             $"{player player'} draws a stone from the reserve, and must now hand one back."
         | _ -> event happening
 
-    /// A refusal is public - asking is part of what happened at the table - but this one
-    /// names the stone just drawn, and it stays on screen after the turn has moved on.
-    /// Only the player who drew can be told it, and the heading gives them the colour
-    /// anyway, so nothing is lost by leaving it out here.
     let private rejectionSeenBy refusal =
         match refusal with
         | MustSettleFirst _ ->
             "Settle the negotiation first: a stone must go back to the reserve, and the one just drawn may be it."
         | _ -> rejection refusal
 
-    /// This game's half, as it reaches one seat.
     let saidTo beholder =
         function
         | Happened happening -> eventSeenBy beholder happening

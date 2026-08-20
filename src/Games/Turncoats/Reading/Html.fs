@@ -6,40 +6,10 @@ open Falco.Markup
 open Falco.Datastar
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing
-// namespace, and both `Spectre.Console` and the command line's argument types carry
-// names this game already uses - `Region`, `Open`, `View`.
 open TCModel.Turncoats
 
-/// The board as a page, for a player reading in a browser rather than at a terminal.
-///
-/// This is the third way of showing the game and it is shown the same way as the other
-/// two: every endpoint is handed the model and gives back text. The text happens to be
-/// HTML, which a terminal cannot show and a browser can, and that is the whole of the
-/// difference the rest of the program has to know about.
-///
-/// Nothing here decides what a player may know. What is shown comes from `Knowledge` and
-/// what a notice says comes from `Render.wording`, the same as the other two views - a
-/// third renderer is a third chance to leak, and the way not to take it is not to write
-/// that reasoning down a third time. Nor does anything here decide what a screen *says*:
-/// the region titles, the cascades, the rules and the commands are all `Render`'s words,
-/// laid out differently.
-///
-/// Two things are this view's own. The first is that a screen is a *fragment* rather than
-/// a page: everything below is one element with a known id, so the same text serves both
-/// for building the page the first time and for patching it afterwards, and there is only
-/// one way of drawing a board rather than one for each. The second is that a control is a
-/// line of typing. Every button here posts the words a player would have typed at the
-/// prompt, which is the record's own bargain - moves are written in the words the prompt
-/// takes - held to by a view that has buttons. A button cannot ask for something the
-/// parser would not take, because there is nothing else for it to send.
 module Html =
 
-    // --- the small change ------------------------------------------------------------
-    //
-    // All of it the page's rather than the game's, and named here only so that the drawing
-    // below reads as drawing. What each one is, and why it is written the way it is, is at
-    // `Page`.
 
     let private attr = Page.attr
 
@@ -55,9 +25,6 @@ module Html =
 
     let private aside = Page.aside
 
-    /// A colour's name in lower case, which serves as a CSS class and as the name of the
-    /// custom property holding it. Taken from `Words` so that a faction renamed is
-    /// renamed here too.
     let private shade color = (Words.color color).ToLowerInvariant()
 
     let private quiet text =
@@ -66,14 +33,11 @@ module Html =
     let private stone color =
         Elem.span [ Attr.class' $"stone {shade color}" ] [ Text.raw (string (Words.glyph color)) ]
 
-    /// Stones laid out one by one, each in its own colour - the same picture the rich view
-    /// draws, which is the one a player learns to read at a glance.
     let private laid pile =
         match Pile.toColors pile with
         | [] -> [ quiet "-" ]
         | colors -> colors |> List.map stone
 
-    /// The same, counted rather than laid out, for where there are too many to draw.
     let private counted pile =
         match Pile.toCounts pile with
         | [] -> [ quiet "-" ]
@@ -82,9 +46,6 @@ module Html =
             |> List.map (fun (color, n) ->
                 Elem.span [ Attr.class' $"stone {shade color}" ] [ Text.raw $"{Words.glyph color}x{n}" ])
 
-    /// Stones nobody can name, drawn as the stones they are: a closed bag of eight is
-    /// eight of these, which is exactly the state of affairs the game means a player to
-    /// be in.
     let private unnamed n =
         if n = 0 then [ quiet "-" ] else List.replicate n (quiet "?")
 
@@ -93,14 +54,6 @@ module Html =
         | Open pile -> laid pile @ [ quiet $" ({Pile.total pile})" ]
         | Closed n -> unnamed n @ [ quiet $" ({n})" ]
 
-    // --- the map ----------------------------------------------------------------------
-    //
-    // `Board.layout` lies on a triangular lattice: a region is two half-columns wide and
-    // each row stands half a region across from the one above. Laid out that way the
-    // regions come out as brickwork, and a brick touches exactly six others - the two
-    // beside it and two on each of the rows above and below. Those six are its borders. So
-    // the offset is not decoration: drop it and the map stops saying where a player may
-    // march.
 
     let private rulerBadge ruling =
         match ruling with
@@ -108,8 +61,6 @@ module Html =
         | Contested tied -> [ Elem.span [ Attr.class' "tied" ] (Text.raw "=" :: (tied |> List.map stone)) ]
         | Unclaimed -> []
 
-    /// A region as a box of its own, bordered in the colour of whoever rules it - which is
-    /// the one thing on a board worth seeing from across the room.
     let private regionCell game (region: Region) =
         let ruling = Game.ruleOver region.Id game
 
@@ -129,9 +80,6 @@ module Html =
         let short color =
             (Words.glyph color |> string).ToLowerInvariant()
 
-        // Recruiting needs nothing but a colour and a region, so every region offers all
-        // three whatever is in anybody's bag: asking for a stone you have not got is a fair
-        // thing to try, and the table answers it in words.
         let recruiting =
             match region.Kind with
             | Dead -> []
@@ -141,20 +89,6 @@ module Html =
                 StoneColor.all
                 |> List.map (fun color -> types $"recruit {short color} {Words.number region.Id}" (string (Words.glyph color)))
 
-        /// What can be done with the stones already standing here: driven out, or marched
-        /// into somewhere this region borders.
-        ///
-        /// Both are whole lines like every other button, which is what took them off the
-        /// prompt and onto the map. A battle needs no casualties named - left unsaid it
-        /// drives out as many as it may - and a march needs no count, one being what it
-        /// means without one. So each of these is a colour and one or two region numbers,
-        /// which is exactly what a region knows about itself.
-        ///
-        /// Filtered by what is actually standing here, where recruiting is not. That is the
-        /// same rule read twice rather than an inconsistency: a recruit of a colour you do
-        /// not hold is a move worth trying and being told about, and a battle or a march of
-        /// a colour that is not in the region is not a move at all - the rules would refuse
-        /// every one of them, every time, and a button refused every time is not a button.
         let withWhatIsHere =
             let here = Game.stones region.Id game
 
@@ -183,8 +117,6 @@ module Html =
             ([ Elem.div [ Attr.class' "title" ] [ Text.enc (Render.regionTitle 24 region) ]
                Elem.div [ Attr.class' "standing" ] (standing @ rulerBadge ruling)
                Elem.div [ Attr.class' "acts" ] (recruiting @ [ types $"rule {Words.number region.Id}" "?" ]) ]
-             // A second row, and only where there is something to do in it. An empty region
-             // has nothing to drive out and nothing to march, and says so by being quiet.
              @ (match withWhatIsHere with
                 | [] -> []
                 | acts -> [ Elem.div [ Attr.class' "acts wide" ] acts ]))
@@ -200,7 +132,6 @@ module Html =
                 (row |> List.map (fst >> Board.region >> regionCell game)))
         |> Elem.div [ Attr.class' "map" ]
 
-    /// The Flag and the Axe, which border nothing and so stand outside the map.
     let private apart game =
         Board.apartRegions
         |> List.map (fun region ->
@@ -212,7 +143,6 @@ module Html =
                   Elem.div [ Attr.class' "standing" ] (laid (Game.stones region.Id game) @ rulerBadge ruling) ])
         |> Elem.div [ Attr.class' "row" ]
 
-    // --- the blocks standing around it ------------------------------------------------
 
     let private players (seen: Knowledge) active model =
         let row (playerId, bag) =
@@ -244,8 +174,6 @@ module Html =
           line Render.Supply.outOfSight (counted seen.Unseen) ]
         @ (if notes && not over then [ note Render.Notes.supply ] else [])
 
-    /// How the land stands is the game's own reckoning, not this view's. A third renderer
-    /// counting it again for itself is a third chance to count it differently.
     let private landRuled notes game =
         let standing = Game.landStanding game
 
@@ -282,11 +210,7 @@ module Html =
             |> List.rev
             |> List.map (fun notice -> Elem.div [ Attr.class' "said" ] [ Text.enc (told notice) ])
 
-    // --- the whole screen ---------------------------------------------------------------
 
-    /// The board, drawn for one player. `margins` says how much of the writing round it
-    /// comes with it; the controls stay either way, because a player who knows how to read
-    /// a board still has to move on it.
     let board (margins: Margins) (beholder: Player) model =
         let notes = margins.Notes
         let game = Playing.game model
@@ -298,12 +222,8 @@ module Html =
 
         let told = Render.wording beholder model
 
-        /// A note, if the reader still wants them. A page wraps its own paragraphs, so
-        /// unlike the two terminal views this hands the whole thing over as it stands.
         let noted text = if notes then [ note text ] else []
 
-        // What may be done without saying anything more than the word itself. The rest of
-        // the moves take arguments, and take them at the prompt.
         let toHand =
             match Playing.session model with
             | InPlay { Phase = AwaitingReturn _ } ->
@@ -337,14 +257,10 @@ module Html =
                            " "
                            [ Render.Notes.map
                              Render.Notes.bordered
-                             // The one thing here no other view has: a region on this board can be
-                             // typed on by clicking it.
                              "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is."
                              "Where a region holds stones there is a second row: '×R' battles with a Red one and drives out all it may, and 'R→8' marches a Red one into 8." ]
                    ))
               block Render.Blocks.apart ([ apart game ] @ noted Render.Notes.apart)
-              // The one block no other view has: the moves that need nothing said beyond
-              // the word itself, which a terminal simply types.
               block "This turn" [ Elem.div [ Attr.class' "acts wide" ] toHand ]
               block Render.Blocks.players (players seen active.Id model)
               block Render.Blocks.supply (supply notes over seen)
@@ -354,8 +270,6 @@ module Html =
             @ [ block Render.Blocks.log (log told model) ]
         )
 
-    /// A table still filling up. There is no game to draw yet, so this is the one screen
-    /// drawn from a list of who has arrived rather than from a position.
     let waiting (seats: Waiting list) =
         let standing (seat: Waiting) =
             Elem.div
@@ -367,14 +281,7 @@ module Html =
             [ Elem.h1 [] [ Text.enc Render.Filling.title ]
               block "The table" ((seats |> List.map standing) @ [ quiet (Render.Filling.stillToCome seats) ]) ]
 
-    // --- the rest of what a player reads -----------------------------------------------
-    //
-    // Everything below lands in the aside rather than on the board, because that is what
-    // the table means by telling a console something: news with no board to go with it.
-    // The board stays where it was while it is read, which is more than a terminal manages.
 
-    /// One line with no board to go with it. The page's, because every game says these and
-    /// says them the same way.
     let says = Page.says
 
     let history (beholder: Player) model =
@@ -402,15 +309,7 @@ module Html =
               lines (Render.explainRule regionId model) ]
 
     let rules = aside [ Elem.h2 [] [ Text.enc Render.Blocks.rules ]; lines Render.help ]
-    // --- what this game looks like on a page ----------------------------------------------
 
-    /// The rules of how *this game's* pieces are drawn, and no more than that. The page
-    /// itself - the chrome, the prompt, the door, the corner - is styled at `Page`, along
-    /// with the row shapes every game builds a fragment out of.
-    ///
-    /// The colours are not here. They are a player's own and are written in above this as
-    /// custom properties, which is what lets two people at one table be sent the same board
-    /// and read it in colours that have nothing to do with each other.
     let private sheet =
         """
 body { --half: 7.5rem; }
@@ -438,12 +337,8 @@ body { --half: 7.5rem; }
 .entry .asked { min-width: 30ch; }
 """
 
-    /// What this game brings to a browser, and the whole of it. Everything else about the
-    /// page is the same at every game and is written once, at `Page`.
     let shell =
         { Title = "Turncoats"
           Sheet = sheet
           Placeholder = "type a move - r b 5, b r 8, m g 8 5 2, help"
-          // A game of turns is read by somebody who is typing, so the page leaves their
-          // keys alone.
           Keys = [] }

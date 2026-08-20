@@ -2,27 +2,15 @@ namespace TCModel.Diplomacy
 
 open TCModel.Engine
 
-/// Putting the game into English. The rules report what happened in their own terms;
-/// everything a player actually reads is written here.
-///
-/// Including the one thing at this game that is not merely wording: what a seat is told about
-/// an order somebody else wrote. Turncoats keeps that in a `Knowledge` of its own because
-/// there a hidden bag changes what the *board* looks like. Here nothing on the board is
-/// hidden - every unit is in plain sight - and the only secret is what has been written down
-/// and not yet sealed. A secret whose whole expression is which sentence gets printed belongs
-/// with the sentences.
 module Words =
 
-    // --- the pieces of the board -------------------------------------------------------------
 
     let province id = Atlas.nameOf id
 
     let code id = Atlas.code id
 
-    /// A place as an order writes it, coast and all: `stp/sc`.
     let spot (location: Location) = Piece.whereabouts location
 
-    /// A place as a sentence writes it: `St Petersburg (south coast)`.
     let place (location: Location) =
         match location.Coast with
         | Some coast -> $"{province location.At} ({Coast.name coast})"
@@ -31,11 +19,9 @@ module Words =
     let piece (unit: Piece) =
         $"{Kind.letter unit.Kind} {spot unit.Where}"
 
-    /// A piece as a sentence names it: `the Austrian fleet in Trieste`.
     let named (unit: Piece) =
         $"the {Power.adjective unit.Power} {Kind.name unit.Kind} in {province unit.Where.At}"
 
-    // --- the year --------------------------------------------------------------------------------
 
     let season =
         function
@@ -48,19 +34,13 @@ module Words =
         | Falling which -> $"{season which} {year} retreats"
         | Building -> $"Winter {year}"
 
-    /// What the phase is asking for, in one line. Every screen opens with this, because at a
-    /// game with three kinds of order the first thing anybody needs to know is which kind is
-    /// wanted.
     let asking =
         function
         | Moving _ -> "Write orders for your units, then 'commit'."
         | Falling _ -> "Say where your beaten units go - or 'disband' them - then 'commit'."
         | Building -> "Build or give up units to match your centres, then 'commit'."
 
-    // --- the orders ------------------------------------------------------------------------------
 
-    /// An order without the province it is for, which is how a board that has already named
-    /// the piece writes the rest of it.
     let saying =
         function
         | Holds -> "holds"
@@ -71,9 +51,6 @@ module Words =
         | Disbands -> "disbands"
         | Builds(kind, _) -> $"build {Kind.name kind}"
 
-    /// A whole order as a player would type it. This and `Parse` are the two halves of one
-    /// bargain: what this writes, that reads, and the record is kept in the words the prompt
-    /// takes so there is no second language standing between them.
     let order at says =
         let where = code at
 
@@ -92,10 +69,6 @@ module Words =
 
             $"build {(Kind.letter kind).ToLowerInvariant()} {at}"
 
-    /// A message written the way a player types it, which is what a record is made of.
-    ///
-    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
-    /// engine's words and are written once, by the engine, in `Msg.written`.
     let command =
         Msg.written (function
             | Give(at, says) -> order at says
@@ -105,7 +78,6 @@ module Words =
             | Whisper(Some heard, text) -> $"press {Power.key heard} {text}"
             | Resign -> "resign")
 
-    // --- what came of them -------------------------------------------------------------------------
 
     let fate =
         function
@@ -118,7 +90,6 @@ module Words =
         | NoRoute -> "no way across"
         | Swamped -> "convoy broken"
 
-    /// One order and its outcome, as a board writes it: `A vie - tri     moves to tri`.
     let report (entry: Report) =
         $"{piece entry.Piece} {saying entry.Said}", fate entry.Fate
 
@@ -128,11 +99,7 @@ module Words =
         | LastStanding winner -> $"{Power.name winner} is the last power left"
         | Deserted -> "everybody has walked away"
 
-    // --- a phase, in a sentence -------------------------------------------------------------------
 
-    /// What a resolved phase amounts to. The orders and their outcomes are on the board where
-    /// there is room to lay them out in a column; what goes in the log is the handful of
-    /// things that changed the game rather than the twenty that did not.
     let passing (was: Passing) =
         let counted =
             match was.Was with
@@ -176,7 +143,6 @@ module Words =
         | [] -> $"{phase was.Was was.Year}: nothing moved."
         | parts -> $"{phase was.Was was.Year}: " + String.concat ", " parts + "."
 
-    // --- the refusals ------------------------------------------------------------------------------
 
     let private list items = String.concat ", " items
 
@@ -212,8 +178,6 @@ module Words =
         | NothingToGiveUp at -> $"You have nothing to give up, so {province at} stays where it is."
         | NotThisPhase says -> $"'{saying says}' is not an order this phase takes."
 
-    /// One and many, said once. Interpolation cannot hold a string of its own, and a sentence
-    /// that says "1 builds" is a sentence somebody wrote in a hurry.
     let private several count one many =
         let word = if abs count = 1 then one else many
         $"{abs count} {word}"
@@ -231,20 +195,15 @@ module Words =
             $"{Power.name who} has {due} to give up and has named them all."
         | TalkingToYourself -> "You are the one power you cannot send word to."
 
-    // --- what a seat is called, and what it may read ---------------------------------------------------
 
     let power seat =
         Power.atSeat seat |> Option.map Power.name |> Option.defaultValue "nobody"
 
     let player = power
 
-    /// A seat as one screen names it, with the reader's own marked. Every view does this, and
-    /// the game is unreadable without it over a network where the seat to play is very often
-    /// not the seat reading.
     let seated yours seat =
         player seat + (if yours then " (you)" else "")
 
-    // --- and the whole of what this game says ----------------------------------------------------------
 
     let happening =
         function
@@ -263,16 +222,6 @@ module Words =
         | Happened event -> happening event
         | Refused why -> rejection why
 
-    /// The same, as much of it as one seat may know.
-    ///
-    /// Two things are secret at this game and both of them are here. An order written is
-    /// nobody's business until every power has sealed - which is the only reason a table where
-    /// the seats come round one at a time plays the same game as seven people writing at once.
-    /// And a word sent to one power is sent to one power.
-    ///
-    /// That the reader is *told there was one* is deliberate. Everybody at a real table can see
-    /// that Austria has finished writing and that a note has gone across to Italy; what they
-    /// cannot see is what is on either piece of paper.
     let saidTo seat notice =
         let reader = Power.atSeat seat
 

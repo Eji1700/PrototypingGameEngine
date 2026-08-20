@@ -1,5 +1,3 @@
-// What one player can see of a game, and that what they cannot see still adds up.
-
 #load "Harness.fsx"
 
 open TCModel.Turncoats
@@ -10,7 +8,6 @@ let private size =
     | Open pile -> Pile.total pile
     | Closed n -> n
 
-/// A real deal rather than a made-up position, so all 63 stones are really in play.
 let private dealt = Setup.deal 3 7UL |> Result.toOption |> Option.get
 
 let private beholder = Game.active dealt
@@ -22,7 +19,6 @@ let private others =
 let private bag playerId =
     view.Bags |> List.filter (fst >> (=) playerId) |> List.map snd
 
-// --- what is kept back -----------------------------------------------------------
 
 report "the beholder's own bag is laid open" [ Open beholder.Bag ] (bag beholder.Id)
 
@@ -33,7 +29,6 @@ report
 
 report "the reserve shows its size and nothing else" (Closed(Pile.total dealt.Reserve)) view.Reserve
 
-// --- what can be worked out anyway -----------------------------------------------
 
 report
     "what is out of sight is the reserve and the other bags together"
@@ -59,7 +54,6 @@ report
          + Pile.total player.Bag
          + Pile.total seen.Unseen))
 
-// --- once it is over ---------------------------------------------------------------
 
 let private bare = Knowledge.laidBare beholder dealt
 

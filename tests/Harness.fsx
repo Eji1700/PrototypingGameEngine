@@ -1,11 +1,3 @@
-// Shared by the test scripts: loads the engine and the game in compile order, and keeps
-// score.
-//
-// The engine comes first and mentions nothing below it - that is the whole of what makes it
-// one - so this list is also the shape of the thing: everything from `Result.fs` to
-// `Machines.fs` would be there whatever game was being checked, and everything after
-// `Stones.fs` is this one.
-
 #load "Checks.fsx"
 
 #load "../src/Common/Result.fs"
@@ -37,15 +29,10 @@
 open TCModel.Engine
 open TCModel.Turncoats
 
-// Keeping score lives on its own, so that the other game's checks - which cannot load this
-// file, both games having a `Board.fs` - can have it without it. Named through again here,
-// so nothing that already says `open Harness` has to learn a second name.
 let report = Checks.report
 
 let finish = Checks.finish
 
-/// A game with the given regions stocked and the given bags held; everything else
-/// is emptied. Regions are named by number.
 let gameOf stocked bags =
     let game =
         Setup.deal (max Table.MinPlayers (List.length bags)) 1UL

@@ -1,7 +1,5 @@
 namespace TCModel.Turncoats
 
-/// The stones standing on the map. Every board region has an entry, so asking what
-/// is in a region always answers.
 type Position = private Position of Map<RegionId, Pile>
 
 module Position =
@@ -23,11 +21,9 @@ module Position =
     let remove color n regionId position =
         position |> withStones regionId (Pile.remove color n (stones regionId position))
 
-    /// Every region paired with what stands in it, in board order.
     let all position =
         Board.regions |> List.map (fun region -> region, stones region.Id position)
 
-    /// Every stone on the map, of any colour.
     let total position =
         Board.ids
         |> List.fold (fun pile regionId -> Pile.merge (stones regionId position) pile) Pile.empty

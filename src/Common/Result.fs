@@ -1,6 +1,5 @@
 namespace TCModel.Common
 
-/// Sequences validation steps, short-circuiting on the first objection.
 type ResultBuilder() =
     member _.Return value = Ok value
     member _.ReturnFrom(outcome: Result<'T, 'E>) = outcome
@@ -13,6 +12,5 @@ module Validation =
 
     let result = ResultBuilder()
 
-    /// Nothing to say when the condition holds; otherwise the objection to it.
     let require condition objection =
         if condition then Ok() else Error objection

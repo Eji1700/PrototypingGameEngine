@@ -1,26 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- A game is a folder, and now the folder is a program.
-
-       Inside it the two seams are two folders. `Rules` is how it is played: no English, no
-       screen, and nothing from `src/Table` - which used to be a house rule you could check
-       and is now a fact about this project, because the reference below is the only way out
-       of it and it points at one thing. `Reading` is how it is read. `Offer.fs` is the two
-       halves joined, and the only file the engine ever sees. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
-    <!-- Framework-dependent unless somebody says otherwise, because `TCModel` references
-         this project and the SDK will not have a self-contained executable inside one that
-         is not. Either shape still publishes: `tools/publish.ps1` passes `-p:SelfContained`
-         on the command line, which is a global property and overrides this for the whole
-         graph at once. -->
     <SelfContained>false</SelfContained>
-    <!-- The same as this file's own name, and that is load-bearing: `Invoked` decides whether
-         to tell people to type `dotnet run` by looking for a project beside the reader named
-         after the running program, and there are six projects to be standing in now. -->
     <AssemblyName>Turncoats</AssemblyName>
     <RootNamespace>TCModel.Turncoats</RootNamespace>
   </PropertyGroup>
@@ -37,16 +22,9 @@
     <Compile Include="Rules/Actions.fs" />
     <Compile Include="Rules/Outcome.fs" />
     <Compile Include="Rules/Setup.fs" />
-    <!-- Where a game stands and how a turn flows, which is this game's and not the engine's:
-         a turn that stays open until a stone goes back is nobody else's rule. -->
     <Compile Include="Rules/Turn.fs" />
     <Compile Include="Rules/Playing.fs" />
-    <!-- Words are in here rather than beside the drawings because they are the game talking,
-         not a screen: what an event or a refusal *says* is settled once, and the three views
-         lay the same sentence out three ways. -->
     <Compile Include="Rules/Words.fs" />
-    <!-- And a seat played by the program, which reads the game the way a player does and
-         draws nothing at all. -->
     <Compile Include="Rules/Rival.fs" />
   </ItemGroup>
 
@@ -56,7 +34,6 @@
     <Compile Include="Reading/Render.fs" />
     <Compile Include="Reading/Rich.fs" />
     <Compile Include="Reading/Html.fs" />
-    <!-- Both seams filled in: this game as the engine takes one, and as a table reads one. -->
     <Compile Include="Offer.fs" />
   </ItemGroup>
 

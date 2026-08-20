@@ -1,18 +1,3 @@
-// The fifth game, and the one that is not a game of turns at all.
-//
-// Half of this is the ordinary thing: Conway's rule has a right answer for every board, and
-// the well-known shapes are the way to find out whether this is it - a block that does not
-// move, a blinker that beats, a glider that crosses the board a cell at a time.
-//
-// The other half is why it was written. `Engine` and `Table` were extracted on the claim that
-// they are generic in the game, and four games of two or more people taking turns against each
-// other cannot test that claim very hard. This one has one seat, no opponent, nothing to win,
-// no ending, and a position that moves because a rule says so rather than because anybody
-// chose it - and every check below that is not about neighbours is really about the machinery
-// giving it the same timeline, record, replay, verbs and screens as the rest, for nothing.
-//
-//   dotnet fsi tests/life.fsx
-
 #load "Living.fsx"
 
 open System
@@ -33,17 +18,12 @@ let private standing model = Model.state model
 
 let private mentions (needle: string) (text: string) = text.Contains needle
 
-/// A cell by the name a player would type. Every check below names cells the way the board
-/// does, because a check written in row and column numbers would pass on a board whose names
-/// had come loose from it.
 let private at word = Grid.read word |> Option.get
 
 let private played moves =
     moves
     |> List.fold (fun model move -> Update.update rules (Make move) model) dealt
 
-/// A board with nothing on it but these cells, which is how every shape below is set up: sweep
-/// the soup and turn on what the shape is made of.
 let private drawn cells =
     played (Clear :: (cells |> List.map (at >> Toggle)))
 
@@ -51,10 +31,6 @@ let private living model = (standing model).Cells
 
 let private shape cells = Set.ofList (cells |> List.map at)
 
-// --- what the game says is wrong with itself ---------------------------------------------
-//
-// The board is worked out from its two sides rather than written down, so this is the check
-// that the arithmetic came out - and the one thing `Faults` is for.
 
 report "the board hangs together" [] life.Faults
 
@@ -66,9 +42,6 @@ report
     (Grid.all
      |> List.filter (fun cell -> List.length (List.distinct (Grid.neighbours cell)) <> 8))
 
-// The edges are joined, which is a decision about the game rather than about the drawing: a
-// glider on a board with edges runs off it, and a board small enough to read on a screen is
-// only worth watching if it does not.
 
 report "the corner touches the far corner" true (Grid.neighbours (at "a1") |> List.contains (at "z16"))
 
@@ -76,10 +49,6 @@ report "and the far side of its own row" true (Grid.neighbours (at "a1") |> List
 
 report "a cell whose name does not read back" [] (Grid.all |> List.filter (fun cell -> Grid.read (Grid.name cell) <> Some cell))
 
-// --- the rule ------------------------------------------------------------------------------
-//
-// Four shapes, and between them they are the whole of Conway's rule: something that dies of
-// loneliness, something that stands still, something that beats, and something that moves.
 
 report "a lone cell dies" Set.empty (living (drawn [ "m8" ] |> fun model -> Update.update rules (Make(Step 1)) model))
 
@@ -99,9 +68,6 @@ report
     (shape blinker)
     (living (played (Clear :: (blinker |> List.map (at >> Toggle)) @ [ Step 2 ])))
 
-// A glider is the one that matters most, because it is the only one of the four that could
-// come out right by accident: a rule that counted its neighbours wrongly can still stand a
-// block still and beat a blinker, and cannot move five cells one square diagonally in four.
 
 let private glider = [ "f7"; "g8"; "h6"; "h7"; "h8" ]
 
@@ -112,9 +78,6 @@ report "a glider moves one square diagonally in four generations" (shape [ "g8";
 
 report "and is still five cells after forty" 5 (Set.count (living (gliding 40)))
 
-/// The same shape somewhere else on the board, with the edges joined - worked out here rather
-/// than asked of the game, because a check that borrowed the game's own wrapping would agree
-/// with it however wrong it was.
 let private moved (down, across) cells =
     cells
     |> Set.map (fun cell ->
@@ -123,7 +86,6 @@ let private moved (down, across) cells =
 
 report "and has gone ten squares diagonally by then, edges and all" (moved (10, 10) (shape glider)) (living (gliding 40))
 
-// --- a turn --------------------------------------------------------------------------------
 
 report "the deal is generation nought" 0 (rules.Turn(standing dealt))
 
@@ -142,9 +104,7 @@ report
     (living (played [ Step 25 ]))
     (living (played (List.replicate 25 (Step 1))))
 
-// --- and what it will not take ----------------------------------------------------------------
 
-/// Everything the rules said about a move, whether or not it carried.
 let private toldBy model =
     model.Log |> List.rev |> List.map (Playable.told life)
 
@@ -168,15 +128,9 @@ report
     (toldBy (played [ Step(Turn.Longest + 1) ])
      |> List.exists (mentions "A run of 101"))
 
-// A refusal is still something that was asked for, so the record keeps it. That is the
-// engine's rule rather than this game's, and it holds here without a line being written.
 
 report "but a refused move is written down all the same" 1 (Journal.length (played [ Step 0 ]).Journal)
 
-// --- a board with nothing left to happen to it -------------------------------------------------
-//
-// The two ways this game runs out, and neither of them is an ending. A still board and an empty
-// one are both boards, and a player who wants to draw on one is not finished with the game.
 
 let private settled = drawn block
 
@@ -206,11 +160,6 @@ report
     [ false; false; false ]
     ([ dealt; settled; died ] |> List.map (standing >> rules.Over))
 
-// --- how it is beating ---------------------------------------------------------------------
-//
-// A still board and a beating one look identical in one frame, and the difference is the only
-// thing anybody watching wants to know. It is worked out from the two generations the world
-// carries behind it, so it is a fact about the run rather than about the picture.
 
 report
     "a blinker is beating, two generations in"
@@ -221,10 +170,6 @@ report "a block is not - it has settled instead" false (World.beating (standing 
 
 report "and a board just drawn on knows nothing about beating" false (World.beating (standing (drawn blinker)))
 
-// --- one seat ----------------------------------------------------------------------------------
-//
-// Every seam above this game takes a count of players, and this is the count none of them was
-// ever given before.
 
 report "there is one seat" 1 (rules.Seats(standing dealt))
 
@@ -241,10 +186,6 @@ report "and there is no machine to sit in the one there is" [] life.Skills
 
 report "so a seating asks for none" [] (life.Seating 0UL [ None ] (standing dealt) |> List.map fst)
 
-// --- everything the machinery brings with it ------------------------------------------------
-//
-// None of what follows was written for this game. It is here because a game the engine's
-// authors would not have thought of is the only honest way to find out whether the seams hold.
 
 let private walked = played [ Step 3; Toggle(at "c4") ]
 
@@ -254,8 +195,6 @@ report "and made again" (living walked) (living (walked |> Update.update rules U
 
 report "and there is nothing to take back at the deal" (standing dealt) (standing (Update.update rules Undo dealt))
 
-// The record, which is written in the words the prompt takes and read back by the same parser -
-// so a game plays again from its own file without a second language in between.
 
 let private record = Transcript.write life [ Here ] walked.Journal
 
@@ -276,10 +215,7 @@ report
         |> Option.get
     ))
 
-// The words every game knows, read once for all of them - so this game's own reader never sees
-// `undo`, and could not redefine it if it tried.
 
-/// What a typed line came to, said in a word.
 let private reads typed =
     match Playable.read life typed with
     | Ok(Send msg) -> Ok(Words.command msg)
@@ -326,7 +262,6 @@ report
 
 report "a table of two is refused by the shared verbs too" (Error "2 players? The game takes 1.") (reads "players 2")
 
-// --- the screen ------------------------------------------------------------------------------
 
 let private view = Playable.plainest AtATerminal standard life
 
@@ -352,8 +287,6 @@ report "what the game said is on the screen" true (board |> mentions "Ran 4 gene
 
 report "the record reads back through the view too" true (view.History (Seat.at 1) walked |> mentions "toggle c4")
 
-// The one thing at this game worth asking about, and the one thing that cannot be read off the
-// board: the rule is about what is alive *around* a square.
 
 let private asked = view.Answer (Seat.at 1) "h9" (gliding 4)
 
@@ -368,29 +301,15 @@ report
     true
     (view.Answer (Seat.at 1) "nowhere" (gliding 4) |> mentions "is not a cell")
 
-// --- all three ways of drawing it ---------------------------------------------------------
-//
-// One description and three layouts. A block that got added to two of them and quietly missed
-// off the third is how this goes wrong, so the sweep asks all of them - and a fourth view added
-// later is held to it without anybody remembering to come back here.
 
 let private views = life.Views standard
 
-/// What a person would actually see, whatever a view wrote it in: colour taken back off, and
-/// markup with it.
-///
-/// The escape character is taken off with the code that follows it, and it has to be here
-/// where the other games could leave it: this board is a picture made of characters, so a row
-/// of it is only a row if what is left between two runs of cells is nothing at all - and an
-/// escape left standing between them is a hole in the picture no eye would ever see.
 let private seen text =
     let uncoloured = Regex.Replace(text, string (char 27) + @"?\[[0-9;]*m", "")
     Regex.Replace(uncoloured, "<[^>]*>", "")
 
 report "there are three of them" [ "plain"; "rich"; "html" ] (views |> List.map (fun view -> view.Name))
 
-/// Row nine of the glider four generations on, written out by hand: h9 and i9 alive and the
-/// rest of the row empty.
 let private ninthRow =
     String.replicate 7 Ink.Empty
     + String.replicate 2 Ink.Living
@@ -407,8 +326,6 @@ for view in views do
 
     report $"the {view.Name} view says which generation it is" true (drawn |> mentions "Generation 4")
 
-    // The whole of one row, rather than a cell here and there: a board is a picture, and the
-    // way a picture of it goes wrong is a row that has lost a character or gained one.
     report $"the {view.Name} view draws that board's ninth row, cell for cell" true (drawn |> mentions ninthRow)
 
     report $"the {view.Name} view names the rows and columns" true (drawn |> mentions Grid.letters)
@@ -436,12 +353,6 @@ for view in views do
         true
         (seen (view.Waiting arriving) |> mentions Scene.Filling.title)
 
-// --- the page, which can go wrong in ways nothing else can ------------------------------------
-//
-// A browser handed broken markup does not complain: it guesses, draws whatever it made of the
-// mess, and leaves nobody any the wiser. So being well-formed is checked here, where it can
-// still fail out loud - and so is the one thing that makes a board a board rather than a
-// picture of one, which is that every control on it types a line the parser takes.
 
 let private page = Page.page life.Page standard
 
@@ -479,8 +390,6 @@ for name, slot, markup in fragments do
         slot
         ((read markup).DocumentElement.GetAttribute "id")
 
-// A page carries its colours in its own head and every fragment draws in those, which is what
-// lets one board be built and read by however many people in however many palettes.
 
 let private lifeIsTeal =
     Palette.set Ink.Key "teal" standard |> Result.toOption |> Option.get
@@ -493,9 +402,6 @@ report
 
 report "the game's own stylesheet reaches the page" true (page |> mentions "line-height: 1.15")
 
-/// What a control on the page would send. The address is written into the markup escaped twice
-/// over - once for the client's own language and once for HTML - so it comes back the same way,
-/// and what is left after both is the line a player would have typed.
 let private posted (markup: string) =
     Regex.Matches(WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
     |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
@@ -518,11 +424,6 @@ report
          | Error _ -> true
          | Ok _ -> false))
 
-// --- one description, three readers -------------------------------------------------------
-//
-// A control carries the line it would type, so what a player at a terminal is told to type and
-// what a browser posts when the same control is clicked are not two strings to be kept in step -
-// they are one string, read twice.
 
 let rec private controls scene =
     match scene with
@@ -546,8 +447,6 @@ report
     (described
      |> List.forall (fun (caption, _) -> plain.Board Margins.all (Seat.at 1) (gliding 4) |> mentions caption))
 
-// A note is the game's decision and not a reader's, so it is off in the description before it
-// is off on any screen - which is what makes turning it off in one place enough.
 
 let rec private notes scene =
     match scene with

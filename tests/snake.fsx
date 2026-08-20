@@ -1,18 +1,3 @@
-// The sixth game: the arcade one, at two paces.
-//
-// A third of this is the ordinary thing - a snake moves, grows, and stops for three reasons,
-// and the rules should say so. A third is the two seams again, which this game leans on where
-// the others do not: it is the first whose table is any size from one to four with the same
-// rules either way, and the first whose generator is used all through a game rather than only
-// at the deal, so undo has to take a draw back with the move.
-//
-// And a third is the thing this game was really written for, which is that **a game that does
-// not wait is still a fold**. The clock is not in the game and not in the rules: a beat is a
-// move like every other move, and everything below asks it for one by hand. If any of it needed
-// a clock to check, the design would be wrong.
-//
-//   dotnet fsi tests/snake.fsx
-
 #load "Slither.fsx"
 
 open System
@@ -31,14 +16,10 @@ let private seat n = Seat.at n
 
 let private at row column = { Row = row; Column = column }
 
-// The two ways, and a fold apiece. Every check below says which pace it is about by which of
-// these it starts from - there is no third thing to get them mixed up in.
 let private turning = turns.Rules
 
 let private racing = snake.Rules
 
-/// A game of this many at that pace, from a fixed seed. Nothing here depends on a clock or on
-/// which order the checks are run in.
 let private dealt rules players =
     Update.start rules players 0UL |> Result.toOption |> Option.get
 
@@ -54,13 +35,9 @@ let private snakeOf n model = Session.snakeAt (seat n) (play model)
 
 let private headOf n model = Snake.head (snakeOf n model)
 
-/// Everything the rules said about a move, whether or not it carried.
 let private toldBy game model =
     model.Log |> List.rev |> List.map (Playable.told game)
 
-/// The board with the food put somewhere on purpose. The state is a record of plain values, so
-/// a check can say "the food is *there*" instead of walking a snake across the board hoping to
-/// meet it - and where the *next* one lands is still the game's own business.
 let private feeding cell model =
     let put session =
         match session with
@@ -70,8 +47,6 @@ let private feeding cell model =
     { model with
         Timeline = Timeline.ofDeal (put (standing model)) }
 
-/// A board with the snakes laid out by hand, head first. What a snake *is* is a public record of
-/// plain values, so a check can put one where it needs it rather than driving it there.
 let private laid bodies model =
     let put session =
         match session with
@@ -94,7 +69,6 @@ let private laid bodies model =
     { model with
         Timeline = Timeline.ofDeal (put (standing model)) }
 
-// --- what the game says is wrong with itself ---------------------------------------------
 
 report "the board hangs together, at every size of table" [] snake.Faults
 
@@ -111,7 +85,6 @@ report
 
 report "a table of none is refused too" true (Result.isError (racing.Deal 0 0UL))
 
-// --- the board ------------------------------------------------------------------------------
 
 report "a step east is one column across" (at 3 5) (Board.along East (at 3 4))
 
@@ -124,9 +97,6 @@ report
     []
     (Direction.all |> List.filter (fun way -> Direction.opposite way = way))
 
-// --- a game of turns ----------------------------------------------------------------------
-//
-// The pace that waits for you: a direction is a step, and nothing happens in between.
 
 let private solo = dealt turning 1
 
@@ -162,11 +132,6 @@ report "and the game does not move" (standing solo) (standing turnedBack)
 
 report "but a refused move is written down all the same" 1 (Journal.length turnedBack.Journal)
 
-// --- eating -----------------------------------------------------------------------------------
-//
-// A snake grows by keeping its tail rather than by gaining a head, which is why eating and
-// lengthening are one step apart. Both steps are checked, because a game that added the segment
-// at once would look right in the log and wrong on the board.
 
 let private hungry = feeding (Board.along East (headOf 1 solo)) solo
 
@@ -188,9 +153,6 @@ report
     ((play ate).Food
      |> Option.forall (fun cell -> Board.holds cell && cell <> headOf 1 ate))
 
-// The generator is in the state and moves with every piece eaten, which is what makes this game
-// replayable at all: where the next piece lands is part of the position rather than a draw made
-// on the side.
 
 report
     "the same board eaten from twice puts the next piece in the same place"
@@ -199,7 +161,6 @@ report
 
 report "and taking the move back takes the draw back with it" (play hungry).Food (play (Update.update turning Undo ate)).Food
 
-// --- the three ways it stops -------------------------------------------------------------------
 
 let private wall = played turning (List.replicate 7 (Go North)) solo
 
@@ -207,17 +168,11 @@ report "a snake that runs into the wall stops" (Some HitWall) (snakeOf 1 wall).F
 
 report "and says so" true (toldBy turns wall |> List.exists (mentions "ran into the wall"))
 
-// A snake long enough to meet itself, coiled so that one square of it is neither the neck nor
-// the tail - which is the only kind of square a snake can actually bite.
 let private coiled =
     laid [ (1, [ at 6 5; at 6 6; at 5 6; at 5 5; at 4 5; at 4 6 ], West) ] solo
 
 report "a snake that runs into itself stops" (Some HitItself) (snakeOf 1 (played turning [ Go North ] coiled)).Fate
 
-// The one place the rule is subtle: the square your own tail is standing on this moment is a
-// square you may move into, because the tail leaves as the head arrives. A game that refused it
-// would kill every snake that turned tightly, and one that allowed it while growing would let a
-// snake eat itself.
 
 let private following = laid [ (1, [ at 5 5; at 5 6; at 6 6; at 6 5 ], West) ] solo
 
@@ -228,7 +183,6 @@ report
     (Some HitItself)
     (snakeOf 1 (played turning [ Go South ] (feeding (at 6 5) following))).Fate
 
-// --- a table of more than one -------------------------------------------------------------------
 
 let private four = dealt turning 4
 
@@ -259,7 +213,6 @@ report "and comes round to the living ones only" (seat 3) (turning.Active(standi
 
 report "what is left of it is still on the board" 3 (Snake.length (snakeOf 1 resigned))
 
-// --- how it ends ---------------------------------------------------------------------------------
 
 report "at a table of one, the game is over when the snake stops" true (turning.Over(standing wall))
 
@@ -287,11 +240,6 @@ report
     (toldBy turns (played turning [ Go North ] lastOne)
      |> List.exists (mentions "The game is over, so there is nothing left to play"))
 
-// --- and now the clock ---------------------------------------------------------------------------
-//
-// Everything from here down is the pace that does not wait - and not one line of it needs a
-// clock, which is the whole claim. A beat is a move: it is asked for by hand here, by a timer in
-// a browser, and by a loop watching a console at a terminal, and all three fold the same one.
 
 let private ticking = dealt racing 1
 
@@ -313,9 +261,6 @@ report
     (Board.along North (headOf 1 ticking))
     (headOf 1 (played racing [ Steer(seat 1, North); Beat ] ticking))
 
-// A player leaning on a key is asking for something that has already happened, and the honest
-// answer to that is nothing at all - not a refusal, and not a line in a record that is already
-// three beats a second long.
 
 let private leaning =
     played racing [ Steer(seat 1, East); Steer(seat 1, East) ] ticking
@@ -344,11 +289,6 @@ report
     (toldBy snake (played racing [ Steer(seat 3, North) ] ticking)
      |> List.exists (mentions "There is no Snake C"))
 
-// Two turns inside one beat, which is what steering quickly *is* at this pace - and where the
-// rule went wrong. "Not the opposite of the way you are facing" is only the same thing as "not
-// back into your own neck" while the two agree, and a snake that has been turned but not yet
-// moved is facing one way and lying another. Turning north and then west used to be two legal
-// presses that killed the snake on the next beat.
 
 let private turnedTwice =
     played racing [ Steer(seat 1, North); Steer(seat 1, West) ] ticking
@@ -372,10 +312,6 @@ report
     None
     (snakeOf 1 (played racing [ Steer(seat 1, North); Beat; Steer(seat 1, West); Beat ] ticking)).Fate
 
-// --- everybody at once ------------------------------------------------------------------------
-//
-// The three rules a game of turns never needed, and the reason the beat is one move rather than
-// one move per snake.
 
 let private pair = dealt racing 2
 
@@ -389,8 +325,6 @@ report
     [ Board.along East (headOf 1 pair); Board.along West (headOf 2 pair) ]
     [ headOf 1 (beaten 1 pair); headOf 2 (beaten 1 pair) ]
 
-// Two heads into one square: neither of them got there first, so both stop. A rule that let the
-// first-listed snake through would make seat one the best seat at the table.
 let private meeting =
     laid [ (1, [ at 5 4; at 5 3; at 5 2 ], East); (2, [ at 5 6; at 5 7; at 5 8 ], West) ] pair
 
@@ -404,9 +338,6 @@ report
     (Some NobodyMoving)
     (Session.ending (standing (beaten 1 meeting)))
 
-// Everything moves at once, so a tail that was going to move counts as gone - which is what lets
-// two snakes chase each other nose to tail without either of them being bitten by a square that
-// was about to be empty.
 let private chasing =
     laid [ (1, [ at 8 5; at 8 4; at 8 3 ], East); (2, [ at 8 8; at 8 7; at 8 6 ], East) ] pair
 
@@ -420,7 +351,6 @@ report
     [ None; None ]
     [ (snakeOf 1 (beaten 3 chasing)).Fate; (snakeOf 2 (beaten 3 chasing)).Fate ]
 
-// And a snake that stops on a beat is still lying there for whoever is still going.
 let private strewn =
     laid
         [ (1, [ at 1 5; at 2 5; at 3 5 ], North)
@@ -431,7 +361,6 @@ report "a snake that runs into the wall stops on the beat" (Some HitWall) (snake
 
 report "and the one still moving wins it" (Some(LastMoving(seat 2))) (Session.ending (standing (beaten 1 strewn)))
 
-// Eating on a clock: the same rules, and the same one piece of food.
 
 let private feasting = feeding (Board.along East (headOf 1 ticking)) ticking
 
@@ -441,7 +370,6 @@ report "and the segment arrives the beat after" 4 (Snake.length (snakeOf 1 (beat
 
 report "and there is a fresh piece somewhere else" true ((play (beaten 1 feasting)).Food |> Option.forall Board.holds)
 
-// --- the two paces do not lend each other moves ----------------------------------------------
 
 report
     "a step is refused at a table that keeps its own time"
@@ -459,9 +387,6 @@ report "giving up on a clock stops every snake" true (racing.Over(standing (play
 
 report "and at a game of turns it stops only yours" false (turning.Over(standing (played turning [ Resign ] four)))
 
-// --- the pulse itself ---------------------------------------------------------------------------
-//
-// What the tables ask the game for, asked here the same way they ask it.
 
 let private pulse = snake.Pulse |> Option.get
 
@@ -471,11 +396,6 @@ report "and the arcade one does" true snake.Pulse.IsSome
 
 report "its beat is the move the checks above have been folding by hand" Beat pulse.Beat
 
-// --- how fast it is wanted ---------------------------------------------------------------------
-//
-// The notch is in the position and the milliseconds are in the pulse, and that split is what
-// these are about: the game says "seven of nine", and what seven is worth in time is settled
-// where the clock is.
 
 let private wound moves = played racing moves ticking
 
@@ -502,9 +422,6 @@ report
     (toldBy snake (wound [ Speed 12 ])
      |> List.exists (mentions "The clock winds from 1 to 9"))
 
-// Asking for the notch it is already on, and asking for quicker at the quickest, are both what
-// somebody leaning on a key is asking for - answered with nothing at all rather than with a line
-// of the log per press.
 
 report "asking for the speed it is already at changes nothing" (standing ticking) (standing (wound [ Speed 5 ]))
 
@@ -524,7 +441,6 @@ report
     5
     (play (Update.update racing Undo (wound [ Speed 9 ]))).Speed
 
-/// A snake that has eaten that many pieces, which is the only thing the pace depends on.
 let private fed pieces =
     let put session =
         match session with
@@ -548,8 +464,6 @@ report
     true
     (pulse.Every(fed 500) >= TimeSpan.FromMilliseconds 50.0)
 
-// The keys are the other half of it, and they are held to the one rule every control in this
-// program is held to: a key stands for a line, and the line is one the game itself reads.
 
 let private keyed key =
     pulse.Pressed(ConsoleKeyInfo(' ', key, false, false, false))
@@ -605,10 +519,6 @@ report
      |> List.choose keyed
      |> List.filter (fun line -> Result.isError (reads snake line)))
 
-// --- a beat at a table -----------------------------------------------------------------------
-//
-// The table is where the clock actually reaches the game, and it is a fold like everything else:
-// no timer is involved in any of this.
 
 let private sitting =
     Solo.opened snake "stamp" (dealt racing 1)
@@ -648,7 +558,6 @@ report
 
      beating 0 sitting)
 
-// --- everything the machinery brings with it ------------------------------------------------
 
 let private walked =
     played racing [ Steer(seat 1, North); Beat; Steer(seat 1, East); Beat ] ticking
@@ -660,9 +569,6 @@ report
 
 report "and made again" (standing walked) (standing (walked |> Update.update racing Undo |> Update.update racing Redo))
 
-// The record, which is written in the words the prompt takes and read back by the same parser.
-// This is the one that matters most at a pace that does not wait: what is in the file is every
-// beat, so what comes off it is the same game and not a game that happened to be quick.
 
 let private record = Transcript.write snake [ Here ] walked.Journal
 
@@ -686,8 +592,6 @@ report
         |> Option.get
     ))
 
-// The words every game knows, read once for all of them - so this game's own reader never sees
-// `undo`, and could not redefine it if it tried.
 
 report "'undo' is not this game's business" (Ok "undo") (reads snake "undo")
 
@@ -716,7 +620,6 @@ report
 
 report "a table of five is refused by the shared verbs too" (Error "5 players? The game takes 1 to 4.") (reads snake "players 5")
 
-// --- the screen ------------------------------------------------------------------------------
 
 let private view = Playable.plainest AtATerminal standard snake
 
@@ -745,8 +648,6 @@ report "the notes can be turned off" false (view.Board Margins.none (seat 1) pai
 
 report "the record reads back through the view too" true (view.History (seat 1) walked |> mentions "a north")
 
-// The one thing worth asking at this game, and the one thing the board cannot quite show: what
-// the *rules* will make of the square you are looking at.
 
 report "a square can be asked about" true (view.Answer (seat 1) "north" ticking |> mentions "open board")
 
@@ -763,13 +664,9 @@ report
     true
     (view.Answer (seat 1) "sideways" ticking |> mentions "is not a way to look")
 
-// --- all three ways of drawing it ---------------------------------------------------------
 
 let private views = snake.Views standard
 
-/// What a person would actually see, whatever a view wrote it in: colour taken back off - the
-/// escape with the code that follows it, because this board is a picture made of characters -
-/// and markup with it.
 let private seen text =
     let uncoloured = Regex.Replace(text, string (char 27) + @"?\[[0-9;]*m", "")
     Regex.Replace(uncoloured, "<[^>]*>", "")
@@ -814,7 +711,6 @@ for view in views do
         true
         (seen (view.Waiting arriving) |> mentions Scene.Filling.title)
 
-// --- the page ---------------------------------------------------------------------------------
 
 let private page = Page.page snake.Page standard
 
@@ -861,8 +757,6 @@ report
     (Page.page snake.Page inTeal
      |> mentions (Palette.paint (Palette.shadeOf "a" inTeal)))
 
-// The page's own half of steering. A key on a page is a line like a button is, and the same rule
-// holds: it must be a line the game reads.
 
 report "the page carries the keys, because this game does not wait" true (page |> mentions "ArrowUp")
 
@@ -901,7 +795,6 @@ report
      |> List.choose keyed
      |> List.sort)
 
-/// What a control on the page would send.
 let private posted (markup: string) =
     Regex.Matches(WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
     |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
@@ -919,8 +812,6 @@ report
     [ "b north"; "b west"; "b east"; "b south"; "slower"; "faster"; "restart" ]
     (posted (asPage.Board Margins.all (seat 2) pair))
 
-// `restart` is the engine's word rather than this game's, and a control carrying it is held to
-// the same rule as any other: it has to be a line the program takes.
 
 report "and the one that is the engine's word is read like anybody's" (Ok "restart") (reads snake "restart")
 
@@ -934,7 +825,6 @@ report
          | Error _ -> true
          | Ok _ -> false))
 
-// --- one description, three readers ---------------------------------------------------------
 
 let rec private controls scene =
     match scene with
@@ -969,12 +859,6 @@ report
 
 report "and not one of them survives turning them off" [] (notes (Render.board Margins.none (seat 1) pair))
 
-// --- the seat the program plays --------------------------------------------------------------
-//
-// At a game of turns, where a machine has a turn to take. A machine here is the first in this
-// program that cannot see the end of the game: noughts and crosses is small enough to solve
-// outright, and a snake on an open board has no end to walk to - so what `hard` promises is not
-// "cannot be beaten" but "does not shut itself in", which is a thing that can be measured.
 
 report "three machines are offered at the pace that has turns" [ "easy"; "medium"; "hard" ] (turns.Skills |> List.map fst)
 
@@ -995,8 +879,6 @@ let private lived model =
     |> Session.snakes
     |> List.sumBy (fun (_, snake) -> snake.Eaten)
 
-// Fixed seeds throughout, and played once and kept: a careful machine plays a long game, and
-// there is no sense in playing the same six again to ask a second question about them.
 let private runs skill =
     [ 1UL .. 6UL ] |> List.map (alone skill)
 

@@ -4,46 +4,24 @@ open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 
-/// This game, filled into both seams: `Rules` for how it is played, `Playable` for how it is
-/// read. One value, and it is the only thing the rest of the program is handed.
-///
-/// Everything above here - the timeline, the record on disk, the seats and their tokens, the
-/// machine loop, the menu, the seat list, the colour screen, the command line, the wire and
-/// the browser - is already written and already generic. What follows is the whole of what a
-/// game has to answer to get all of it.
 module Offer =
 
-    // --- the engine's seam, and this game's own reading of a seat --------------------------
 
     let private refused =
         function
         | TooFewPlayers n -> $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
         | TooManyPlayers n -> $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
 
-    /// The player at a seat, for the views - which draw a hand and a bag and so want the
-    /// player rather than the seat. A seat that is not at this table cannot happen: the table
-    /// only ever asks about seats the game dealt.
     let private at seat model =
         Game.tryPlayer seat (Playing.game model)
         |> Option.defaultValue (Game.active (Playing.game model))
 
-    // --- the machines ---------------------------------------------------------------------
 
-    /// One of this game's rivals as the engine takes a machine: a function from where the
-    /// game stands to what it plays, carrying its own generator inside it.
-    ///
-    /// Public because a check may want to seat a skill that is not one of the three on offer
-    /// - `Seating` below goes by the names a person can type, and a machine written to lose
-    /// on purpose has no name to type.
     let machine rival = Machines.choosing Rival.taking rival
 
     let private skill name = Rival.byName name |> Result.toOption
 
-    // --- how it is drawn -------------------------------------------------------------------
 
-    /// A `rule` question, answered by whichever view was asked. The words arrived as they
-    /// were typed, so the region is read back here - and a region the board has not got is
-    /// said in the same voice the view says everything else in.
     let private answering says ruling _ question model =
         match Parse.asked question with
         | Ok regionId -> ruling regionId model
@@ -72,10 +50,6 @@ module Offer =
             Says = Ink.paint palette
             Waiting = Rich.waiting palette }
 
-          // This one takes no palette into its endpoints, and it is the only one that does
-          // not. A page carries its colours in its own head - `Html.page` writes them there -
-          // and every fragment draws in those rather than in colours of its own, so a board is
-          // built once however many people are reading it.
           { Name = "html"
             Describe = "a page, for a player reading in a browser"
             Shown = InABrowser
@@ -87,7 +61,6 @@ module Offer =
             Says = Html.says
             Waiting = Html.waiting } ]
 
-    // --- and the whole of it ----------------------------------------------------------------
 
     let playable: Playable<Move, Session, Notice> =
         { Rules =
@@ -97,8 +70,6 @@ module Offer =
               Turn = Session.turn
               Over = Session.isOver
               Seats = fun session -> Game.playerCount (Session.game session)
-              // Out of the game's own generator rather than off the clock, so a game restarted
-              // twice from the same record restarts the same way twice.
               Reseed = fun session -> Rng.next (Session.game session).Rng |> fst }
 
           Name = "turncoats"
@@ -126,17 +97,10 @@ module Offer =
                     { Skill = rival.Skill.Name
                       Plays = machine rival })
 
-          // A game of turns: nothing happens here until somebody says so.
           Pulse = None
 
 
           Page = Html.shell
           Views = views }
 
-    /// Every way this game can be played, the plainest first.
-    ///
-    /// One, here. A game with an optional rule in it offers two and the Game page of the
-    /// settings screen asks which - see [Compile](../Compile/Offer.fs). This is a list even
-    /// where it holds one so that the door and the settings screen are the same at every game
-    /// rather than nearly the same at most of them.
     let ways = [ playable ]

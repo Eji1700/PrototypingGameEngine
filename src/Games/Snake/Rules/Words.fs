@@ -2,23 +2,14 @@ namespace TCModel.Snake
 
 open TCModel.Engine
 
-/// Putting the game into English. The rules report what happened in their own terms;
-/// everything a player actually reads is written here.
 module Words =
 
-    /// The letter a seat is, which is also the letter its snake is drawn with. At this game
-    /// those really are one thing - a board of four snakes is unreadable unless what you are
-    /// called is what you can see - so the seat is named after the letter rather than the
-    /// letter being picked to suit a name.
     let letter seat =
         char (int 'a' + PlayerId.value seat - 1)
 
     let player seat =
         $"Snake {System.Char.ToUpperInvariant(letter seat)}"
 
-    /// A seat as one screen names it, with the reader's own marked. Every view does this, and
-    /// the game is unreadable without it over a network, where the seat to play is very often
-    /// not the seat reading.
     let seated yours seat =
         player seat + (if yours then " (you)" else "")
 
@@ -29,8 +20,6 @@ module Words =
         | South -> "south"
         | West -> "west"
 
-    /// Which way that is on the screen in front of somebody, for the places where a compass
-    /// point is not the plainest thing to say.
     let towards =
         function
         | North -> "up"
@@ -61,15 +50,11 @@ module Words =
         | HitAnother other -> $"ran into {player other}"
         | GaveUp -> "gave the game up"
 
-    /// How it ended, in one clause. Short on purpose: this is a line of the log, and the line
-    /// above it already says which snake stopped and how.
     let ending =
         function
         | LastMoving seat -> $"{player seat} is the last one moving"
         | NobodyMoving -> "nothing is left moving"
 
-    /// The same, for the heading of a screen that has the board to hand - which is where the
-    /// score belongs, because a game of one ends with a score and a game of four with a winner.
     let scored play over =
         let count seat =
             let snake = Session.snakeAt seat play
@@ -102,17 +87,6 @@ module Words =
             $"Speed {said}? The clock winds from {Session.Slowest} to {Session.Fastest} - or say 'faster' and 'slower', which is what + and - do."
         | NotThisPace why -> $"Not at this way of playing: {why}."
 
-    /// A message written the way a player types it. The record is kept in the same words the
-    /// prompt takes, so a game can be read back and played again without a second language
-    /// standing between the two.
-    ///
-    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
-    /// engine's words and are written once, by the engine, in `Msg.written`.
-    /// At a game with two paces, in the words that pace takes. `go` is a step at a game of
-    /// turns and a beat on a clock, and each way reads its own line back into its own move - so
-    /// a record can only ever mean one of them. A steer names its snake outright, because a
-    /// record that left that to be worked out from whose turn it was would be the record of a
-    /// game that has turns.
     let command =
         Msg.written (function
             | Go way -> direction way
@@ -124,13 +98,9 @@ module Words =
             | Speed notch -> $"speed {notch}"
             | Resign -> "resign")
 
-    /// What this game itself said, and the whole of what it has to say for itself.
     let said =
         function
         | Happened happening -> event happening
         | Refused refusal -> rejection refusal
 
-    /// The same, as much of it as one seat may know - which here is all of it. Every snake is
-    /// on the board in front of everybody, and the only thing nobody knows is where the next
-    /// piece of food will land, which is nobody's secret either.
     let saidTo _ notice = said notice

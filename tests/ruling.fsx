@@ -1,8 +1,3 @@
-// Checks the ruling cascade, and in particular that a colour knocked out by one
-// measure never comes back through a later one.
-//
-//   dotnet fsi tests/ruling.fsx
-
 #load "Harness.fsx"
 
 open TCModel.Turncoats
@@ -30,7 +25,6 @@ check
     [ (Blue, 1) ]
     [ Red, 1; Blue, 1; Green, 1 ]
 
-// Elimination: a colour out of contention stays out, however it stands later on.
 check "colour out on count cannot win the Axe" (Contested [ Blue; Green ]) [ (Red, 9) ] [] [ Red, 1; Blue, 2; Green, 2 ]
 
 check "colour out on count cannot win the Flag" (Contested [ Blue; Green ]) [] [ (Red, 9) ] [ Red, 1; Blue, 2; Green, 2 ]

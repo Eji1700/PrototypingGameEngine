@@ -4,22 +4,18 @@ open TCModel.Engine
 
 open TCModel.Common
 
-/// The measures that decide which faction carried the board.
 type FactionMeasure =
     | LandRuled
     | AxeHeld
     | FlagHeld
 
-/// The measures that decide which player carried the faction.
 type PlayerMeasure =
     | WinningStonesHeld
     | LosingStonesHeld
     | ClosestToActing
 
 type DrawReason =
-    /// No faction could be told apart, even after both tie-breakers.
     | NoFactionSeparated of StoneColor list
-    /// A faction carried the board, but nobody holds a stone to win with.
     | EveryBagPlayedOut of StoneColor
     | NoPlayerSeparated of StoneColor
 
@@ -27,8 +23,6 @@ type Verdict =
     | Won of faction: StoneColor * player: PlayerId
     | Drawn of DrawReason
 
-/// Who won. Two cascades run when the game ends: the faction that carried the board,
-/// then the player who served that faction best.
 module Outcome =
 
     let private factionMeasures game =
@@ -40,8 +34,6 @@ module Outcome =
           Cascade.by AxeHeld (fun color -> Pile.count color axe)
           Cascade.by FlagHeld (fun color -> Pile.count color flag) ]
 
-    /// Every faction contends, including one ruling nothing: if no faction rules a
-    /// region at all they are level on nought and the Axe settles it.
     let weighFactions game =
         Cascade.run (factionMeasures game) StoneColor.all
 
@@ -53,7 +45,6 @@ module Outcome =
             |> List.filter (fun color -> color <> winning)
             |> List.sumBy (fun color -> Pile.count color player.Bag)
 
-        // A player's place in the turn order from here: nought is next to act.
         let waiting =
             Table.fromNext game.Table
             |> List.mapi (fun place player -> player.Id, place)

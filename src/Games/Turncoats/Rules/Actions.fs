@@ -2,34 +2,22 @@ namespace TCModel.Turncoats
 
 open TCModel.Common
 
-/// Which stones a battle drives out of the region it targets.
 type Casualties =
-    /// As many as the rule allows. Only settled without asking where there is no
-    /// choice to be made; a real choice between colours goes back to the attacker.
     | AsManyAsAllowed
-    /// Exactly these. A battle must drive out at least one stone, so an empty list
-    /// is refused rather than taken as declining the fight.
     | These of StoneColor list
 
-/// The four things a player may do on their turn. Each is a pure transition:
-/// a game and a choice in, a new game and what happened out - or why not.
 module Actions =
 
-    // -- vetting the pieces an action needs ---------------------------------
 
-    /// A region a stone may enter: anything but the dead one.
     let private openRegion regionId =
         require (RegionKind.isOpen (Board.region regionId).Kind) (DeadGround regionId)
 
-    /// A region an action may be aimed at: not dead, and not one of the two that
-    /// stand apart from the map.
     let private contestedRegion regionId =
         result {
             do! openRegion regionId
             do! require (not (RegionKind.isIsolated (Board.region regionId).Kind)) (StandsApart regionId)
         }
 
-    /// Take a stone out of the active player's bag.
     let private takeFromBag color game =
         let player = Game.active game
 
@@ -37,14 +25,12 @@ module Actions =
         | None -> Error(NotInBag(player.Id, color))
         | Some bag -> Ok(Game.withActive { player with Bag = bag } game)
 
-    /// Move a stone from the bag onto the map.
     let private placeFromBag color regionId game =
         takeFromBag color game
         |> Result.map (fun game ->
             { game with
                 Position = Position.add color 1 regionId game.Position })
 
-    /// Lift the named stones out of a region, objecting if any is not standing there.
     let private takeStones colors regionId game =
         colors
         |> List.fold
@@ -56,9 +42,7 @@ module Actions =
                     | None -> Error(NotStandingThere(regionId, color))))
             (Ok(Game.stones regionId game))
 
-    // -- recruit ------------------------------------------------------------
 
-    /// Place any stone from the bag on the map, anywhere but the dead region.
     let recruit color into game =
         result {
             let player = Game.active game
@@ -67,18 +51,12 @@ module Actions =
             return game, Recruited(player.Id, color, into)
         }
 
-    // -- battle -------------------------------------------------------------
 
-    /// The stones in a region that a battle of this colour could drive out.
     let private losingStones color regionId game =
         Game.stones regionId game
         |> Pile.toCounts
         |> List.filter (fun (other, _) -> other <> color)
 
-    /// Work out what an unnamed battle drives out. Taking everything on offer is
-    /// only assumed where it is the one thing the attacker could have meant. By the
-    /// time this runs both counts are known to be at least one, so it never comes
-    /// back empty.
     let private resolveCasualties color regionId allowed game =
         let losing = losingStones color regionId game
         let available = losing |> List.sumBy snd
@@ -88,8 +66,6 @@ module Actions =
         | [ (only, _) ] -> Ok(List.replicate allowed only)
         | _ -> Error(MustChooseCasualties(regionId, Pile.ofCounts losing, allowed))
 
-    /// Place a stone in the Axe and name a region. For each stone there matching the
-    /// placed colour, one stone of another colour is driven back to the reserve.
     let battle color target casualties game =
         result {
             let player = Game.active game
@@ -97,8 +73,6 @@ module Actions =
             let matching = Pile.count color (Game.stones target game)
             let available = losingStones color target game |> List.sumBy snd
 
-            // A battle has to be a real fight: something of yours to fight with,
-            // and something of theirs to drive out.
             do! require (matching >= 1) (NothingToBattleWith(target, color))
             do! require (available >= 1) (NothingToDriveOut(target, color))
 
@@ -123,10 +97,7 @@ module Actions =
             return game, Battled(player.Id, color, target, spoils)
         }
 
-    // -- march --------------------------------------------------------------
 
-    /// Place a stone in the Flag and name a region. Stones there of the matching
-    /// colour then march into a single region bordering it.
     let march color from into count game =
         result {
             let player = Game.active game
@@ -151,10 +122,7 @@ module Actions =
             return game, Marched(player.Id, color, from, into, count)
         }
 
-    // -- negotiate ----------------------------------------------------------
 
-    /// Draw a stone from the reserve at random. The turn is not over: a stone must
-    /// then be handed back, which `settle` does.
     let negotiate game =
         result {
             let player = Game.active game
@@ -175,8 +143,6 @@ module Actions =
                 return game, color, Drew(player.Id, color)
         }
 
-    /// Finish a negotiation by handing a stone back. One always goes back, so the
-    /// bag ends the turn the size it began it.
     let settle color game =
         let player = Game.active game
 

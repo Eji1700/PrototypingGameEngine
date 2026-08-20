@@ -2,38 +2,8 @@ namespace TCModel.Diplomacy
 
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace, and
-// the command line's argument types carry names this game already uses - `Open`.
 open TCModel.Diplomacy
 
-/// Every screen this game has, described once.
-///
-/// **The map is drawn, a province takes as many hexes as it needs, and the picture *is* the
-/// border table.**
-///
-/// It went through four answers. First there was no map, on the argument that a board which
-/// cannot be drawn faithfully is better not drawn: the other game of maps here prints a
-/// honeycomb because its borders really are a patch of a triangular lattice, so its picture *is*
-/// its border table. Then there was a map of one hex a province - and that argument turned out
-/// to be about completeness rather than honesty, which are not the same thing.
-///
-/// The third answer is what fixed it. One hex gives a province six sides; provinces on this board
-/// have up to eleven neighbours, and that ceiling is what held the first map to about half its
-/// borders. A region three or four hexes across has sides to spare.
-///
-/// What that cost was a word in the description. A cell of this map is a `Patch` and says which
-/// region it is part of, so the readers draw a province as one shape rather than four boxes
-/// sharing a name - and the wall round the shape takes the colour of whoever holds its centre,
-/// which is the one thing on this board that says at a glance whose is whose.
-///
-/// The fourth was going back over the places the layout had settled for less, which took the map
-/// from nine borders in ten to all two hundred and six - so `Atlas.problems` now refuses a game
-/// in both directions: **every side the picture draws between two provinces is a real border, and
-/// every border is drawn.** The picture *is* the border table. A side between two hexes of the
-/// same province is not a border but the inside of a country, and is no part of either half.
-///
-/// The note under the board says what the shapes mean, because a player who cannot tell the
-/// inside of a country from a border has not been told what they are looking at.
 module Render =
 
     module Blocks =
@@ -60,7 +30,6 @@ module Render =
 
     let private dash = "-"
 
-    // --- who is playing -------------------------------------------------------------------------
 
     let heading beholder session =
         match session with
@@ -72,8 +41,6 @@ module Render =
                 $"{Words.phase play.Stage play.Year} - {Words.seated (seat = beholder) seat} to write"
             | [] -> Words.phase play.Stage play.Year
 
-    /// Every power, with an arrow at whoever is to write and the reader's own marked: what it
-    /// holds, what it has on the board, and where it has got to this phase.
     let private powers beholder session =
         let play = Session.play session
         let acting = Session.awaited play |> List.tryHead
@@ -99,7 +66,6 @@ module Render =
               Scene.cell Tone.Quiet standing ])
         |> Aligned
 
-    // --- the board ------------------------------------------------------------------------------------
 
     let private regionName =
         function
@@ -117,15 +83,7 @@ module Render =
         | Africa -> "Africa"
         | Waters -> Blocks.sea
 
-    // --- the board drawn as a board ------------------------------------------------------------------
 
-    /// Which hex of each province carries what is standing on it: the first one, in reading
-    /// order.
-    ///
-    /// A province takes as many hexes as it needs its sides, so most of them take several - and
-    /// a unit drawn in every hex of a province would look like four armies rather than one. So
-    /// the name is written in every hex, which is what shows the region's shape, and everything
-    /// else is written once.
     let private seatOfEach =
         Atlas.layout
         |> List.mapi (fun row (_, cells) -> cells |> List.mapi (fun step cell -> (row, step), cell))
@@ -138,20 +96,6 @@ module Render =
             (Set.empty, Set.empty)
         |> snd
 
-    /// One province as a cell of the map: its three letters, and - on the one hex that carries
-    /// them - who holds the centre and what is standing there.
-    ///
-    /// A `Patch` rather than a `Tile`, and the difference is the whole shape of the board. A
-    /// tile is a cell with its own four walls; a patch is a piece of something bigger and says
-    /// which - so the hexes of one province are drawn as one region with no walls inside it, and
-    /// the wall round it takes the colour of whoever holds its centre. A province is a shape in
-    /// somebody's colour rather than four boxes that happen to share a name.
-    ///
-    /// The shape is the province's code and not its owner's: Vienna and Budapest are both
-    /// Austria's and the border between them is perfectly real.
-    ///
-    /// Two lines whether or not there is a unit, so that every cell is the same height and a row
-    /// of them looks like a row rather than a broken comb.
     let private cell position carries province =
         let owner = Position.ownerOf province position
         let isCentre = Atlas.isCentre province
@@ -169,16 +113,6 @@ module Render =
             | None, true -> Tone.Plainly
             | _ -> Tone.Quiet
 
-        // The three letters, and after them who holds the centre - their own letter, or a star
-        // where nobody does, or nothing at all where there is no centre to hold. Said in a
-        // character rather than left to the colour, because the plainest reader drops every tone
-        // it is given and a board that only says who owns what in colour says it to nobody there.
-        //
-        // Open water is written between tildes instead, on every hex of it rather than one: half
-        // of what a player may do turns on whether a province is wet - a fleet lives out there
-        // and an army may not go near it - and that is too much to leave to a colour, which the
-        // plainest reader has none of. Nothing else can wear them: no sea on this board holds a
-        // supply centre, so the character after a name is never asked to mean two things at once.
         let head =
             if afloat then
                 "~" + Atlas.code province + "~"
@@ -200,10 +134,6 @@ module Render =
 
         Patch(Atlas.code province, held, [ Say [ Span.toned named head ]; standing ])
 
-    /// The whole board as a honeycomb. Each row sits half a cell across from the one above, which
-    /// is what gives a cell six sides to share; `Atlas.layout` says where everything lies and
-    /// `Atlas.problems` refuses to deal a game if any side it draws between two provinces is not
-    /// a real border.
     let private honeycomb position =
         Walled(
             4,
@@ -215,28 +145,15 @@ module Render =
                     |> List.mapi (fun step ->
                         function
                         | Some province -> cell position (Set.contains (row, step) seatOfEach) province
-                        // Nothing at all, which is what keeps two provinces that do not border
-                        // from being drawn side by side. A hole in the map has no walls of its
-                        // own: what is drawn round it is the coastline of whatever it is a hole
-                        // in.
                         | None -> Blank) })
         )
 
-    // --- what this power has been asked for ------------------------------------------------------------
 
-    /// A control that types a line, captioned with the line it types. The page draws a button
-    /// and a terminal draws the words, and both of them are showing the same order.
     let private types line = Does(line, line, Tone.Quiet)
 
     let private tile piece contents =
         Tile(Some(Words.piece piece), Tone.Slot(Ink.key piece.Power), contents)
 
-    /// What this power still has to do, in the shape the phase asks for it.
-    ///
-    /// Three phases, three different things, and this is where the difference shows up on a
-    /// screen. In a movement it is every unit and what it has been told; in a retreat it is the
-    /// beaten and where they may go; in a winter it is a home centre with room in it or a unit
-    /// that has to be given up.
     let private chores margins beholder play =
         let power = Power.atSeat beholder
 
@@ -264,8 +181,6 @@ module Render =
         let laid rows =
             match rows with
             | [] -> Blank
-            // Beside rather than a walled grid: the map below is the one grid on this screen, and
-            // a cell wide enough to hold `bud s vie - tri` would blow it out to a page across.
             | rows -> Beside rows
 
         match play.Stage with
@@ -293,9 +208,6 @@ module Render =
                         (types $"{where} hold"
                          :: (Atlas.reach piece.Kind piece.Where
                              |> List.map (fun into -> types $"{where} - {Words.spot into}"))
-                         // Last, and not an order at all: the board draws no map, so the
-                         // question "what can this actually reach" needs to be one press away
-                         // rather than something a player has to know to type.
                          @ [ types $"borders {where}" ]))
 
             Stack
@@ -375,7 +287,6 @@ module Render =
                   laid waiting
                   Does("commit", "commit", Tone.Yours) ]
 
-    // --- what happened last time everybody moved ---------------------------------------------------------
 
     let private passing (was: Passing) =
         let orders =
@@ -404,7 +315,6 @@ module Render =
         | [] -> Blank
         | passings -> Block(Blocks.last, passings |> List.map passing)
 
-    // --- what a player may type -------------------------------------------------------------------------
 
     let private verbs =
         [ "vie - tri", "move; 'vie - stp/sc' names a coast"
@@ -463,12 +373,10 @@ module Render =
               "COMMANDS"
               commands ]
 
-    // --- the log -------------------------------------------------------------------------------------------
 
     let private wordsFor beholder =
         Told.inWords (Words.saidTo beholder) Words.command
 
-    // --- the whole screen ------------------------------------------------------------------------------------
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
@@ -490,14 +398,7 @@ module Render =
               Scene.listing margins Blocks.commands commands
               Block(Blocks.log, Scene.log (wordsFor beholder) model) ]
 
-    // --- the record ----------------------------------------------------------------------------------------
 
-    /// One line of the record, as much of it as this seat may read.
-    ///
-    /// The record is the whole truth of the game and a player is not owed the whole truth while
-    /// it is still being played. An order written this phase is nobody's business until the
-    /// phase resolves, and a word sent to one power is sent to one power for good - so the
-    /// record shows that a thing was done and, where it may not say what, says that too.
     let private askedFor beholder current (entry: Entry<Move, Notice>) =
         match entry.Asked with
         | Make(Whisper(Some heard, _)) when entry.Actor <> beholder && Power.seatOf heard <> beholder ->
@@ -518,14 +419,7 @@ module Render =
         |> List.map entry
         |> Scene.record (heading beholder (Model.state model))
 
-    // --- the one thing this game can be asked -------------------------------------------------------------------
 
-    /// `borders vie`, `where vie`, `orders`.
-    ///
-    /// This is what `View.Answer` was put there for, and this game fills it the way the game it
-    /// was written for does. The board deliberately shows no picture of the map, so the question
-    /// "what can this piece actually reach" has to have an answer - and it comes out of the same
-    /// table the adjudicator walks, so it cannot be out of date and cannot be wrong.
     let answer (asked: string) (model: Model<Move, Session, Notice>) =
         let play = Session.play (Model.state model)
 
@@ -534,9 +428,6 @@ module Render =
             | Some province -> Ok province
             | None -> Error $"'{word}' is not a province."
 
-        // Written out rather than said line by line, and for the same reason the other game's
-        // answer is: this lands beside the board rather than on it, and it is a column of
-        // related lines that have to stay in the order and the shape they were written in.
         let written title lines =
             Block(title, [ Written(String.concat "\n" lines) ])
 
@@ -563,9 +454,6 @@ module Render =
                    | places -> "An army can reach " + String.concat ", " places + ".")
                   ""
                   for coast, reach in bySea do
-                      // Named in full rather than in the three letters an order uses. This is
-                      // the screen somebody reads when they are not sure, and "Gulf of Lyon"
-                      // answers that where "gol" only repeats the question.
                       match reach |> List.map Words.place |> List.sort with
                       | [] -> "A fleet can reach nowhere from here."
                       | places ->
@@ -609,18 +497,10 @@ module Render =
 
     let rules = Scene.rules help
 
-    // --- a table still filling up -------------------------------------------------------------------------------
 
     let waiting = Scene.waiting Words.seated
 
-    // --- and what this game brings to a page --------------------------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that.
-    ///
-    /// Two sizes, because this game has two kinds of cell. The map is sixteen columns of three
-    /// letters and wants them small; a unit's orders are whole lines like `bud s vie - tri` and
-    /// want room. `--cell` belongs to the grid, and the map is the only grid here, so the order
-    /// tiles sit in a row of their own and are sized by what is in them.
     let private sheet =
         """
 .grid { --cell: 3.4rem; }
@@ -634,6 +514,4 @@ module Render =
         { Title = "Diplomacy"
           Sheet = sheet
           Placeholder = "an order - 'vie - tri', 'bud s vie - tri' - then 'commit'. Or 'help'."
-          // A game of turns is read by somebody who is typing, so the page leaves their
-          // keys alone.
           Keys = [] }

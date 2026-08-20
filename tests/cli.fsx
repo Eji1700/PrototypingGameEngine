@@ -1,19 +1,3 @@
-﻿// The command line, both ways round.
-//
-// `Launch` reads the arguments the process was started with, and writes a command line the
-// program will later be handed back - the line a dropped player is told to type to get back
-// to their seat. Those two used to be different libraries, and the danger between them was an
-// option renamed on one side and not the other, which would leave the program printing
-// instructions it would not accept. It happened: `--cert-password` on one side was
-// `--certpassword` on the other, and the round trip below is what said so.
-//
-// They are one declaration now, so that particular way of being wrong is gone by
-// construction. What the round trip is still worth is everything else: a line the program
-// writes has to come back holding the very launch it was written from, whatever the surface
-// grows next.
-//
-//   dotnet fsi tests/cli.fsx
-
 #r "nuget: FsCheck, 3.3.3"
 
 #load "Whole.fsx"
@@ -23,8 +7,6 @@ open FsCheck
 open FsCheck.FSharp
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
-// and the command line's argument types carry names this game already uses - `Open`.
 open TCModel.Turncoats
 open Harness
 open Whole
@@ -48,14 +30,7 @@ let private holds name property =
         message.Split '\n'
         |> Array.iter (fun line -> printfn "     %s" (line.TrimEnd()))
 
-// --- anything the program can be asked to open --------------------------------------------
 
-/// Somewhere for a certificate to be.
-///
-/// The command line looks for the file before it opens anything, which is worth doing - a
-/// table that fell over on the certificate after dealing would have taken the game with it -
-/// and means a line naming one has to name a real file if the far end of the round trip is
-/// to accept it. Nothing here reads it, and nothing here is a certificate.
 let private certificate =
     let path = IO.Path.Combine(IO.Path.GetTempPath(), "tcmodel-check.pfx")
     IO.File.WriteAllText(path, "not a certificate")
@@ -67,8 +42,6 @@ let private launches =
     let seed =
         Gen.oneof [ Gen.constant None; Gen.choose (0, 1_000_000) |> Gen.map (uint64 >> Some) ]
 
-    // Addresses and paths as people really write them - a bare name, a name and port, a
-    // whole URL, a path with a space in it that would not survive being split on spaces.
     let address =
         Gen.elements [ "greg-pc"; "192.168.1.9:5000"; "http://localhost:5000/table" ]
 
@@ -76,16 +49,10 @@ let private launches =
 
     let code = Gen.elements [ None; Some "kbd4-9mtx-7rfp" ]
 
-    // Which table of a house, or none at a process holding one. Named the way a house names
-    // them, which is the same minting the door words use.
     let table = Gen.elements [ None; Some "kbd4-9mtx-7rfp"; Some "7rfp-kbd4-9mtx" ]
 
     let path = Gen.elements [ "logs/one.log"; "C:/Games/My Records/last night.log" ]
 
-    // How far a table can be reached, said every way the program can write one. These are in
-    // here for the round trip below: a table now says several things about its own door on
-    // its way out and has to come back holding all of them, and an option spelt one way by
-    // the writer and another by the reader is precisely the failure this file exists for.
     let reach =
         Gen.elements
             [ Reach.ajar
@@ -104,9 +71,6 @@ let private launches =
                   Port = 443
                   Wrapping = Kept(certificate, Some "hunter two") } ]
 
-    // A table with the machine at some of it. Never at more seats than there are after the
-    // first: the first is yours, and a line the program could not have written is not a line
-    // worth asking whether it reads back.
     let dealing =
         players
         |> Gen.bind (fun players ->
@@ -117,9 +81,6 @@ let private launches =
             Gen.zip seed (Gen.elements seatings)
             |> Gen.map (fun (seed, rivals) -> players, seed, rivals))
 
-    // Where a game comes from, either way round: dealt for that many, or a record taken up.
-    // `host` names no machines, so a start of its own that did would be a line the program
-    // could not have written.
     let starting =
         Gen.oneof [ dealing |> Gen.map Start.Dealt; path |> Gen.map Start.Saved ]
 
@@ -135,13 +96,9 @@ let private launches =
           Gen.zip hosting reach |> Gen.map Launch.Host
           Gen.zip (Gen.zip address token) (Gen.zip code table)
           |> Gen.map (fun ((address, token), (code, table)) -> Launch.Join(address, token, code, table))
-          // A house says how far it reaches and whether to look in `logs/` on the way up, and
-          // nothing else - there being no game to open. Both halves are in here for the same
-          // reason every other line is: it is written out and has to come back the same.
           Gen.zip reach (Gen.elements [ true; false ]) |> Gen.map Launch.House ]
     |> Arb.fromGen
 
-// --- what the program writes, the program reads ----------------------------------------------
 
 holds
     "a launch written out and read back is the same launch"
@@ -152,9 +109,6 @@ report
     (Ok(Launch.Join("greg-pc", Some "a1b2c3", None, None)))
     (Launch.read playing [ "dotnet"; "run"; "--"; "join"; "greg-pc"; "--token"; "a1b2c3" ])
 
-// The table a house holds, named on the line rather than buried in the address. `Reach.endpoint`
-// puts this program's own path onto whatever address it is given, so a name typed into the
-// address would be a path that replaced the hub's rather than one hanging off it.
 report
     "a console can say which table of a house it means"
     (Ok(Launch.Join("greg-pc", None, None, Some "kbd4-9mtx-7rfp")))
@@ -174,15 +128,7 @@ report
      | Error problem -> problem.Contains "seed"
      | Ok _ -> false)
 
-// --- and what the program writes, the command line accepts --------------------------------------
 
-/// Run the real front door over a set of arguments, and give back what it made of them.
-/// `Launch.run` is what `main` calls, so this is the program's door and not a model of it -
-/// including the exit code, which is what a script reads.
-///
-/// What it says while refusing something is caught rather than printed. Half these checks
-/// hand it arguments it ought to refuse, and a run of usage text between the lines of a test
-/// report is no help to anybody reading one.
 let private through (words: string list) =
     let mutable opened = None
     let said = new IO.StringWriter()
@@ -212,9 +158,6 @@ holds
         | 0, Some opened -> opened = launch
         | _ -> false))
 
-// --- and answers a person who gets it wrong ------------------------------------------------------
-
-// The exit code is what a script reads, and nothing may be opened on the way out.
 
 let private turnedAway words =
     let code, opened = through words
@@ -232,24 +175,14 @@ report "so is a colour said the wrong way round" true (turnedAway [ "play"; "2";
 
 report "and a command nobody has" true (turnedAway [ "frobnicate" ])
 
-// An option nobody has, which is the same kind of mistake and was not always treated as one.
-// A line read past rather than refused is quiet in the one place this program cannot afford
-// quiet: '--cod sesame' opened a table with a word made up here rather than the word that was
-// meant, and said nothing about it.
 
 report "an option nobody has is turned away too" true (turnedAway [ "play"; "2"; "--vew"; "rich" ])
 
 report "including one that is nearly the word at a door" true (turnedAway [ "host"; "3"; "--cod"; "sesame" ])
 
-// And an address nobody could open. It is the one thing said at the door that this machine
-// cannot check by trying it - what is out front is somebody else's business - so what is
-// checked is that it is an address at all, because a link is going to be built out of it.
 
 report "an address that is not one is refused before a table is opened" true (turnedAway [ "host"; "3"; "--at"; "my table" ])
 
-// The machine is asked for by name, and only for seats that exist. The first is yours, so a
-// game for two has one to give away and a second one asked for is somebody meaning
-// something else - which is worth saying at the door rather than at the table.
 
 report "a way of playing nobody has is turned away" true (turnedAway [ "play"; "2"; "--rival"; "cunning" ])
 
@@ -260,11 +193,6 @@ report
 
 report "which `serve` says too, dealing the same table" true (turnedAway [ "serve"; "2"; "--rival"; "easy"; "--rival"; "hard" ])
 
-// --- taking a saved game up --------------------------------------------------------------
-//
-// A record already says how many are playing, what they were dealt from and who was in each
-// seat. Saying any of it again alongside is not a shorter way of saying the same thing - it
-// is two different games asked for at once, and there is no telling which was meant.
 
 let private saved = "logs/2026-08-02-215823-2p-seed42.log"
 
@@ -281,7 +209,6 @@ report
      | Error problem -> problem.Contains "--from" && problem.Contains "how many are playing"
      | Ok _ -> false)
 
-// --- the defaults --------------------------------------------------------------------------------
 
 report
     "a game asked for with no number is dealt for the fewest that can play"
@@ -313,10 +240,6 @@ report
     (0, Some(Launch.Play(Start.Dealt(3, None, [ "hard"; "easy" ]))))
     (through [ "play"; "3"; "--rival"; "hard"; "--rival"; "easy" ])
 
-// A table that opens a port makes up a word for its door when nobody says otherwise, so the
-// two commands that do cannot be held up whole against anything: what the word is, is not
-// knowable from out here, which is the entire point of it. So the door is taken off for the
-// checks about everything else, and put back for the checks about doors.
 
 let private without launch =
     match launch with
@@ -333,9 +256,6 @@ report
     (0, Some(Launch.Serve(Start.Dealt(2, Some 42UL, [ "medium" ]), Reach.ajar)))
     (unlocked [ "serve"; "2"; "--seed"; "42"; "-r"; "medium" ])
 
-// Every way in asks where the game comes from in the same words, because it is the same
-// question. So a game put down at one keyboard can be taken up in a browser or as a table
-// others join, and the machines stay where they were sitting whichever it is.
 
 report
     "a saved game can be taken up at this keyboard"
@@ -349,22 +269,12 @@ report
     (0, Some(Launch.Host(Start.Saved saved, Reach.ajar)))
     (unlocked [ "host"; "--from"; saved; "--open" ])
 
-// `replay <file>` is the short way of saying `play --from <file>` - the way people already
-// ask for it, and what every record's own header tells them to type. It reads to the very
-// same launch, so the two cannot come to mean different things.
 
 report
     "and 'replay' is the short way of saying the same thing"
     (through [ "play"; "--from"; saved ])
     (through [ "replay"; saved ])
 
-// --- how far a table is opened ------------------------------------------------------------
-//
-// A table on a network everybody in the room is on is guarded by the room. One reachable from
-// anywhere is guarded by nothing, and a seat once taken is kept for whoever took it - so the
-// first stranger through the door ends the game for somebody, and there is no move for
-// standing them up again. Hence a word at the door by default, and hence the flags: every one
-// of them is a way of saying how far this table is meant to reach.
 
 let private door words =
     match through words with
@@ -393,8 +303,6 @@ report "and a table said to be open has no word at all" (Ok Ajar) (door [ "host"
 
 report "the same word twice running is the same word" (door [ "host"; "3" ]) (door [ "serve"; "2" ])
 
-// Everything below is somebody meaning one of two quite different things, and there is no
-// way to tell which - so each is refused at the door rather than settled quietly.
 
 report "a table cannot be both open and locked" true (turnedAway [ "host"; "3"; "--open"; "--code"; "sesame" ])
 
@@ -427,31 +335,15 @@ report
      ))
     (unlocked [ "host"; "3"; "--behind"; "--at"; "stones.example.org"; "--open" ])
 
-// --- the other door ---------------------------------------------------------------------------
-//
-// Running the program with no arguments at all opens the menu instead, which asks the same
-// questions in a different grammar. Only the newest part of it is held to anything here: how
-// many are playing is not asked for after `vs`, because saying who you are playing has
-// already said it - one seat for you and one for each machine named - and a menu that got
-// that sum wrong would deal a table with an empty chair at it.
 
 let private chosen line = Menu.choose playing standard line
 
-/// The settings screen as the game under test would show it: the ways it can be drawn at a
-/// terminal, and the plainest of them doing the drawing. Both handed in, the same way the
-/// program hands them in - the screen has never met a game and is not about to.
 let private settings palette =
     let drawn =
         Playable.offered AtATerminal palette playing |> List.map (fun view -> view.Name)
 
     Options.video drawn (List.head drawn) palette
 
-/// A choice as something that can be compared. `Menu.Choice` carries a view, and a view is
-/// a bundle of functions, so the choices cannot be held up against each other whole.
-///
-/// A seating comes back as the words it would be typed in, which is the shape it is easiest
-/// to be wrong about and the shape a person actually says: 'you hard' either is a seat for
-/// each of you or it is not.
 let private dealing choice =
     match choice with
     | Ok(Menu.Deal(sitters, seed)) -> Ok("deal", Seating.line sitters, seed)
@@ -461,8 +353,6 @@ let private dealing choice =
     | Ok _ -> Error "that is not a game to deal"
     | Error problem -> Error problem
 
-/// And how far the table it opens will reach, which every one of those lines can say too -
-/// said back as the words it would be typed in, for the same reason.
 let private reaching choice =
     match choice with
     | Ok(Menu.Serve(_, _, reach))
@@ -500,12 +390,6 @@ report
      | Error problem -> problem.Contains "not a way for the machine to play"
      | Ok _ -> false)
 
-// --- and the seatings, said long and said short --------------------------------------------
-//
-// A seating is one sitter to a seat, and how many are playing is how long it is - so the count
-// and the seats cannot disagree, which is the one sum the old menu could get wrong. Everything
-// shorter than that is built out of a whole seating rather than beside one, so a shorthand
-// cannot come to mean something the long way round does not.
 
 report "a bare number is still a table of people" (Ok("deal", "you you you you", None)) (dealing (chosen "4"))
 
@@ -538,8 +422,6 @@ report
      | Error problem -> problem.Contains "is not somebody to seat"
      | Ok _ -> false)
 
-// A page on this machine is one hot seat, the same as this keyboard is. There is nobody for a
-// seat at it to be at the far end of, so a seating with anybody joining is not one it can take.
 
 report
     "a browser's game cannot have anybody joining it"
@@ -553,9 +435,6 @@ report
     true
     ((Keys.draw None (Menu.screen playing plain false)).Contains "vs <skill>...")
 
-// A table somebody was told about is an address and a word, so that is what the menu takes.
-// Coming back to a seat already held is the other thing, and is a command line - written by
-// the program, for the player to hand back to it - rather than anything typed here.
 
 report
     "a table joined from the menu carries the word at its door"
@@ -571,16 +450,6 @@ report
      | Ok(Menu.Join(_, None)) -> true
      | _ -> false)
 
-// --- the same door, opened with the arrow keys ------------------------------------------------
-//
-// A row on a screen is not a second way of meaning something: it stands for a line, and
-// choosing it hands that line to the very reader a person typing it would have reached. That
-// is the whole design, and it is only worth anything if it is true of every row - including
-// the ones two lists down, which nobody scrolls past on the way to anywhere.
-//
-// So the first check here walks the whole tree and insists the reader understands every line
-// on it. A row that came to offer something `Menu.choose` has never heard of would be a dead
-// end a player finds by pressing Enter on it, and nothing else in the program would notice.
 
 let private front = Menu.screen playing plain false
 
@@ -600,12 +469,6 @@ let rec private everyScreen (screen: Keys.Screen) =
             | Keys.Opens under -> everyScreen under
             | _ -> []))
 
-/// Every line one row can come to: the one it stands for, and the two its left and right
-/// make. A row that only writes the start of a line is finished off here, because what is
-/// being checked is the grammar around the part somebody types rather than the part itself.
-///
-/// A number stands in for it, being the one thing that is a fair example of all four things
-/// a row here waits for: a file, an address, a port, and a word at a door.
 let private linesOf (row: Keys.Row) =
     (match row.Pick with
      | Keys.Sends line -> [ line ]
@@ -630,9 +493,6 @@ report
     []
     (unread (Options.chooseVideo standard) (settings standard))
 
-// The seat list is not reached by opening a row - it is reached by a line, and comes back as
-// one - so it has to be walked over separately. Every seating there is, at every size the
-// table takes, because a row there is built from what is already in the seat beside it.
 
 let private everySeating =
     let rec grown seats =
@@ -644,9 +504,6 @@ let private everySeating =
 
     [ Table.MinPlayers .. Table.MaxPlayers ] |> List.collect grown
 
-/// Every seat list carries how far its table reaches, so there is a second list to walk over
-/// it: the reaches a screen can hold. Not every reach there is - a port is a number and an
-/// address is a name - but every *shape* of one, which is what the rows are built out of.
 let private everyReach =
     [ Reach.ajar
       Reach.locked "kbd4-9mtx-7rfp"
@@ -674,9 +531,6 @@ report
          everyReach
          |> List.collect (fun reach -> unread chosen (Menu.reaches "kbd4-9mtx-7rfp" sitters reach))))
 
-// The front door has something behind it only when this program has more than one game in
-// it. With one there is nothing to go back to and the row would be a dead end; with two,
-// leaving it out would strand a player in a game they only meant to look at.
 report
     "a front door with a list of games behind it can be walked back out of"
     true
@@ -728,17 +582,7 @@ report
          | _ -> false
      | None -> false)
 
-// --- the settings, which are four screens rather than one --------------------------------------
-//
-// The same promise as everywhere else above, held to each of them: every row stands for a line,
-// and the line it stands for is one the screen's own reader takes. Four readers now, so four
-// checks - and they are worth having four of, because the way these came to be four screens was
-// by one screen being cut into pages, and a row left pointing at the reader it used to have
-// would be a row that did nothing at all.
 
-/// The ways a game might offer, as the Game page wants them. Made up here rather than taken
-/// from a game, which is the point of the page: it has never met one. Two, because a page that
-/// only ever showed one would not be checked for the case it exists for.
 let private waysOffered =
     [ "compile", "Draft three protocols and play across the table."
       "compile-control", "The same, with the optional rule." ]
@@ -780,9 +624,6 @@ report
              | _ -> false
          | None -> false))
 
-// One `save` keeps all three pages, so every page has to have a row that says so and every
-// page's reader has to take it. A page that could be changed and not kept would be a page
-// whose answers quietly went away.
 report
     "'save' is a line every page reads as keeping the lot"
     [ true; true; true ]
@@ -794,12 +635,6 @@ report
          | Ok Options.Keep -> true
          | _ -> false))
 
-// --- and the file they are kept in ---------------------------------------------------------
-//
-// Every line of it is a line somebody could have typed at the screen it belongs to, which is
-// the bargain this file keeps and the reason it is worth checking both ways round: what is
-// written has to read back as what it was, or the answers given at a screen are not the
-// answers handed back next time.
 
 let private saidBack settings =
     Settings.write settings |> Settings.read |> fst
@@ -823,9 +658,6 @@ report
      |> saidBack
      |> Settings.plays "compile")
 
-// The one that would have gone wrong quietly. The Video page and the Game page both keep
-// answers about the same game, and one `save` writes both - so keeping colours must put them
-// beside the way of playing rather than over the top of it.
 report
     "keeping this game's colours does not forget which way it is being played"
     (Some "compile-control", Some "plain")
@@ -837,9 +669,6 @@ report
 
      Settings.plays "compile" kept, Settings.drawn "compile" kept)
 
-// A line in the wrong half of the file is worth a sentence and worth nothing at all to stop
-// on, which is the rule this file has always followed. Both of the new lines have a half they
-// belong in, and they belong in opposite ones.
 report
     "a way of playing said above the games is complained about rather than swallowed"
     true
@@ -862,7 +691,6 @@ report
      |> List.collect (fun screen -> screen.Rows |> List.choose (fun row -> row.Digit) |> List.countBy id)
      |> List.filter (fun (_, many) -> many > 1))
 
-// --- and that the keys reach them -------------------------------------------------------------
 
 let private key press =
     ConsoleKeyInfo('\000', press, false, false, false)
@@ -870,10 +698,6 @@ let private key press =
 let private letter (typed: char) =
     ConsoleKeyInfo(typed, enum<ConsoleKey> 0, false, false, false)
 
-/// A screen, walked over by a run of key presses from a given row, and whatever line it gave
-/// up. Where the cursor starts matters on a screen whose rows are not all the same kind of
-/// thing - the settings screen opens on the row that says how the board is drawn, and the
-/// colours are under it.
 let private walkingAt at screen keys =
     let rec next standing keys =
         match keys with
@@ -885,7 +709,6 @@ let private walkingAt at screen keys =
 
     next (Keys.standing screen at) keys
 
-/// The same, from the top, which is where somebody arriving at a screen stands.
 let private walking screen keys = walkingAt 0 screen keys
 
 let private walked keys = walking front keys
@@ -920,9 +743,6 @@ report
         @ [ key ConsoleKey.Enter ]
     ))
 
-// The one place the two readings of a key meet. With nothing typed the letters steer; with a
-// line underway every letter belongs to it, or an address with an 'a' in it could not be
-// spelt out at all.
 
 report
     "and once a line is underway the steering letters are letters again"
@@ -943,14 +763,7 @@ report
     (Some "quit")
     (walked [ key ConsoleKey.Escape; letter '7' ])
 
-// --- and the seats, which are the same idea again -----------------------------------------
-//
-// A seat's row stands for the whole seating with that one seat changed, so walking a seat
-// along is a way of typing and there is nothing to remember between presses. Which means the
-// list can be walked here exactly as a person walks it: press, read the line, build the
-// screen again from what it said.
 
-/// One press at the seat list, and the seating it came back holding.
 let private pressed press sitters =
     match walking (Menu.seats playing sitters Reach.ajar) [ press ] with
     | Some line ->
@@ -982,9 +795,6 @@ report
     (Seating.line (walkingSeat 1 (key ConsoleKey.RightArrow)))
     (Seating.line (pressed (letter '1') (Seating.here 3)))
 
-// And the rows underneath the seats, which are what a seating is finally *for*. Which of them
-// is offered is the seating's own answer: a table anybody is joining is opened and waited at,
-// and is not a thing a browser on this machine could hold.
 
 let private under sitters =
     (Menu.seats playing sitters Reach.ajar).Rows
@@ -1011,9 +821,6 @@ report
         )
     ))
 
-// And what it opens is exactly the reach on the screen too, which is the half of this that
-// the seat list could not say at all before: a table opened from a menu now says where it
-// listens, what it is carried in, and what it takes to sit down at it.
 
 report
     "and exactly the reach it was holding"
@@ -1031,8 +838,6 @@ report
         )
     ))
 
-// The screen behind it, walked the way a person walks it: press, read the line, build the
-// screen again from what it said. Nothing is remembered between presses there either.
 
 let private settling presses reach =
     match walking (Menu.reaches "kbd4-9mtx-7rfp" (Seating.hosting 2) reach) presses with
@@ -1053,10 +858,6 @@ report
     "port:5000 word:kbd4-9mtx-7rfp behind"
     (Reach.line (settling [ key ConsoleKey.DownArrow; key ConsoleKey.RightArrow ] (Reach.locked "kbd4-9mtx-7rfp")))
 
-// The two that want words write the line as far as they can and wait for the rest, which is
-// how the port and the address are said. What the row writes has to be a line the reader
-// takes once the rest arrives - and the part being changed goes last, because the last word
-// about a part is the one that counts.
 
 let private typed row rest reach =
     match
@@ -1086,15 +887,9 @@ report
     true
     ((typed (letter '3') "70000" (Reach.locked "kbd4-9mtx-7rfp")).Contains "is not a port")
 
-// Left and right on the settings screen walk one row through what it has to choose from.
-// Nothing is remembered between presses - the line says the whole of the change - so walking
-// a list right round has to come back to what it set out from.
 
 let private colours = settings standard
 
-/// The first colour is one row down, the screen opening on the row that says how the board
-/// is drawn. Said once here rather than counted at each check below, because it is one fact
-/// about the shape of the screen and not four.
 [<Literal>]
 let private FirstSlot = 1
 
@@ -1110,17 +905,6 @@ let private walkedRight times palette =
             | None -> palette)
         palette
 
-/// Where a colour stands in the list on offer, and what is that many steps along it.
-///
-/// Read off the list rather than written out, because what there is to choose from is no
-/// longer only what this program was built with - a colours file may have added to it,
-/// restated one of it or dropped one. Which is exactly what these checks are not about: they
-/// are about a row walking one step, and a check that hard-coded the second colour would be
-/// checking what the nineteen happen to be, and would fail on a machine whose owner had said
-/// what colours they like.
-/// A colour standing in nothing on offer starts from the top, which is what the screen does
-/// with one - a slot whose game-given colour a colours file has dropped is still a slot to
-/// walk, and refusing to draw it would be losing a row over a decoration.
 let private along steps =
     let names = Palette.shades |> List.map (fun shade -> shade.Name)
 
@@ -1147,13 +931,9 @@ report
     [ (Palette.shadeOf "red" (walkedRight 1 standard)).Name
       (Palette.shadeOf "red" (walkedRight (List.length Palette.shades) standard)).Name ]
 
-// And the row above them all walks the ways of drawing the same way, which is the whole of
-// what it is: a view is picked here exactly as a colour is.
 
 report "right walks the top row on to the next way of drawing" (Some "view rich") (walking colours [ key ConsoleKey.RightArrow ])
 
-// Where the cursor was left comes back with the line, because the screen is built again from
-// the palette every time one changes and the cursor has to still be on the slot being walked.
 
 report
     "and the cursor comes back where it was left, however deep it went"

@@ -1,10 +1,3 @@
-// The whole program with Snake in it, for that game's own checks.
-//
-// The same list as the other harnesses with a different game on the end, and a file of its own
-// for the reason they are separate files: `dotnet fsi` names a loaded file by its basename, and
-// every game here has a `Turn.fs` and a `Words.fs` - which is a fact about scripts and not
-// about the program, where all six sit side by side in one solution.
-
 #r "nuget: Argu, 6.2.5"
 #r "nuget: Falco.Datastar, 1.3.0"
 #r "nuget: Falco.Markup, 1.4.0"
@@ -63,18 +56,12 @@
 
 open TCModel.Table
 
-/// The game these checks are about, at the pace everybody means by the name: the arcade one,
-/// where the snakes move on a clock and what you type only steers.
 let snake = TCModel.Snake.Offer.playable
 
-/// And the same game with the clock taken out of it - a step when you say so, which is the way
-/// four people play it round one keyboard and the way the machines play it.
 let turns = TCModel.Snake.Offer.ways |> List.item 1
 
 let standard = Playable.standard snake
 
-/// The first way it can be drawn at a terminal.
 let plain = Playable.plainest AtATerminal standard snake
 
-/// And in a browser.
 let asPage = Playable.plainest InABrowser standard snake

@@ -1,28 +1,18 @@
 namespace TCModel.Turncoats
 
-/// Identifies a region of the map. The case is private to this file, so the only
-/// way to get one is from the board below - which means a `RegionId` always names a
-/// region that exists, and looking one up never fails.
 type RegionId = private RegionId of int
 
 module RegionId =
     let value (RegionId n) = n
 
-/// What a region is, which decides how it is seeded and who may enter it.
 type RegionKind =
-    /// The heartland of a colour, seeded with that colour's stones.
     | Home of StoneColor
-    /// Contested ground, seeded at random.
     | Wild
-    /// A manoeuvre rather than ground: nothing borders it, it starts empty, and it
-    /// is no part of the land a faction holds.
     | Special
-    /// Ground no stone may ever enter.
     | Dead
 
 module RegionKind =
 
-    /// Whether stones may be placed here at all.
     let isOpen kind =
         match kind with
         | Dead -> false
@@ -30,8 +20,6 @@ module RegionKind =
         | Wild
         | Special -> true
 
-    /// Whether the region stands outside the map: bordering nothing, and not land.
-    /// The dead region is deliberately not isolated - adjacency runs through it.
     let isIsolated kind =
         match kind with
         | Special -> true
@@ -39,25 +27,15 @@ module RegionKind =
         | Wild
         | Dead -> false
 
-    /// Whether holding this region counts towards the land a faction rules.
     let isLand kind = not (isIsolated kind)
 
-/// A region as the map defines it. Nothing here changes during play.
 type Region =
     { Id: RegionId
       Name: string
       Kind: RegionKind }
 
-/// The fixed shape of the map: which regions exist, and which of them border each other.
 module Board =
 
-    /// The regions in board order. A region's position in this list is its number.
-    ///
-    /// The order runs across the map rather than by kind, so that neighbours carry
-    /// nearby numbers: no border joins regions more than three apart, and most
-    /// regions border the one numbered either side of them. The mainland - homes,
-    /// wilds and the dead region - takes 1 to 12; the Flag and the Axe, which are no
-    /// part of the map, come last.
     let private table =
         [ "Nightfen", Home Green
           "Saltmarsh", Wild
@@ -88,10 +66,8 @@ module Board =
     let private byId =
         regions |> List.map (fun region -> region.Id, region) |> Map.ofList
 
-    /// Total, because a RegionId can only have come from this board.
     let region regionId = byId |> Map.find regionId
 
-    /// The only way in from the outside: a number a player typed.
     let tryId n =
         if n >= 1 && n <= count then Some(RegionId n) else None
 
@@ -99,30 +75,18 @@ module Board =
         regions
         |> List.tryFind (fun region -> region.Name = name)
         |> Option.map (fun region -> region.Id)
-        // Guarded by `problems` below, which stops the game before a deal.
         |> Option.defaultValue (RegionId 0)
 
-    /// The region a march is declared through.
     let flag = named "The Flag"
 
-    /// The region a battle is declared through.
     let axe = named "The Axe"
 
-    /// The regions that count as ground held, which is everything but the Flag and
-    /// the Axe. The dead region is land nobody can ever take.
     let landRegions =
         regions |> List.filter (fun region -> RegionKind.isLand region.Kind)
 
-    /// The other two: bought with stones, but no part of the map and no part of the
-    /// land. Every view draws them clear of the map, so which they are is asked here
-    /// rather than worked out again in each.
     let apartRegions =
         regions |> List.filter (fun region -> RegionKind.isIsolated region.Kind)
 
-    /// Region numbers paired with the regions they border. Borders are symmetrised
-    /// below, so a border only has to be named from one end: each region names only
-    /// the neighbours numbered above it, which - given the numbering above - are
-    /// never more than three away.
     let private declaredBorders =
         [ 1, [ 2; 4 ]
           2, [ 3; 4 ]
@@ -136,8 +100,6 @@ module Board =
           10, [ 12 ]
           11, [ 12 ] ]
 
-    /// Every declared border taken both ways round. Regions that border nothing
-    /// still appear, mapped to the empty set.
     let private adjacency =
         let empty = ids |> List.map (fun regionId -> regionId, Set.empty) |> Map.ofList
 
@@ -158,16 +120,6 @@ module Board =
 
     let areAdjacent one other = neighbours one |> Set.contains other
 
-    /// Where the regions lie, so the map can be drawn as a map. The mainland is a
-    /// patch of a triangular lattice: rows run north to south, each row starting at
-    /// the half-column given in front of it and its regions standing two half-columns
-    /// apart, so that one row is offset half a step from the next.
-    ///
-    /// Two regions border each other exactly when they stand two half-columns apart in
-    /// the same row, or one half-column apart in rows that touch. So every border can
-    /// be drawn as a line and no line has to be drawn that is not a border - which is
-    /// what `problems` checks the tables against each other for. The Flag and the Axe
-    /// lie nowhere, being no part of the map.
     let private places =
         [ 2, [ 2; 1 ]; 1, [ 3; 4 ]; 0, [ 5; 6; 7 ]; 1, [ 8; 9; 10 ]; 2, [ 11; 12 ] ]
 
@@ -175,14 +127,12 @@ module Board =
         places
         |> List.map (fun (offset, row) -> row |> List.mapi (fun step n -> n, offset + 2 * step))
 
-    /// The regions row by row, each with the half-column it stands in.
     let layout =
         placed
         |> List.map (List.choose (fun (n, at) -> tryId n |> Option.map (fun regionId -> regionId, at)))
 
     let private asPair one other = min one other, max one other
 
-    /// The borders the layout puts side by side, which should be all of them.
     let private drawnBorders =
         Set.ofList
             [ for row in placed do
@@ -201,8 +151,6 @@ module Board =
                   for other in borders do
                       yield asPair from other ]
 
-    /// Every region reachable from the start by crossing borders, optionally
-    /// treating some regions as impassable.
     let reachableFrom (blocked: Set<RegionId>) start =
         let rec walk seen frontier =
             match frontier with
@@ -218,9 +166,6 @@ module Board =
 
         walk Set.empty [ start ]
 
-    /// Ways in which the declared map fails to make sense. A non-empty list is a bug
-    /// in the tables above, not something a player can cause, so the game refuses to
-    /// start rather than dealing onto a broken map.
     let problems =
         [ for from, borders in declaredBorders do
               if Option.isNone (tryId from) then yield $"Region {from} is not on the board."
@@ -237,7 +182,6 @@ module Board =
               | false, true -> yield $"{region.Name} borders nothing, so no stone can ever reach it."
               | _ -> ()
 
-          // The map as drawn has to be the map as declared, or the picture lies.
           for n, _ in List.concat placed do
               if Option.isNone (tryId n) then
                   yield $"The map lays out region {n}, which is not on the board."

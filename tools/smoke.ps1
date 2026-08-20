@@ -1,35 +1,11 @@
-﻿# Play the game in a real browser, and say whether it worked.
-#
-# Everything else in `tests/` checks what the program *writes*. This checks what a browser
-# *does* with it, which is a different question and the one that has already been got wrong:
-# a page can be well-formed, carry every attribute it should, draw a board, and have not one
-# working control on it. Nothing that reads markup can tell you that. A click can.
-#
-# So this opens a headless browser, waits for the board to arrive over the stream, and then
-# uses the page the way a person would - types a line and presses the send button, presses
-# Enter in the box, clicks a button that arrived with the board - checking after each that
-# the game moved.
-#
-#   pwsh tools/smoke.ps1                     # the game a line that names none gets
-#   pwsh tools/smoke.ps1 -Game tictactoe     # the other one
-#
-# Wants a Chromium-based browser (Edge or Chrome) on the machine. It is not in CI for that
-# reason; run it after touching anything the browser reads.
-
+﻿
 param(
     [int]$Port = 5000,
     [int]$DebugPort = 9222,
     [string]$Browser = "",
-    # Which game to serve. Empty is the one a line that names none gets.
     [ValidateSet("", "turncoats", "tictactoe", "diplomacy")]
     [string]$Game = "",
-    # Serve the game with the machine in the second seat, and check the two things about
-    # that which only a browser can show: that the page is told whose seat it is, and that
-    # the machine's answer arrives down the stream without the page asking for it.
     [string]$Rival = "",
-    # The word at the served table's door. Said here rather than left to the program to make
-    # one up, because everything below has to present it - a browser in the address, a
-    # console in a header - and there is no way to read one off a hidden window.
     [string]$Code = "smoke-runs-here"
 )
 
@@ -37,85 +13,38 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
-# Where a page opens its stream and where it says what was typed. `Page` writes these into
-# the markup and `Browser` serves them; they are spelled out here because the second console
-# below asks for them directly rather than by being a page.
 $Stream = "/stream"
 $Say = "/say"
 
-# What differs between one game and the next, and the whole of it: what a board is made of,
-# what a player types at one, and what the table says back.
-#
-# Worth reading as the answer to a question this file was asked when there was a second game:
-# how much of driving a page in a browser is about the game on it? This much. Everything else
-# below - the stream, the box, the Enter key, the buttons carrying their own lines, the knock,
-# the heartbeat, the word at the door - is between this program and a browser, and is checked
-# once for both.
 $games = @{
     "turncoats" = @{
-        # How many sit down, which the game says and this only repeats.
         Seats = 2
-        # What the board is built out of, and how much of it there should be.
         Pieces = ".region"; Fewest = 12; Called = "map"
-        # Two lines to type: one that moves the game, and one that walks it back.
         Typed  = "negotiate"; Then = "undo"
-        # A control that arrived with the board rather than with the page, and what the line
-        # it carries should look like.
         Button = ".region .acts button"; Types = "^recruit "
-        # This game's own question, if it has one, and a word its answer should contain.
         Asking = "rule "; Working = "holds"
-        # What a second console says, and a word the first page should see in its log.
         Elsewhere = "negotiate"; Heard = "reserve"
-        # What the first board this game draws opens with.
         Opens = "Turn 1"
-        # What the seat a machine plays is called here - in the roster the table reads out as
-        # somebody sits down, and at the head of the lines that seat puts in the log.
         Machine = "Player 2"; Answers = "Player 2"
     }
     "tictactoe" = @{
         Seats = 2
-        # `.tile` and not `.cell`, which is what these said until a third game was added and
-        # somebody ran this. A square stopped being a shape this game drew and became a cell of
-        # a `Scene` when its three renderers were folded into one description - and nothing
-        # failed, because a selector that matches nothing throws where it is *used* and the use
-        # was inside the page. The board check never got as far as being wrong.
         Pieces = ".tile"; Fewest = 9; Called = "board"
         Typed  = "5"; Then = "undo"
         Button = ".tile .types"; Types = "^\d+$"
-        # Nine squares in plain sight: there is nothing to ask about, and saying so by
-        # leaving this empty is the point rather than a gap.
         Asking = ""; Working = ""
         Elsewhere = "1"; Heard = "takes square"
         Opens = "Turn 1"
         Machine = "O"; Answers = "O"
     }
     "diplomacy" = @{
-        # Seven, because the map has seven home countries and the game is built on all of
-        # them being played. This is the only game here that is not two, which is the whole
-        # reason the number stopped being written into the line below.
         Seats = 7
-        # The map: one cell per province, laid out as a honeycomb. Scoped to the grid because
-        # this game draws tiles elsewhere too - a unit's orders are a tile apiece - and a count
-        # that picked those up as well would pass whatever the map did.
         Pieces = ".grid .tile"; Fewest = 70; Called = "map"
-        # `commit` rather than an order, and for a reason worth writing down: at this game a
-        # move by one power changes nothing anybody else can see, so an order typed into the
-        # box would move the game without moving the board - and the seat after this one is
-        # never reached until this one says it has finished. Committing is the line that does
-        # both, which is what the checks below are actually about.
         Typed  = "commit"; Then = "undo"
         Button = ".tile .types"; Types = "^(bud|tri|vie) "
         Asking = "borders vie"; Working = "Tyrolia"
-        # Nothing here, and unlike the game of nine squares it is not because there is nothing
-        # to say. Everybody writes at once, so the only seat that may say anything is the one
-        # being asked - and a second console sitting down at this table is by definition not
-        # it. There is no line for somebody else to say out of turn.
         Elsewhere = ""; Heard = ""
         Opens = "Spring 1901"
-        # Two names rather than one, because at seven seats they are not the same answer. The
-        # roster names the machines in seating order and England leads it; the log holds the
-        # last dozen lines, and by the time a season has resolved those belong to the power
-        # that wrote last.
         Machine = "England"; Answers = "Turkey"
     }
 }
@@ -140,28 +69,9 @@ function Find-Browser {
     throw "No Chromium-based browser found. Pass one with -Browser."
 }
 
-# --- driving one over the devtools protocol -------------------------------------------------
-#
-# Every command goes out before anything is read back: abandoning a pending receive faults
-# the socket, so this never times a read out until the very end.
-
-# An empty `url` means do not navigate: a page being asked what became of it must not be
-# reloaded first, or the stream it was holding - and everything that arrived down it - goes
-# with the old page.
-#
-# Nothing here waits a fixed length of time. Every wait is for the thing actually being
-# waited on - the browser answering at all, the navigation landing - because a fixed wait is
-# wrong twice over: too long on the machine it was written on, and too short on a slower one,
-# where it fails as though the page were broken.
 
 function Get-Pages {
     try {
-        # Named before it is handed on, and that is not a style choice. Windows PowerShell
-        # gives a JSON array back as one thing rather than as its items, and one thing put
-        # through a filter is one thing: `$_.type -eq "page"` asked of the whole list reads
-        # every type at once, compares the lot, and passes the entire list as a match. The
-        # symptom is a filter that appears to select everything, which is a hard thing to
-        # see when what you are looking at is a list of browser tabs.
         $answered = Invoke-RestMethod -Uri "http://localhost:$DebugPort/json" -TimeoutSec 10
         @($answered)
     }
@@ -182,11 +92,6 @@ function Wait-For($what, $seconds, $test) {
 
 function Invoke-InPage($url, $script) {
     $page = Wait-For "the browser to open a page" 30 {
-        # A browser has pages of its own open that have nothing to do with anybody - Edge
-        # starts with a sync dialog - and which of them comes first in the list is not
-        # settled. Taking whichever came first was working by luck, and the way it would
-        # have failed is a page that cannot be sent anywhere near the game reporting that
-        # as the game being broken.
         $open = @(
             Get-Pages |
                 Where-Object { $_.type -eq "page" } |
@@ -210,15 +115,10 @@ function Invoke-InPage($url, $script) {
 
         Send-Cmd 1 "Runtime.enable" @{}
         Send-Cmd 2 "Page.enable" @{}
-        # Never a cached page: a stale one would be checking the last run's work.
         Send-Cmd 3 "Network.setCacheDisabled" @{ cacheDisabled = $true }
         if ($url) {
             Send-Cmd 4 "Page.navigate" @{ url = $url }
 
-            # Until the navigation has landed there is an old document still in the page, and
-            # a script run into that one is checking the last thing this browser was showing.
-            # The address a target reports changes when the new document commits, so that is
-            # what is waited on rather than a guess at how long it takes.
             Wait-For "the page to arrive at $url" 30 {
                 Get-Pages | Where-Object { $_.id -eq $page.id -and $_.url -eq $url }
             } | Out-Null
@@ -258,7 +158,6 @@ function Invoke-InPage($url, $script) {
     finally { $ws.Dispose() }
 }
 
-# --- what a person does with the page ----------------------------------------------------------
 
 $script = @'
 (async () => {
@@ -408,47 +307,22 @@ $script = @'
 })()
 '@
 
-# --- a second console, which is not a browser ---------------------------------------------
-#
-# Somebody else has to move for the page above to be told anything, and that somebody does
-# not have to be a browser. A console at this table is whatever holds a stream open and posts
-# a line, and thirty lines of HTTP is all of that - so this is a cookie jar, a stream, and one
-# typed line.
-#
-# It was a second browser tab first, leaning on `localhost` and `127.0.0.1` being two cookie
-# jars. That worked, but it made the check depend on how two tabs of one browser get along -
-# which is a question about browsers rather than about the game, and the wrong thing to have
-# a failing check point at. One page in the room, and a console that is only a cookie and a
-# stream, asks the question that is actually being asked.
 
 function Join-AsConsole($address) {
-    # Present without asking in PowerShell 7 and not in Windows PowerShell, which is the one
-    # difference between the two that this script actually touches.
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
 
     $handler = New-Object Net.Http.HttpClientHandler
     $handler.CookieContainer = New-Object Net.CookieContainer
     $client = New-Object Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromMinutes(5)
-    # This console is not a browser and has no address bar to be handed a word in, so it says
-    # it the way a terminal does - on every request it makes.
     $client.DefaultRequestHeaders.Add("X-Table-Code", $Code)
 
-    # The page first, purely to be given a cookie: that cookie is the whole of who this
-    # console is, and the stream below has to arrive carrying it or the table would take the
-    # two requests for two different callers.
     $client.GetStringAsync("$address/").GetAwaiter().GetResult() | Out-Null
 
-    # Held open rather than read to the end, because that is what sitting at a table is. The
-    # table seats a page when its stream opens and lets it go when the stream ends, so this
-    # is a console for exactly as long as this response is not disposed.
     $asking = New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]::Get, "$address$Stream")
     $held = $client.SendAsync($asking, [Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
     $held.EnsureSuccessStatusCode() | Out-Null
 
-    # And read as far as the first thing the table says, which is the board it draws for
-    # somebody sitting down. Until that has arrived this console is not seated yet, and a
-    # line sent before then would be answered with a shrug.
     $body = $held.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
     $buffer = New-Object byte[] 4096
     $read = $body.ReadAsync($buffer, 0, $buffer.Length)
@@ -458,8 +332,6 @@ function Join-AsConsole($address) {
     @{ Client = $client; Held = $held; Body = $body }
 }
 
-# What the first page made of all that, asked without reloading it - a reload would open a
-# fresh stream and lose the one the knock arrived down.
 
 $counted = @'
 (async () => {
@@ -486,21 +358,15 @@ $counted = @'
 })()
 '@
 
-# --- run it -------------------------------------------------------------------------------------
 
 $exe = Find-Browser
 $profile = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-smoke-$PID"
-# The process serving the table. Not `$game`: that is the parameter saying which game,
-# and PowerShell does not tell the two apart.
 $table = $null
 $browser = $null
 
 try {
     "Serving a game and opening it in $(Split-Path -Leaf $exe)..."
 
-    # Anything still holding either port would be used instead of what this run starts: an
-    # older game answering from a different position, or an older browser still showing a
-    # page from last time. Both look like a failure of the thing being checked.
     Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
@@ -509,28 +375,15 @@ try {
 
     Start-Sleep -Milliseconds 500
 
-    # Opened with a word at the door, which is what a table gets when nobody says otherwise -
-    # so what is driven below is the way this is actually served rather than a way round it.
-    # Given rather than made up here, because this script has to be able to say it.
     $served = @("run", "--project", $root, "--")
     if ($Game) { $served += $Game }
     $served += @("serve", "$($g.Seats)", "--seed", "42", "--code", $Code)
 
-    # Every seat the browser is not in has to be filled, or the table sits waiting for people
-    # who are not coming and no board is ever drawn. At a game of two that is the one seat
-    # `-Rival` was already about; at a game of seven it is the other six, and a run that named
-    # no machine gets one anyway because there is no other way to have a game at all.
     $fill = if ($Rival) { $Rival } elseif ($g.Seats -gt 2) { "easy" } else { "" }
     if ($fill) { for ($seat = 1; $seat -lt $g.Seats; $seat++) { $served += @("--rival", $fill) } }
 
     $table = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
 
-    # Wait for the table rather than guess how long it takes to open. Driving a browser at a
-    # server that is not up yet fails in ways that look like the page's fault - which is
-    # exactly the sort of false alarm this script exists to avoid raising.
-    #
-    # A socket rather than a request, because `Invoke-WebRequest` goes by way of whatever
-    # proxy this machine is set up with and does not necessarily reach its own localhost.
     Wait-For "the game to come up on port $Port" 60 {
         try {
             $probe = New-Object Net.Sockets.TcpClient
@@ -542,10 +395,6 @@ try {
         catch { $false }
     } | Out-Null
 
-    # The door, before anything is driven through it. A browser that turns up without the
-    # word is not shown a board, and is shown something a person can act on rather than a
-    # number - and there is no way to check that by reading markup, because the whole question
-    # is which of two pages the table decided to send.
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $stranger = New-Object Net.Http.HttpClient
 
@@ -556,10 +405,6 @@ try {
         Report "a browser with no word at the door is not seated" ([int]$shut.StatusCode -eq 401) "the table answered $([int]$shut.StatusCode)"
         Report "and is shown the door rather than a number" ($shutSaid -match 'word at the door') "it was sent $($shutSaid.Length) characters"
 
-        # And somebody who keeps guessing is slowed down. Ten wrong answers in a row is a
-        # burst nobody's fingers produce, so what is checked is that the ones after it are
-        # refused differently - and, the half that actually matters, that the word still gets
-        # in from the very same address straight afterwards.
         $tries = 1..14 | ForEach-Object {
             [int]($stranger.GetAsync("http://localhost:$Port/?code=guess-$_").GetAwaiter().GetResult()).StatusCode
         }
@@ -572,22 +417,12 @@ try {
     }
     finally { $stranger.Dispose() }
 
-    # `--disable-sync` and the rest are not tidiness: each of them is a page this browser
-    # would otherwise open of its own accord, sitting in the target list beside the one the
-    # game is in.
     $browser = Start-Process -PassThru -WindowStyle Hidden -FilePath $exe -ArgumentList @(
         "--headless=new", "--disable-gpu", "--no-first-run",
         "--disable-sync", "--no-default-browser-check", "--disable-extensions",
         "--user-data-dir=$profile", "--remote-debugging-port=$DebugPort", "about:blank"
     )
 
-    # `Invoke-InPage` waits for the browser to have a page of its own to talk to, so there is
-    # nothing to wait for here.
-    # Whether the page should expect to be told anything as it sits down, which it only is
-    # when there is a machine at the table to be told about.
-    # And what a board is made of at whichever game is being served. Substituted rather than
-    # written in, so that the script above reads as the one thing it is: a person using a
-    # page, at a game it never names.
     $asking =
         $script.Replace("ROSTER", $(if ($Rival) { "true" } else { "false" })).
             Replace("PIECES", "'$($g.Pieces)'").
@@ -598,9 +433,6 @@ try {
             Replace("TYPED", "'$($g.Typed)'").
             Replace("THEN", "'$($g.Then)'")
 
-    # The word goes in the address, which is how somebody sent a table's address arrives with
-    # it. Everything the page fetches afterwards - its client, its stream, every line typed -
-    # goes on the cookie the table hands back here, and would 403 if that had not happened.
     $run = Invoke-InPage "http://localhost:$Port/?code=$Code" $asking
     $r = $run.value
     ""
@@ -629,20 +461,7 @@ try {
         Report "and the machine's own move arrives without the page asking" $r.answered "no line of the log was $($g.Answers)'s"
     }
 
-    # --- the turn arriving from somebody else ----------------------------------------------
-    #
-    # This is the delivery, and nothing that reads markup or folds a value can be asked about
-    # it. Everything the stream has carried until now has been a piece of the page, landing
-    # where the element of its id already was. A knock is not a piece of anything: it goes as
-    # a script for the client to run and take off the page again, and a page can take every
-    # board perfectly while quietly dropping every one of these.
-    #
-    # So a second console sits down - not a browser, just a cookie and a held-open stream -
-    # and says one line. The page above should hear about it without being asked.
 
-    # Skipped at a game where nobody may speak out of turn, and said out loud rather than
-    # quietly dropped: the delivery below is real machinery, and a game that cannot exercise
-    # it should say which game it is and why.
     if (-not $g.Elsewhere) {
     "skip a second console saying a line: at this game only the seat being asked may say anything"
     }
@@ -651,9 +470,6 @@ try {
     $second = Join-AsConsole "http://localhost:$Port"
 
     try {
-        # A negotiation, because it is the one move that is legal at any point in an opening
-        # and needs nothing said about where. It is not this script's business whether it was
-        # a good move - only that it was somebody else's.
         $said = $second.Client.PostAsync("http://localhost:$Port$Say`?line=$($g.Elsewhere)", $null).GetAwaiter().GetResult()
 
         Report "a second console at the same game can say a line" ($said.IsSuccessStatusCode) "the table answered $([int]$said.StatusCode)"
@@ -670,17 +486,6 @@ try {
         $second.Client.Dispose()
     }
 
-    # --- and a house of them ------------------------------------------------------------
-    #
-    # A house serves the same boards through the same handlers, so what is worth driving here
-    # is only what a house adds: a front page that lists what is being played, a link that
-    # deals a new table, and a board arriving at a browser that never named a table - it named
-    # a link, and the house remembered which table that was.
-    #
-    # Which is the one thing a house cannot be checked for without a browser. Everything up to
-    # the board is a page fetch, and `house.fsx` has the rules behind it; this is the seam
-    # between them, and it is exactly where a cookie that did not survive a redirect would go
-    # unnoticed.
 
     ""
     "A house, and a table opened at it..."
@@ -690,10 +495,6 @@ try {
 
     $housePort = $Port + 1
 
-    # With a word at the door, like the table above, so what is driven below is the way a
-    # house is actually opened rather than a way round it. One door and not two: everything
-    # inside a house is behind this, and a table having a second word of its own would be a
-    # house whose whole purpose - a list of games you can join - you could not use.
     $housed = @("run", "--project", $root, "--")
     if ($Game) { $housed += $Game }
     $housed += @("house", "--port", "$housePort", "--code", $Code)
@@ -712,10 +513,6 @@ try {
     } | Out-Null
 
     try {
-        # The door first, before a browser is driven through it. A house is one room and one
-        # door: everything in it - the list, opening a table, the boards - is behind the same
-        # word, so a stranger who has not got it cannot see what is being played, never mind
-        # sit down at it.
         $outside = New-Object Net.Http.HttpClient
 
         try {
@@ -729,9 +526,6 @@ try {
         }
         finally { $outside.Dispose() }
 
-        # The front page, read the way a person reads it rather than as markup: what is on it
-        # is a heading, some links to open a table, and either a list or a line saying there
-        # is nothing yet.
         $reading = @'
 (async () => {
   const said = { };
@@ -751,9 +545,6 @@ try {
         Report "with a way to open a table for every size the game takes" ($f.opens.Count -ge 1) "$($f.opens.Count) of them"
         Report "and nothing listed before anybody has opened one" ($f.tables -eq 0) "$($f.tables) already there"
 
-        # Opening one. The link is followed, the house deals a table and sends the browser to
-        # it, and the board arrives over the stream exactly as it does at a table served on
-        # its own - which is the whole claim a house makes.
         $opening = @'
 (async () => {
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -784,10 +575,6 @@ try {
 
         Report "opening a table sends the browser to a table of its own" ($o.where -like "/at/*") "it landed on '$($o.where)'"
 
-        # Read from the board page itself, with its stream still open, because that is the only
-        # moment at which anybody is at it: a console that leaves a table still filling up gives
-        # its seat back, so a check that went to the front page to look would be reading the
-        # house after the browser had got up.
         Report "and a board arrives there over the stream, in place of the placeholder" ($o.drew -ne "") "the page still read 'Sitting down...'"
         Report "the table it dealt is listed at the house" ($o.front -match "/at/") "the front page linked to no table"
 
@@ -808,14 +595,9 @@ finally {
         if ($p -and -not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch {} }
     }
 
-    # A browser is a family of processes and stopping the one that was launched does not
-    # take the rest with it. Left behind, they keep a page open that goes on asking this
-    # port for a stream - and the next thing served here, game or not, finds a stranger
-    # already sitting at it. So they go the same way they are cleared at the start.
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like "*--remote-debugging-port=$DebugPort*" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    # `dotnet run` leaves the game itself behind when it goes.
     Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
 }

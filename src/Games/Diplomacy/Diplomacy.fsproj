@@ -1,9 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The third game, and the one that leans on the seams hardest. Everybody moves at once,
-       so a phase is seven seats writing in secret and one resolution; a year is three kinds
-       of phase, two of which are usually skipped; and the map is a table of three hundred
-       borders rather than a shape. None of that needed a line changing above it. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -19,20 +15,14 @@
     <Compile Include="Rules/Atlas.fs" />
     <Compile Include="Rules/Position.fs" />
     <Compile Include="Rules/Orders.fs" />
-    <!-- Working out what happened when everybody moved at once, which is the only hard thing
-         in this game and is hard because an order's outcome can depend on itself. -->
     <Compile Include="Rules/Adjudicate.fs" />
     <Compile Include="Rules/Session.fs" />
     <Compile Include="Rules/Turn.fs" />
     <Compile Include="Rules/Words.fs" />
-    <!-- And a seat played by the program, which reads the board a player reads and draws
-         nothing at all. -->
     <Compile Include="Rules/Rival.fs" />
   </ItemGroup>
 
   <ItemGroup Label="How it is read">
-    <!-- Three files, like the game of nine squares and unlike the game of stones: this one
-         describes its screens once as a `Scene` and `Readers` draws all three. -->
     <Compile Include="Reading/Ink.fs" />
     <Compile Include="Reading/Parse.fs" />
     <Compile Include="Reading/Render.fs" />

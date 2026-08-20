@@ -1,21 +1,8 @@
-// The ways of showing the game, and the colours they are shown in.
-//
-// A view may lay the board out however it likes - `plain` writes one block of text, `rich`
-// builds panels, tables and charts, and `html` builds a page - but no view may show a
-// player anything the game means them not to see. A third renderer is a third chance to
-// leak, so every view there is gets held to that here, whether or not anybody remembered to
-// come back and add it to this file.
-//
-//   dotnet fsi tests/view.fsx
-
 #load "Whole.fsx"
 
 open System.Text.RegularExpressions
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
-// and both Spectre and the command line's argument types carry names this game already
-// uses - `Region`, `Open`, `View`.
 open TCModel.Turncoats
 open Harness
 open Whole
@@ -24,26 +11,12 @@ let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
 let private seats = Game.players (Playing.game dealt)
 
-/// What a person would actually see, whatever the view wrote it in: colour taken back off,
-/// and markup with it. The escape itself has to go with the codes; stripping only the codes
-/// leaves it sitting between the letters, and a check for "R R R" would then never find one.
 let private uncoloured text =
     Regex.Replace(text, "\u001b\\[[0-9;]*m", "")
 
-/// Markup taken off too, so that what is left of a page is what somebody reading one would
-/// have in front of them.
-///
-/// Only for boards. The game's own prose says things like `recruit <colour> <region>`, and
-/// to a rule this blunt an angle bracket is an angle bracket - so anything checking what
-/// the game *says* uses `uncoloured` above and stops there.
 let private seen text =
     Regex.Replace(uncoloured text, "<[^>]*>", "")
 
-/// Every way a bag is written anywhere in the program, and so every shape a leak could
-/// take: laid out stone by stone, which is how `rich` draws one that is open; counted,
-/// which is how `plain` draws it; and laid out with nothing at all between the stones,
-/// which is what `html` comes to once its tags are off, each stone being an element of
-/// its own.
 let private spellings (player: Player) =
     let stones = player.Bag |> Pile.toColors |> List.map (Words.glyph >> string)
 
@@ -54,20 +27,12 @@ let private mentions (needle: string) (text: string) = text.Contains needle
 let private spells (player: Player) (board: string) =
     spellings player |> List.exists (fun spelling -> board |> mentions spelling)
 
-/// Every view, in the colours the game is drawn in unless somebody says otherwise. What a
-/// player may see does not depend on what colour it is drawn in, and the checks below say
-/// so in the one palette; the ones at the foot of this file are where colour is the point.
 let private views = playing.Views standard
 
-/// One view by name, in whatever colours are wanted. A view is its endpoints and those have
-/// a palette baked into them, so asking for one in different colours means asking the game
-/// afresh rather than putting a new palette on the one in hand.
 let private drawnBy palette name =
     playing.Views palette |> List.find (fun view -> view.Name = name)
 
-// --- the rule every view keeps ----------------------------------------------------------
 
-// A sweep, so a view added later is held to this without anybody remembering to come back.
 for view in views do
     for beholder in seats do
         let board = seen (view.Board Margins.all beholder.Id dealt)
@@ -80,7 +45,6 @@ for view in views do
                 false
                 (board |> spells other)
 
-// --- a stone drawn stays with the player who drew it ---------------------------------------
 
 let private drawn = dealt |> Playing.update (Make Negotiate)
 
@@ -104,21 +68,7 @@ for view in views do
         (seen (view.Board Margins.all other.Id drawn)
          |> mentions $"drew a {drewColor} stone")
 
-// --- the notes -----------------------------------------------------------------------------
-//
-// The writing that explains the board is `Render.Notes`, and every view shows all of it. Each
-// wraps it to whatever width it has, which is the only part that is a view's own business.
-//
-// Written out per view they drifted, which is what this is here to stop: one view said two
-// regions share a "side" and another a "wall", one called the dead region wild, and two of the
-// four notes were shown by one view and quietly missing from the others. A note nobody is
-// shown reads exactly like a note nobody needed.
 
-/// A note as it reaches a reader, with everything that is only how it was drawn taken back
-/// off: colour and markup, the walls of whatever box it was written inside - a note in a
-/// Spectre panel has one down each side of every line - and the wrapping, run back together.
-/// A page's entities are read back too, the map note having an apostrophe and an angle
-/// bracket in it and a page writing both the long way round.
 let private unwrapped text =
     let walls = Regex.Replace(seen text, "[─-╿]", "")
     let flat = Regex.Replace(walls, @"\s+", " ")
@@ -142,12 +92,6 @@ for view in views do
 
         report $"and with the notes off says nothing of {what}" false (hidden |> mentions note)
 
-// --- the blocks a board is built of ----------------------------------------------------------
-//
-// Which blocks there are is one decision and three layouts. `plain` shouts a name, `rich`
-// writes it into the top wall of a panel and `html` gives it a heading, so this asks only that
-// every view has every block - the way a block gets added to two screens out of three is that
-// nothing ever asked.
 
 let private blocks =
     [ Render.Blocks.map
@@ -164,11 +108,6 @@ for view in views do
     for block in blocks do
         report $"the {view.Name} view has a block for {block}" true (board |> mentions (block.ToLowerInvariant()))
 
-// --- the table still filling up ---------------------------------------------------------
-//
-// The one screen with no game behind it, built by all three from the same short list of who
-// has arrived. Exactly the trap the notes fell into, so each view is held to saying where
-// every seat stands, how many are still to come, and which seat is the reader's own.
 
 let private arriving =
     let three =
@@ -212,7 +151,6 @@ for view in views do
         true
         (screen |> mentions (Words.seated true arriving.Head.Player))
 
-// --- prose ---------------------------------------------------------------------------------
 
 let private rich = drawnBy standard "rich"
 
@@ -222,7 +160,6 @@ report "the rich view colours prose without moving a character of it" Render.hel
 
 report "and does colour it" true (rich.Says Render.help |> mentions "[")
 
-// --- choosing one -----------------------------------------------------------------------------
 
 report "every view answers to its own name" [ "plain"; "rich"; "html" ] (views |> List.map (fun view -> view.Name))
 
@@ -244,10 +181,6 @@ report
     (Playable.byName AtATerminal standard playing "fancy"
      |> Result.map (fun view -> view.Name))
 
-// Which views there are is one question and which of them a reader could show is another.
-// A terminal handed a page reads angle brackets and a browser handed the rich board reads
-// escape codes, so neither is offered the other's - and the refusal says what there is
-// rather than that the name is unknown, because the name is not the problem.
 
 report
     "a terminal is not offered the page"
@@ -261,22 +194,12 @@ report
     (Playable.byName InABrowser standard playing "rich"
      |> Result.map (fun view -> view.Name))
 
-// --- the colours it is drawn in -----------------------------------------------------------------
-//
-// A palette is how the game is read rather than how it is played, so the whole of what it
-// may do is change which escape codes come out. Nothing it does may move a character, and
-// nothing it does may show a player one thing more than they could see before.
 
 let private beholder = seats[0]
 
-/// The standard palette with one thing moved: Red drawn in teal rather than crimson.
 let private redIsTeal =
     Palette.set "red" "teal" standard |> Result.toOption |> Option.get
 
-/// Whether a piece of writing has been coloured with a given eight-bit colour. 45 is teal
-/// and 196 is crimson, which are the two this file moves a colour between. The escape
-/// itself is written as its number: put in as the character it is, it would be a byte
-/// nobody reading this file could see.
 let private escape = string (char 0x1b)
 
 let private inked code text =
@@ -301,9 +224,6 @@ report
 report
     "a colour nobody has is refused, and says what there is"
     true
-    // What there is is read off the list rather than written out here, because a colours file
-    // may have added to it or dropped from it - and what this is checking is that a refusal
-    // says what there is, not what this program happened to be built with.
     (match Palette.set "blue" "beige" standard with
      | Error problem -> problem |> mentions $"'beige' is not a colour I have. There is {Palette.names}."
      | Ok _ -> false)
@@ -330,8 +250,6 @@ report
     (plain.Board Margins.all beholder.Id dealt)
     ((drawnBy redIsTeal "plain").Board Margins.all beholder.Id dealt)
 
-// A palette crosses a wire as the words a person would have typed, and is read back by the
-// same function that reads them, so there is no second spelling of one to keep in step.
 
 report
     "a palette comes back off the wire as it went on"
@@ -349,7 +267,6 @@ report
     "crimson"
     (Palette.shadeOf "red" (Palette.read playing.Slots "red=beige blue=teal")).Name
 
-// --- the screen that offers them ------------------------------------------------------------
 
 report
     "two words are a colour for something"
@@ -380,12 +297,6 @@ report
      | Ok Options.Same -> true
      | _ -> false)
 
-// The screen is written in the board's own words so that showing it through a view colours
-// the samples on it - which is what makes it a look at the colours rather than a list of
-// names for them.
-
-// It is always shown through the view built in the very palette it is offering, which is
-// what makes the samples on it a look at the colours rather than a list of names for them.
 
 let private offering = drawnBy redIsTeal "rich"
 

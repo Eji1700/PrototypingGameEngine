@@ -3,43 +3,19 @@ namespace TCModel.Snake
 open TCModel.Common
 open TCModel.Engine
 
-/// How well a machine plays.
-///
-/// Two things, and the first of them is the whole of what "good at snake" means. Anybody can
-/// see that the square in front of them is empty; what kills a snake is the square it will
-/// want four moves from now, and the cheapest honest way to ask about that is how much room a
-/// step leaves it standing in. A machine that only looks one square ahead eats well and then
-/// walls itself into a pocket, every time, and that is exactly what `easy` and `medium` do.
 type Skill =
-    {
-        Name: string
-        Describe: string
-        /// Whether it counts the room a step leaves it in before taking it.
-        Counts: bool
-        /// Out of a hundred, how often it plays something other than the best it saw. What
-        /// makes a beatable opponent out of one that is merely careful.
-        Slips: int
-    }
+    { Name: string
+      Describe: string
+      Counts: bool
+      Slips: int }
 
-/// A machine at a seat: how it plays, and its own generator.
-///
-/// The generator breaks ties - several ways are very often worth exactly the same, and a
-/// machine that always took the first would drive every snake into the same wall - and decides
-/// a slip. It travels with the machine, so the same table dealt twice plays the same twice.
 type Rival = { Skill: Skill; Rng: Rng }
 
 module Rival =
 
-    /// The three ways a snake may go, which is every way but back.
     let private ways snake =
         Direction.all |> List.filter (fun way -> way <> Direction.opposite snake.Facing)
 
-    /// How much room a step leaves: how many squares can be reached from the one it lands on,
-    /// counting nothing anybody is lying on.
-    ///
-    /// This is the whole difference between the machines. A snake in a pocket of four squares
-    /// is dead in four moves whatever it does next, and the only moment it could have known
-    /// that was before it went in.
     let private room play seat direction =
         let snake = Session.snakeAt seat play
         let start = Board.along direction (Snake.head snake)
@@ -64,13 +40,6 @@ module Rival =
 
         if not (Board.holds start) || Set.contains start blocked then 0 else fill Set.empty [ start ]
 
-    /// What a step is worth to a machine, or nothing at all where it would be the last one it
-    /// took.
-    ///
-    /// Room first and food second, in that order, and the order is the opinion: a machine that
-    /// ate its way into a pocket has eaten its last. Then the food, then the distance to it -
-    /// so a step that eats beats a step that approaches, and a step that approaches beats one
-    /// that wanders.
     let private worth skill play seat direction =
         match Turn.ahead seat direction play with
         | Wall
@@ -89,10 +58,6 @@ module Rival =
 
             Some((if space >= Snake.length snake then 1 else 0), (if there = Food then 1 else 0), nearer, space)
 
-    /// Which way a machine goes, and the machine as it then stands.
-    ///
-    /// This is the whole of what a game has to hand the engine about a seat it plays: the
-    /// *when* is `Machines`', and is the same at every game.
     let plays session rival =
         match session with
         | Finished _ -> None
@@ -107,9 +72,6 @@ module Rival =
 
         let slip, rng = Rng.intBelow 100 rival.Rng
 
-        // Every way it may go, only the best of them, or - where every way it may go is a
-        // death - whatever is left. A snake with nowhere to go still has to go somewhere, and
-        // saying so here is cheaper than a machine that answers nothing and stalls the table.
         let wanted =
             if List.isEmpty rated then
                 open'
@@ -123,7 +85,6 @@ module Rival =
 
         Some(Go wanted[picked], { rival with Rng = rng })
 
-    // --- the three on offer ------------------------------------------------------------------
 
     let easy =
         { Name = "easy"
@@ -143,7 +104,6 @@ module Rival =
           Counts = true
           Slips = 0 }
 
-    /// Worst to best, which is the order they are offered in.
     let all = [ easy; medium; hard ]
 
     let names = Machines.named (fun skill -> skill.Name) all
@@ -151,8 +111,6 @@ module Rival =
     let byName name =
         Machines.byName (fun skill -> skill.Name) all name
 
-    /// Seat the machines named. Which seats there are is this game's answer - they are dealt
-    /// in order, up to four of them - and everything else about it is the engine's.
     let seating (seed: uint64) sitting =
         Machines.seating [ for place in 1 .. Session.Most -> Seat.at place ] seed sitting
         |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

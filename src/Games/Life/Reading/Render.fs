@@ -2,22 +2,10 @@ namespace TCModel.Life
 
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace, and
-// the command line's argument types carry names this game already uses.
 open TCModel.Life
 
-/// Every screen this game has, described once - and the three ways of reading one come back
-/// from `Readers` already written.
-///
-/// A `Scene` says what a screen is *made of* and nothing about what it looks like, and that is
-/// what makes a board of four hundred cells possible here at all. Written out three times over
-/// - as text, as Spectre's widgets, as elements - a grid this size would be three layouts to
-/// keep in step, and two of them would be wrong within a week.
 module Render =
 
-    /// What each part of the screen is called. Named rather than written out, because the
-    /// readers draw them and a block renamed in one place would look like a block that had
-    /// gone missing.
     module Blocks =
         let board = "The board"
         let run = "The run"
@@ -32,11 +20,6 @@ module Render =
         let rule =
             "A living cell with two or three neighbours lives on. An empty one with exactly three comes alive. Everything else is empty next time round. The edges are joined, so what leaves one side arrives at the other."
 
-    // --- the heading ---------------------------------------------------------------------
-    //
-    // Whose turn it is, at a game where it is always the same one, is not worth a line. What
-    // is worth one is the thing a single frame of a board cannot show: whether it is still
-    // going anywhere.
 
     let heading world =
         let where = $"Generation {world.Generation}"
@@ -50,25 +33,12 @@ module Render =
         else
             $"{where} - {Words.cells (World.living world)} alive"
 
-    // --- the board ---------------------------------------------------------------------------
 
-    /// One row, as spans - and runs of the same tone gathered into one span each by
-    /// `Scene.runs`, because a board of four hundred and sixteen cells drawn afresh every time
-    /// anybody looks at it is not four hundred and sixteen spans.
     let private row world cells =
         cells
         |> List.map (fun cell -> if World.alive cell world then Ink.Living, Tone.Slot Ink.Key else Ink.Empty, Tone.Quiet)
         |> Scene.runs
 
-    /// The board: a column of rows, each with its number beside it, under a line of column
-    /// letters.
-    ///
-    /// Rows lined up rather than cells walled off, and that is a decision about this game
-    /// rather than a shortcut. A `Walled` grid is what the game of nine squares wants - a cell
-    /// with room in it, a wall round it, a button on it - and at four hundred cells every
-    /// reader here would draw something unreadable: a table four hundred columns of walls
-    /// wide, or a page of four hundred boxes. What a cell of *this* board is, is one character
-    /// in a shape made of its neighbours, and the shape is the whole point.
     let private grid world =
         Aligned(
             [ Scene.cell Tone.Quiet ""; Scene.cell Tone.Quiet Grid.letters ]
@@ -76,7 +46,6 @@ module Render =
                 |> List.mapi (fun index cells -> [ Scene.cell Tone.Quiet (string (index + 1)); row world cells ]))
         )
 
-    // --- where the run stands -----------------------------------------------------------------
 
     let private standing world =
         [ Scene.says $"Generation {world.Generation}."
@@ -92,19 +61,7 @@ module Render =
                   "It is still going."
           ) ]
 
-    /// The four things a player does over and over, as controls.
-    ///
-    /// Each carries the line it would type, which is the whole of what a control is for: a
-    /// reader with buttons draws four buttons and one without writes out the four words, and
-    /// neither of them had to be told what a button means. Two of these are the engine's own
-    /// words rather than this game's - which is exactly why they can be offered here without
-    /// this game having an opinion about undo.
     let private onwards =
-        // The line above the buttons is here to be read, and it is also holding the box open:
-        // a block of nothing but short captions comes out of the reader that builds panels
-        // narrower than its own name, and a panel too narrow for its header is drawn without
-        // one. Which is worth a sentence rather than a shrug - the block would still be there,
-        // and nobody looking at it would know what it was called.
         [ Scene.quietly "each of these is a line you could type"
           Does("step", "step", Tone.Plainly)
           Does("step 10", "step 10", Tone.Plainly)
@@ -113,10 +70,7 @@ module Render =
           Does("clear", "clear", Tone.Plainly)
           Does("restart", "restart", Tone.Plainly) ]
 
-    // --- what a player may type ----------------------------------------------------------
 
-    /// The commands, short. `help` has them at length, and both are written from this list so
-    /// neither can quietly grow a command the other has never heard of.
     let private verbs =
         [ "f7", "turn cell f7 on, or off (or 'toggle f7')"
           "step, step 10", "let the rule run, once or ten times"
@@ -134,7 +88,6 @@ module Render =
 
     let commands = Scene.verbs verbs
 
-    /// A paragraph as lines short enough for either terminal reader.
     let private wrapped text = Scene.paragraph 66 text
 
     let help =
@@ -155,11 +108,9 @@ module Render =
               "COMMANDS"
               commands ]
 
-    // --- the log ---------------------------------------------------------------------------
 
     let wording = Told.inWords Words.said Words.command
 
-    // --- the whole screen ---------------------------------------------------------------
 
     let board margins _ (model: Model<Move, World, Notice>) =
         let world = Model.state model
@@ -167,16 +118,12 @@ module Render =
         Stack
             [ Heading(heading world)
               Block(Blocks.board, [ grid world; Scene.noted margins Notes.board ])
-              // The two narrow blocks side by side under the board, because the board wants the
-              // whole width and neither of these wants half of it. A reader with no way to put
-              // two things beside each other stacks them and nothing is lost.
               Beside
                   [ Block(Blocks.run, standing world @ [ Scene.noted margins Notes.rule ])
                     Block(Blocks.onwards, onwards) ]
               Scene.listing margins Blocks.commands commands
               Block(Blocks.log, Scene.log wording model) ]
 
-    // --- the rest of what a player reads --------------------------------------------------
 
     let history _ (model: Model<Move, World, Notice>) =
         let entry (entry: Entry<Move, Notice>) =
@@ -188,12 +135,6 @@ module Render =
         |> List.map entry
         |> Scene.record (heading (Model.state model))
 
-    /// What the rule is about to do with one cell, and why.
-    ///
-    /// The one thing at this game that is worth asking and cannot be read off the board: the
-    /// board shows what is alive, and the rule is about what is alive *around* a square. Which
-    /// is the whole of Life - so a game whose every position is in plain sight still has
-    /// something to explain, and this is it.
     let answer asked (model: Model<Move, World, Notice>) =
         let world = Model.state model
 
@@ -235,22 +176,12 @@ module Render =
 
     let rules = Scene.rules help
 
-    // --- a table still filling up -----------------------------------------------------------
-    //
-    // Drawn from a list of who has arrived and nothing else, so there is no game in it to
-    // differ about - and it is one line here rather than a screen.
 
     let waiting = Scene.waiting Words.seated
 
-    // --- what this game brings to a page -----------------------------------------------------
 
-    /// This game's own rules of drawing, and no more than that - which here is none at all.
-    /// The board is a grid of aligned rows and everything else on the page - the blocks, the
-    /// buttons, the notes - is a scene's, so all of it is styled at `Page`.
     let shell =
         { Title = "Life"
           Sheet = Page.tightRows
           Placeholder = "a cell to turn it on - 'f7' - or 'step 10' to run it on, or 'help'"
-          // A game of turns is read by somebody who is typing, so the page leaves their
-          // keys alone.
           Keys = [] }

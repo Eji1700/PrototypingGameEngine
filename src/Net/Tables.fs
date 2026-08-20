@@ -4,33 +4,7 @@ open System
 open TCModel.Engine
 open TCModel.Table
 
-/// What the wire needs of a table, and the whole of it: somebody sits down, somebody says
-/// something, somebody goes, and each of those comes back as a list of things to say.
-///
-/// No type parameters, and that is the point of it existing. The hub below is built by the
-/// framework's own container from a type named in a route, and a *generic* type named there
-/// cannot be tied to the game being played: F# infers the arguments of `MapHub<TableHub<_,_,_>>`
-/// as `obj`, the container is then asked for a `TableHub<obj,obj,obj>` it has never heard of,
-/// and hub activation throws. What that looks like from the far end is a console that
-/// negotiates, connects, and is dropped without a word - which is why this was found by
-/// joining a table rather than by anything that reads code.
-///
-/// So the types stop here, the same way they stop at `Chosen`: by the time the wire is
-/// involved everything being said is a string or a number anyway.
 type Table =
-    /// Take a seat, or come back to one. `resuming` is the token of a seat already held;
-    /// `offered` is the one a new seat would be given, minted outside so the lobby stays a
-    /// value. The view and the colours are the words a console sends, read at this end
-    /// against the game actually being played.
-    ///
-    /// `shown` is what kind of thing is sitting down, and it is told rather than guessed at.
-    /// A terminal and a page cannot read the same screens - `rich` means nothing to a browser
-    /// and `html` means nothing to a terminal - so a table asked for a view has to know which
-    /// list to look in. It could have been read off the console's own name, pages having a
-    /// mark in theirs, but that would mean this file knowing how a page is named, and how a
-    /// page is named is settled two files further out in the one place that has met an
-    /// `HttpContext`. A table that has never heard of a browser is worth more than a
-    /// parameter saved.
     abstract Sits:
         console: string * offered: string * resuming: string option * shown: Shown * view: string * palette: string -> Post list
 
@@ -38,31 +12,10 @@ type Table =
 
     abstract Left: console: string -> Post list
 
-    /// The clock came round at a table that does not wait: play the beat, say what everybody
-    /// is to be shown, and say how long to leave before the next one.
-    ///
-    /// On the interface rather than on the one class that has a clock, because a house holds
-    /// tables it knows nothing else about and would otherwise have to ask what kind each one
-    /// was. A table whose game waits answers with nothing to say and a long wait, and whatever
-    /// is keeping the time can go back to sleep.
     abstract Beats: unit -> Post list * TimeSpan
 
-    /// What this table looks like from the door: how far along it is, how many seats are
-    /// going spare, and who is at the ones that are not.
-    ///
-    /// The only member here that does not change anything, and the only one a house of tables
-    /// needs before somebody has decided which table they are joining. Taken under the same
-    /// lock as the rest, so a list of tables cannot catch one halfway through a move.
     abstract Standing: Lobby.Standing
 
-/// The one lobby this process is hosting.
-///
-/// Every change goes through here under a lock, so the pure fold inside never sees two
-/// players at once and the game can never be half-moved. What comes back out is the list
-/// of things to say, which is the only part that touches the wire.
-///
-/// Generic in the game for the same reason the lobby is: nothing here reads a board. It is
-/// a lock, a mutable slot and a file being written.
 type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: Model<'Move, 'State, 'Notice> -> unit) =
     let gate = obj ()
     let mutable lobby = opening
@@ -71,8 +24,6 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
         lock gate (fun () ->
             let next, posts = change lobby
             lobby <- next
-            // The record is written after every change rather than at the end, because
-            // a table with people at it can lose its host without warning.
             keep (Lobby.model next)
             posts)
 
@@ -80,14 +31,8 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
         member this.Sits(console, offered, resuming, shown, view, palette) =
             let game = Lobby.game lobby
 
-            // A view a table has never heard of is no reason to turn a player away; they can
-            // ask for another once they are sitting down. Colours the table does not know are
-            // passed over the same way, one at a time, by `Palette.read`.
             let palette = Palette.read game.Slots palette
 
-            // And only among the ways this kind of console can read at all, which is what
-            // `shown` is for: a page asking for `rich` is not asking for something that does
-            // not exist, it is asking for something it could not draw.
             let view =
                 Playable.byName shown palette game view
                 |> Result.defaultValue (Playable.plainest shown palette game)
@@ -98,11 +43,6 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
 
         member this.Left console = this.Change(Lobby.left console)
 
-        // The beat and the wait are taken together, under one lock, because they are one
-        // question: how the game stands after this beat is what says when the next one is due,
-        // and a clock that read the state again afterwards could be reading a game two moves
-        // further on. A game that waits answers with nothing and a minute, which is a clock
-        // that has nothing to do and does not spin asking.
         member this.Beats() =
             lock gate (fun () ->
                 match (Lobby.game lobby).Pulse with
@@ -113,17 +53,8 @@ type Held<'Move, 'State, 'Notice>(opening: Lobby<'Move, 'State, 'Notice>, keep: 
                     keep (Lobby.model next)
                     posts, pulse.Every(Model.state (Lobby.model next)))
 
-        // Under the gate like every other reading of the lobby, and it has to be: the slot is
-        // written by whichever thread last moved the game, and a description read beside that
-        // write is a description of neither state.
         member _.Standing = lock gate (fun () -> Lobby.described lobby)
 
-/// The same, for the one hot seat this process is serving to a browser.
-///
-/// `Solo` says what a typed line does and what it wants written down; this does the writing
-/// and hands back what to show. The record goes out after every change here too, for a
-/// reason a local game did not have before: a page has no way of putting the game down on
-/// its way out, so there is no last moment to save at.
 type Aside<'Move, 'State, 'Notice>
     (opening: Solo<'Move, 'State, 'Notice>, fresh: unit -> string, keep: Model<'Move, 'State, 'Notice> -> string -> string option)
     =
@@ -136,14 +67,6 @@ type Aside<'Move, 'State, 'Notice>
             solo <- next
             posts)
 
-    /// Somebody starts reading this game, in the words a browser sends - the same door
-    /// `Held.Sits` opens, said the same way.
-    ///
-    /// There are no seats at a hot seat, so nothing is taken and nothing is handed back to
-    /// come back with; what a console gets here is a way of reading and a place to read it.
-    /// But the *words* are the same words, and that is the point of this member existing:
-    /// above here, a page sitting down at a table and a page watching a hot seat are one
-    /// thing, and neither the page nor the file serving it has to know which it found.
     member this.Watches(console, shown, view, palette) =
         let game = Solo.game solo
         let palette = Palette.read game.Slots palette
@@ -154,12 +77,6 @@ type Aside<'Move, 'State, 'Notice>
 
         this.Change(Solo.watching console { Margins = Margins.all; View = view })
 
-    /// The clock came round: the beat, what everybody is shown, and how long to leave before
-    /// the next one - taken together under one lock, for the reason `Held.Beats` gives.
-    ///
-    /// A game that ends on a beat is written down here rather than by whatever is keeping the
-    /// time. Nobody typed the move that ended it, so there is no line to answer and nowhere to
-    /// say where the file went; a page is told the game is over by the board it is sent.
     member _.Beats() =
         lock gate (fun () ->
             match (Solo.game solo).Pulse with
@@ -180,11 +97,6 @@ type Aside<'Move, 'State, 'Notice>
             let next, posts, doing = Solo.said (fresh ()) console line solo
             solo <- next
 
-            // A record the player asked for is answered where they asked - the board is
-            // already on its way down the stream, and a file's name is not part of a board.
-            // Through the table rather than as a bare `Told`, so that it comes out in the
-            // words the reader's own view speaks: a page wants markup where a terminal
-            // wants a line.
             let alsoTold model stamp announce =
                 match keep model stamp with
                 | Some path when announce -> Solo.saying console $"Record saved to {path}." next
@@ -196,85 +108,30 @@ type Aside<'Move, 'State, 'Notice>
                 | Carrying -> []
                 | Keeping(model, stamp, announce) -> alsoTold model stamp announce
                 | Leaving(Some model, stamp) -> alsoTold model stamp true
-                // A console that only read the game back has nothing to write on its way out.
                 | Leaving(None, _) -> []
 
             posts @ said)
 
-/// Everything the table says, said.
-///
-/// A console at a terminal has a socket SignalR is holding open; a console in a browser has
-/// a stream holding itself open. Which of the two any console is, is written into its id
-/// and nowhere else - the lobby that addressed the post has no idea there are two kinds,
-/// Opening a table, without knowing what a move is at this game.
-///
-/// The second of the two seams a house of tables needs, and the one that did not already
-/// exist. `Table` above is what a house does with a table once it has one; this is where one
-/// comes from - and it has to be its own thing because dealing is the last part of hosting
-/// that is still generic in the game. `Server.host` takes a model that has already been dealt,
-/// which is fine for a process holding one table and no use at all to something holding a
-/// list, which must be able to deal on demand while holding nothing but `Table`s.
-///
-/// The types stop here for the third time in this program, and by the same trick each time:
-/// an interface with no parameters, implemented by closing over a game. `Rules` seals what a
-/// game *is*, `Playable` seals how it is read, `Chosen` seals it for a list to hold, and this
-/// seals it for a house to deal from.
 [<NoComparison; NoEquality>]
 type Hosting =
-    /// What the game is called, and to a person. A house is one game's house, so it says so at
-    /// the top of every page it draws.
     abstract Name: string
     abstract Title: string
 
-    /// How many may sit down, so a house can refuse a table of the wrong size before dealing
-    /// one rather than after.
     abstract Fewest: int
     abstract Most: int
 
-    /// What a page of this game is shelled in, what takes a colour, and the colours nobody
-    /// has changed.
-    ///
-    /// Three pieces of plain data rather than the game they came off, for the reason every
-    /// other member here is plain: a house holds these and has never been told what a move
-    /// is. `Browser` wants exactly this three and is compiled where it cannot be named from.
     abstract Shell: Shell
     abstract Slots: Slot list
     abstract Standard: Palette
 
-    /// Every way this game can be played, the plainest first: the name, and a line about it.
-    ///
-    /// What the "new table" form offers. A game with one way offers a list of one and the form
-    /// has nothing to ask, which is the ordinary case.
     abstract Ways: (string * string) list
 
-    /// Deal one and hand back something to play it.
-    ///
-    /// `sitters` says who is a person and who is the machine and at what strength, in the
-    /// words `Seating` already reads - so the form that asks is the seat list this program has
-    /// already written and already checked, and how many are playing is the length of it
-    /// rather than a second thing to keep in step.
-    ///
-    /// `way` is which of `Ways` to deal, and it is carried here rather than read from a
-    /// settings file because it belongs to the table and not to the machine the house is
-    /// running on: two people must be able to hold a plain game and a game with the optional
-    /// rule in it in the same house at the same time. A name that is none of this game's is
-    /// the plainest way, which is the same answer a settings file gets for a way that has
-    /// since been renamed.
     abstract Deals: sitters: Sitter list * seed: uint64 option * way: string option -> Result<Table, string>
 
-    /// And take one up off a record, which is the same question asked of a file - and the
-    /// whole of what a house needs to come back from being restarted.
     abstract Resumes: path: string -> Result<Table, string>
 
 module Hosting =
 
-    /// A game as one of those: every way it can be played, the plainest first.
-    ///
-    /// Beside `Play.chosen` in spirit and not in place, and the reason is the test scripts.
-    /// Everything from here down is checkable with `dotnet fsi` because nothing in this file
-    /// has met a socket; `Play.fs` is compiled after the whole of the wire and could not be
-    /// loaded into a script without it. A seam whose only implementation cannot be checked
-    /// without a web server is a seam that will be checked by starting a web server.
     let of'
         (ways: Playable<'Move, 'State, 'Notice> list)
         (clock: unit -> uint64)
@@ -290,17 +147,10 @@ module Hosting =
                 |> Option.defaultValue plainest
             | None -> plainest
 
-        /// A dealt game with its record already being kept. Both ways in end here, because a
-        /// table taken up off a file and a table dealt fresh differ in where the model came
-        /// from and in nothing after that.
         let table (game: Playable<'Move, 'State, 'Notice>) model sitters stamp =
             let rivals =
                 game.Seating (Model.seed model) (Seating.machines sitters) (Model.state model)
 
-            // Written after every change rather than at the end, for the reason the one-table
-            // host already gives: a table with people at it can lose its host without warning.
-            // In a house that stops being a precaution and becomes the way back - a house is
-            // rebuilt from these files and from nothing else.
             let keep model =
                 if not (Journal.isEmpty model.Journal) then
                     Transcript.save game stamp sitters model.Journal |> ignore
@@ -324,10 +174,6 @@ module Hosting =
                 |> Result.map (fun model -> table game model sitters (stamping game))
 
             member _.Resumes path =
-                // Every way this game can be played is tried, because a record says which of
-                // them it is and a house holding both must open each as itself. The plainest
-                // is asked first, so a record from before this game had a second way - written
-                // when its name said nothing - is still taken up as the game it was.
                 let attempt =
                     ways
                     |> List.fold

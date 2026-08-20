@@ -1,14 +1,3 @@
-// The whole program with Diplomacy in it, for that game's own checks.
-//
-// `Whole.fsx` and `Noughts.fsx` are the same list with a different game on the end. Three
-// files rather than one because `dotnet fsi` names a loaded file by its basename, and all
-// three games have a `Turn.fs` - which is a fact about scripts and not about the program,
-// where the three sit side by side in one project and always have.
-//
-// Which is worth reading as the point rather than the inconvenience: everything above the
-// last thirteen lines is the same list, in the same order, and none of it knows which game
-// is coming.
-
 #r "nuget: Argu, 6.2.5"
 #r "nuget: Falco.Datastar, 1.3.0"
 #r "nuget: Falco.Markup, 1.4.0"
@@ -71,13 +60,10 @@
 
 open TCModel.Table
 
-/// The game these checks are about.
 let diplomacy = TCModel.Diplomacy.Offer.playable
 
 let standard = Playable.standard diplomacy
 
-/// The first way it can be drawn at a terminal.
 let plain = Playable.plainest AtATerminal standard diplomacy
 
-/// And in a browser.
 let asPage = Playable.plainest InABrowser standard diplomacy

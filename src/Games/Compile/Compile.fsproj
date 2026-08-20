@@ -1,10 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The fourth game, and the first one that is not a board at all: a deck each, built out
-       of protocols the players draft between them, and three lines running across the table
-       with a stack of cards growing at each end. What it leans on that none of the others did
-       is the stage - a game of this is a draft, then a laying-out, then play, and the three
-       have different moves and three different senses of whose turn it is. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -18,23 +13,12 @@
   <ItemGroup Label="How it is played">
     <Compile Include="Rules/Protocols.fs" />
     <Compile Include="Rules/Cards.fs" />
-    <!-- What a card's rules text is made of, as data rather than as functions - so that the
-         game can check it, print it, and reason about it, none of which it could do to a
-         closure. And what is printed on each of the seventy-two, which is a lookup rather
-         than a field on a card: text is a fact *about* a card, and a card stays a protocol
-         and a number so that it stays cheap to compare and easy to type. -->
     <Compile Include="Rules/Effects.fs" />
     <Compile Include="Rules/Printed.fs" />
-    <!-- The lines, one side of the table, and both of them together. -->
     <Compile Include="Rules/Field.fs" />
-    <!-- Whose pick it is, which is a list of six and nothing else. -->
     <Compile Include="Rules/Drafting.fs" />
     <Compile Include="Rules/Session.fs" />
-    <!-- What the game has to say, above the two things that say it: a move made by a player,
-         and the pile working its way down after one. -->
     <Compile Include="Rules/Events.fs" />
-    <!-- The pile: what a card's text sets off, one command at a time, with a look at the
-         table between every two of them. -->
     <Compile Include="Rules/Resolving.fs" />
     <Compile Include="Rules/Turn.fs" />
     <Compile Include="Rules/Words.fs" />

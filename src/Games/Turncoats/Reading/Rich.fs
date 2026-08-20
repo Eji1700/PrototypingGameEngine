@@ -5,63 +5,24 @@ open Spectre.Console
 open Spectre.Console.Rendering
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing
-// namespace, and both `Spectre.Console` and the command line's argument types carry
-// names this game already uses - `Region`, `Open`, `View`.
 open TCModel.Turncoats
 
-/// The board built out of Spectre's own widgets: panels, tables and charts, rather than
-/// one long block of text.
-///
-/// The honeycomb itself is kept. It is not decoration - a side shared between two regions
-/// is a border and a corner touched is not, so the map is the only part of the screen that
-/// says which regions a player may march between. A grid of tidy boxes would lose that, so
-/// the map is `Render`'s, drawn once and coloured here. Everything standing around it is
-/// built here from scratch.
-///
-/// Nothing in this file decides what a player may know. What is shown comes from
-/// `Knowledge`, and what a notice says comes from `Render.wording`, the same as the plain
-/// view - a second renderer is a second chance to leak, and the way not to take it is not
-/// to write that reasoning down twice.
-///
-/// Nor does anything here decide what colour to use. Every one of them is read out of the
-/// palette that comes in, which is the player's own, so two people at one table can be
-/// drawn the same board in colours that look nothing alike.
 module Rich =
 
-    /// Characters to a region, and to half of one.
-    ///
-    /// `Board.layout` lies on a triangular lattice: a region is two half-columns wide and
-    /// each row stands half a region across from the one above. Laid out that way the
-    /// regions come out as brickwork, and a brick touches exactly six others - the two
-    /// beside it and two on each of the rows above and below. Those six are its borders.
-    /// So the offset is not decoration: drop it and the map stops saying where a player
-    /// may march.
     let private across = 26
     let private half = across / 2
 
-    /// The room inside a region's walls, once the border and its padding are taken off.
     let private inside = across - 4
 
-    /// A title has less room than that, because it is written into the top wall and the
-    /// wall wants a little of itself either side of it. A name given less room than it
-    /// needs gives up its "The" rather than being cut short.
     let private titleRoom = across - 6
 
-    /// How far the widest row of the map reaches, taken from the board rather than
-    /// counted out here, so a board laid out differently still gets a screen that fits.
     let private mapAcross =
         Board.layout
         |> List.map (fun row -> (row |> List.map snd |> List.min) * half + List.length row * across)
         |> List.max
 
-    /// Wide enough that the map is never folded, and wide enough besides that the two
-    /// panels standing side by side have room for a bag laid out stone by stone.
     let private width = max (mapAcross + 4) 104
 
-    /// How wide the chart of what is out of sight is drawn, and so how much room the two
-    /// panels beside one another have. The note under it is wrapped to the same, because a
-    /// paragraph broken narrower than the thing it explains reads as a column of scraps.
     let private breakdownAcross = 40
 
     let private esc (text: string) = Markup.Escape text
@@ -70,11 +31,6 @@ module Rich =
 
     let private rows (all: IRenderable list) = Rows(all) :> IRenderable
 
-    /// A panel is drawn in a quiet grey so that the stones inside it are what the eye goes
-    /// to. Its title is not, and has to say so outright: a header takes the border's own
-    /// style unless it is given a colour of its own, and a title in the same grey as the
-    /// border is a title nobody reads. The spaces either side go inside the markup too -
-    /// Spectre trims whatever is left outside it.
     let private titled title (content: IRenderable) =
         let panel = Panel(content)
         panel.Header <- PanelHeader $"[bold silver] {esc title} [/]"
@@ -84,23 +40,17 @@ module Rich =
 
     let private panel title content = titled title content :> IRenderable
 
-    /// The same, but taking the whole width, so the blocks under one another line up.
     let private wide title content =
         let panel = titled title content
         panel.Expand <- true
         panel :> IRenderable
 
-    /// Writing that is there to be read once: shown while the notes are on, and gone the
-    /// moment they are turned off. What it says is `Render.Notes`, the same words the other
-    /// two views show; the only thing decided here is how wide it is drawn.
     let private noted palette room (text: string) =
         markup ""
         :: (Render.wrap room text
             |> List.map (fun line -> markup (Tint.wrap (Ink.hidden palette) (esc line))))
 
-    // --- stones -------------------------------------------------------------------------
 
-    /// Stones laid out one by one, each in its own colour.
     let private laid palette pile =
         match Pile.toColors pile with
         | [] -> Tint.wrap (Ink.hidden palette) "-"
@@ -109,7 +59,6 @@ module Rich =
             |> List.map (fun color -> Tint.wrap (Ink.ink palette color) (string (Words.glyph color)))
             |> String.concat " "
 
-    /// The same, counted rather than laid out, for where there are too many to draw.
     let private counted palette pile =
         match Pile.toCounts pile with
         | [] -> Tint.wrap (Ink.hidden palette) "-"
@@ -118,9 +67,6 @@ module Rich =
             |> List.map (fun (color, n) -> Tint.wrap (Ink.ink palette color) $"{Words.glyph color}x{n}")
             |> String.concat "  "
 
-    /// Stones nobody can name, drawn as the stones they are. A closed bag of eight is
-    /// eight of these: a player can see how much is in it and nothing else, which is
-    /// exactly the state of affairs the game means them to be in.
     let private unnamed palette n =
         if n = 0 then
             Tint.wrap (Ink.hidden palette) "-"
@@ -132,10 +78,7 @@ module Rich =
         | Open pile -> $"{laid palette pile}   ({Pile.total pile})"
         | Closed n -> $"{unnamed palette n}   ({n})"
 
-    // --- the map ------------------------------------------------------------------------
 
-    /// A region as a box of its own, bordered in the colour of whoever rules it - which
-    /// is the one thing on a board worth seeing from across the room.
     let private regionPanel palette game (region: Region) =
         let border =
             match region.Kind, Game.ruleOver region.Id game with
@@ -153,7 +96,6 @@ module Rich =
         panel.Width <- Nullable across
         panel :> IRenderable
 
-    /// One row of the map, shoved right by however many half-regions it stands in.
     let private mapRow palette game (cells: (RegionId * int) list) =
         let grid = Grid()
         grid.Expand <- false
@@ -167,7 +109,6 @@ module Rich =
 
         let offset = cells |> List.map snd |> List.min
 
-        // A blank column carrying the half-region offset, where there is one to carry.
         let lead =
             if offset > 0 then
                 column (offset * half)
@@ -185,18 +126,10 @@ module Rich =
     let private mapOf palette game =
         Board.layout |> List.map (mapRow palette game) |> rows
 
-    /// The Flag and the Axe, which border nothing and so stand outside the map. Here they
-    /// are panels of their own rather than boxes drawn in text, which is what standing
-    /// apart ought to look like.
     let private apart palette game =
         let held (region: Region) =
-            // A panel has room to say who rules it in words, which the map has not - but
-            // the words are `Words.rule`'s and the colouring is the same pass that colours
-            // every other piece of prose here, so this is only where it is written down.
             let ruling = Ink.markup palette (Words.rule (Game.ruleOver region.Id game))
 
-            // Padded to a width that clears the title, because a panel drawn no wider than
-            // its own contents will cut its heading short to fit.
             let standing = laid palette (Game.stones region.Id game)
             let room = 16 - Pile.total (Game.stones region.Id game) * 2 |> max 1
 
@@ -209,7 +142,6 @@ module Rich =
         grid.AddRow(Array.ofList standing) |> ignore
         grid :> IRenderable
 
-    // --- the players ----------------------------------------------------------------------
 
     let private players palette (seen: Knowledge) active model =
         let table = Table()
@@ -237,7 +169,6 @@ module Rich =
 
         rows ([ table :> IRenderable ] @ run)
 
-    // --- what is where --------------------------------------------------------------------
 
     let private supply palette (seen: Knowledge) =
         let table = Table()
@@ -260,9 +191,6 @@ module Rich =
 
         line Render.Supply.outOfSight (counted palette seen.Unseen)
 
-        // Every stone that is not on the map and not in the reader's own bag is somewhere
-        // out there, and though nobody can say where, the colours are known exactly. That
-        // is worth a picture rather than three numbers.
         let breakdown = BreakdownChart()
         breakdown.Width <- breakdownAcross
 
@@ -272,8 +200,6 @@ module Rich =
         rows [ table :> IRenderable; markup ""; breakdown :> IRenderable ]
 
     let private landRuled palette game =
-        // How the land stands is the game's own reckoning, not this view's. A second
-        // renderer counting it again for itself is a second chance to count it differently.
         let standing = Game.landStanding game
 
         let bars = BarChart()
@@ -287,7 +213,6 @@ module Rich =
         bars.AddItem(Words.unclaimed, float standing.Unclaimed, Color.Grey23) |> ignore
         bars :> IRenderable
 
-    // --- everything the game has said ---------------------------------------------------
 
     let private log palette told (model: Model) =
         match model.Log with
@@ -302,7 +227,6 @@ module Rich =
     let private plainly palette (lines: string list) =
         lines |> String.concat Environment.NewLine |> Ink.markup palette |> markup
 
-    // --- the whole screen ------------------------------------------------------------------
 
     let board palette (margins: Margins) (beholder: Player) model =
         let notes = margins.Notes
@@ -318,7 +242,6 @@ module Rich =
         rule.Justification <- Justify.Left
         rule.Style <- Style(Color.Grey37)
 
-        /// Two panels side by side, which is room the map has already paid for.
         let beside left right =
             let grid = Grid()
             grid.AddColumn() |> ignore
@@ -326,7 +249,6 @@ module Rich =
             grid.AddRow(left, right) |> ignore
             grid :> IRenderable
 
-        /// A note across the whole screen, and one inside a panel standing beside another.
         let noted room text =
             if notes then noted palette room text else []
 
@@ -352,10 +274,6 @@ module Rich =
         rows (
             [ rule :> IRenderable
               wide Render.Blocks.map (rows ([ mapOf palette game ] @ mapNote))
-              // Named but not boxed. Every other block here is a panel, and putting these two
-              // inside one would be drawing a box around the thing that stands outside every
-              // box on the board - so the name is written in a panel header's own style and
-              // the Flag and the Axe are left standing on their own.
               rows (
                   markup (Tint.wrap "bold silver" (esc Render.Blocks.apart))
                   :: apart palette game
@@ -371,13 +289,7 @@ module Rich =
         )
         |> Tint.renderAt width
 
-    // --- the rest of what a player reads --------------------------------------------------
-    //
-    // Every screen the game shows has to be answered here, not only the board. That is the
-    // bargain of a wide seam: adding to the game means adding an endpoint and answering it
-    // in every view, and the compiler says so if one is missed.
 
-    /// The record of play, as a table: what was asked, by whom, and what came of it.
     let history palette (beholder: Player) model =
         let told = Render.wording beholder model
 
@@ -419,16 +331,12 @@ module Rich =
                       markup ""
                       markup (Tint.wrap (Ink.hidden palette) (esc (Render.recordStanding model))) ]))
 
-    /// The working behind who rules a region.
     let ruling palette regionId model =
         Tint.renderAt width (wide (Render.Blocks.region regionId) (plainly palette [ Render.explainRule regionId model ]))
 
-    /// The rules and the commands, at length. The words are `Render`'s - they say what the
-    /// game is, which is not a thing for a view to have an opinion about - laid out here.
     let rules palette =
         Tint.renderAt width (wide Render.Blocks.rules (plainly palette [ Render.help ]))
 
-    /// A table still filling up, before there is any game to draw.
     let waiting palette (seats: Waiting list) =
         let table = Table()
         table.Border <- TableBorder.None
@@ -440,8 +348,6 @@ module Rich =
             let named = Words.seated seat.Yours seat.Player
             let who = if seat.Yours then Tint.wrap (Tint.yours palette) named else named
 
-            // Somebody who has arrived is the good news on this screen, so they are the
-            // one line on it drawn in a colour rather than held back in grey.
             let ink =
                 if seat.Expected || seat.Away then Ink.hidden palette else Tint.yours palette
 

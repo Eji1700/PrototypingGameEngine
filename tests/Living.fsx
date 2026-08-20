@@ -1,14 +1,3 @@
-// The whole program with Life in it, for that game's own checks.
-//
-// The same list as `Noughts.fsx` and `Whole.fsx` with a different game on the end, and a file
-// of its own for the reason those two are two files: `dotnet fsi` names a loaded file by its
-// basename, and this game has a `Turn.fs` and a `Words.fs` like the rest of them - which is a
-// fact about scripts and not about the program, where all five sit side by side in one
-// solution and always have.
-//
-// Everything above the last nine lines is the same list, in the same order, and none of it
-// knows which game is coming - which is the whole claim this game was written to test.
-
 #r "nuget: Argu, 6.2.5"
 #r "nuget: Falco.Datastar, 1.3.0"
 #r "nuget: Falco.Markup, 1.4.0"
@@ -65,13 +54,10 @@
 
 open TCModel.Table
 
-/// The game these checks are about.
 let life = TCModel.Life.Offer.playable
 
 let standard = Playable.standard life
 
-/// The first way it can be drawn at a terminal.
 let plain = Playable.plainest AtATerminal standard life
 
-/// And in a browser.
 let asPage = Playable.plainest InABrowser standard life

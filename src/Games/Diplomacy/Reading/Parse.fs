@@ -3,23 +3,10 @@ namespace TCModel.Diplomacy
 open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace, and
-// the command line's argument types carry names this game already uses - `Open`.
 open TCModel.Diplomacy
 
-/// A typed line as this game's own move.
-///
-/// The words read here are the ones every set of rules for this game prints: `vie - tri`,
-/// `bud s vie - tri`, `nth c lon - bel`. That is not a flourish - it is the reason the record
-/// on disk is readable by anybody who has played this before, and the reason `Words.order` and
-/// this file are two halves of the same bargain rather than two languages.
-///
-/// `undo`, `save`, `view rich`, `resign`, `quit` and `restart` are not here. They mean the same
-/// thing whatever is on the board and have already been read, once, for every game there is.
 module Parse =
 
-    /// The words a unit is named with, which an order does not need and everybody types anyway.
-    /// No province is called `a` or `f`, so throwing them away cannot throw away a place.
     let private naming = set [ "a"; "f"; "army"; "fleet" ]
 
     let private province word =
@@ -36,7 +23,6 @@ module Parse =
 
     let private send at says = Send(Make(Give(at, says)))
 
-    /// One order, with the province it is for already read.
     let private order (words: string list) =
         match words with
         | [ from; "hold" ]
@@ -85,8 +71,6 @@ module Parse =
             Error
                 "Say an order the way the rules print one - 'vie - tri', 'bud s vie - tri', 'nth c lon - bel', 'vie hold'. 'help' has the rest."
 
-    /// A build, which is the one order written the other way round - the piece first, because
-    /// there is no piece there yet to name the province by.
     let private build (words: string list) =
         let raise kind where =
             spot where
@@ -100,15 +84,11 @@ module Parse =
         | [ where; kind ] -> raise kind where
         | _ -> Error "Say 'build a vie' or 'build f stp/sc'."
 
-    /// The whole of what this game reads.
     let line (typed: string) =
         let raw = Commands.words typed
         let plainly = raw |> List.map (fun word -> word.ToLowerInvariant())
 
         match plainly with
-        // Read before anything else and off the line as it was typed, because what somebody
-        // says to another power is theirs and not this parser's to lower-case, split on
-        // dashes, or have an opinion about.
         | "press" :: who :: (_ :: _) ->
             let text = raw |> List.skip 2 |> String.concat " "
 
@@ -126,9 +106,6 @@ module Parse =
 
         | _ ->
 
-        // `vie-tri` and `vie - tri` are the same order, and a player who leaves the spaces out
-        // has not made a mistake. Done after press and before anything else, so it is the one
-        // place the shape of a line is tidied up.
         let words = Commands.lowered (typed.Replace("-", " - ").Replace(">", " - "))
 
         match words with
@@ -145,8 +122,6 @@ module Parse =
         | [ "disband"; where ]
         | [ "remove"; where ] -> province where |> Result.map (fun at -> send at Disbands)
 
-        // Not a move: something the game can be asked about, answered in the words it was
-        // asked in. This game's `rule 8`.
         | [ "borders"; _ ]
         | [ "where"; _ ]
         | [ "orders" ] -> Ok(Asking typed)

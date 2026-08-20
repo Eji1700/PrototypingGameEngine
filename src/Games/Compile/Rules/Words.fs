@@ -2,15 +2,10 @@ namespace TCModel.Compile
 
 open TCModel.Engine
 
-/// Putting the game into English. The rules report what happened in their own terms;
-/// everything a player actually reads is written here.
 module Words =
 
     let player seat = $"Player {PlayerId.value seat}"
 
-    /// A seat as one screen names it, with the reader's own marked. Every view does this, and
-    /// the game is unreadable without it over a network, where the seat to play is very often
-    /// not the seat reading.
     let seated yours seat =
         player seat + (if yours then " (you)" else "")
 
@@ -20,7 +15,6 @@ module Words =
 
     let line (n: int) = $"line {n}"
 
-    /// A run of lines as a sentence's tail: "line 2", "line 1 or line 3", "no line at all".
     let lines =
         function
         | [] -> "no line at all"
@@ -32,30 +26,18 @@ module Words =
             + " or "
             + List.last said
 
-    /// A card as it lies, to somebody who may see what it is: face down, what it is worth is
-    /// two whatever is printed on it, and saying both is the whole of what a player needs.
     let placed card =
         match card.Face with
         | FaceUp -> Card.name card.Card
         | FaceDown -> $"[{Placed.FaceDownValue}] {Card.name card.Card}"
 
-    /// And to somebody who may not. A face-down card is a two and nothing else to the player
-    /// across the table - which is the only thing on this board that is worth something exactly
-    /// because nobody can read it.
     let faceless card =
         match card.Face with
         | FaceUp -> Card.name card.Card
         | FaceDown -> $"[{Placed.FaceDownValue}]"
 
-    /// What a board says where a protocol would be, before both orders are turned over.
-    ///
-    /// Its own word rather than "face down", which the log says about the same thing in prose:
-    /// a screen that keeps something back should say so in one place, so that what is kept
-    /// back can be *checked* by looking for it. A test that searched for "face down" would
-    /// find the sentence explaining the rule and pass whether or not the board held its tongue.
     let hidden = "hidden"
 
-    /// A run of protocols as an order is said: "Water, Dark, Fire".
     let order protocols =
         protocols |> List.map protocol |> String.concat ", "
 
@@ -64,11 +46,6 @@ module Words =
         | Won who -> $"{player who} has compiled all {Protocol.Each} of their protocols"
         | Abandoned who -> $"{player who} walked away"
 
-    // --- what is printed on a card ------------------------------------------------------------
-    //
-    // Generated from what the card *does*, rather than written out beside it. That is the whole
-    // argument for card text being data: a card cannot say one thing and do another, seventy-two
-    // of them cannot drift one at a time, and all three views get the wording for nothing.
 
     let private pointing selector =
         let whose =
@@ -116,9 +93,6 @@ module Words =
             | AnyLine
             | ToOrFromHere -> ""
 
-        // "This card" and "that card" are whole phrases and take none of the rest of it: a card
-        // that said "flip your uncovered this card" would be reading the record out rather than
-        // reading the card.
         if selector.JustThis then "this card"
         elif selector.WasChosen then "that card"
         else $"{whose}{best}{notThis}{lying}{way} card{worth}{where}"
@@ -183,8 +157,6 @@ module Words =
 
             $"play a card from your hand {way}{into}"
         | May inner -> $"you may {printing inner}"
-        // "delete any card" becomes "delete every card", which is the one place the words for a
-        // command are not simply the words for what is inside it.
         | InAChosenLine inner -> (printing inner) + ", in a line of your choosing"
         | InEachOtherLine inner -> (printing inner) + ", in each other line"
         | InEachLineHolding inner -> (printing inner) + ", in each line where you have a card"
@@ -214,9 +186,6 @@ module Words =
         | SkipsCacheCheck -> "you skip your check cache phase"
         | Silence -> "the middle commands of cards in this line do nothing"
 
-    /// The commands run together into one printed line. Each command is written in the lower case
-    /// it reads in the middle of a sentence, so the capital goes on here rather than in ten
-    /// places that would have to agree about it.
     let private capital (text: string) =
         if text = "" then text else string (System.Char.ToUpperInvariant text[0]) + text.Substring 1
 
@@ -225,22 +194,6 @@ module Words =
         | [] -> None
         | said -> Some(said |> List.map (fun one -> capital one + ".") |> String.concat " ")
 
-    /// A card as it is printed: the top box, the middle box and the bottom box, in that order,
-    /// each of them possibly empty.
-    ///
-    /// **Which box a rule is in is the rule that matters most at this game.** A card played over
-    /// another one covers its middle and its bottom and leaves its top showing, so the same
-    /// sentence is a rule that survives being built on or one that does not, depending on
-    /// nothing but where it is printed. That is why they are handed back separately rather than
-    /// run together: a board that draws all three, empty ones and all, says which half of a card
-    /// a cover has taken away by leaving a box a player can see is empty.
-    ///
-    /// The grouping is the one the **rules** make rather than the one a printed card's
-    /// typography makes, and the two part company in exactly one place: all four triggers go on
-    /// listening from under another card, so they are top-box things here however they read.
-    /// `Ruling.saying` splits the standing rules the same way and `Resolving` splits the
-    /// triggers the same way, so *the top box is exactly what a cover cannot silence* - which is
-    /// a sentence a check can hold this to, and typography is not.
     let boxes card =
         let text = Printed.on card
 
@@ -286,21 +239,10 @@ module Words =
 
         List.choose id top, List.choose id middle, List.choose id bottom
 
-    /// The whole of a card, run together - for reading one at length rather than for drawing it.
     let printed card =
         let top, middle, bottom = boxes card
         top @ middle @ bottom
 
-    /// The same three boxes, with as much taken out of each as this card has been silenced.
-    ///
-    /// **Face down it says nothing from any of them**, whatever is printed on it - so a board
-    /// that printed the text of a face-down card would be handing over the one thing at this
-    /// game that is worth something precisely because nobody can read it. Face up and
-    /// **covered**, its middle and bottom are empty and its top is untouched. Uncovered, it says
-    /// the lot.
-    ///
-    /// Which is not a screen's opinion about what to print. It is the same three cases the rules
-    /// themselves make, off the same `Text` that makes them.
     let saying uncovered placed =
         if not (Placed.isFaceUp placed) then
             [], [], []
@@ -372,9 +314,6 @@ module Words =
         | TookNothing who -> $"{player who} takes nothing - the other player has no cards left to take."
         | GameEnded e -> $"The game is over: {ending e}."
 
-    /// What the game is asking for, said as the thing to do about it. A refusal for the wrong
-    /// stage ends in one of these, because being told what is wanted now is worth more than
-    /// being told what is not.
     let asking =
         function
         | TheDraft -> "the draft is still going: say a protocol to take it"
@@ -383,12 +322,9 @@ module Words =
         | AChoice -> "a card is waiting on somebody to choose"
         | Nothing -> "the game is over"
 
-    /// A run of cards, for a question offering them.
     let choices cards =
         cards |> List.map Card.name |> String.concat ", "
 
-    /// What a question is asking for, in the words that would answer it - the whole truth of it,
-    /// which is what a record is written in.
     let wanting =
         function
         | ACard(_, targets) -> $"say one of: {choices (targets |> List.map Target.card)}"
@@ -404,16 +340,6 @@ module Words =
         | ALineFor(_, offered) -> $"say which line - {lines offered}"
         | OneOf(first, second) -> $"say first or second - {printing first}, or {printing second}"
 
-    /// The same, as much of it as one seat may know.
-    ///
-    /// **A question can be a hand.** *"Your opponent discards a card"* stops on the other player
-    /// and offers them everything they are holding, and the list of what is on offer is therefore
-    /// the list of their cards - so a screen that said it to both of them would hand over the one
-    /// thing at this game that is never said out loud. It did, and on the board of the player who
-    /// played the card: a Plague-0 printed the whole of the other hand for whoever played it.
-    ///
-    /// Only cards in somebody else's *hand* are held back. A card on the table is on the table,
-    /// and a card in your own hand is yours to read.
     let wantingSeenBy seat asked =
         let hidden =
             function
@@ -430,14 +356,6 @@ module Words =
             | rest -> $"they say one of {choices rest}, or one of the {held} they are holding"
         | asked -> wanting asked
 
-    /// One step of the pile, said to one seat.
-    ///
-    /// The pile is what the game is going to do next and has not done yet, and a player stopped
-    /// in the middle of a long one has every right to know what is behind the question - a card
-    /// that says *"delete a card. If you do, draw a card"* is a different question depending on
-    /// whether the draw is still coming.
-    ///
-    /// Said per seat for the same reason a question is: a step can be a hand.
     let waiting seat step =
         match step with
         | Run(command, source) -> $"{card source.Saying}: {printing command}."
@@ -495,11 +413,6 @@ module Words =
         | MustRefresh ->
             $"Your hand is empty, so refreshing is the only thing left to do this turn - say 'refresh', and {Deck.HandSize} come up."
 
-    /// A message written the way a player types it. The record is kept in the same words the
-    /// prompt takes, so a game can be read back and played again without a second language
-    /// standing between the two.
-    /// Only this game's own moves are written here. `undo`, `redo` and `restart` are the
-    /// engine's words and are written once, by the engine, in `Msg.written`.
     let command =
         Msg.written (function
             | Take taken -> $"draft {Protocol.key taken}"
@@ -517,41 +430,18 @@ module Words =
             | Choose TheSecond -> "second"
             | Resign -> "resign")
 
-    /// What this game itself said, and the whole of what it has to say for itself.
     let said =
         function
         | Happened e -> event e
         | Refused r -> rejection r
 
-    /// The same, as much of it as one seat may know.
-    ///
-    /// One thing at this game is said and kept back, and it is here: which protocol somebody
-    /// put against which line, before both of them have. They are laid out face down and
-    /// turned over together, so a table where the seats come round one at a time plays the
-    /// same game as two people laying them out at once - and it has to, because a card may be
-    /// played face up against *either* protocol on a line, which makes an order seen early
-    /// worth a great deal.
-    ///
-    /// That the reader is told there *was* one is deliberate. Anybody at a real table can see
-    /// that the other player has finished laying theirs out; what they cannot see is which way
-    /// round. The draft above it is announced on purpose - a protocol taken is taken from both
-    /// of them - and a hand is never in a notice at all: it is on a screen, and hiding it
-    /// there is the board's business.
     let saidTo seat notice =
         match notice with
         | Happened(Arranged(who, _)) when who <> seat ->
             $"{player who} sets their {Protocol.Each} protocols against the lines, face down."
-        // A card played face down is a two to the player across the table and nothing else. The
-        // one who played it knows what it is - they had it in their hand a moment ago - and
-        // pretending otherwise would be the game keeping a secret from the person who owns it.
         | Happened(Played(who, played, where)) when who <> seat && not (Placed.isFaceUp played) ->
             $"{player who} plays a card face down to {line where}, for {Placed.FaceDownValue}."
-        // A card off the top of a shuffled deck is a card nobody had seen. The player it went
-        // to has seen it now; the player it came from knows only that they are one lighter,
-        // which is exactly what they would know at a table.
         | Happened(Took(who, _)) when who <> seat -> $"{player who} takes a card from the top of your deck."
-        // Two refusals say what the game is waiting for, and what it is waiting for can be a list
-        // of the other player's hand.
         | Refused(AnswerFirst asked) ->
             $"The game is waiting on an answer, and nothing else can happen until it comes: {wantingSeenBy seat asked}."
         | Refused(NotOnOffer asked) -> $"That is not one of the things being offered: {wantingSeenBy seat asked}."

@@ -1,24 +1,9 @@
-// How far a table reaches, and what it takes to sit down at one.
-//
-// This is the layer between a game and everybody who is not in the room, and all of it is
-// values: a word made up, a word held up against another, an address as somebody says it
-// filled out into one a socket can be pointed at. Which means the part that keeps a stranger
-// out of somebody's seat can be checked without opening a port, and is - what the wire does
-// is find whatever was presented and hand it to `Reach.admits`.
-//
-// The address filling is here for a plainer reason. It was wrong: every address was moved to
-// this program's own port, including the ones that already said where they were going, so a
-// table behind anything listening on the usual port could not be joined at all.
-//
-//   dotnet fsi tests/reach.fsx
-
 #load "Harness.fsx"
 #load "../src/Table/Parts/Reach.fs"
 
 open TCModel.Table
 open Harness
 
-// --- a word for the door ---------------------------------------------------------------
 
 let private word = Reach.minted ()
 
@@ -39,7 +24,6 @@ report
 
 report "two of them are not the same word" false (Reach.minted () = Reach.minted ())
 
-// --- and holding one up against another ---------------------------------------------------
 
 report "a word is itself" true (Reach.same word word)
 
@@ -53,12 +37,9 @@ report "a word one letter out is out" false (Reach.same "kbd4-9mtx-7rfp" "kbd4-9
 
 report "nothing is not a word" false (Reach.same "kbd4-9mtx-7rfp" "")
 
-// The one that would be a way in rather than a wrong answer: a door locked with something
-// that has no letters in it would let through anybody arriving with nothing at all.
 
 report "and a door locked with no letters is not locked, it is shut" false (Reach.same "--" "")
 
-// --- who is let in --------------------------------------------------------------------------
 
 let private locked =
     { Reach.ajar with
@@ -72,12 +53,9 @@ report "and nobody with the wrong one" false (Reach.admits locked [ "sesame" ])
 
 report "the word gets in" true (Reach.admits locked [ "kbd4-9mtx-7rfp" ])
 
-// An arrival carries more than one of these - a browser has an address and a cookie, and they
-// need not agree - so being right about any of them is being right.
 
 report "and gets in beside a stale one" true (Reach.admits locked [ "the-old-word"; "kbd4-9mtx-7rfp" ])
 
-// --- where a table is, and what to tell people ------------------------------------------------
 
 let private behind =
     { Reach.ajar with
@@ -98,9 +76,6 @@ report "and so does one behind something that holds it, because that is what a p
 
 report "this machine's own address carries the port" "http://192.168.1.9:5000" (Reach.at Reach.ajar "192.168.1.9")
 
-// The one place the two schemes come apart. What a player types is https, because that is
-// what the thing out front is holding - but what is listening *here* is plain http from the
-// machine beside it, and somebody arriving at this address directly is not going past that.
 
 report
     "and is what this machine is really listening in, not what is spoken out front"
@@ -124,8 +99,6 @@ report
         { behind with
             Address = Some "https://stones.example.org:8443/table" })
 
-// What is read out to somebody is one thing and not two, because a word and an address that
-// have to be carried separately are a word that gets typed wrong.
 
 report
     "the word at the door is written into what a browser is told to open"
@@ -134,7 +107,6 @@ report
 
 report "and a table with no word is just the address" "http://localhost:5000" (Reach.opened Reach.ajar "http://localhost:5000")
 
-// --- and one worth giving anybody --------------------------------------------------------------
 
 report "a name is an address" (Ok "stones.example.org") (Reach.address "stones.example.org")
 
@@ -152,7 +124,6 @@ report
 
 report "nor is nothing at all" true (Result.isError (Reach.address "   "))
 
-// --- an address as somebody says it -----------------------------------------------------------
 
 let private reached = Reach.endpoint "/table"
 
@@ -162,9 +133,6 @@ report "a name and a port keeps the port" (Ok "http://192.168.1.9:5001/table") (
 
 report "a whole URL is taken as it stands" (Ok "http://localhost:5000/table") (reached "http://localhost:5000/table")
 
-// The one this got wrong. An address that says https says where it is going: something is
-// listening on the usual port for it, and moving that to this program's own port would be
-// answering an address nobody gave.
 
 report
     "an https address is left on the port it asked for"
@@ -178,8 +146,6 @@ report
     (Ok "https://stones.example.org:8443/table")
     (reached "https://stones.example.org:8443")
 
-// A table behind a proxy may be at a path rather than at a host of its own, and a path said
-// is a path meant.
 
 report
     "a path said is left where it was put"

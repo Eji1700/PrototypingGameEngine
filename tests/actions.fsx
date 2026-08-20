@@ -1,7 +1,3 @@
-// Checks the four actions: what each one does, and what each one refuses.
-//
-//   dotnet fsi tests/actions.fsx
-
 #load "Harness.fsx"
 
 open TCModel.Turncoats
@@ -9,18 +5,15 @@ open Harness
 
 let private at n = Board.tryId n |> Option.get
 
-let emberfall = at 5 // Red home, borders 3, 6 and 8
-let crossroads = at 8 // wild, borders 5, 6, 9 and 11
-let nightfen = at 1 // Green home, borders 2 and 4
+let emberfall = at 5
+let crossroads = at 8
+let nightfen = at 1
 let flag = Board.flag
 let axe = Board.axe
-let waste = at 6 // dead
+let waste = at 6
 
-// Nothing else here means much if the board itself does not hang together, and the
-// map is only drawn as it is because the layout and the borders agree.
 report "the map hangs together" [] Board.problems
 
-/// A two-player game: region 8 holds what is asked, Player 1 holds one of each.
 let private game stocked =
     gameOf [ 8, stocked ] [ [ Red, 1; Blue, 1; Green, 1 ]; [ (Red, 1) ] ]
 
@@ -34,7 +27,6 @@ let private stonesIn regionId outcome =
 let private bagOf outcome =
     outcome |> Result.map (fun (game, _) -> (Game.active game).Bag |> Pile.toCounts)
 
-// --- recruit ----------------------------------------------------------------
 
 report
     "recruit puts the stone on the map"
@@ -47,9 +39,7 @@ refuses "recruit cannot enter the dead region" (DeadGround waste) (Actions.recru
 
 report "recruit may enter the Flag" (Ok [ Red, 1 ]) (Actions.recruit Red flag (game []) |> stonesIn flag)
 
-// --- battle -----------------------------------------------------------------
 
-// Region 8 holds one blue and one green; a blue battle drives the green out.
 let blueVsGreen = game [ Blue, 1; Green, 1 ]
 
 report
@@ -104,7 +94,6 @@ report
 
 refuses "a battle cannot target the Axe" (StandsApart axe) (Actions.battle Blue axe AsManyAsAllowed blueVsGreen)
 
-// --- march ------------------------------------------------------------------
 
 let twoBlue = game [ Blue, 2 ]
 
@@ -136,7 +125,6 @@ refuses
     (NotAdjacent(crossroads, flag))
     (Actions.march Blue crossroads flag 1 twoBlue)
 
-// --- negotiate --------------------------------------------------------------
 
 let private drawable =
     { game [] with
@@ -164,15 +152,12 @@ refuses
     (NotInBag((Game.active (game [])).Id, Red))
     (Actions.settle Red (gameOf [] [ [ (Blue, 1) ]; [ (Red, 1) ] ]))
 
-// --- conservation -----------------------------------------------------------
 
-// Only a real deal holds all 63 stones, so conservation is checked against one.
 let private dealt = Setup.deal 3 7UL |> Result.toOption |> Option.get
 
 let private conserved name outcome =
     report name (Ok 63) (outcome |> Result.map (fun (game, _) -> Pile.total (Game.allStones game)))
 
-/// Some colour the player to act is holding.
 let private held game =
     (Game.active game).Bag |> Pile.toColors |> List.head
 

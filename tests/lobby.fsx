@@ -1,37 +1,24 @@
-// The rules a networked table adds to the game: who may sit, who may act, who may see,
-// and what a player may ask for. None of them touch a wire - the lobby is a value, and
-// what it hands back is a list of things to say.
-//
-//   dotnet fsi tests/lobby.fsx
-
 #load "Whole.fsx"
 
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Net
-// Last, so this game's own names win: an explicit open outranks the enclosing namespace,
-// and the command line's argument types carry names this game already uses - `Open`.
 open TCModel.Turncoats
 open Harness
 open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
-/// A table of nothing but people, which is what this file is mostly about.
 let private opened () = Lobby.opened playing dealt []
 
-/// One console at the table, in the next empty seat.
 let private sits console token lobby =
     Lobby.join console token None plain lobby
 
-/// Both seats taken, which is the only state a game is played in.
 let private full () =
     let lobby, _ = opened () |> sits "one" "tok-one"
     let lobby, _ = lobby |> sits "two" "tok-two"
     lobby
 
-/// Everything one console was told, run together, so a check can look for the sentence
-/// it cares about without minding what else arrived alongside it.
 let private heard console posts =
     posts
     |> List.filter (fun post -> post.To = console)
@@ -45,9 +32,6 @@ let private heard console posts =
         | Nudged -> "(nudged)")
     |> String.concat "\n"
 
-/// Whether one console was told the turn had come round to it. Kept apart from `heard`
-/// because a nudge carries no words at all - it is the one thing a table says that is not
-/// something to read.
 let private nudged console posts =
     posts |> List.exists (fun post -> post.To = console && post.Say = Nudged)
 
@@ -56,7 +40,6 @@ let private mentions (needle: string) (text: string) = text.Contains needle
 let private movesMade lobby =
     Timeline.movesMade (Lobby.model lobby).Timeline
 
-// --- taking a seat ------------------------------------------------------------------
 
 let seatedOne, seatedOnePosts = opened () |> sits "one" "tok-one"
 
@@ -73,7 +56,6 @@ report
     true
     (heard "three" latecomer |> mentions "Every seat at this table is taken.")
 
-// --- nobody plays until everyone is here ----------------------------------------------
 
 report
     "one player alone is shown the lobby, not a board"
@@ -87,7 +69,6 @@ report
     true
     (heard "one" seatedTwoPosts |> mentions "=== Turn 1 - Player 1 to play ===")
 
-// --- coming back --------------------------------------------------------------------
 
 let dropped, _ = full () |> Lobby.left "one"
 
@@ -103,13 +84,6 @@ let _, stranger =
 
 report "a token that claimed no seat claims none now" true (heard "four" stranger |> mentions "That is not a seat at this table.")
 
-// --- getting up -------------------------------------------------------------------------
-//
-// The half that was missing, and it was missing in the way that is hard to see from inside:
-// the table did the right thing with `quit` - the seat kept, the game waiting, everybody
-// else drawn again - and said not one word to the console that typed it. What that looks
-// like at a terminal is a prompt that has stopped answering, which is exactly what a table
-// that has gone looks like.
 
 let private upFrom lobby = lobby |> Lobby.said "one" "quit"
 
@@ -119,9 +93,6 @@ report "a console that gets up is told it has" true (heard "one" stoodPosts |> m
 
 report "and told the seat is kept" true (heard "one" stoodPosts |> mentions "Your seat is kept")
 
-// Which is what a console at a terminal ends on. Nothing else the table says would do:
-// a board is what it sends when nothing has changed, and it sends nothing at all to
-// somebody who is not there.
 report
     "and it is said as getting up rather than as anything else"
     true
@@ -144,15 +115,11 @@ report
     (heard "one-again" (stood |> Lobby.join "one-again" "tok-fresh" (Some "tok-one") plain |> snd)
      |> mentions "seated at 1")
 
-// A table still filling up answered every line with the waiting screen, whatever it said,
-// so this was the one place a player could sit with nothing to look at and no way out of
-// it. The game that has finished is checked further down, where there is one.
 report
     "getting up works at a table still filling up"
     true
     (heard "one" (seatedOne |> upFrom |> snd) |> mentions "You are up from the table")
 
-// --- who may act ----------------------------------------------------------------------
 
 let waited, waitedPosts = full () |> Lobby.said "two" "recruit r 3"
 
@@ -164,17 +131,6 @@ let acted, _ = full () |> Lobby.said "one" "recruit r 3"
 
 report "the player whose turn it is may move" 1 (movesMade acted)
 
-// --- being told the turn has come round --------------------------------------------------
-//
-// The reason this table has it and one keyboard has no use for it: everybody here is at
-// their own machine, waiting on somebody they cannot see, and the sensible thing to do
-// while waiting is something else. So the turn arriving has to be able to reach a player
-// who is not looking at it.
-//
-// Which makes the interesting checks the ones about when it stays quiet. A nudge that went
-// out on every change to everybody would be a bell ringing all game, and a player would
-// learn to ignore it inside two turns - so the whole of its worth is in being rare and
-// meaning exactly one thing.
 
 report "a move nudges the player it has come round to" true (nudged "two" (full () |> Lobby.said "one" "recruit r 3" |> snd))
 
@@ -184,9 +140,6 @@ report "a move refused for being out of turn nudges nobody" (false, false) (nudg
 
 report "and neither does a line that is not a move at all" false (nudged "two" (full () |> Lobby.said "one" "history" |> snd))
 
-// Taking the last seat starts the game, and the player it starts with has been sitting
-// there with nothing to watch - which is the same case a move makes and wants the same
-// answer.
 report "the last player to sit down nudges whoever the game begins with" true (nudged "one" seatedTwoPosts)
 
 report "and not themselves" false (nudged "two" seatedTwoPosts)
@@ -195,8 +148,6 @@ report "a table still filling up nudges nobody" false (nudged "one" seatedOnePos
 
 report "and a console coming back to a seat it already held starts nothing, so nudges nobody" false (nudged "one" resumed)
 
-/// A two-player game played out the only way it can be in four lines: each player draws
-/// and hands one back, and the game ends once everybody has negotiated in a row.
 let private played =
     [ "one", "negotiate"; "one", "return r"; "two", "negotiate"; "two", "return r" ]
     |> List.fold (fun (lobby, _) (who, line) -> Lobby.said who line lobby) (full (), [])
@@ -205,15 +156,12 @@ report "those four lines end the game" true (Playing.isOver (Lobby.model (fst pl
 
 report "and a game that is over has come round to nobody" (false, false) (nudged "one" (snd played), nudged "two" (snd played))
 
-// The table this was reported from: the game had finished, the host typed `quit`, and the
-// board it was looking at was the last thing it ever heard.
 report
     "a player may get up from a game that has finished"
     true
     (heard "one" (fst played |> upFrom |> snd)
      |> mentions "You are up from the table")
 
-// --- what a player may not ask for -----------------------------------------------------
 
 let private refuses typed sentence =
     let after, posts = full () |> Lobby.said "one" typed
@@ -225,7 +173,6 @@ refuses "redo" "Undo is not played over a network"
 refuses "restart" "A networked table plays the one game it was dealt"
 refuses "players 3" "How many are playing is settled when the table is opened"
 
-// --- who may see what -------------------------------------------------------------------
 
 let _, drawn = full () |> Lobby.said "one" "negotiate"
 
@@ -252,11 +199,6 @@ report
     (heard "one" seatedTwoPosts |> mentions "Player 2        bag: closed (8)"
      && heard "two" seatedTwoPosts |> mentions "Player 1        bag: closed (8)")
 
-// --- how each console reads it ------------------------------------------------------------
-//
-// A view lays a whole screen out and so needs the game to do it, and the game is here at
-// the table. So the board is drawn per seat, and two people at one table can be sent two
-// boards that look nothing alike from the one position.
 
 let sittingPlain, _ = opened () |> sits "one" "tok-one"
 
@@ -270,7 +212,6 @@ let mixed, mixedPosts =
          |> Result.toOption
          |> Option.get)
 
-/// Panels are drawn with box characters; nothing in the plain board has one.
 let private panelled = mentions "╭"
 
 report "a console that asked to read richly is sent a board with panels" true (heard "two" mixedPosts |> panelled)
@@ -292,15 +233,7 @@ report
 
 report "and the game does not move for it" 0 (movesMade refusedView)
 
-// --- a seat the machine plays ---------------------------------------------------------------
-//
-// A table opened over a network may have the program at some of its seats: somebody here,
-// a friend two rooms away, and a machine between them. That seat was never empty, so nobody
-// waits for it and nobody can sit down in it - and the machine plays it through the very loop
-// the one-keyboard table uses, so a move it makes is a move like anybody else's.
 
-/// Seat 1 is the machine's, which leaves one seat for one person - so a single arrival fills
-/// a table of two, and the machine has already played by the time they are shown a board.
 let private machineFirst () =
     Lobby.opened playing dealt (playing.Seating 42UL [ Some "easy"; None ] (Model.state dealt))
 
@@ -336,13 +269,6 @@ report
     true
     (movesMade answered >= movesMade alone + 2)
 
-// --- and what the table looks like from the door ----------------------------------------
-//
-// A table could be played and not described until there was a house holding several of them,
-// and a list of tables is mostly descriptions. Every fact in one was already in the lobby, so
-// what is checked here is that the projection says what the lobby means - and in particular
-// that it tells apart the three things that look alike from outside: a seat nobody has taken,
-// a seat somebody has taken and walked away from, and a seat the machine is playing.
 
 let private described lobby = Lobby.described lobby
 
@@ -364,19 +290,12 @@ report
     (let door = described (full ())
      door.Stage, door.Sat, door.Reading)
 
-// The one a count of "who is here" would get wrong. A player who drops keeps their seat, so
-// the table is still full and still under way - it is not waiting for anybody - but there is
-// one fewer console reading it, and that is the number worth showing beside a table that
-// looks stalled. `dropped` is the lobby the seat-keeping checks above already built.
 report
     "a player who drops still holds their seat, so the table is full and one console short"
     (Lobby.Underway, 2, 1)
     (let door = described dropped
      door.Stage, door.Sat, door.Reading)
 
-// And the seat the machine plays, which is neither empty nor sat in. A house offering "one
-// seat going spare" at a table of two where the machine has one would be offering a seat that
-// does not exist.
 report
     "a seat the machine plays is counted as its own thing and never as one going spare"
     (Lobby.Underway, 2, 1, 1)

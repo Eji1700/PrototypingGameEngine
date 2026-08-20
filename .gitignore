@@ -2,12 +2,8 @@
 bin
 obj
 
-# What `tools/publish.ps1` builds. The releases are the artifacts, not the tree.
 publish/
 
-# What somebody playing here settled on, and what colours they like. Both belong to whoever
-# is at the keyboard rather than to the program, and a repository that carried one would be
-# handing everybody who cloned it somebody else's answers.
 settings.txt
 colours.txt
 colors.txt

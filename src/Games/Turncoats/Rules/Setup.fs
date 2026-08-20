@@ -2,32 +2,23 @@ namespace TCModel.Turncoats
 
 open TCModel.Common
 
-/// Dealing a fresh game: 63 stones spread over the board, the players' bags and the
-/// reserve.
 module Setup =
 
-    /// Stones available of each colour.
     [<Literal>]
     let StonesPerColor = 21
 
-    /// Stones a home region starts with, of its own colour.
     [<Literal>]
     let HomeSeedStones = 2
 
-    /// Stones a wild region starts with, drawn at random.
     [<Literal>]
     let WildSeedStones = 2
 
-    /// Stones each player starts with in their bag.
     [<Literal>]
     let BagSize = 8
 
     let private fullSupply =
         StoneColor.all |> List.map (fun color -> color, StonesPerColor) |> Pile.ofCounts
 
-    /// Seed each home from the supply. Wild regions are dealt after, once every home
-    /// has taken its own colour; the special regions start empty by rule, and the
-    /// dead region because nothing may enter it.
     let private seedHomes supply =
         Board.regions
         |> List.fold
@@ -39,7 +30,6 @@ module Setup =
                 | Dead -> position, supply)
             (Position.empty, supply)
 
-    /// Deal each wild region two stones from what the homes left behind.
     let private dealWilds (position, reserve) rng =
         Board.regions
         |> List.filter (fun region -> region.Kind = Wild)
@@ -49,7 +39,6 @@ module Setup =
                 (Position.withStones region.Id stones position, reserve), rng)
             ((position, reserve), rng)
 
-    /// Draw a bag for each player, in seating order.
     let private dealBags playerCount reserve rng =
         let (bags, reserve), rng =
             [ 1..playerCount ]
@@ -61,8 +50,6 @@ module Setup =
 
         (List.rev bags, reserve), rng
 
-    /// Deal a complete game for `playerCount` players from a seed. The player count
-    /// is checked by the table, so a game that exists has a legal number of players.
     let deal playerCount (seed: uint64) =
         let position, supply = seedHomes fullSupply
         let (position, reserve), rng = dealWilds (position, supply) (Rng.ofSeed seed)

@@ -17,67 +17,35 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      # The tool manifest pins Fantomas, so this is the same formatter every machine runs.
       - name: Restore tools
         run: dotnet tool restore
 
       - name: Restore
         run: dotnet restore
 
-      # Warnings are the standard here, not something to look at later.
       - name: Build
         run: dotnet build --no-restore -warnaserror
 
       - name: Check formatting
         run: dotnet fantomas --check src tests tools
 
-      # Every script is loaded straight from source and exits non-zero on the first failing
-      # check; the runner starts them together, prints each one's whole output in the order
-      # they are listed, and fails the job if any of them did.
-      #
-      # Together rather than one after another because nearly all of the time is `dotnet fsi`
-      # compiling the same sources again for each script - fourteen times over, on one core.
-      # The list of which scripts there are lives in the runner and is still written out one
-      # by one, so a script added without being listed shows up as a missing line in a review.
       - name: Checks
         run: pwsh tools/tests.ps1
 
-      # And the one road none of those travel: a console at a terminal, talking to a hosted
-      # table over a socket. It is here because that gap has already cost something - making
-      # the table generic in the game broke hub activation, every console that tried to sit
-      # down was dropped without a word, and fourteen scripts and a browser saw nothing.
-      #
-      # Both games, because what broke was the machinery rather than either of them.
       - name: A table over the wire
         run: |
           pwsh tools/wire.ps1
           pwsh tools/wire.ps1 -Game tictactoe
 
-      # A record is meant to replay for good. The committed one is the oldest thing in
-      # the repository that still has to work, so the build says so out loud. The second
-      # one is a game of noughts and crosses, guarding the same promise for the game that
-      # was written to find out whether the promise was the machinery's or this game's.
       - name: Replay the committed records
         run: |
           echo quit | dotnet run --no-build -- replay logs/2026-08-03-193909-2p-seed639214079490240407.log | head -2
           echo quit | dotnet run --no-build -- tictactoe replay logs/2026-08-07-190000-2p-noughts.log | head -2
 
-  # The image, built and then run - which is where it is actually worth doing rather than on
-  # anybody's own machine. What ships is a Linux image and this runner is Linux, so what is
-  # built here is the thing, not a Windows box's idea of it. It was also the only place with a
-  # Docker daemon when this was written.
-  #
-  # A job of its own so that it runs beside the checks above rather than after them; nothing
-  # in it needs anything the other job makes.
   image:
     runs-on: ubuntu-latest
 
     strategy:
-      # Two games and not one, and not all four. One would build an image and prove nothing
-      # about `--build-arg GAME`, which is the only thing that differs between the four and is
-      # therefore the only thing that can be wrong: a Dockerfile that had the game's name
-      # written into it would pass a single-game check every time. Two proves the argument is
-      # wired to something. The other two are the same line again.
       fail-fast: false
       matrix:
         game: [Turncoats, TicTacToe]
@@ -85,8 +53,5 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The same checks a person runs, rather than a second set written in shell here. What an
-      # image has to do is one question and it is answered in one place - the same bargain the
-      # record and the settings file keep, kept for the build.
       - name: Build the image and play a game in it
         run: pwsh tools/image.ps1 -Game ${{ matrix.game }}
