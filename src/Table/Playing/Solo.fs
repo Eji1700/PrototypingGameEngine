@@ -110,6 +110,14 @@ module Solo =
     let private drawAll solo =
         solo.Watchers |> List.map (screenFor solo)
 
+    /// What the board is sounding, said to everybody watching it. A sound goes *beside* a screen
+    /// rather than instead of one, and it is read off where the game stands rather than out of
+    /// what it said - so a board taken up from a record sounds the same as the one it was saved
+    /// from, and a table with no way to make a noise drops it without any of this knowing.
+    let private sounding solo =
+        [ for sound in solo.Game.Rings(standing solo) do
+              for console, _ in solo.Watchers -> { To = console; Say = Rang sound } ]
+
     let private nudging console solo =
         if isOver solo then
             []
@@ -152,6 +160,13 @@ module Solo =
         []
 
 
+    /// One beat of the clock.
+    ///
+    /// A beat that found nothing to do leaves no trace - `Update` does not write down a move the
+    /// game neither took nor spoke about - and so nothing is drawn for it either. That is what
+    /// lets a game beat while it is at rest without sending a board down every wire in the house
+    /// twice a second, and it is why a game whose board only moves in bursts may keep one clock
+    /// rather than starting and stopping one.
     let beaten solo =
         match solo.Game.Pulse with
         | Some pulse when not (isOver solo) && not (List.isEmpty solo.Watchers) ->
@@ -160,7 +175,10 @@ module Solo =
                     { solo with
                         Model = Update.update (rules solo) (Make pulse.Beat) solo.Model }
 
-            next, drawAll next, (if isOver next then Keeping(next.Model, next.Stamp, false) else Carrying)
+            if Journal.length next.Model.Journal = Journal.length solo.Model.Journal then
+                next, [], Carrying
+            else
+                next, drawAll next @ sounding next, (if isOver next then Keeping(next.Model, next.Stamp, false) else Carrying)
         | Some _
         | None -> solo, [], Carrying
 
@@ -180,7 +198,7 @@ module Solo =
             solo, [ screenFor solo (console, reading) ], Carrying
 
         let moved solo errand =
-            solo, drawAll solo @ nudging console solo, errand
+            solo, drawAll solo @ sounding solo @ nudging console solo, errand
 
         match Playable.read solo.Game typed with
         | Error problem -> told problem

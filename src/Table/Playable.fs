@@ -5,11 +5,45 @@ open TCModel.Engine
 
 [<NoComparison; NoEquality>]
 type Pulse<'Move, 'State> =
-    { Every: 'State -> TimeSpan
+    {
+        Every: 'State -> TimeSpan
 
-      Beat: 'Move
+        Beat: 'Move
 
-      Pressed: ConsoleKeyInfo -> string option }
+        /// How many times to draw the board between one beat and the next.
+        ///
+        /// A beat is a move; a frame is not. Nothing a frame draws reaches the rules, the timeline
+        /// or the record, and the only thing that differs between one frame and the next is
+        /// `Margins.Phase` - so a frame cannot change a game, only how far through a change it is
+        /// caught. Nought is a game with nothing moving between its beats, which is every game of
+        /// turns and Snake as well: a snake is on one square or the next and never between them.
+        Frames: 'State -> int
+
+        Pressed: ConsoleKeyInfo -> string option
+    }
+
+module Pulse =
+
+    /// The next moment worth waking for: the next frame, or the beat itself if there is no frame
+    /// left before it.
+    ///
+    /// Frames are laid evenly across the beat rather than counted off one after another, so a
+    /// frame that arrived late does not push the ones behind it late as well - what is asked for
+    /// is the next boundary after *now*, whichever one that is. A game that asks for no frames is
+    /// only ever woken by the beat, which is the loop every clocked game had before there were
+    /// any frames to ask for.
+    let waking frames (since: DateTime) (due: DateTime) (now: DateTime) =
+        if frames <= 1 || due <= since then
+            due
+        else
+            let step = (due - since) / float frames
+            min due (since + step * (floor ((now - since) / step) + 1.0))
+
+    /// How far a drawing made now is between one beat and the next: nought at the beat, and up
+    /// towards - but never reaching - one. Never reaching it is what keeps the last frame of a
+    /// beat the last picture of the turn rather than the first picture of the next one.
+    let phase (since: DateTime) (due: DateTime) (now: DateTime) =
+        if due <= since then 0.0 else (now - since) / (due - since) |> max 0.0 |> min 0.999
 
 [<NoComparison; NoEquality>]
 type Seated<'Move, 'State> =
@@ -18,40 +52,49 @@ type Seated<'Move, 'State> =
 
 [<NoComparison; NoEquality>]
 type Playable<'Move, 'State, 'Notice> =
-    { Rules: Rules<'Move, 'State, 'Notice>
+    {
+        Rules: Rules<'Move, 'State, 'Notice>
 
-      Name: string
-      Title: string
-      Blurb: string
+        Name: string
+        Title: string
+        Blurb: string
 
-      Fewest: int
-      Most: int
+        Fewest: int
+        Most: int
 
-      Read: string -> Result<Command<'Move>, string>
+        Read: string -> Result<Command<'Move>, string>
 
-      Write: Msg<'Move> -> string
+        Write: Msg<'Move> -> string
 
-      Seat: PlayerId -> string
+        Seat: PlayerId -> string
 
-      Says: 'Notice -> string
+        Says: 'Notice -> string
 
-      SeenBy: PlayerId -> 'Notice -> string
+        SeenBy: PlayerId -> 'Notice -> string
 
-      Resign: 'Move option
+        /// What the board is sounding, from where it stands.
+        ///
+        /// Read off the state after a move rather than out of the notices, which is what makes it
+        /// the same at a replayed table as at a played one, and lets a game say it once for every
+        /// table there is rather than once per endpoint. Empty at a game nobody needs to hear.
+        Rings: 'State -> Sound list
 
-      Faults: string list
+        Resign: 'Move option
 
-      Slots: Slot list
+        Faults: string list
 
-      Skills: (string * string) list
+        Slots: Slot list
 
-      Seating: uint64 -> string option list -> 'State -> (PlayerId * Seated<'Move, 'State>) list
+        Skills: (string * string) list
 
-      Pulse: Pulse<'Move, 'State> option
+        Seating: uint64 -> string option list -> 'State -> (PlayerId * Seated<'Move, 'State>) list
 
-      Page: Shell
+        Pulse: Pulse<'Move, 'State> option
 
-      Views: Palette -> View<'Move, 'State, 'Notice> list }
+        Page: Shell
+
+        Views: Palette -> View<'Move, 'State, 'Notice> list
+    }
 
 module Playable =
 

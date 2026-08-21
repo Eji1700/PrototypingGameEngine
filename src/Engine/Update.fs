@@ -20,6 +20,12 @@ module Update =
             | Some state, told ->
                 let timeline = Timeline.advance asked state model.Timeline
                 model |> Model.happen rules asked (told |> List.map Said) timeline
+
+            // A move the game neither took nor had anything to say about did not happen, and a
+            // record is what happened. Without this a clock beating over a board with nothing
+            // moving on it writes a line every beat, and a game nobody has touched is not empty.
+            | None, [] -> model
+
             | None, told -> model |> Model.happen rules asked (told |> List.map Said) model.Timeline
 
     let private walk rules asked step nothingThere told model =

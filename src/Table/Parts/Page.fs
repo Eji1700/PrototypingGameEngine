@@ -41,6 +41,18 @@ module Page =
     [<Literal>]
     let Alive = "alive()"
 
+    /// What the page is asked to do when the table makes a sound. A `Sound` is named for what
+    /// happened rather than for what it sounds like, so this is where the one becomes the other
+    /// and it is the only place in the program that has an opinion about pitch.
+    let rang sound =
+        let word =
+            match sound with
+            | Tap -> "tap"
+            | Chime -> "chime"
+            | Fanfare -> "fanfare"
+
+        $"rang('{word}')"
+
     type Signals =
         { [<JsonPropertyName("line")>]
           Line: string }
@@ -141,6 +153,15 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
 .tile:hover { border-color: var(--yours); }
 .big { font-size: 2.2rem; font-weight: 700; line-height: 1; }
 
+/* A field: many small cells rather than a few big ones, one glyph each, laid out so that the
+   legend across the top sits over the column it names. The moods a game gives a cell arrive
+   here as further classes on `.speck`, and it is the game's own sheet that says what they
+   look like - nothing general could know what turning, or landing, or lit is. */
+.field { display: inline-flex; flex-direction: column; margin: .3rem 0 .6rem; line-height: 1.25; }
+.field .row { display: flex; white-space: pre; }
+.field .label, .field .legend { color: var(--edge); }
+.field .speck { display: inline-block; width: 1ch; text-align: center; }
+
 #told {
   position: fixed; right: 1rem; bottom: 4.5rem; max-height: 60vh; width: min(60ch, 45vw);
   overflow: auto; padding: .8rem; border: 1px solid var(--edge); border-radius: .4rem;
@@ -180,6 +201,25 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
 }
 .colours button { grid-column: 1 / -1; }
 """
+
+    /// The table's one voice. Three sounds, made out of nothing the page had to fetch, because a
+    /// board that could not be heard until a file arrived would be silent for the first move of
+    /// every game. A browser will not let a page make a noise before somebody has touched it, so
+    /// the first touch is what wakes it, and until then this quietly does nothing at all.
+    let private sounding =
+        String.concat
+            ""
+            [ "let horn=null;const wake=()=>{try{horn=horn||new (window.AudioContext||window.webkitAudioContext)();"
+              "if(horn.state===`suspended`)horn.resume()}catch(e){}};"
+              "addEventListener(`pointerdown`,wake);addEventListener(`keydown`,wake);"
+              "window.rang=w=>{wake();if(!horn||horn.state!==`running`)return;"
+              "const notes=w===`fanfare`?[523.25,659.25,783.99]:w===`chime`?[659.25,987.77]:[392];"
+              "const loud=w===`tap`?0.04:0.07;const at=horn.currentTime;"
+              "notes.forEach((hz,i)=>{const o=horn.createOscillator(),g=horn.createGain();"
+              "o.type=`triangle`;o.frequency.value=hz;const from=at+i*0.07;"
+              "g.gain.setValueAtTime(0.0001,from);g.gain.exponentialRampToValueAtTime(loud,from+0.012);"
+              "g.gain.exponentialRampToValueAtTime(0.0001,from+0.17);"
+              "o.connect(g);g.connect(horn.destination);o.start(from);o.stop(from+0.19)})}" ]
 
     let private holding =
         String.concat
@@ -313,6 +353,7 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                                     Attr.autocomplete "off"
                                     attr "placeholder" shell.Placeholder ]
                               Elem.button [ Attr.class' "types"; Ds.onClick (Ds.post Say) ] [ Text.raw "send" ] ]
+                        Elem.script [] [ Text.raw sounding ]
                         Elem.script [] [ Text.raw answering ]
                         Elem.script [] [ Text.raw holding ]
                         Elem.script [] [ Text.raw (steering shell.Keys) ] ] ]

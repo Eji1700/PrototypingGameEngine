@@ -7,6 +7,24 @@ module Readers =
 
     let private hush = Palette.slate
 
+    /// How wide the labels down the side of a field are. One width for all of them, because it
+    /// is what puts the legend across the top over the cells it names.
+    let private widest (rows: (string * Speck list) list) =
+        rows
+        |> List.fold (fun room (name: string, _) -> max room (String.length name)) 0
+
+    /// A field, laid out the way every reader lays one out. What a label and a row of cells are
+    /// *drawn as* is the reader's business and is passed in; the arrangement is not, because a
+    /// board that lined up in one reader and not in another would be the same board saying two
+    /// different things about which cell is which.
+    let private laid (label: string -> string) (drawn: Speck list -> string) legend rows =
+        let wide = widest rows
+
+        [ if legend <> "" then label (String.replicate wide " " + " " + legend)
+
+          for name, specks in rows do
+              label (name.PadLeft wide + " ") + drawn specks ]
+
 
     // Drawing a `Walled` grid as a honeycomb rather than as a table.
     //
@@ -40,7 +58,8 @@ module Readers =
             | Tile(_, _, body)
             | Patch(_, _, body) -> body |> List.collect lines
             | Aligned rows -> rows |> List.map List.concat
-            | Walled _ -> []
+            | Walled _
+            | Field _ -> []
 
         let private facet scene : Facet =
             match scene with
@@ -354,6 +373,8 @@ module Readers =
             | Patch(_, _, body) -> body |> List.collect draw
             | Big span -> [ span.Text ]
             | Does(caption, _, _) -> [ caption ]
+            | Field(legend, rows) ->
+                laid id (fun specks -> specks |> List.map (fun speck -> speck.Glyph) |> String.concat "") legend rows
 
         and private grid _ (rows: Course list) =
             let drawn = rows |> List.map (fun row -> row.Shift, row.Cells |> List.map draw)
@@ -496,6 +517,13 @@ module Readers =
             | Patch(_, _, body) -> [ stacked paint palette room body ]
             | Big text -> [ markup (Tint.wrap "bold" (span paint palette text)) ]
             | Does(caption, _, tone) -> [ markup (span paint palette { Text = caption; Tone = tone }) ]
+            | Field(legend, rows) ->
+                laid
+                    quietly
+                    (fun specks -> line paint palette (Scene.runs (specks |> List.map (fun speck -> speck.Glyph, speck.Tone))))
+                    legend
+                    rows
+                |> List.map markup
 
         and private spread paint palette room wide parts =
             Spectre.Console.Rows(parts |> List.collect (render paint palette room wide)) :> IRenderable
@@ -568,6 +596,25 @@ module Readers =
         let private span (span: Span) =
             Elem.span (toned span.Tone) [ Text.enc span.Text ]
 
+        /// A mood is a bare word a game made up, about to become a class in a stylesheet the same
+        /// game wrote. Anything that is not a letter, a digit or a dash is dropped rather than
+        /// escaped, because a class name is not text a reader sees and half a word that styles
+        /// nothing is better than a page that a stray character has broken.
+        let private moods (mood: string list) =
+            mood
+            |> List.map (String.filter (fun letter -> System.Char.IsLetterOrDigit letter || letter = '-'))
+            |> List.filter (fun word -> word <> "")
+
+        let private speck (speck: Speck) =
+            let painted =
+                match speck.Tone with
+                | Tone.Plainly -> []
+                | Tone.Quiet -> [ Page.attr "style" "color: var(--edge)" ]
+                | Tone.Yours -> [ Page.attr "style" "color: var(--yours)" ]
+                | Tone.Slot key -> [ Page.attr "style" $"color: var(--{key})" ]
+
+            Elem.span (Attr.class' (String.concat " " ("speck" :: moods speck.Mood)) :: painted) [ Text.enc speck.Glyph ]
+
         let rec private draw scene : XmlNode list =
             match scene with
             | Blank -> []
@@ -613,6 +660,23 @@ module Readers =
             | Patch(_, tone, body) -> draw (Tile(None, tone, body))
             | Big text -> [ Elem.span (Attr.class' "big" :: toned text.Tone) [ Text.enc text.Text ] ]
             | Does(caption, line, _) -> [ Page.types line caption ]
+            | Field(legend, rows) ->
+                let wide = widest rows
+
+                let labelled name inside =
+                    Elem.div
+                        [ Attr.class' "row" ]
+                        (Elem.span [ Attr.class' "label" ] [ Text.enc ((name: string).PadLeft wide + " ") ]
+                         :: inside)
+
+                [ Elem.div
+                      [ Attr.class' "field" ]
+                      ((if legend = "" then
+                            []
+                        else
+                            [ labelled "" [ Elem.span [ Attr.class' "legend" ] [ Text.enc legend ] ] ])
+                       @ (rows
+                          |> List.map (fun (name, specks) -> labelled name (specks |> List.map speck)))) ]
 
         let screen scene = Page.screen (draw scene)
 

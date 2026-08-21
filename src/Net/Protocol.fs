@@ -30,3 +30,6 @@ module Protocol =
 
         [<Literal>]
         let Nudged = "Nudged"
+
+        [<Literal>]
+        let Rang = "Rang"

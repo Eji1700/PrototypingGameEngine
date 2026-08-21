@@ -84,6 +84,8 @@ module Offer =
           Says = Words.said
           SeenBy = Words.saidTo
 
+          Rings = fun _ -> []
+
           Resign = Some Resign
           Faults = Board.problems
           Slots = Ink.slots

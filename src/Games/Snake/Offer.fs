@@ -146,6 +146,8 @@ module Offer =
           Says = Words.said
           SeenBy = Words.saidTo
 
+          Rings = fun _ -> []
+
           Resign = Some Resign
           Faults = faults
           Slots = Ink.slots
@@ -175,6 +177,11 @@ module Offer =
                 Some
                     { Every = every
                       Beat = Beat
+
+                      // A snake is on one square or the next and never between them, so there is
+                      // nothing for a frame to catch.
+                      Frames = fun _ -> 0
+
                       Pressed = pressed }
 
           Page = Render.shell pace

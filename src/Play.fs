@@ -31,9 +31,23 @@ let private errand game sitters doing =
     | Leaving(Some model, stamp) -> if Journal.isEmpty model.Journal then [] else write model stamp true
     | Leaving(None, _) -> []
 
+/// A terminal has one bell, so a batch of posts that a board rang three times over rings once:
+/// three bells in a beat is a noise rather than a sound, and this is the one place that knows how
+/// many posts came out of a single move.
 let private tell rings posts =
-    for post in posts do
-        if rings && post.Say = Nudged then printf "\a"
+    let heard =
+        posts
+        |> List.exists (fun post ->
+            match post.Say with
+            | Nudged
+            | Rang _ -> true
+            | Seated _
+            | Screen _
+            | Told _
+            | TurnedAway _
+            | GotUp _ -> false)
+
+    if rings && heard then printf "\a"
 
     posts
     |> List.choose (fun post ->
@@ -42,6 +56,7 @@ let private tell rings posts =
         | TurnedAway text
         | GotUp text -> Some text
         | Nudged
+        | Rang _
         | Screen _
         | Seated _ -> None)
 
@@ -71,10 +86,16 @@ let rec private loop rings sitters said solo =
 
 /// Playing a game that runs on a clock at this keyboard, drawn over itself as it goes.
 ///
-/// The loop waits for either a keypress or the next beat, whichever comes first. Holding stops the
-/// clock by waiting a day instead of an interval, and only while it is held - or the game is over -
-/// are the notes and the list of commands drawn, since a board redrawn several times a second has no
-/// room for them and nobody could read them anyway.
+/// The loop waits for a keypress, the next frame or the next beat, whichever comes first. Holding
+/// stops the clock by waiting a day instead of an interval, and only while it is held - or the game
+/// is over - are the notes and the list of commands drawn, since a board redrawn several times a
+/// second has no room for them and nobody could read them anyway.
+///
+/// A beat is a move and a frame is not. `Solo.beaten` folds a beat into the model; a frame folds
+/// nothing, and the only thing that differs between one frame and the next is how far through the
+/// beat `Margins.Phase` says the drawing is. So a game that has nothing moving between its beats
+/// asks for no frames and this is the loop it always was, and a game that does gets the in-between
+/// pictures without a single one of them reaching the timeline or the record.
 let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
     let show lines =
         for line in lines do
@@ -88,10 +109,17 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         | ConsoleKey.Escape -> Leaving'
         | _ -> Steering
 
-    let rec spin holding wanted drawn said due solo =
+    let rec spin holding wanted drawn said since due solo =
         let over = Solo.isOver solo
         let still = holding || over
-        let showing = if still then wanted else Margins.none
+        let standing = Model.state (Solo.model solo)
+        let now = DateTime.UtcNow
+
+        // How far this drawing is between the last beat and the next. Held, or over, it is pinned
+        // at the beat: a board nobody is going to move again should not be caught mid-stride.
+        let phase = if still then 0.0 else Pulse.phase since due now
+
+        let showing = (if still then wanted else Margins.none) |> Margins.through phase
         let solo = Solo.reading Keyboard showing solo
 
         let screen =
@@ -107,9 +135,12 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
                       else
                           "  space to hold and read the rest - Enter to type a line - Esc to put it down" ]
 
-        let drawn = Screens.redrawn drawn screen
+        // A screen identical to the one already on the terminal is not written again. Without this
+        // a game at rest under a running clock repaints itself as fast as the loop can poll.
+        let drawn =
+            if snd drawn = screen then drawn else Screens.redrawn (fst drawn) screen, screen
 
-        let heard holding due line solo =
+        let heard holding since due line solo =
             let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
             let answered = tell rings posts @ errand (Solo.game solo) sitters doing
 
@@ -121,47 +152,61 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
                 show answered
                 Solo.model next
             | Carrying
-            | Keeping _ -> spin holding wanted drawn answered due next
+            | Keeping _ -> spin holding wanted drawn answered since due next
 
         let afresh () =
-            DateTime.UtcNow + pulse.Every(Model.state (Solo.model solo))
+            let now = DateTime.UtcNow
+            now, now + pulse.Every(Model.state (Solo.model solo))
 
-        match Screens.awaiting (if still then DateTime.UtcNow + TimeSpan.FromDays 1.0 else due) with
+        // The next thing worth waking for. Frames are asked for from where the game stands, so a
+        // board with nothing moving on it asks for none and this waits for the beat itself.
+        let waiting =
+            if still then now + TimeSpan.FromDays 1.0 else Pulse.waking (pulse.Frames standing) since due now
+
+        match Screens.awaiting waiting with
+        | None when DateTime.UtcNow < due -> spin holding wanted drawn said since due solo
         | None ->
             let next, posts, doing = Solo.beaten solo
+            let since = DateTime.UtcNow
+            let due = since + pulse.Every(Model.state (Solo.model next))
 
-            let due = DateTime.UtcNow + pulse.Every(Model.state (Solo.model next))
-
-            spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) due next
+            spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) since due next
         | Some key ->
             match key with
-            | Leaving' -> heard holding due "quit" solo
-            | Holding -> spin (not holding) wanted drawn said (afresh ()) solo
-            | Restarting when still -> heard holding (afresh ()) "restart" solo
-            | Restarting -> spin holding wanted drawn said due solo
+            | Leaving' -> heard holding since due "quit" solo
+            | Holding ->
+                let since, due = afresh ()
+                spin (not holding) wanted drawn said since due solo
+            | Restarting when still ->
+                let since, due = afresh ()
+                heard holding since due "restart" solo
+            | Restarting -> spin holding wanted drawn said since due solo
             | Typing ->
                 printf "> "
 
                 match Console.ReadLine() with
-                | null -> heard holding due "quit" solo
+                | null -> heard holding since due "quit" solo
                 | line ->
                     Screens.cleared ()
-                    heard holding (afresh ()) line solo
-            | Steering when over -> spin holding wanted drawn said due solo
+                    let since, due = afresh ()
+                    heard holding since due line solo
+            | Steering when over -> spin holding wanted drawn said since due solo
             | Steering ->
                 match pulse.Pressed key with
-                | Some line -> heard holding due line solo
-                | None -> spin holding wanted drawn said due solo
+                | Some line -> heard holding since due line solo
+                | None -> spin holding wanted drawn said since due solo
 
     if Screens.steering () then
         Screens.cleared ()
+        let opened = DateTime.UtcNow
 
         spin
             false
             (Solo.margins Keyboard solo |> Option.defaultValue Margins.all)
-            0
+            (0, "")
             said
-            (DateTime.UtcNow + pulse.Every(Model.state (Solo.model solo)))
+            opened
+            (opened + pulse.Every(Model.state (Solo.model solo)))
             solo
     else
         loop rings sitters said solo

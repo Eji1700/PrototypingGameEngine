@@ -202,7 +202,10 @@ module Render =
     let wording = Told.inWords Words.said Words.command
 
     let private lately (margins: Margins) lines =
-        if margins = Margins.none then lines |> List.skip (max 0 (List.length lines - 3)) else lines
+        if not margins.Notes && not margins.Commands then
+            lines |> List.skip (max 0 (List.length lines - 3))
+        else
+            lines
 
 
     let board margins beholder (model: Model<Move, Session, Notice>) =

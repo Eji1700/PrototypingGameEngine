@@ -1,4 +1,4 @@
-# TCModel — an engine for turn-based games, and six games in it
+# TCModel — an engine for turn-based games, and seven games in it
 
 Answer seven questions about how a game is *played* and fifteen about how it is *read*, and
 you are handed the rest: a history to walk back through, a record that replays, seats and
@@ -17,12 +17,14 @@ README of its own:
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
 | [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
 | [**Snake**](src/Games/Snake/README.md) | 1 to 4 | The arcade game, on a clock: the snakes move on their own and quicken as they eat, and you only steer |
+| [**Cascade**](src/Games/Cascade/README.md) | 1 | Two hundred and fifty-six elbows. Touch one and it turns a quarter, and whatever it is now reaching that is reaching back turns too |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
 dotnet run -- tictactoe play 2  # or say which, and everything after it is read by that game
 dotnet run -- diplomacy play 7  # seven powers, and no dice anywhere in it
 dotnet run -- life play 1       # one seat, no opponent, and nothing to win
+dotnet run -- cascade play 1    # touch a cell, and then you only watch
 ```
 
 Written in F# as a Model-View-Update loop. The core is pure: a game deals itself from a seed
@@ -99,6 +101,7 @@ live and where four people can play it round one keyboard.
 
 **The seams** — [A game-shaped hole](#a-game-shaped-hole) · [The second seam](#the-second-seam) ·
 [A game that does not wait](#a-game-that-does-not-wait) ·
+[A frame is not a move](#a-frame-is-not-a-move) ·
 [Adding a game](#adding-a-game) ·
 [What a second game found](#what-a-second-game-found) ·
 [What a third game found](#what-a-third-game-found)
@@ -381,9 +384,9 @@ gold rather than a fourth hue that could be mistaken for a stone.
 ```
 
 Three pages because there are three kinds of question. **Video** is how a board reaches your
-eyes. **Audio** is how it reaches your ears, which today is one bell and a question about
+eyes. **Audio** is how it reaches your ears, which at a terminal is one bell and a question about
 whether you want it. **Game** is whatever this particular game lets you settle about itself,
-which for five of these six games is nothing at all.
+which for six of these seven games is nothing at all.
 
 The split is not decoration. Before it there was one screen with a view row and a colour row
 on it, and every new kind of question would have gone on the end of the same list until it was
@@ -597,6 +600,7 @@ type Scene =
     | Patch of shape: string * tone: Tone * body: Scene list  // a cell of a bigger shape
     | Big of Span                                       // one glyph, drawn to be seen
     | Does of caption: string * line: string * tone: Tone   // a control that types a line
+    | Field of legend: string * rows: (string * Speck list) list  // many small cells, a glyph each
 ```
 
 [Readers.fs](src/Table/Parts/Readers.fs) draws one three ways - `Plain` counts characters into
@@ -632,6 +636,16 @@ cell what is in it. That is the difference between a description and a layout, a
 the half-cell `Shift` on a `Course` is not a hint: the offset is what makes a region on a
 lattice touch six others rather than four, so it is a fact about the board, and a reader that
 dropped it would be drawing a different map.
+
+**A grid of tiles is a table; a grid of patches is a map; a grid of specks is a field.** The
+first two put a wall round every cell, which is right for nine squares and unreadable at two
+hundred and fifty-six - so `Field` is a glyph a cell, laid out in rows with a legend across the
+top and labels down the side, and Cascade's board is one. Each cell of it is a `Speck`, and a
+speck carries a **mood** as well as a glyph and a tone: a bare word saying what the cell is
+*doing* rather than what it is. A terminal has no way to be part-way through anything and
+ignores them; a page turns them into classes, and the game's own stylesheet says what turning,
+landing and lit look like. It is the same bargain a `Tone` makes about colour, made about
+movement.
 
 **A grid of tiles is a table; a grid of patches is a map.** A `Tile` is a cell and its own four
 walls, which is what a board of nine squares is made of. A `Patch` says which *shape* it is a
@@ -1536,6 +1550,77 @@ table **nothing beats until every seat is taken**. And whose turn it is stops be
 a table whose game has a pulse lets anybody move at any time, because there is no turn to be out
 of.
 
+### A frame is not a move
+
+Snake settled that a clock needs nothing but a move. [Cascade](src/Games/Cascade/README.md)
+asked the harder half of the same question: what about a board that is *between* two of them?
+
+A cell there takes half a second to turn a quarter, and half a second is a long time to show
+nothing. But a picture of a cell part-way round cannot be a move — there is nothing to record,
+nothing to undo, and a record with thirty of them a second in it would be a video rather than a
+game. So the answer is the exact complement of the one above:
+
+```fsharp
+type Pulse<'Move, 'State> =
+    { Every: 'State -> TimeSpan
+      Beat: 'Move
+      Frames: 'State -> int              // redrawings between two beats. Nought at every
+      Pressed: ConsoleKeyInfo -> string option }   // game that has nothing moving between them
+```
+
+A frame folds nothing. The single thing that differs between one and the next is a number on
+the record every screen is already drawn with:
+
+```fsharp
+type Margins =
+    { Notes: bool                        // what a player turned on
+      Commands: bool
+      Phase: float }                     // and how far through a beat this drawing is: 0 at
+                                         // the beat, towards 1 before the next
+```
+
+`Margins.frame 3 margins` answers which of three pictures the phase falls in, which is what a
+terminal picking one of a few wants rather than the fraction. Cascade draws a turning cell as
+where it was, its corner half way round, and where it is going. **A view that never asked for
+frames is only ever handed 0**, so every screen in the program that was drawn one way before is
+drawn exactly that way now.
+
+Three things this buys, and one it does not:
+
+- **The record is unchanged.** A cascade of ninety-five waves is ninety-five lines, not two
+  thousand. Frames cannot reach the timeline, the journal or the rules; there is no path from
+  one to any of them, which is a stronger claim than a convention about not doing it.
+- **A browser does not use them at all.** It is sent the board once a beat and animates the half
+  second itself, out of the game's own stylesheet, off the [moods](#a-screen-described-once) the
+  cells carry. That is the right split: a terminal cannot interpolate and a browser should not be
+  asked to hold a connection open thirty times a second to be told what it could work out.
+- **A clock may rest.** Cascade's board is still most of the time, and it beats over a still
+  board at whatever notch it is wound to. That used to be a line in the record a beat, because
+  `Update` wrote down a move whether or not anything came of it. Now a move the game **neither
+  took nor said anything about did not happen** — the model comes back untouched. A game nobody
+  has touched has an empty record, a board at rest is not sent down every wire in the house twice
+  a second, and Snake quietly stopped writing down a steer that turned a snake the way it was
+  already going.
+- **What it does not buy is a way to cheat.** A frame cannot show the board something the model
+  does not hold. Which cells are turning, what they are turning from, which shapes have come up
+  and on which beat are all in the state; the phase only says how far through. So the same board
+  read by a terminal three times a beat and by a browser once are the same board, and neither can
+  be shown a cell the other cannot.
+
+**And a table can be heard.** The sound a board makes was the other thing half a second of
+turning wanted, and it goes on the same seam rather than into a view:
+
+```fsharp
+Rings: 'State -> Sound list              // Tap, Chime, Fanfare - named for what happened
+```
+
+Read off where the game stands *after* a move rather than out of the notices, which is what makes
+a game taken up from a record sound exactly like the game it was saved from. Named for the
+occasion rather than for the noise, which is the bargain a `Tone` makes about colour: a browser
+builds all three out of three oscillators and nothing it had to fetch, a terminal has one bell
+and rings it once however many a move produced, and a table with nothing to make a sound with
+drops them without any of it knowing.
+
 ### Adding a game
 
 A folder, two records, and a line. Nothing above the game is touched, and nothing above the
@@ -1572,7 +1657,7 @@ above ever sees.
 let main argv = TCModel.Play.only Offer.ways argv
 ```
 
-That line is the same at all six games, and its being the same is the fair test of the two
+That line is the same at all seven games, and its being the same is the fair test of the two
 seams: by the time a game is a `Playable` there is nothing left for a way in to decide.
 
 **5. And one line in [Games.fs](src/Games.fs)**, if it is also to appear in the program that
@@ -1778,7 +1863,7 @@ game.
 engine references nothing. "A game may reach the engine and the engine may not reach a game"
 used to be a convention that happened to hold and could be checked by reading; it is now a
 thing that will not build. Not one line of code moved to get that — the split is project
-files, and every source file is where it always was, which is why the sixteen test scripts
+files, and every source file is where it always was, which is why the test scripts
 that `#load` them by path did not change either.
 
 | Project | What it is |
@@ -1790,10 +1875,11 @@ that `#load` them by path did not change either.
 | [src/Games/Compile/Compile.fsproj](src/Games/Compile/Compile.fsproj) | " |
 | [src/Games/Life/Life.fsproj](src/Games/Life/Life.fsproj) | " |
 | [src/Games/Snake/Snake.fsproj](src/Games/Snake/Snake.fsproj) | " |
-| [TCModel.fsproj](TCModel.fsproj) | All five in one program, which asks which. What a clone runs |
+| [src/Games/Cascade/Cascade.fsproj](src/Games/Cascade/Cascade.fsproj) | " |
+| [TCModel.fsproj](TCModel.fsproj) | All seven in one program, which asks which. What a clone runs |
 
 A game's own executable is one game, one port and nothing else in the image, which is what
-goes in a container. `TCModel` is what somebody who wants all six downloads once, and what
+goes in a container. `TCModel` is what somebody who wants all seven downloads once, and what
 every `dotnet run` line in this README is.
 
 **`src/Common`** — generic, and knows nothing about the game.
@@ -1801,7 +1887,7 @@ every `dotnet run` line in this README is.
 | File | Role |
 | --- | --- |
 | [Result.fs](src/Common/Result.fs) | The `result` computation expression used to chain an action's checks |
-| [Cascade.fs](src/Common/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning |
+| [Cascade.fs](src/Common/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning. It is older than the game of the same name and has nothing to do with it |
 | [Random.fs](src/Common/Random.fs) | An immutable SplitMix64 generator, passed along as a value |
 
 **`src/Engine`** — what every turn-based game wants and none of them should write again.
@@ -1813,7 +1899,7 @@ hole](#a-game-shaped-hole).
 | [Seats.fs](src/Engine/Seats.fs) | `PlayerId`: which seat, and nothing about who is in it |
 | [Messages.fs](src/Engine/Messages.fs) | `Msg<'Move>`: the game's own move, and the three the engine answers itself - and the words a record writes those three in |
 | [Told.fs](src/Engine/Told.fs) | `Told<'Move,'Notice>`: what the game said, and what the engine said |
-| [Rules.fs](src/Engine/Rules.fs) | The seam: the seven questions the machinery asks a game |
+| [Rules.fs](src/Engine/Rules.fs) | The seam: the seven questions the machinery asks a game. `Play` answering `None` with nothing to say is a move that did not happen, and leaves no line behind |
 | [Timeline.fs](src/Engine/Timeline.fs) | Every state a game has stood in, with a finger on the present |
 | [Journal.fs](src/Engine/Journal.fs) | The record of play: what was asked, by whom, and what came of it |
 | [Model.fs](src/Engine/Model.fs) | The timeline, the journal, and the last few lines on screen |
@@ -1826,9 +1912,9 @@ point: `Parts` does not know there is a seam, and `Playing` is written against i
 
 | File | Role |
 | --- | --- |
-| [Showing.fs](src/Table/Parts/Showing.fs) | What a table shows one console, and which console it is for |
+| [Showing.fs](src/Table/Parts/Showing.fs) | What a table shows one console, and which console it is for - and the three sounds a table may be heard making |
 | [Waiting.fs](src/Table/Parts/Waiting.fs) | A seat at a table that has not filled up yet, as the person waiting sees it |
-| [Scene.fs](src/Table/Parts/Scene.fs) | What a screen is made of, before anybody has decided what it looks like |
+| [Scene.fs](src/Table/Parts/Scene.fs) | What a screen is made of, before anybody has decided what it looks like - and `Margins`, which carries how much of it to draw and how far through a beat it is being drawn |
 | [Palette.fs](src/Table/Parts/Palette.fs) | Which colour is drawn for what, keyed by the words a game says it colours - and what there is to choose from, which a `colours.txt` may add to |
 | [Settings.fs](src/Table/Parts/Settings.fs) | What somebody settled on last time and gets again this time, written as the lines they would have typed |
 | [Reach.fs](src/Table/Parts/Reach.fs) | How far a table can be reached and what it takes to sit down at one: the port, the word at the door, what it is all wrapped in, and an address as somebody says it |
@@ -1888,7 +1974,7 @@ to call.
 | File | Role |
 | --- | --- |
 | [Play.fs](src/Play.fs) | The above, ending in `Chosen` — and `Play.only`, which is what `main` is at a game's own executable |
-| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all six: `Play.only Offer.ways argv` |
+| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all seven: `Play.only Offer.ways argv` |
 | [Games.fs](src/Games.fs) | The games there are, and the only file in the program that names more than one |
 | [Program.fs](src/Program.fs) | Which game a line is about, the screen that asks when nothing says, and nothing else |
 
@@ -2197,18 +2283,21 @@ dotnet fsi tests/life.fsx       # the fifth game - Conway's rule against the sha
 dotnet fsi tests/snake.fsx      # the sixth game - the three ways a snake stops, the square its
                                 #   own tail is leaving, a table of one and a table of four, and
                                 #   a machine that counts the room a step leaves it
+dotnet fsi tests/cascade.fsx    # the seventh game - the rule read off a board laid out by hand,
+                                #   a wave landing all at once, a cell set off a second time, and
+                                #   a board drawn three ways across one beat
 ```
 
-**Six harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
-loaded file by its basename, and all six games have a `Turn.fs` and a `Words.fs` - which
+**Seven harnesses, and the reason is `dotnet fsi` rather than the program.** A script names a
+loaded file by its basename, and every game has a `Turn.fs` and a `Words.fs` - which
 compile happily side by side in one project and cannot be loaded into one script. So
 [Checks.fsx](tests/Checks.fsx) keeps score and loads nothing at all, and
 [Whole.fsx](tests/Whole.fsx), [Noughts.fsx](tests/Noughts.fsx),
 [Europe.fsx](tests/Europe.fsx), [Compiled.fsx](tests/Compiled.fsx),
-[Living.fsx](tests/Living.fsx) and [Slither.fsx](tests/Slither.fsx) each load the same stack in
-the project's own order with one game on the end of it. The thirteen scripts above the last five
-used to keep a hand-ordered `#load` list apiece; they had already drifted, which is the same
-disease the seams are for.
+[Living.fsx](tests/Living.fsx), [Slither.fsx](tests/Slither.fsx) and
+[Cascading.fsx](tests/Cascading.fsx) each load the same stack in the project's own order with one
+game on the end of it. The thirteen scripts above the last six used to keep a hand-ordered
+`#load` list apiece; they had already drifted, which is the same disease the seams are for.
 
 Two more, which want a process rather than a value:
 
@@ -2357,9 +2446,9 @@ pwsh tools/publish.ps1 -Program Turncoats  # just the one game
 pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
 ```
 
-Seven programs come out: one per game, and `TCModel`, which has all six in it and asks
+Eight programs come out: one per game, and `TCModel`, which has all seven in it and asks
 which. A game's own file is one game, one port and nothing else — which is what goes in a
-container — and `TCModel` is what somebody who wants all six downloads once.
+container — and `TCModel` is what somebody who wants all seven downloads once.
 
 | | size | wants |
 | --- | --- | --- |
@@ -2367,7 +2456,7 @@ container — and `TCModel` is what somebody who wants all six downloads once.
 | `standalone` | ~105 MB | nothing at all |
 
 The checks below are run against each of the seven, and they are not the same lines at each: a
-game's own file takes `serve 2` and the one with six games in it takes `tictactoe serve 2`.
+game's own file takes `serve 2` and the one with seven games in it takes `tictactoe serve 2`.
 That difference is the whole of what publishing separately changed, so it is checked rather
 than assumed — `Turncoats.exe` printing `Turncoats turncoats play 2` is a line that runs and
 then refuses, which is worse than one that does not run at all.

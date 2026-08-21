@@ -2,13 +2,35 @@ namespace TCModel.Table
 
 open TCModel.Engine
 
-type Margins = { Notes: bool; Commands: bool }
+/// How much of a screen to draw, and how far through a beat it is being drawn.
+///
+/// `Phase` is the one thing here that is not a choice a player made: it runs from 0 at a beat
+/// towards 1 just before the next one, and it is how a board drawn between two beats knows how
+/// far a piece that is moving has got. A game with no frame clock is only ever drawn at 0, so
+/// every screen in the program that never asked for one is drawn exactly as it was.
+type Margins =
+    { Notes: bool
+      Commands: bool
+      Phase: float }
 
 module Margins =
 
-    let all = { Notes = true; Commands = true }
+    let all =
+        { Notes = true
+          Commands = true
+          Phase = 0.0 }
 
-    let none = { Notes = false; Commands = false }
+    let none =
+        { Notes = false
+          Commands = false
+          Phase = 0.0 }
+
+    let through phase margins = { margins with Phase = phase }
+
+    /// Which of `count` frames a phase falls in, which is what a terminal picking one of a few
+    /// pictures wants rather than the fraction itself.
+    let frame count margins =
+        if count <= 1 then 0 else margins.Phase * float count |> int |> max 0 |> min (count - 1)
 
 [<RequireQualifiedAccess>]
 type Tone =
@@ -52,6 +74,20 @@ and Scene =
 
     | Does of caption: string * line: string * tone: Tone
 
+    // A board of many small cells rather than a few big ones. `Walled` puts a wall round every
+    // cell, which is right for nine squares and unreadable at two hundred and fifty-six: a field
+    // is a glyph a cell, laid out in rows with a label down the side and a legend across the top.
+    | Field of legend: string * rows: (string * Speck list) list
+
+/// One cell of a field. `Mood` is what the cell is *doing* rather than what it is - turning,
+/// landing, lit - and it is a list of bare words: a page turns them into classes it can animate
+/// from a game's own stylesheet, and a terminal, which has no way to be part-way through
+/// anything, ignores them and draws the glyph.
+and Speck =
+    { Glyph: string
+      Tone: Tone
+      Mood: string list }
+
 module Span =
 
     let plainly text = { Text = text; Tone = Tone.Plainly }
@@ -63,6 +99,27 @@ module Span =
     let slot key text = { Text = text; Tone = Tone.Slot key }
 
     let toned tone text = { Text = text; Tone = tone }
+
+module Speck =
+
+    let plainly glyph =
+        { Glyph = glyph
+          Tone = Tone.Plainly
+          Mood = [] }
+
+    let quiet glyph =
+        { Glyph = glyph
+          Tone = Tone.Quiet
+          Mood = [] }
+
+    let toned tone glyph =
+        { Glyph = glyph
+          Tone = tone
+          Mood = [] }
+
+    let slot key glyph = toned (Tone.Slot key) glyph
+
+    let doing mood speck = { speck with Mood = speck.Mood @ mood }
 
 module Scene =
 

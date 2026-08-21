@@ -22,10 +22,12 @@ module Client =
         System.Console.Write "> "
         System.Console.Out.Flush()
 
+    let private bell () =
+        System.Console.Write '\a'
+        System.Console.Out.Flush()
+
     let private ring rings =
-        if rings then
-            System.Console.Write '\a'
-            System.Console.Out.Flush()
+        if rings then bell ()
 
         Screens.marking true
 
@@ -105,6 +107,12 @@ module Client =
         |> ignore
 
         connection.On(Protocol.Call.Nudged, Action(fun () -> ring rings)) |> ignore
+
+        // A terminal has one bell and no way to say which of three sounds it is making, so all
+        // three are it, and a board that rang twice in a beat rings once. The marking a nudge
+        // leaves on the window title is not made: a sound the board made is not a summons.
+        connection.On(Protocol.Call.Rang, Action(fun () -> if rings then bell ()))
+        |> ignore
 
         connection.add_Reconnecting (fun _ ->
             printfn ""

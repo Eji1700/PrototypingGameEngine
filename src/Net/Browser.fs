@@ -96,6 +96,7 @@ module Browser =
         | TurnedAway why -> Some(Piece(Page.says why))
         | GotUp said -> Some(Piece(Page.says said))
         | Nudged -> Some(Doing Page.Nudge)
+        | Rang sound -> Some(Doing(Page.rang sound))
         | Seated _ -> None
 
     let send (pages: Pages) (post: Post) =
