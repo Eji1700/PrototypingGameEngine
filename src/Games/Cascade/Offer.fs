@@ -13,36 +13,27 @@ module Offer =
         if players = Seats then
             Ok(Session.dealt seed)
         else
-            Error $"{players} players? Cascade has one seat at it, for whoever is touching the board."
+            Error $"{players} players? Cascade seats one - whoever is touching the board."
 
 
-    /// How long until the next beat: one quarter turn, at whatever notch the board is wound to.
-    /// The clock goes on beating while the board is at rest, and those beats do nothing and are
-    /// not written down - which is what lets this be one number rather than a clock that has to
-    /// be started and stopped as cascades come and go.
+    /// How long until the next beat: one quarter turn, at whatever notch the board is wound to. The
+    /// clock beats on while the board is at rest and those beats do nothing, which is what lets
+    /// this be one number rather than a clock started and stopped as cascades come and go.
     let private every session =
         System.TimeSpan.FromMilliseconds(float (Session.quarter (Session.play session).Speed))
 
-    /// How many times to draw the board between two beats.
-    ///
-    /// Twice as many as there are pictures to show, so that a frame arriving a few milliseconds
-    /// late cannot skip one of the three - a terminal polls for a keypress on its own clock, and
-    /// nothing lines a frame up exactly with the third of a beat it was asked for. Drawing the
-    /// same picture twice costs nothing: a screen identical to the one already on the terminal is
-    /// not written again.
-    ///
-    /// None at all while the board is at rest. There is nothing moving to be caught half way, and
-    /// a board redrawn several times a second to show the same thing is a board flickering for no
-    /// reason.
+    /// How many times to draw the board between two beats. Twice as many as there are pictures to
+    /// show, so a frame arriving a few milliseconds late cannot skip one of the three - a terminal
+    /// polls for keypresses on its own clock and nothing lines a frame up exactly with the third of
+    /// a beat it was asked for. Drawing the same picture twice costs nothing, since a screen
+    /// identical to the one already there is not written again. None at all while the board is at
+    /// rest: nothing is moving to be caught half way.
     let private frames session =
         if Session.settling (Session.play session) then Render.Pictures * 2 else 0
 
-    /// What the board is sounding, in the three the table has to make a noise with. A shape
-    /// coming up is the rare thing and gets the rare sound; a cascade coming to rest is worth
-    /// noticing; a wave landing is the small one, and there are a great many of those.
-    /// What each of the board's own occasions is heard as. A square comes up on half of all
-    /// cascades and several times over in a long one, so it takes the sound that comes often; a
-    /// whole row or column is rarer by a factor of ten and takes the one that does not.
+    /// What each of the board's occasions is heard as. A square comes up on half of all cascades and
+    /// several times over in a long one, so it takes the sound that comes often; a whole row or
+    /// column is rarer by a factor of ten and takes the one that does not.
     let private rung =
         function
         | Landing -> Tap
@@ -54,9 +45,8 @@ module Offer =
     let private rings session =
         Session.sounding (Session.play session) |> List.map rung
 
-    /// The hand, moved with the arrows or with `wasd`, and the space bar to press what it is on.
-    /// Every one of them is a line the game reads, so nothing can be pressed here that could not
-    /// have been typed.
+    /// The hand, moved with the arrows or `wasd`, space to press what it is on. Every one of these
+    /// is a line the game reads, so nothing can be pressed that could not have been typed.
     let private pressed (key: System.ConsoleKeyInfo) =
         match key.Key with
         | System.ConsoleKey.UpArrow
@@ -109,8 +99,8 @@ module Offer =
           if List.length (List.distinct Facing.all) <> List.length Facing.all then
               yield "the same facing listed twice"
 
-          // Every way out of a cell has to be an arm of exactly two of the four facings, or the
-          // odds of a cascade going anywhere are not what the board looks like they are.
+          // Every way out of a cell has to be an arm of exactly two of the four facings, or the odds
+          // of a cascade going anywhere are not what the board looks like they are.
           for way in Way.all do
               let reaching = Facing.all |> List.filter (Facing.reaches way) |> List.length
 
@@ -143,9 +133,8 @@ module Offer =
           if not (Board.holds dealt.At) then
               yield "a board dealt with the hand resting off the edge of it"
 
-          // The hand is dealt in the middle, so there is somewhere for it to go every way. A board
-          // that dealt it into a corner would be one where two of the four keys did nothing, and
-          // nothing above here would have any way of noticing.
+          // The hand is dealt in the middle so there is somewhere for it to go every way. Dealt into
+          // a corner, two of the four keys would do nothing and nothing above here would notice.
           for way in Way.all do
               if Session.pushed way dealt = dealt.At then
                   yield $"a hand dealt against the {Words.way way} edge, with nowhere to go that way"
@@ -159,9 +148,8 @@ module Offer =
           if Session.quarter Session.Slowest <= Session.quarter Session.Fastest then
               yield "a slowest notch that is not slower than the fastest one"
 
-          // What a reader hears and what a reader sees have to say the same thing. The rules
-          // decide which occasions strike the board and the table decides which sounds are worth
-          // its one bell, and neither can see the other - so the two lists are held up against
+          // The rules decide which occasions strike the board and the table decides which sounds are
+          // worth its one bell, and neither can see the other - so the two lists are held up against
           // each other here, where both are in reach.
           for occasion in [ Landing; Squared; Lined; Resting; Ending ] do
               if Session.strikes occasion <> Sound.worthABell (rung occasion) then

@@ -23,12 +23,9 @@ module Ink =
     [<Literal>]
     let Lit = "lit"
 
-    /// The four ways of drawing an elbow, a step of wear apiece.
-    ///
-    /// They differ in the weight of the line and not only in its colour, and that is the point:
-    /// a board drawn in plain text has no colour at all, and a player reading one still has to
-    /// be able to see which cells have been round the most. Each string runs in the order
-    /// `Facing.all` does, so the glyph is looked up by where the facing sits in that list.
+    /// The four ways of drawing an elbow, a step of wear apiece. They differ in the weight of the
+    /// line and not only its colour, so a board drawn in plain text still shows which cells have
+    /// been round the most. Each string runs in `Facing.all` order, and is indexed by it.
     let private steps = [ "└┌┐┘"; "╰╭╮╯"; "┗┏┓┛"; "╚╔╗╝" ]
 
     let private stepped wear =
@@ -38,11 +35,9 @@ module Ink =
         let step = stepped wear
         string step[Facing.all |> List.findIndex ((=) facing)]
 
-    /// A cell caught half way through its turn.
-    ///
-    /// There is no box-drawing character for an elbow at forty-five degrees, so what is drawn
-    /// instead is the way its corner is pointing - which is the arm it is turning its first arm
-    /// onto. It reads as motion rather than as a shape, which is what it is.
+    /// A cell caught half way through its turn. There is no box-drawing character for an elbow at
+    /// forty-five degrees, so what is drawn instead is the way its corner points - which reads as
+    /// motion rather than as a shape, and motion is what it is.
     let private pointing =
         function
         | North -> "^"
@@ -52,9 +47,8 @@ module Ink =
 
     let turning facing = pointing (Facing.halfway facing)
 
-    /// Which slot a cell of that much wear is drawn in. The names are steps of a fire rather
-    /// than shades of one colour, because a player who has recoloured them should still be able
-    /// to tell four of them apart.
+    /// Which slot a cell of that much wear is drawn in. The names are steps of a fire rather than
+    /// shades of one colour, so a player who has recoloured them can still tell four apart.
     let wornBy wear =
         match max wear 0 with
         | 0 -> Elbow

@@ -9,8 +9,7 @@ type World =
         Behind: Cells list
         Generation: int
         /// Whether the rule is running of its own accord. The clock beats either way; a world that
-        /// is not running answers a beat with nothing at all, which the engine leaves out of the
-        /// record.
+        /// is not running answers a beat with nothing, which the engine leaves out of the record.
         Running: bool
         /// How fast it is wanted, from 1 to 9. What a notch is worth in time is `Offer`'s.
         Speed: int

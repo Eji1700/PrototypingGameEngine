@@ -31,10 +31,8 @@ let private errand game sitters doing =
     | Leaving(Some model, stamp) -> if Journal.isEmpty model.Journal then [] else write model stamp true
     | Leaving(None, _) -> []
 
-/// A terminal has one bell, so a batch of posts that a board rang three times over rings once:
-/// three bells in a beat is a noise rather than a sound, and this is the one place that knows how
-/// many posts came out of a single move. A tap is not worth one at all - `mute` at the table and
-/// the Audio setting are the two ways to have none of them.
+/// A terminal has one bell, so a batch of posts that a board rang three times over rings once -
+/// this is the only place that knows how many posts came out of a single move.
 let private tell rings posts =
     let heard =
         posts
@@ -85,18 +83,15 @@ let rec private loop rings sitters said solo =
     | null -> heard "quit"
     | line -> heard line
 
-/// Playing a game that runs on a clock at this keyboard, drawn over itself as it goes.
-///
-/// The loop waits for a keypress, the next frame or the next beat, whichever comes first. Holding
-/// stops the clock by waiting a day instead of an interval, and only while it is held - or the game
-/// is over - are the notes and the list of commands drawn, since a board redrawn several times a
-/// second has no room for them and nobody could read them anyway.
+/// Playing a game that runs on a clock at this keyboard, drawn over itself as it goes. The loop
+/// waits for a keypress, the next frame or the next beat, whichever comes first; holding stops the
+/// clock by waiting a day instead of an interval.
 ///
 /// A beat is a move and a frame is not. `Solo.beaten` folds a beat into the model; a frame folds
-/// nothing, and the only thing that differs between one frame and the next is how far through the
-/// beat `Margins.Phase` says the drawing is. So a game that has nothing moving between its beats
-/// asks for no frames and this is the loop it always was, and a game that does gets the in-between
-/// pictures without a single one of them reaching the timeline or the record.
+/// nothing, and all that differs between two frames is how far through the beat `Margins.Phase`
+/// says the drawing is. So a game with nothing moving between beats asks for no frames and this is
+/// the loop it always was, and one that does gets its in-between pictures without any of them
+/// reaching the timeline or the record.
 let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
     let show lines =
         for line in lines do
@@ -104,11 +99,8 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
 
     // A game gets first refusal on every key but the two this loop cannot give up: Enter opens the
     // line prompt and Escape puts the game down, and a game that could take those could leave
-    // somebody at a board with no way out of it. Everything else is the game's if it wants it,
-    // which is what lets one game steer with the space bar and another hold the clock with it.
-    //
-    // `h` holds as well as the space bar always does, so a game that takes the space bar does not
-    // cost a player the one key that stops the clock.
+    // somebody at a board with no way out. `h` holds as well as the space bar always does, so a
+    // game that takes the space bar does not cost a player the one key that stops the clock.
     let (|Typing|Holding|Restarting|Leaving'|Steering|Idle|) (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> Typing
@@ -136,14 +128,13 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         let standing = Model.state (Solo.model solo)
         let now = DateTime.UtcNow
 
-        // How far this drawing is between the last beat and the next. Held, or over, it is pinned
-        // at the beat: a board nobody is going to move again should not be caught mid-stride.
+        // How far this drawing is between the last beat and the next. Held or over, it is pinned at
+        // the beat - a board nobody is going to move again should not be caught mid-stride.
         let phase = if still then 0.0 else Pulse.phase since due now
 
-        // The notes and the list of commands go while the board is moving: at three beats a second
-        // there is no room for them and nobody could read them anyway. The log does not go with
-        // them - what the game has just said is the one thing somebody watching a board move
-        // actually wants - so it follows what that player asked for and nothing else.
+        // The notes and the list of commands go while the board is moving, since at three beats a
+        // second nobody could read them. The log stays, because what the game has just said is the
+        // one thing somebody watching a board move actually wants.
         let showing =
             (if still then
                  wanted
@@ -167,16 +158,15 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
 
         let drawn = Screens.redrawn drawn screen
 
-        // `drawn` is passed in rather than taken from above, because the one caller that wipes the
-        // terminal first has to say so: a screen that came out identical would otherwise not be
-        // written at all, and the player would be left looking at the blank it was cleared to.
+        // `drawn` is passed in rather than taken from above so the one caller that wipes the
+        // terminal first can say so - an identical screen is not written again, which would leave
+        // the player looking at the blank it was cleared to.
         let heard holding drawn since due line solo =
             let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
             let answered = tell rings posts @ errand (Solo.game solo) sitters doing
 
-            // What the player asked for, whether or not the clock is running - the margins this
-            // loop imposes on a moving board are never written into their choice, so there is
-            // nothing here that could overwrite it.
+            // What the player asked for, running clock or not: the margins this loop imposes on a
+            // moving board are never written back into their choice.
             let wanted = Solo.margins Keyboard next |> Option.defaultValue wanted
 
             match doing with
@@ -190,8 +180,8 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             let now = DateTime.UtcNow
             now, now + pulse.Every(Model.state (Solo.model solo))
 
-        // The next thing worth waking for. Frames are asked for from where the game stands, so a
-        // board with nothing moving on it asks for none and this waits for the beat itself.
+        // Frames are asked for from where the game stands, so a board with nothing moving on it
+        // asks for none and this waits for the beat itself.
         let waiting =
             if still then now + TimeSpan.FromDays 1.0 else Pulse.waking (pulse.Frames standing) since due now
 
@@ -251,7 +241,7 @@ let private takeUp game path =
 
     Transcript.takenUp elsewhere game path
     |> Result.map (fun (model, sitters, stamp, moves) ->
-        printfn "Took up %d move(s) from %s." moves path
+        printfn "Took up %s from %s." (if moves = 1 then "1 move" else $"{moves} moves") path
         printfn "Take them back with 'undo', or read them with 'history'."
         model, sitters, stamp)
 

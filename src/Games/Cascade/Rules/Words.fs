@@ -60,10 +60,10 @@ module Words =
     let private settling (run: Run) =
         let whole =
             match run.Made with
-            | [] -> ""
-            | made -> $" {shapes made} came up."
+            | [] -> "."
+            | made -> $", bringing up {shapes made}."
 
-        $"The cascade from {cell run.From} came to rest after {turns run.Rotations} over {waves run.Waves}.{whole}"
+        $"The cascade from {cell run.From} came to rest after {turns run.Rotations} over {waves run.Waves}{whole}"
 
     let event =
         function
@@ -76,13 +76,13 @@ module Words =
         | Wound notch -> $"A quarter turn now takes {Session.quarter notch}ms. Notch {notch}."
         | GaveIn left -> $"Put down with {touches left} unspent."
         | GameEnded tally ->
-            $"{turns tally.Rotations} in all, over {touches tally.Touches}: {tally.Lines} whole rows and columns, and {tally.Squares} squares."
+            $"{turns tally.Rotations} in all, over {touches tally.Touches}: {tally.Lines} whole rows or columns, and {tally.Squares} squares."
 
     let rejection =
         function
-        | StillTurning turning ->
-            $"{cells turning} are still turning. Nothing may be touched until the board comes to rest - space holds the clock if you want to read it."
-        | NoneLeft -> $"No touches left. A board is worth {Session.Touches}; restart for another."
+        | StillTurning 1 -> "A cell is still turning. Nothing may be touched until the board comes to rest."
+        | StillTurning turning -> $"{turning} cells are still turning. Nothing may be touched until the board comes to rest."
+        | NoneLeft -> $"No touches left. A board is worth {Session.Touches} - 'restart' deals another."
         | NoSuchCell said ->
             $"There is no cell {cell said}. The columns run a to {Board.letters[Board.Width - 1]} and the rows 1 to {Board.Height}."
         | NoSuchSpeed said -> $"A speed of {said}? The notches run from {Session.Slowest} to {Session.Fastest}."

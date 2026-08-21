@@ -100,11 +100,10 @@ module Turn =
 
         // --- the clock ---------------------------------------------------------------------
 
-        // Nothing at all rather than a refusal, and that is what makes a stopped board cost
-        // nothing: a move the game neither took nor spoke about is left out of the record by the
-        // engine, so a clock beating over a world nobody has started writes no lines and draws
-        // no boards. The same answer serves a board that has settled or died - there is a beat
-        // every quarter of a second either way, and it has nothing to do.
+        // Nothing at all rather than a refusal, which is what makes a stopped board cost nothing:
+        // the engine leaves out a move the game neither took nor spoke about, so a clock beating
+        // over a world nobody started writes no lines and draws no boards. The same answer serves
+        // a board that has settled or died.
         | Beat when not world.Running || World.isEmpty world -> None, []
 
         | Beat ->
@@ -117,8 +116,8 @@ module Turn =
                 elif World.settled world then
                     [ Happened(Settled world.Generation) ]
                 else
-                    // The board says which generation this is and what is on it, three times a
-                    // second. A line saying the same would be a log with nothing else in it.
+                    // The board already says which generation this is, three times a second - a
+                    // line saying the same would be a log with nothing else in it.
                     []
 
         // --- and whether it is running -------------------------------------------------------

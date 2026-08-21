@@ -24,10 +24,9 @@ module Render =
             $"A cell is drawn a step heavier for every {Session.PerStep} turns it has made, so the ground a cascade keeps coming back over shows."
 
 
-    /// How many pictures a turning cell is drawn as across one beat: where it was, its corner
-    /// half way round, and where it is going. Which of them is `Margins.Phase`, and a reader
-    /// with no frame clock behind it is handed the first of the three every time - which is
-    /// right, because such a reader never sees the turn, only the board before it and after.
+    /// How many pictures a turning cell is drawn as across one beat: where it was, its corner half
+    /// way round, and where it is going. A reader with no frame clock behind it is handed the first
+    /// every time, which is right - it never sees the turn, only the board before and after.
     [<Literal>]
     let Pictures = 3
 
@@ -44,27 +43,21 @@ module Render =
             match play.Run with
             | Some run when run.Halted ->
                 $"{where} - the cascade from {Words.cell run.From} was stopped at {Words.turns run.Rotations}"
-            | Some run -> $"{where} - the cascade from {Words.cell run.From} came to {Words.turns run.Rotations}"
+            | Some run -> $"{where} - the cascade from {Words.cell run.From} ran to {Words.turns run.Rotations}"
             | None -> $"{where} - nothing has been touched yet"
 
 
-    /// Where in a lit shape the light has got to.
-    ///
-    /// It runs along the shape a cell a frame and is three cells wide, so a whole row takes
-    /// about as long as three beats to light from end to end and a square blinks. Beats and
-    /// frames are counted together, which is what makes the light go on travelling across a
-    /// beat boundary rather than starting again at each one.
+    /// Where in a lit shape the light has got to. It runs a cell a frame and is three cells wide,
+    /// so a whole row takes about three beats end to end and a square blinks. Beats and frames are
+    /// counted together, so the light travels on across a beat boundary rather than starting again.
     let private lighting margins play (lit: Lit) index =
         let head = (play.Wave - lit.Since) * Pictures + Margins.frame Pictures margins
 
         index <= head && head < index + 3
 
-    /// The visual bell: a band of light run down the whole board, four rows deep, crossing it in
-    /// about three beats.
-    ///
-    /// It is what `plain` has instead of hearing the bell, which is why the row *labels* are
-    /// marked as well as the cells being coloured - a reader with no colour at all still sees the
-    /// band travel down the edge of the board.
+    /// The visual bell: a band of light four rows deep, crossing the board in about three beats.
+    /// The row *labels* are marked as well as the cells coloured, so a reader with no colour at all
+    /// still sees the band travel down the edge of the board.
     let private strikes margins play row =
         match Session.struck Pictures (Margins.frame Pictures margins) play with
         | Some head -> row - 1 <= head && head < row + 3
@@ -79,18 +72,16 @@ module Render =
             |> Option.map (fun index -> lit, index))
 
 
-    /// One cell, as it is at this instant.
-    ///
-    /// The moods are for a page, which is sent the board once a beat and animates the turn
-    /// itself out of the game's own stylesheet; the glyph is for a terminal, which is sent the
-    /// board several times a beat and is shown the turn a picture at a time. Both are drawn from
-    /// the same state, so neither can show the board something the other does not.
+    /// One cell, as it is at this instant. The moods are for a page, which is sent the board once a
+    /// beat and animates the turn out of the game's own stylesheet; the glyph is for a terminal,
+    /// which is sent the board several times a beat and shown the turn a picture at a time. Both
+    /// are drawn from the same state, so neither can show what the other does not.
     let private speck margins play cell =
         let standing = Session.standing cell play
         let wear = Session.wear cell play
 
-        // A page can ring a cell without taking anything away from it, so it is told where the
-        // hand is as well; a terminal is told on the edges of the board instead.
+        // A page can ring a cell without taking anything away from it, so it is told where the hand
+        // is; a terminal is told on the edges of the board instead.
         let under = if cell = play.At then [ "at" ] else []
 
         let struck = if strikes margins play cell.Row then [ "struck" ] else []
@@ -114,9 +105,9 @@ module Render =
             |> Speck.doing ([ "lit"; $"lit-{index % Board.Width}"; $"wear-{wear}" ] @ under)
         | None ->
 
-        // A cell that landed on the beat the board is standing on is shown in the turning ink for
-        // as long as the first picture of the beat lasts. A page inverts it outright, which a
-        // terminal has no way of doing; this is what a terminal can do and mean the same thing.
+        // A cell that just landed is shown in the turning ink for as long as the first picture of
+        // the beat lasts. A page inverts it outright, which a terminal cannot do; this is what a
+        // terminal can do and mean the same thing.
         if Session.justLanded cell play then
             let flashing = Margins.frame Pictures margins = 0
 
@@ -127,13 +118,10 @@ module Render =
         else
             Speck.slot (Ink.wornBy wear) glyph |> Speck.doing ([ $"wear-{wear}" ] @ under)
 
-    /// The board, with the hand marked on the edges of it rather than in it.
-    ///
-    /// A cell is one character wide and every one of them already means something - which way it
-    /// faces and how worn it is - so there is nowhere in the grid to put a cursor that would not
-    /// be taking a glyph away from the cell under it. The row it is on is marked down the side and
-    /// the column across the top, the way a diagram of a board marks a square, and both of those
-    /// are legible in plain text, which has no colour to fall back on.
+    /// The board, with the hand marked on the edges rather than in the grid. A cell is one
+    /// character wide and already says which way it faces and how worn it is, so a cursor in the
+    /// grid could only be a glyph taken away from the cell under it. Marking the row down the side
+    /// and the column across the top costs nothing and is legible in plain text.
     let private field margins play =
         let legend =
             Board.letters
@@ -153,17 +141,14 @@ module Render =
         )
 
 
-    /// The four things a board is counted by, this cascade and over all of them.
-    ///
-    /// Waves have no column of their own in the second place, because a wave is how long a
-    /// cascade took rather than anything it was worth, and adding them up over a whole board
-    /// would be adding up seconds and calling it a score.
+    /// The four things a board is counted by, this cascade and over all of them. Waves have no
+    /// total, because a wave is how long a cascade took rather than anything it was worth - adding
+    /// them up would be adding up seconds and calling it a score.
     let private count play =
         let mine reading = play.Run |> Option.map reading
 
-        // Padded left rather than left alone: `Aligned` lines its columns up on the left, and a
-        // column of counts read down wants its units under its units - four beside four thousand
-        // and ninety-six. Four is the width of the largest a cascade is allowed to reach.
+        // Padded left because `Aligned` lines its columns up on the left, and counts read down want
+        // units under units. Four is the width of the largest a cascade is allowed to reach.
         let shown =
             function
             | Some(number: int) -> (string number).PadLeft 4
@@ -207,12 +192,12 @@ module Render =
           "space, press", "set the cell the hand is on turning"
           "f7", "set that cell turning, wherever the hand is"
           "why f7", "what that cell would reach when it lands"
-          "faster, slower", "how long a quarter turn is given to take"
-          "speed 7", "that notch outright, from 1 to 9"
+          "faster, slower", "how long a quarter turn takes"
+          "speed 7", "go straight to that notch, from 1 to 9"
           "sound, mute", "whether this board is heard as well as read"
           "undo, redo", "walk the cascade back and forward, a wave at a time"
           "restart", "deal another board; 'restart 42' deals that one"
-          "resign", "put it down with the touches you have left unspent"
+          "resign", "put the board down with your touches unspent"
           "history", "the record so far"
           "notes", "hide the writing that explains the board"
           "commands", "hide this box"
@@ -255,13 +240,10 @@ module Render =
     let wording = Told.inWords Words.said Words.command
 
 
-    /// The log, cut down to its last few lines while the clock is running.
-    ///
-    /// A cascade says something every time a shape comes up, and a screen that grows a line every
-    /// beat is a screen that walks the board off the top of the terminal - which is the one thing
-    /// a board being watched must not do. Holding it puts the whole log back, along with the notes
-    /// and the box of commands, because a held board is one somebody is reading rather than
-    /// watching. It is the same bargain the margins make, and it is made on the same signal.
+    /// The log, cut down to its last few lines while the clock is running. A cascade says something
+    /// every time a shape comes up, and a screen that grows a line a beat walks the board off the
+    /// top of the terminal. Opening the notes or the commands puts the whole log back, on the
+    /// grounds that a board with its margins open is one being read rather than watched.
     [<Literal>]
     let private Lately = 3
 
@@ -271,12 +253,9 @@ module Render =
         else
             lines |> List.skip (max 0 (List.length lines - Lately))
 
-    /// The board on the left and everything counted on the right.
-    ///
-    /// Side by side rather than stacked, because a board sixteen deep with three boxes under it is
-    /// taller than a terminal, and a clock that redraws a screen taller than its window scrolls the
-    /// board off the top of it. What is beside the board is what a player watching one wants to
-    /// read without looking away from it.
+    /// The board on the left and everything counted on the right. Side by side rather than stacked,
+    /// because a board sixteen deep with three boxes under it is taller than a terminal - and a
+    /// clock redrawing a screen taller than its window scrolls the board off the top of it.
     let board margins _ (model: Model<Move, Session, Notice>) =
         let play = Session.play (Model.state model)
 
@@ -331,7 +310,15 @@ module Render =
 
             Block(
                 $"Cell {Words.cell cell}",
-                [ Scene.says $"{Words.cell cell} is {Words.facing standing.Facing}, and has turned {Words.turns standing.Turned}."
+                [ Scene.says (
+                      let far =
+                          match standing.Turned with
+                          | 0 -> "has not turned yet"
+                          | 1 -> "has turned once"
+                          | turned -> $"has turned {Words.turns turned}"
+
+                      $"{Words.cell cell} is {Words.facing standing.Facing}, and {far}."
+                  )
                   Scene.says $"A quarter to the right would leave it {Words.facing landing}."
                   yield! reaching |> List.map (said >> Scene.says)
                   Scene.quietly (
@@ -351,13 +338,10 @@ module Render =
     let waiting = Scene.waiting Words.seated
 
 
-    /// What a page needs that no general reader could know: how to turn a cell that is turning.
-    ///
-    /// The board is sent once a beat, and everything between two of them is done here - the
-    /// browser rotates the glyph through its quarter, flashes the cell that has just landed, and
-    /// runs the light along a shape that has come up. `--turn` is set from the notch the game is
-    /// running at, so winding the clock winds the animation with it; the cells carry the notch as
-    /// a mood because the sheet is written once and the notch is not known until the board is.
+    /// What a page needs that no general reader could know: how to turn a cell that is turning. The
+    /// board is sent once a beat and everything between two of them is done here. `--turn` follows
+    /// the notch the game is running at, so winding the clock winds the animation with it; the
+    /// cells carry the notch as a mood because the sheet is written before any notch is known.
     let private sheet =
         let paces =
             [ for notch in Session.Slowest .. Session.Fastest -> $".speck.pace-{notch} {{ --turn: {Session.quarter notch}ms; }}" ]

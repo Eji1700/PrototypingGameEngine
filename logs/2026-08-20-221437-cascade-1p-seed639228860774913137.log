@@ -1,0 +1,2297 @@
+# A Cascade game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program.
+#
+#   dotnet run -- cascade replay <this file>
+
+deal 1 639228860774913137 you
+
+#   1  turn 1, The hand
+right
+
+#   2  turn 1, The hand
+right
+
+#   3  turn 1, The hand
+right
+
+#   4  turn 1, The hand
+right
+
+#   5  turn 1, The hand
+left
+
+#   6  turn 1, The hand
+left
+
+#   7  turn 1, The hand
+left
+
+#   8  turn 1, The hand
+down
+
+#   9  turn 1, The hand
+up
+
+#  10  turn 1, The hand
+down
+
+#  11  turn 1, The hand
+left
+
+#  12  turn 1, The hand
+right
+
+#  13  turn 1, The hand
+press
+#      i9 begins turning.
+
+#  14  turn 2, The hand
+beat
+#      The cascade from i9 came to rest after 1 turn over 1 wave.
+
+#  15  turn 2, The hand
+beat
+
+#  16  turn 2, The hand
+beat
+
+#  17  turn 2, The hand
+beat
+
+#  18  turn 2, The hand
+left
+
+#  19  turn 2, The hand
+press
+#      h9 begins turning.
+
+#  20  turn 3, The hand
+beat
+
+#  21  turn 3, The hand
+beat
+
+#  22  turn 3, The hand
+beat
+
+#  23  turn 3, The hand
+beat
+
+#  24  turn 3, The hand
+beat
+
+#  25  turn 3, The hand
+beat
+
+#  26  turn 3, The hand
+beat
+#      the square at e8 has turned over, 9 turns in.
+
+#  27  turn 3, The hand
+beat
+#      the square at d8 has turned over, 11 turns in.
+
+#  28  turn 3, The hand
+beat
+
+#  29  turn 3, The hand
+beat
+
+#  30  turn 3, The hand
+beat
+#      the square at d7 has turned over, 15 turns in.
+
+#  31  turn 3, The hand
+beat
+#      The cascade from h9 came to rest after 16 turns over 12 waves. the square at e8, the square at d8, the square at d7 came up.
+
+#  32  turn 3, The hand
+beat
+
+#  33  turn 3, The hand
+beat
+
+#  34  turn 3, The hand
+beat
+
+#  35  turn 3, The hand
+up
+
+#  36  turn 3, The hand
+up
+
+#  37  turn 3, The hand
+up
+
+#  38  turn 3, The hand
+up
+
+#  39  turn 3, The hand
+up
+
+#  40  turn 3, The hand
+down
+
+#  41  turn 3, The hand
+right
+
+#  42  turn 3, The hand
+right
+
+#  43  turn 3, The hand
+right
+
+#  44  turn 3, The hand
+left
+
+#  45  turn 3, The hand
+left
+
+#  46  turn 3, The hand
+press
+#      i5 begins turning.
+
+#  47  turn 4, The hand
+beat
+
+#  48  turn 4, The hand
+beat
+
+#  49  turn 4, The hand
+beat
+#      the square at i5 has turned over, 7 turns in.
+
+#  50  turn 4, The hand
+beat
+#      the square at i4 has turned over, 10 turns in.
+
+#  51  turn 4, The hand
+beat
+#      the square at h5 has turned over, 13 turns in.
+
+#  52  turn 4, The hand
+beat
+#      the square at g5 has turned over, 15 turns in.
+
+#  53  turn 4, The hand
+beat
+#      the square at f5 has turned over, 18 turns in.
+
+#  54  turn 4, The hand
+beat
+
+#  55  turn 4, The hand
+beat
+#      the square at f4 has turned over, 26 turns in.
+
+#  56  turn 4, The hand
+beat
+#      the square at e5 has turned over, 31 turns in.
+#      the square at f6 has turned over, 31 turns in.
+
+#  57  turn 4, The hand
+beat
+#      the square at f7 has turned over, 36 turns in.
+
+#  58  turn 4, The hand
+beat
+#      the square at e4 has turned over, 40 turns in.
+
+#  59  turn 4, The hand
+beat
+#      the square at e6 has turned over, 46 turns in.
+
+#  60  turn 4, The hand
+beat
+#      the square at e7 has turned over, 54 turns in.
+
+#  61  turn 4, The hand
+beat
+#      the square at f8 has turned over, 62 turns in.
+
+#  62  turn 4, The hand
+beat
+
+#  63  turn 4, The hand
+beat
+#      the square at e8 has turned over, 79 turns in.
+
+#  64  turn 4, The hand
+beat
+#      the square at i3 has turned over, 87 turns in.
+
+#  65  turn 4, The hand
+beat
+#      the square at i2 has turned over, 95 turns in.
+
+#  66  turn 4, The hand
+beat
+#      the square at f2 has turned over, 104 turns in.
+#      the square at g2 has turned over, 104 turns in.
+#      the square at h2 has turned over, 104 turns in.
+#      the square at f3 has turned over, 104 turns in.
+#      the square at b7 has turned over, 104 turns in.
+
+#  67  turn 4, The hand
+beat
+#      the square at g8 has turned over, 113 turns in.
+#      the square at h8 has turned over, 113 turns in.
+
+#  68  turn 4, The hand
+beat
+#      the square at h9 has turned over, 124 turns in.
+
+#  69  turn 4, The hand
+beat
+#      the square at g3 has turned over, 136 turns in.
+#      the square at h3 has turned over, 136 turns in.
+#      the square at g4 has turned over, 136 turns in.
+#      the square at h4 has turned over, 136 turns in.
+#      the square at c7 has turned over, 136 turns in.
+#      the square at d7 has turned over, 136 turns in.
+#      the square at b8 has turned over, 136 turns in.
+
+#  70  turn 4, The hand
+beat
+#      the square at g6 has turned over, 150 turns in.
+#      the square at h6 has turned over, 150 turns in.
+#      the square at g7 has turned over, 150 turns in.
+#      the square at h7 has turned over, 150 turns in.
+
+#  71  turn 4, The hand
+beat
+#      the square at f1 has turned over, 166 turns in.
+#      the square at g1 has turned over, 166 turns in.
+
+#  72  turn 4, The hand
+beat
+#      the square at c8 has turned over, 181 turns in.
+#      the square at d8 has turned over, 181 turns in.
+#      the square at a9 has turned over, 181 turns in.
+
+#  73  turn 4, The hand
+beat
+
+#  74  turn 4, The hand
+beat
+#      the square at b9 has turned over, 208 turns in.
+#      the square at b10 has turned over, 208 turns in.
+
+#  75  turn 4, The hand
+beat
+#      the square at c9 has turned over, 222 turns in.
+
+#  76  turn 4, The hand
+beat
+#      the square at i6 has turned over, 235 turns in.
+#      the square at i7 has turned over, 235 turns in.
+#      the square at b11 has turned over, 235 turns in.
+
+#  77  turn 4, The hand
+beat
+#      the square at j3 has turned over, 250 turns in.
+#      the square at k3 has turned over, 250 turns in.
+#      the square at l3 has turned over, 250 turns in.
+#      the square at b12 has turned over, 250 turns in.
+
+#  78  turn 4, The hand
+beat
+#      the square at i8 has turned over, 269 turns in.
+#      the square at i9 has turned over, 269 turns in.
+#      the square at c10 has turned over, 269 turns in.
+#      the square at c11 has turned over, 269 turns in.
+#      the square at c12 has turned over, 269 turns in.
+
+#  79  turn 4, The hand
+beat
+#      the square at e3 has turned over, 290 turns in.
+#      the square at j4 has turned over, 290 turns in.
+#      the square at k4 has turned over, 290 turns in.
+#      the square at l4 has turned over, 290 turns in.
+#      the square at d11 has turned over, 290 turns in.
+#      the square at a12 has turned over, 290 turns in.
+
+#  80  turn 4, The hand
+beat
+#      the square at e1 has turned over, 309 turns in.
+#      the square at e2 has turned over, 309 turns in.
+#      the square at m3 has turned over, 309 turns in.
+#      the square at m4 has turned over, 309 turns in.
+#      the square at j5 has turned over, 309 turns in.
+#      the square at k5 has turned over, 309 turns in.
+#      the square at j6 has turned over, 309 turns in.
+#      the square at d9 has turned over, 309 turns in.
+#      the square at d10 has turned over, 309 turns in.
+#      the square at b13 has turned over, 309 turns in.
+
+#  81  turn 4, The hand
+beat
+#      the square at b14 has turned over, 331 turns in.
+
+#  82  turn 4, The hand
+beat
+#      the square at l5 has turned over, 349 turns in.
+#      the square at k6 has turned over, 349 turns in.
+#      the square at j7 has turned over, 349 turns in.
+#      the square at e11 has turned over, 349 turns in.
+#      the square at a13 has turned over, 349 turns in.
+
+#  83  turn 4, The hand
+beat
+#      the square at n3 has turned over, 368 turns in.
+#      the square at m5 has turned over, 368 turns in.
+#      the square at k7 has turned over, 368 turns in.
+#      the square at j8 has turned over, 368 turns in.
+#      the square at e9 has turned over, 368 turns in.
+#      the square at e10 has turned over, 368 turns in.
+#      the square at h10 has turned over, 368 turns in.
+#      the square at i10 has turned over, 368 turns in.
+#      the square at a14 has turned over, 368 turns in.
+
+#  84  turn 4, The hand
+beat
+#      the square at k8 has turned over, 386 turns in.
+#      the square at j9 has turned over, 386 turns in.
+#      the square at j10 has turned over, 386 turns in.
+#      the square at b15 has turned over, 386 turns in.
+
+#  85  turn 4, The hand
+beat
+#      the square at k9 has turned over, 406 turns in.
+#      the square at i11 has turned over, 406 turns in.
+
+#  86  turn 4, The hand
+beat
+#      the square at o3 has turned over, 425 turns in.
+#      the square at f9 has turned over, 425 turns in.
+#      the square at g9 has turned over, 425 turns in.
+#      the square at f10 has turned over, 425 turns in.
+#      the square at g10 has turned over, 425 turns in.
+#      the square at k10 has turned over, 425 turns in.
+
+#  87  turn 4, The hand
+beat
+#      the square at n4 has turned over, 446 turns in.
+
+#  88  turn 4, The hand
+beat
+#      the square at o4 has turned over, 468 turns in.
+#      the square at n5 has turned over, 468 turns in.
+#      the square at j11 has turned over, 468 turns in.
+
+#  89  turn 4, The hand
+beat
+#      the square at o5 has turned over, 486 turns in.
+
+#  90  turn 4, The hand
+beat
+
+#  91  turn 4, The hand
+beat
+
+#  92  turn 4, The hand
+beat
+
+#  93  turn 4, The hand
+beat
+
+#  94  turn 4, The hand
+beat
+#      the square at o1 has turned over, 578 turns in.
+#      the square at o2 has turned over, 578 turns in.
+
+#  95  turn 4, The hand
+beat
+#      the square at n1 has turned over, 596 turns in.
+#      the square at n2 has turned over, 596 turns in.
+
+#  96  turn 4, The hand
+beat
+#      the square at m1 has turned over, 615 turns in.
+#      the square at m2 has turned over, 615 turns in.
+
+#  97  turn 4, The hand
+beat
+
+#  98  turn 4, The hand
+beat
+
+#  99  turn 4, The hand
+beat
+
+# 100  turn 4, The hand
+beat
+
+# 101  turn 4, The hand
+beat
+
+# 102  turn 4, The hand
+beat
+
+# 103  turn 4, The hand
+beat
+
+# 104  turn 4, The hand
+beat
+
+# 105  turn 4, The hand
+beat
+
+# 106  turn 4, The hand
+beat
+
+# 107  turn 4, The hand
+beat
+
+# 108  turn 4, The hand
+beat
+
+# 109  turn 4, The hand
+beat
+
+# 110  turn 4, The hand
+beat
+
+# 111  turn 4, The hand
+beat
+
+# 112  turn 4, The hand
+beat
+
+# 113  turn 4, The hand
+beat
+
+# 114  turn 4, The hand
+beat
+
+# 115  turn 4, The hand
+beat
+
+# 116  turn 4, The hand
+beat
+
+# 117  turn 4, The hand
+beat
+
+# 118  turn 4, The hand
+beat
+
+# 119  turn 4, The hand
+beat
+
+# 120  turn 4, The hand
+beat
+
+# 121  turn 4, The hand
+beat
+
+# 122  turn 4, The hand
+beat
+
+# 123  turn 4, The hand
+beat
+
+# 124  turn 4, The hand
+beat
+
+# 125  turn 4, The hand
+beat
+
+# 126  turn 4, The hand
+beat
+#      The cascade from i5 came to rest after 851 turns over 80 waves. the square at i5, the square at i4, the square at h5, the square at g5, the square at f5, the square at f4, the square at e5, the square at f6, the square at f7, the square at e4, the square at e6, the square at e7, the square at f8, the square at e8, the square at i3, the square at i2, the square at f2, the square at g2, the square at h2, the square at f3, the square at b7, the square at g8, the square at h8, the square at h9, the square at g3, the square at h3, the square at g4, the square at h4, the square at c7, the square at d7, the square at b8, the square at g6, the square at h6, the square at g7, the square at h7, the square at f1, the square at g1, the square at c8, the square at d8, the square at a9, the square at b9, the square at b10, the square at c9, the square at i6, the square at i7, the square at b11, the square at j3, the square at k3, the square at l3, the square at b12, the square at i8, the square at i9, the square at c10, the square at c11, the square at c12, the square at e3, the square at j4, the square at k4, the square at l4, the square at d11, the square at a12, the square at e1, the square at e2, the square at m3, the square at m4, the square at j5, the square at k5, the square at j6, the square at d9, the square at d10, the square at b13, the square at b14, the square at l5, the square at k6, the square at j7, the square at e11, the square at a13, the square at n3, the square at m5, the square at k7, the square at j8, the square at e9, the square at e10, the square at h10, the square at i10, the square at a14, the square at k8, the square at j9, the square at j10, the square at b15, the square at k9, the square at i11, the square at o3, the square at f9, the square at g9, the square at f10, the square at g10, the square at k10, the square at n4, the square at o4, the square at n5, the square at j11, the square at o5, the square at o1, the square at o2, the square at n1, the square at n2, the square at m1, the square at m2 came up.
+
+# 127  turn 4, The hand
+beat
+
+# 128  turn 4, The hand
+beat
+
+# 129  turn 4, The hand
+beat
+
+# 130  turn 4, The hand
+up
+
+# 131  turn 4, The hand
+down
+
+# 132  turn 4, The hand
+down
+
+# 133  turn 4, The hand
+down
+
+# 134  turn 4, The hand
+down
+
+# 135  turn 4, The hand
+down
+
+# 136  turn 4, The hand
+down
+
+# 137  turn 4, The hand
+down
+
+# 138  turn 4, The hand
+down
+
+# 139  turn 4, The hand
+up
+
+# 140  turn 4, The hand
+right
+
+# 141  turn 4, The hand
+right
+
+# 142  turn 4, The hand
+right
+
+# 143  turn 4, The hand
+right
+
+# 144  turn 4, The hand
+right
+
+# 145  turn 4, The hand
+right
+
+# 146  turn 4, The hand
+press
+#      o11 begins turning.
+
+# 147  turn 5, The hand
+beat
+
+# 148  turn 5, The hand
+beat
+
+# 149  turn 5, The hand
+beat
+
+# 150  turn 5, The hand
+beat
+
+# 151  turn 5, The hand
+beat
+#      the square at n9 has turned over, 8 turns in.
+
+# 152  turn 5, The hand
+beat
+#      the square at o9 has turned over, 11 turns in.
+
+# 153  turn 5, The hand
+beat
+
+# 154  turn 5, The hand
+beat
+#      the square at m9 has turned over, 19 turns in.
+
+# 155  turn 5, The hand
+beat
+
+# 156  turn 5, The hand
+beat
+
+# 157  turn 5, The hand
+beat
+#      the square at n7 has turned over, 33 turns in.
+#      the square at n8 has turned over, 33 turns in.
+
+# 158  turn 5, The hand
+beat
+
+# 159  turn 5, The hand
+beat
+
+# 160  turn 5, The hand
+beat
+#      the square at m6 has turned over, 45 turns in.
+#      the square at m10 has turned over, 45 turns in.
+#      the square at n10 has turned over, 45 turns in.
+
+# 161  turn 5, The hand
+beat
+#      the square at l6 has turned over, 51 turns in.
+#      the square at n11 has turned over, 51 turns in.
+
+# 162  turn 5, The hand
+beat
+#      the square at k6 has turned over, 55 turns in.
+
+# 163  turn 5, The hand
+beat
+#      the square at m5 has turned over, 60 turns in.
+#      the square at j6 has turned over, 60 turns in.
+
+# 164  turn 5, The hand
+beat
+#      the square at l5 has turned over, 65 turns in.
+
+# 165  turn 5, The hand
+beat
+
+# 166  turn 5, The hand
+beat
+#      the square at m4 has turned over, 74 turns in.
+
+# 167  turn 5, The hand
+beat
+#      the square at l4 has turned over, 80 turns in.
+#      the square at k5 has turned over, 80 turns in.
+
+# 168  turn 5, The hand
+beat
+
+# 169  turn 5, The hand
+beat
+
+# 170  turn 5, The hand
+beat
+#      the square at k4 has turned over, 93 turns in.
+
+# 171  turn 5, The hand
+beat
+
+# 172  turn 5, The hand
+beat
+
+# 173  turn 5, The hand
+beat
+
+# 174  turn 5, The hand
+beat
+#      the square at j4 has turned over, 98 turns in.
+#      the square at j5 has turned over, 98 turns in.
+
+# 175  turn 5, The hand
+beat
+
+# 176  turn 5, The hand
+beat
+
+# 177  turn 5, The hand
+beat
+#      the square at i4 has turned over, 105 turns in.
+
+# 178  turn 5, The hand
+beat
+
+# 179  turn 5, The hand
+beat
+
+# 180  turn 5, The hand
+beat
+#      the square at i5 has turned over, 108 turns in.
+
+# 181  turn 5, The hand
+beat
+
+# 182  turn 5, The hand
+beat
+
+# 183  turn 5, The hand
+beat
+
+# 184  turn 5, The hand
+beat
+#      The cascade from o11 came to rest after 114 turns over 38 waves. the square at n9, the square at o9, the square at m9, the square at n7, the square at n8, the square at m6, the square at m10, the square at n10, the square at l6, the square at n11, the square at k6, the square at m5, the square at j6, the square at l5, the square at m4, the square at l4, the square at k5, the square at k4, the square at j4, the square at j5, the square at i4, the square at i5 came up.
+
+# 185  turn 5, The hand
+beat
+
+# 186  turn 5, The hand
+beat
+
+# 187  turn 5, The hand
+beat
+
+# 188  turn 5, The hand
+up
+
+# 189  turn 5, The hand
+up
+
+# 190  turn 5, The hand
+up
+
+# 191  turn 5, The hand
+up
+
+# 192  turn 5, The hand
+up
+
+# 193  turn 5, The hand
+up
+
+# 194  turn 5, The hand
+up
+
+# 195  turn 5, The hand
+up
+
+# 196  turn 5, The hand
+up
+
+# 197  turn 5, The hand
+up
+
+# 198  turn 5, The hand
+right
+
+# 199  turn 5, The hand
+left
+
+# 200  turn 5, The hand
+left
+
+# 201  turn 5, The hand
+left
+
+# 202  turn 5, The hand
+left
+
+# 203  turn 5, The hand
+press
+#      l1 begins turning.
+
+# 204  turn 6, The hand
+beat
+#      The cascade from l1 came to rest after 1 turn over 1 wave.
+
+# 205  turn 6, The hand
+beat
+
+# 206  turn 6, The hand
+beat
+
+# 207  turn 6, The hand
+beat
+
+# 208  turn 6, The hand
+left
+
+# 209  turn 6, The hand
+down
+
+# 210  turn 6, The hand
+down
+
+# 211  turn 6, The hand
+up
+
+# 212  turn 6, The hand
+left
+
+# 213  turn 6, The hand
+left
+
+# 214  turn 6, The hand
+left
+
+# 215  turn 6, The hand
+left
+
+# 216  turn 6, The hand
+down
+
+# 217  turn 6, The hand
+down
+
+# 218  turn 6, The hand
+left
+
+# 219  turn 6, The hand
+up
+
+# 220  turn 6, The hand
+up
+
+# 221  turn 6, The hand
+left
+
+# 222  turn 6, The hand
+left
+
+# 223  turn 6, The hand
+left
+
+# 224  turn 6, The hand
+left
+
+# 225  turn 6, The hand
+down
+
+# 226  turn 6, The hand
+down
+
+# 227  turn 6, The hand
+up
+
+# 228  turn 6, The hand
+up
+
+# 229  turn 6, The hand
+right
+
+# 230  turn 6, The hand
+press
+#      c2 begins turning.
+
+# 231  turn 7, The hand
+beat
+
+# 232  turn 7, The hand
+beat
+
+# 233  turn 7, The hand
+beat
+#      the square at c2 has turned over, 5 turns in.
+
+# 234  turn 7, The hand
+beat
+
+# 235  turn 7, The hand
+beat
+
+# 236  turn 7, The hand
+beat
+
+# 237  turn 7, The hand
+beat
+
+# 238  turn 7, The hand
+beat
+
+# 239  turn 7, The hand
+beat
+
+# 240  turn 7, The hand
+beat
+
+# 241  turn 7, The hand
+beat
+
+# 242  turn 7, The hand
+beat
+#      The cascade from c2 came to rest after 14 turns over 12 waves. the square at c2 came up.
+
+# 243  turn 7, The hand
+beat
+
+# 244  turn 7, The hand
+beat
+
+# 245  turn 7, The hand
+beat
+
+# 246  turn 7, The hand
+down
+
+# 247  turn 7, The hand
+down
+
+# 248  turn 7, The hand
+down
+
+# 249  turn 7, The hand
+up
+
+# 250  turn 7, The hand
+left
+
+# 251  turn 7, The hand
+right
+
+# 252  turn 7, The hand
+right
+
+# 253  turn 7, The hand
+press
+#      d4 begins turning.
+
+# 254  turn 8, The hand
+beat
+
+# 255  turn 8, The hand
+beat
+
+# 256  turn 8, The hand
+beat
+
+# 257  turn 8, The hand
+beat
+
+# 258  turn 8, The hand
+beat
+#      the square at b4 has turned over, 8 turns in.
+
+# 259  turn 8, The hand
+beat
+
+# 260  turn 8, The hand
+beat
+
+# 261  turn 8, The hand
+beat
+#      the square at c4 has turned over, 18 turns in.
+#      the square at b5 has turned over, 18 turns in.
+
+# 262  turn 8, The hand
+beat
+#      the square at d4 has turned over, 22 turns in.
+#      the square at c5 has turned over, 22 turns in.
+
+# 263  turn 8, The hand
+beat
+#      the square at e4 has turned over, 25 turns in.
+#      the square at d5 has turned over, 25 turns in.
+
+# 264  turn 8, The hand
+beat
+#      the square at f4 has turned over, 28 turns in.
+#      the square at e5 has turned over, 28 turns in.
+
+# 265  turn 8, The hand
+beat
+#      the square at g4 has turned over, 31 turns in.
+#      the square at f5 has turned over, 31 turns in.
+
+# 266  turn 8, The hand
+beat
+#      the square at h4 has turned over, 34 turns in.
+#      the square at g5 has turned over, 34 turns in.
+
+# 267  turn 8, The hand
+beat
+
+# 268  turn 8, The hand
+beat
+
+# 269  turn 8, The hand
+beat
+#      the square at i4 has turned over, 46 turns in.
+#      the square at g6 has turned over, 46 turns in.
+
+# 270  turn 8, The hand
+beat
+
+# 271  turn 8, The hand
+beat
+#      the square at f6 has turned over, 57 turns in.
+
+# 272  turn 8, The hand
+beat
+#      the square at g7 has turned over, 65 turns in.
+
+# 273  turn 8, The hand
+beat
+#      the square at h5 has turned over, 74 turns in.
+#      the square at h6 has turned over, 74 turns in.
+
+# 274  turn 8, The hand
+beat
+#      the square at e6 has turned over, 84 turns in.
+#      the square at f7 has turned over, 84 turns in.
+
+# 275  turn 8, The hand
+beat
+#      the square at h7 has turned over, 95 turns in.
+#      the square at g8 has turned over, 95 turns in.
+
+# 276  turn 8, The hand
+beat
+
+# 277  turn 8, The hand
+beat
+#      the square at d6 has turned over, 120 turns in.
+#      the square at f8 has turned over, 120 turns in.
+
+# 278  turn 8, The hand
+beat
+#      the square at h8 has turned over, 130 turns in.
+
+# 279  turn 8, The hand
+beat
+
+# 280  turn 8, The hand
+beat
+#      the square at c6 has turned over, 153 turns in.
+
+# 281  turn 8, The hand
+beat
+
+# 282  turn 8, The hand
+beat
+#      the square at i7 has turned over, 176 turns in.
+#      the square at i8 has turned over, 176 turns in.
+
+# 283  turn 8, The hand
+beat
+
+# 284  turn 8, The hand
+beat
+#      the square at c7 has turned over, 196 turns in.
+
+# 285  turn 8, The hand
+beat
+#      the square at j8 has turned over, 207 turns in.
+
+# 286  turn 8, The hand
+beat
+
+# 287  turn 8, The hand
+beat
+#      the square at d7 has turned over, 224 turns in.
+#      the square at e7 has turned over, 224 turns in.
+#      the square at c8 has turned over, 224 turns in.
+
+# 288  turn 8, The hand
+beat
+#      the square at j7 has turned over, 234 turns in.
+#      the square at k8 has turned over, 234 turns in.
+
+# 289  turn 8, The hand
+beat
+
+# 290  turn 8, The hand
+beat
+#      the square at d8 has turned over, 252 turns in.
+#      the square at e8 has turned over, 252 turns in.
+#      the square at c9 has turned over, 252 turns in.
+
+# 291  turn 8, The hand
+beat
+#      the square at k7 has turned over, 262 turns in.
+#      the square at l8 has turned over, 262 turns in.
+
+# 292  turn 8, The hand
+beat
+#      the square at i5 has turned over, 272 turns in.
+#      the square at i6 has turned over, 272 turns in.
+#      the square at j6 has turned over, 272 turns in.
+
+# 293  turn 8, The hand
+beat
+#      the square at d9 has turned over, 284 turns in.
+#      the square at c10 has turned over, 284 turns in.
+
+# 294  turn 8, The hand
+beat
+#      the square at k6 has turned over, 294 turns in.
+
+# 295  turn 8, The hand
+beat
+
+# 296  turn 8, The hand
+beat
+#      the square at d10 has turned over, 310 turns in.
+#      the square at c11 has turned over, 310 turns in.
+
+# 297  turn 8, The hand
+beat
+
+# 298  turn 8, The hand
+beat
+
+# 299  turn 8, The hand
+beat
+#      the square at d11 has turned over, 324 turns in.
+
+# 300  turn 8, The hand
+beat
+#      the square at e9 has turned over, 329 turns in.
+#      the square at e10 has turned over, 329 turns in.
+
+# 301  turn 8, The hand
+beat
+
+# 302  turn 8, The hand
+beat
+#      the square at e11 has turned over, 340 turns in.
+
+# 303  turn 8, The hand
+beat
+#      column c has turned over, 347 turns in.
+#      the square at f9 has turned over, 347 turns in.
+#      the square at f10 has turned over, 347 turns in.
+
+# 304  turn 8, The hand
+beat
+
+# 305  turn 8, The hand
+beat
+
+# 306  turn 8, The hand
+beat
+#      the square at g9 has turned over, 366 turns in.
+#      the square at g10 has turned over, 366 turns in.
+
+# 307  turn 8, The hand
+beat
+
+# 308  turn 8, The hand
+beat
+
+# 309  turn 8, The hand
+beat
+#      the square at h9 has turned over, 385 turns in.
+#      the square at h10 has turned over, 385 turns in.
+
+# 310  turn 8, The hand
+beat
+
+# 311  turn 8, The hand
+beat
+
+# 312  turn 8, The hand
+beat
+#      the square at i9 has turned over, 405 turns in.
+#      the square at i10 has turned over, 405 turns in.
+
+# 313  turn 8, The hand
+beat
+
+# 314  turn 8, The hand
+beat
+
+# 315  turn 8, The hand
+beat
+#      the square at j9 has turned over, 426 turns in.
+#      the square at j10 has turned over, 426 turns in.
+
+# 316  turn 8, The hand
+beat
+
+# 317  turn 8, The hand
+beat
+
+# 318  turn 8, The hand
+beat
+#      the square at k9 has turned over, 442 turns in.
+#      the square at k10 has turned over, 442 turns in.
+
+# 319  turn 8, The hand
+beat
+
+# 320  turn 8, The hand
+beat
+
+# 321  turn 8, The hand
+beat
+#      the square at l9 has turned over, 457 turns in.
+#      the square at l10 has turned over, 457 turns in.
+
+# 322  turn 8, The hand
+beat
+
+# 323  turn 8, The hand
+beat
+
+# 324  turn 8, The hand
+beat
+#      the square at m9 has turned over, 473 turns in.
+#      the square at m10 has turned over, 473 turns in.
+
+# 325  turn 8, The hand
+beat
+
+# 326  turn 8, The hand
+beat
+
+# 327  turn 8, The hand
+beat
+#      the square at n10 has turned over, 489 turns in.
+
+# 328  turn 8, The hand
+beat
+
+# 329  turn 8, The hand
+beat
+
+# 330  turn 8, The hand
+beat
+#      the square at n9 has turned over, 499 turns in.
+
+# 331  turn 8, The hand
+beat
+
+# 332  turn 8, The hand
+beat
+
+# 333  turn 8, The hand
+beat
+
+# 334  turn 8, The hand
+beat
+
+# 335  turn 8, The hand
+beat
+
+# 336  turn 8, The hand
+beat
+
+# 337  turn 8, The hand
+beat
+
+# 338  turn 8, The hand
+beat
+
+# 339  turn 8, The hand
+beat
+
+# 340  turn 8, The hand
+beat
+
+# 341  turn 8, The hand
+beat
+
+# 342  turn 8, The hand
+beat
+
+# 343  turn 8, The hand
+beat
+#      The cascade from d4 came to rest after 513 turns over 90 waves. the square at b4, the square at c4, the square at b5, the square at d4, the square at c5, the square at e4, the square at d5, the square at f4, the square at e5, the square at g4, the square at f5, the square at h4, the square at g5, the square at i4, the square at g6, the square at f6, the square at g7, the square at h5, the square at h6, the square at e6, the square at f7, the square at h7, the square at g8, the square at d6, the square at f8, the square at h8, the square at c6, the square at i7, the square at i8, the square at c7, the square at j8, the square at d7, the square at e7, the square at c8, the square at j7, the square at k8, the square at d8, the square at e8, the square at c9, the square at k7, the square at l8, the square at i5, the square at i6, the square at j6, the square at d9, the square at c10, the square at k6, the square at d10, the square at c11, the square at d11, the square at e9, the square at e10, the square at e11, column c, the square at f9, the square at f10, the square at g9, the square at g10, the square at h9, the square at h10, the square at i9, the square at i10, the square at j9, the square at j10, the square at k9, the square at k10, the square at l9, the square at l10, the square at m9, the square at m10, the square at n10, the square at n9 came up.
+
+# 344  turn 8, The hand
+beat
+
+# 345  turn 8, The hand
+beat
+
+# 346  turn 8, The hand
+beat
+
+# 347  turn 8, The hand
+down
+
+# 348  turn 8, The hand
+down
+
+# 349  turn 8, The hand
+down
+
+# 350  turn 8, The hand
+down
+
+# 351  turn 8, The hand
+down
+
+# 352  turn 8, The hand
+down
+
+# 353  turn 8, The hand
+down
+
+# 354  turn 8, The hand
+down
+
+# 355  turn 8, The hand
+down
+
+# 356  turn 8, The hand
+down
+
+# 357  turn 8, The hand
+up
+
+# 358  turn 8, The hand
+left
+
+# 359  turn 8, The hand
+left
+
+# 360  turn 8, The hand
+right
+
+# 361  turn 8, The hand
+right
+
+# 362  turn 8, The hand
+right
+
+# 363  turn 8, The hand
+right
+
+# 364  turn 8, The hand
+right
+
+# 365  turn 8, The hand
+right
+
+# 366  turn 8, The hand
+right
+
+# 367  turn 8, The hand
+press
+#      i13 begins turning.
+
+# 368  turn 9, The hand
+beat
+
+# 369  turn 9, The hand
+beat
+
+# 370  turn 9, The hand
+beat
+
+# 371  turn 9, The hand
+beat
+
+# 372  turn 9, The hand
+beat
+#      the square at i12 has turned over, 9 turns in.
+
+# 373  turn 9, The hand
+beat
+
+# 374  turn 9, The hand
+beat
+#      the square at i13 has turned over, 19 turns in.
+
+# 375  turn 9, The hand
+beat
+#      the square at i11 has turned over, 26 turns in.
+#      the square at j12 has turned over, 26 turns in.
+#      the square at i14 has turned over, 26 turns in.
+
+# 376  turn 9, The hand
+beat
+#      the square at h10 has turned over, 32 turns in.
+
+# 377  turn 9, The hand
+beat
+#      the square at g10 has turned over, 40 turns in.
+#      the square at j13 has turned over, 40 turns in.
+
+# 378  turn 9, The hand
+beat
+#      the square at i10 has turned over, 52 turns in.
+#      the square at j11 has turned over, 52 turns in.
+#      the square at k12 has turned over, 52 turns in.
+#      the square at k13 has turned over, 52 turns in.
+#      the square at j14 has turned over, 52 turns in.
+
+# 379  turn 9, The hand
+beat
+
+# 380  turn 9, The hand
+beat
+
+# 381  turn 9, The hand
+beat
+#      the square at i9 has turned over, 81 turns in.
+#      the square at j10 has turned over, 81 turns in.
+#      the square at k11 has turned over, 81 turns in.
+#      the square at j15 has turned over, 81 turns in.
+
+# 382  turn 9, The hand
+beat
+#      the square at i8 has turned over, 94 turns in.
+#      the square at g13 has turned over, 94 turns in.
+#      the square at h13 has turned over, 94 turns in.
+#      the square at l13 has turned over, 94 turns in.
+
+# 383  turn 9, The hand
+beat
+#      the square at g14 has turned over, 107 turns in.
+#      the square at h14 has turned over, 107 turns in.
+
+# 384  turn 9, The hand
+beat
+#      the square at j9 has turned over, 122 turns in.
+#      the square at k10 has turned over, 122 turns in.
+#      the square at h11 has turned over, 122 turns in.
+#      the square at h12 has turned over, 122 turns in.
+#      the square at e13 has turned over, 122 turns in.
+#      the square at f13 has turned over, 122 turns in.
+#      the square at g15 has turned over, 122 turns in.
+
+# 385  turn 9, The hand
+beat
+#      the square at j8 has turned over, 137 turns in.
+#      the square at g11 has turned over, 137 turns in.
+#      the square at g12 has turned over, 137 turns in.
+#      the square at l12 has turned over, 137 turns in.
+#      the square at h15 has turned over, 137 turns in.
+#      the square at i15 has turned over, 137 turns in.
+
+# 386  turn 9, The hand
+beat
+#      the square at d12 has turned over, 151 turns in.
+#      the square at e12 has turned over, 151 turns in.
+#      the square at f12 has turned over, 151 turns in.
+
+# 387  turn 9, The hand
+beat
+#      the square at h8 has turned over, 162 turns in.
+#      the square at h9 has turned over, 162 turns in.
+#      the square at k9 has turned over, 162 turns in.
+#      the square at e14 has turned over, 162 turns in.
+#      the square at f14 has turned over, 162 turns in.
+
+# 388  turn 9, The hand
+beat
+#      the square at l11 has turned over, 173 turns in.
+#      the square at d13 has turned over, 173 turns in.
+
+# 389  turn 9, The hand
+beat
+#      the square at e10 has turned over, 183 turns in.
+#      the square at f10 has turned over, 183 turns in.
+#      the square at e11 has turned over, 183 turns in.
+#      the square at f11 has turned over, 183 turns in.
+#      the square at c13 has turned over, 183 turns in.
+
+# 390  turn 9, The hand
+beat
+
+# 391  turn 9, The hand
+beat
+#      the square at e9 has turned over, 202 turns in.
+#      the square at l9 has turned over, 202 turns in.
+#      the square at l10 has turned over, 202 turns in.
+
+# 392  turn 9, The hand
+beat
+#      the square at e8 has turned over, 216 turns in.
+#      the square at f15 has turned over, 216 turns in.
+
+# 393  turn 9, The hand
+beat
+#      the square at e7 has turned over, 229 turns in.
+
+# 394  turn 9, The hand
+beat
+#      the square at f8 has turned over, 243 turns in.
+#      the square at g8 has turned over, 243 turns in.
+#      the square at f9 has turned over, 243 turns in.
+#      the square at g9 has turned over, 243 turns in.
+
+# 395  turn 9, The hand
+beat
+#      the square at d14 has turned over, 253 turns in.
+
+# 396  turn 9, The hand
+beat
+#      the square at c14 has turned over, 264 turns in.
+
+# 397  turn 9, The hand
+beat
+
+# 398  turn 9, The hand
+beat
+
+# 399  turn 9, The hand
+beat
+
+# 400  turn 9, The hand
+beat
+
+# 401  turn 9, The hand
+beat
+
+# 402  turn 9, The hand
+beat
+
+# 403  turn 9, The hand
+beat
+#      The cascade from i13 came to rest after 311 turns over 36 waves. the square at i12, the square at i13, the square at i11, the square at j12, the square at i14, the square at h10, the square at g10, the square at j13, the square at i10, the square at j11, the square at k12, the square at k13, the square at j14, the square at i9, the square at j10, the square at k11, the square at j15, the square at i8, the square at g13, the square at h13, the square at l13, the square at g14, the square at h14, the square at j9, the square at k10, the square at h11, the square at h12, the square at e13, the square at f13, the square at g15, the square at j8, the square at g11, the square at g12, the square at l12, the square at h15, the square at i15, the square at d12, the square at e12, the square at f12, the square at h8, the square at h9, the square at k9, the square at e14, the square at f14, the square at l11, the square at d13, the square at e10, the square at f10, the square at e11, the square at f11, the square at c13, the square at e9, the square at l9, the square at l10, the square at e8, the square at f15, the square at e7, the square at f8, the square at g8, the square at f9, the square at g9, the square at d14, the square at c14 came up.
+
+# 404  turn 9, The hand
+faster
+#      A quarter turn now takes 400ms. Notch 6.
+
+# 405  turn 9, The hand
+beat
+
+# 406  turn 9, The hand
+beat
+
+# 407  turn 9, The hand
+beat
+
+# 408  turn 9, The hand
+faster
+#      A quarter turn now takes 300ms. Notch 7.
+
+# 409  turn 9, The hand
+left
+
+# 410  turn 9, The hand
+down
+
+# 411  turn 9, The hand
+faster
+#      A quarter turn now takes 200ms. Notch 8.
+
+# 412  turn 9, The hand
+up
+
+# 413  turn 9, The hand
+up
+
+# 414  turn 9, The hand
+up
+
+# 415  turn 9, The hand
+up
+
+# 416  turn 9, The hand
+up
+
+# 417  turn 9, The hand
+up
+
+# 418  turn 9, The hand
+up
+
+# 419  turn 9, The hand
+up
+
+# 420  turn 9, The hand
+up
+
+# 421  turn 9, The hand
+up
+
+# 422  turn 9, The hand
+up
+
+# 423  turn 9, The hand
+up
+
+# 424  turn 9, The hand
+up
+
+# 425  turn 9, The hand
+right
+
+# 426  turn 9, The hand
+right
+
+# 427  turn 9, The hand
+right
+
+# 428  turn 9, The hand
+down
+
+# 429  turn 9, The hand
+press
+#      k2 begins turning.
+
+# 430  turn 10, The hand
+beat
+
+# 431  turn 10, The hand
+beat
+
+# 432  turn 10, The hand
+beat
+
+# 433  turn 10, The hand
+beat
+
+# 434  turn 10, The hand
+beat
+
+# 435  turn 10, The hand
+beat
+
+# 436  turn 10, The hand
+beat
+
+# 437  turn 10, The hand
+beat
+#      the square at j5 has turned over, 14 turns in.
+
+# 438  turn 10, The hand
+beat
+
+# 439  turn 10, The hand
+beat
+#      the square at j4 has turned over, 22 turns in.
+
+# 440  turn 10, The hand
+beat
+#      the square at i5 has turned over, 28 turns in.
+#      the square at j6 has turned over, 28 turns in.
+
+# 441  turn 10, The hand
+beat
+
+# 442  turn 10, The hand
+beat
+#      the square at j3 has turned over, 41 turns in.
+#      the square at i4 has turned over, 41 turns in.
+
+# 443  turn 10, The hand
+beat
+#      the square at h5 has turned over, 50 turns in.
+#      the square at i6 has turned over, 50 turns in.
+#      the square at j7 has turned over, 50 turns in.
+
+# 444  turn 10, The hand
+beat
+
+# 445  turn 10, The hand
+beat
+#      the square at j2 has turned over, 68 turns in.
+#      the square at i3 has turned over, 68 turns in.
+
+# 446  turn 10, The hand
+beat
+#      the square at g5 has turned over, 79 turns in.
+#      the square at h6 has turned over, 79 turns in.
+#      the square at i7 has turned over, 79 turns in.
+#      the square at j8 has turned over, 79 turns in.
+
+# 447  turn 10, The hand
+beat
+
+# 448  turn 10, The hand
+beat
+#      the square at j1 has turned over, 96 turns in.
+#      the square at i2 has turned over, 96 turns in.
+
+# 449  turn 10, The hand
+beat
+#      the square at h3 has turned over, 109 turns in.
+#      the square at h4 has turned over, 109 turns in.
+#      the square at f5 has turned over, 109 turns in.
+#      the square at g6 has turned over, 109 turns in.
+#      the square at h7 has turned over, 109 turns in.
+#      the square at i8 has turned over, 109 turns in.
+
+# 450  turn 10, The hand
+beat
+#      the square at k1 has turned over, 118 turns in.
+
+# 451  turn 10, The hand
+beat
+#      the square at i1 has turned over, 130 turns in.
+#      the square at l1 has turned over, 130 turns in.
+#      the square at h2 has turned over, 130 turns in.
+
+# 452  turn 10, The hand
+beat
+#      the square at g3 has turned over, 146 turns in.
+#      the square at g4 has turned over, 146 turns in.
+#      the square at e5 has turned over, 146 turns in.
+#      the square at f6 has turned over, 146 turns in.
+#      the square at g7 has turned over, 146 turns in.
+#      the square at h8 has turned over, 146 turns in.
+#      the square at i9 has turned over, 146 turns in.
+
+# 453  turn 10, The hand
+beat
+
+# 454  turn 10, The hand
+beat
+#      the square at h1 has turned over, 170 turns in.
+#      the square at g2 has turned over, 170 turns in.
+
+# 455  turn 10, The hand
+beat
+#      the square at f3 has turned over, 187 turns in.
+#      the square at f4 has turned over, 187 turns in.
+#      the square at e6 has turned over, 187 turns in.
+#      the square at f7 has turned over, 187 turns in.
+#      the square at g8 has turned over, 187 turns in.
+#      the square at h9 has turned over, 187 turns in.
+#      the square at i10 has turned over, 187 turns in.
+
+# 456  turn 10, The hand
+beat
+
+# 457  turn 10, The hand
+beat
+#      the square at g1 has turned over, 213 turns in.
+#      the square at f2 has turned over, 213 turns in.
+
+# 458  turn 10, The hand
+beat
+#      the square at e3 has turned over, 232 turns in.
+#      the square at e4 has turned over, 232 turns in.
+#      the square at e7 has turned over, 232 turns in.
+#      the square at f8 has turned over, 232 turns in.
+#      the square at g9 has turned over, 232 turns in.
+#      the square at h10 has turned over, 232 turns in.
+
+# 459  turn 10, The hand
+beat
+#      the square at i11 has turned over, 245 turns in.
+#      the square at i12 has turned over, 245 turns in.
+
+# 460  turn 10, The hand
+beat
+#      the square at f1 has turned over, 260 turns in.
+#      the square at e2 has turned over, 260 turns in.
+
+# 461  turn 10, The hand
+beat
+#      the square at d3 has turned over, 281 turns in.
+#      the square at d4 has turned over, 281 turns in.
+#      the square at e8 has turned over, 281 turns in.
+#      the square at f9 has turned over, 281 turns in.
+#      the square at g10 has turned over, 281 turns in.
+#      the square at h11 has turned over, 281 turns in.
+
+# 462  turn 10, The hand
+beat
+#      the square at j12 has turned over, 297 turns in.
+
+# 463  turn 10, The hand
+beat
+
+# 464  turn 10, The hand
+beat
+#      the square at e9 has turned over, 332 turns in.
+#      the square at f10 has turned over, 332 turns in.
+#      the square at g11 has turned over, 332 turns in.
+#      the square at h12 has turned over, 332 turns in.
+
+# 465  turn 10, The hand
+beat
+#      the square at j11 has turned over, 346 turns in.
+
+# 466  turn 10, The hand
+beat
+
+# 467  turn 10, The hand
+beat
+#      the square at e10 has turned over, 369 turns in.
+#      the square at f11 has turned over, 369 turns in.
+
+# 468  turn 10, The hand
+beat
+#      the square at j9 has turned over, 379 turns in.
+#      the square at j10 has turned over, 379 turns in.
+
+# 469  turn 10, The hand
+beat
+
+# 470  turn 10, The hand
+beat
+#      the square at e11 has turned over, 398 turns in.
+
+# 471  turn 10, The hand
+beat
+
+# 472  turn 10, The hand
+beat
+
+# 473  turn 10, The hand
+beat
+
+# 474  turn 10, The hand
+beat
+
+# 475  turn 10, The hand
+beat
+
+# 476  turn 10, The hand
+beat
+
+# 477  turn 10, The hand
+beat
+
+# 478  turn 10, The hand
+beat
+
+# 479  turn 10, The hand
+beat
+
+# 480  turn 10, The hand
+beat
+
+# 481  turn 10, The hand
+beat
+#      The cascade from k2 came to rest after 440 turns over 52 waves. the square at j5, the square at j4, the square at i5, the square at j6, the square at j3, the square at i4, the square at h5, the square at i6, the square at j7, the square at j2, the square at i3, the square at g5, the square at h6, the square at i7, the square at j8, the square at j1, the square at i2, the square at h3, the square at h4, the square at f5, the square at g6, the square at h7, the square at i8, the square at k1, the square at i1, the square at l1, the square at h2, the square at g3, the square at g4, the square at e5, the square at f6, the square at g7, the square at h8, the square at i9, the square at h1, the square at g2, the square at f3, the square at f4, the square at e6, the square at f7, the square at g8, the square at h9, the square at i10, the square at g1, the square at f2, the square at e3, the square at e4, the square at e7, the square at f8, the square at g9, the square at h10, the square at i11, the square at i12, the square at f1, the square at e2, the square at d3, the square at d4, the square at e8, the square at f9, the square at g10, the square at h11, the square at j12, the square at e9, the square at f10, the square at g11, the square at h12, the square at j11, the square at e10, the square at f11, the square at j9, the square at j10, the square at e11 came up.
+
+# 482  turn 10, The hand
+beat
+
+# 483  turn 10, The hand
+beat
+
+# 484  turn 10, The hand
+beat
+
+# 485  turn 10, The hand
+down
+
+# 486  turn 10, The hand
+down
+
+# 487  turn 10, The hand
+down
+
+# 488  turn 10, The hand
+down
+
+# 489  turn 10, The hand
+down
+
+# 490  turn 10, The hand
+down
+
+# 491  turn 10, The hand
+down
+
+# 492  turn 10, The hand
+down
+
+# 493  turn 10, The hand
+down
+
+# 494  turn 10, The hand
+down
+
+# 495  turn 10, The hand
+down
+
+# 496  turn 10, The hand
+right
+
+# 497  turn 10, The hand
+right
+
+# 498  turn 10, The hand
+right
+
+# 499  turn 10, The hand
+right
+
+# 500  turn 10, The hand
+press
+#      o13 begins turning.
+
+# 501  turn 11, The hand
+beat
+
+# 502  turn 11, The hand
+beat
+
+# 503  turn 11, The hand
+beat
+#      the square at n13 has turned over, 6 turns in.
+
+# 504  turn 11, The hand
+beat
+
+# 505  turn 11, The hand
+beat
+#      the square at n12 has turned over, 11 turns in.
+
+# 506  turn 11, The hand
+beat
+#      the square at m12 has turned over, 15 turns in.
+
+# 507  turn 11, The hand
+beat
+
+# 508  turn 11, The hand
+beat
+
+# 509  turn 11, The hand
+beat
+#      the square at m11 has turned over, 25 turns in.
+#      the square at l12 has turned over, 25 turns in.
+
+# 510  turn 11, The hand
+beat
+
+# 511  turn 11, The hand
+beat
+
+# 512  turn 11, The hand
+beat
+#      the square at m10 has turned over, 40 turns in.
+#      the square at l11 has turned over, 40 turns in.
+#      the square at k12 has turned over, 40 turns in.
+
+# 513  turn 11, The hand
+beat
+
+# 514  turn 11, The hand
+beat
+
+# 515  turn 11, The hand
+beat
+#      the square at l10 has turned over, 53 turns in.
+#      the square at k11 has turned over, 53 turns in.
+#      the square at j12 has turned over, 53 turns in.
+
+# 516  turn 11, The hand
+beat
+#      the square at i12 has turned over, 56 turns in.
+
+# 517  turn 11, The hand
+beat
+#      the square at h12 has turned over, 59 turns in.
+
+# 518  turn 11, The hand
+beat
+#      the square at k10 has turned over, 63 turns in.
+#      the square at j11 has turned over, 63 turns in.
+
+# 519  turn 11, The hand
+beat
+#      the square at i11 has turned over, 66 turns in.
+
+# 520  turn 11, The hand
+beat
+
+# 521  turn 11, The hand
+beat
+#      the square at j10 has turned over, 68 turns in.
+
+# 522  turn 11, The hand
+beat
+#      the square at i10 has turned over, 69 turns in.
+#      The cascade from o13 came to rest after 69 turns over 22 waves. the square at n13, the square at n12, the square at m12, the square at m11, the square at l12, the square at m10, the square at l11, the square at k12, the square at l10, the square at k11, the square at j12, the square at i12, the square at h12, the square at k10, the square at j11, the square at i11, the square at j10, the square at i10 came up.
+
+# 523  turn 11, The hand
+beat
+
+# 524  turn 11, The hand
+beat
+
+# 525  turn 11, The hand
+beat
+
+# 526  turn 11, The hand
+up
+
+# 527  turn 11, The hand
+up
+
+# 528  turn 11, The hand
+up
+
+# 529  turn 11, The hand
+up
+
+# 530  turn 11, The hand
+up
+
+# 531  turn 11, The hand
+up
+
+# 532  turn 11, The hand
+up
+
+# 533  turn 11, The hand
+up
+
+# 534  turn 11, The hand
+up
+
+# 535  turn 11, The hand
+down
+
+# 536  turn 11, The hand
+down
+
+# 537  turn 11, The hand
+down
+
+# 538  turn 11, The hand
+down
+
+# 539  turn 11, The hand
+down
+
+# 540  turn 11, The hand
+down
+
+# 541  turn 11, The hand
+down
+
+# 542  turn 11, The hand
+down
+
+# 543  turn 11, The hand
+down
+
+# 544  turn 11, The hand
+down
+
+# 545  turn 11, The hand
+down
+
+# 546  turn 11, The hand
+down
+
+# 547  turn 11, The hand
+right
+
+# 548  turn 11, The hand
+up
+
+# 549  turn 11, The hand
+up
+
+# 550  turn 11, The hand
+left
+
+# 551  turn 11, The hand
+down
+
+# 552  turn 11, The hand
+press
+#      o15 begins turning.
+
+# 553  turn 12, The hand
+beat
+
+# 554  turn 12, The hand
+beat
+
+# 555  turn 12, The hand
+beat
+
+# 556  turn 12, The hand
+beat
+#      the square at o14 has turned over, 9 turns in.
+
+# 557  turn 12, The hand
+beat
+
+# 558  turn 12, The hand
+beat
+
+# 559  turn 12, The hand
+beat
+#      the square at o13 has turned over, 15 turns in.
+#      the square at n14 has turned over, 15 turns in.
+
+# 560  turn 12, The hand
+beat
+
+# 561  turn 12, The hand
+beat
+
+# 562  turn 12, The hand
+beat
+#      the square at o12 has turned over, 24 turns in.
+#      the square at n13 has turned over, 24 turns in.
+
+# 563  turn 12, The hand
+beat
+
+# 564  turn 12, The hand
+beat
+
+# 565  turn 12, The hand
+beat
+#      the square at o11 has turned over, 37 turns in.
+#      the square at n12 has turned over, 37 turns in.
+#      the square at m13 has turned over, 37 turns in.
+
+# 566  turn 12, The hand
+beat
+
+# 567  turn 12, The hand
+beat
+
+# 568  turn 12, The hand
+beat
+#      the square at o10 has turned over, 53 turns in.
+#      the square at n11 has turned over, 53 turns in.
+#      the square at m12 has turned over, 53 turns in.
+#      the square at l13 has turned over, 53 turns in.
+
+# 569  turn 12, The hand
+beat
+
+# 570  turn 12, The hand
+beat
+
+# 571  turn 12, The hand
+beat
+#      the square at m11 has turned over, 66 turns in.
+#      the square at l12 has turned over, 66 turns in.
+
+# 572  turn 12, The hand
+beat
+
+# 573  turn 12, The hand
+beat
+
+# 574  turn 12, The hand
+beat
+#      the square at l11 has turned over, 73 turns in.
+
+# 575  turn 12, The hand
+beat
+
+# 576  turn 12, The hand
+beat
+#      The cascade from o15 came to rest after 75 turns over 24 waves. the square at o14, the square at o13, the square at n14, the square at o12, the square at n13, the square at o11, the square at n12, the square at m13, the square at o10, the square at n11, the square at m12, the square at l13, the square at m11, the square at l12, the square at l11 came up.
+
+# 577  turn 12, The hand
+beat
+
+# 578  turn 12, The hand
+beat
+
+# 579  turn 12, The hand
+beat
+
+# 580  turn 12, The hand
+up
+
+# 581  turn 12, The hand
+up
+
+# 582  turn 12, The hand
+up
+
+# 583  turn 12, The hand
+up
+
+# 584  turn 12, The hand
+up
+
+# 585  turn 12, The hand
+up
+
+# 586  turn 12, The hand
+up
+
+# 587  turn 12, The hand
+up
+
+# 588  turn 12, The hand
+up
+
+# 589  turn 12, The hand
+up
+
+# 590  turn 12, The hand
+up
+
+# 591  turn 12, The hand
+up
+
+# 592  turn 12, The hand
+up
+
+# 593  turn 12, The hand
+down
+
+# 594  turn 12, The hand
+left
+
+# 595  turn 12, The hand
+left
+
+# 596  turn 12, The hand
+left
+
+# 597  turn 12, The hand
+left
+
+# 598  turn 12, The hand
+left
+
+# 599  turn 12, The hand
+left
+
+# 600  turn 12, The hand
+left
+
+# 601  turn 12, The hand
+left
+
+# 602  turn 12, The hand
+left
+
+# 603  turn 12, The hand
+left
+
+# 604  turn 12, The hand
+left
+
+# 605  turn 12, The hand
+left
+
+# 606  turn 12, The hand
+left
+
+# 607  turn 12, The hand
+press
+#      b3 begins turning.
+
+# 608  turn 13, The hand
+beat
+
+# 609  turn 13, The hand
+beat
+
+# 610  turn 13, The hand
+beat
+
+# 611  turn 13, The hand
+beat
+
+# 612  turn 13, The hand
+beat
+
+# 613  turn 13, The hand
+beat
+#      the square at c3 has turned over, 8 turns in.
+
+# 614  turn 13, The hand
+beat
+
+# 615  turn 13, The hand
+beat
+#      the square at b3 has turned over, 14 turns in.
+
+# 616  turn 13, The hand
+beat
+#      the square at c4 has turned over, 18 turns in.
+
+# 617  turn 13, The hand
+beat
+
+# 618  turn 13, The hand
+beat
+#      the square at b4 has turned over, 27 turns in.
+
+# 619  turn 13, The hand
+beat
+#      the square at d4 has turned over, 31 turns in.
+
+# 620  turn 13, The hand
+beat
+
+# 621  turn 13, The hand
+beat
+
+# 622  turn 13, The hand
+beat
+#      the square at e4 has turned over, 35 turns in.
+
+# 623  turn 13, The hand
+beat
+#      the square at f4 has turned over, 36 turns in.
+
+# 624  turn 13, The hand
+beat
+#      the square at g4 has turned over, 37 turns in.
+#      The cascade from b3 came to rest after 37 turns over 17 waves. the square at c3, the square at b3, the square at c4, the square at b4, the square at d4, the square at e4, the square at f4, the square at g4 came up.
+#      2442 turns in all, over 12 touches: 1 whole rows and columns, and 382 squares.
+

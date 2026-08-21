@@ -162,11 +162,9 @@ module Lobby =
         consoles lobby |> List.map (screenFor lobby)
 
     /// What the board is sounding, said to every console at the table. The same reading `Solo`
-    /// takes: off where the game stands rather than out of what it said, so that two players at
-    /// different keyboards hear the same board at the same beat.
-    /// Only for a move that happened - the same reading `Solo` takes, and for the same reason: a
-    /// move the game refused leaves the state where it was, and what it would answer here is
-    /// whatever the last move that did happen was sounding.
+    /// takes, and for the same reasons: off where the game stands rather than out of what it said,
+    /// so two players at different keyboards hear the same board on the same beat; and only for a
+    /// move that happened, since a refused move would ring the last real move's sound again.
     let private sounding before lobby =
         if Timeline.movesMade lobby.Model.Timeline = Timeline.movesMade before.Model.Timeline then
             []

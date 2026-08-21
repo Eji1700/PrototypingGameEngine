@@ -116,7 +116,7 @@ module Menu =
                 (Keys.nth 1)
                 "Carried"
                 (match reach.Wrapping with
-                 | InTheClear -> "in the clear - right on a network you trust, and nowhere else"
+                 | InTheClear -> "in the clear - fine on a network you trust, and nowhere else"
                  | Ahead -> "https, ended by a tunnel or proxy in front of this"
                  | Kept(certificate, _) -> $"https, with the certificate at {certificate}")
                 (after { reach with Wrapping = other })
@@ -135,7 +135,7 @@ module Menu =
                   $"{after reach} at:" ]
           Note =
             [ "Left and right change the one marked ->, and so does its own number. The two that"
-              "want words write the line as far as they can and wait for the rest."
+              "need typing write the line as far as they can and wait for you to finish it."
               ""
               "A word at the door is what keeps a stranger out of somebody's seat, and a table"
               "reachable from further than a room wants one. Over anything further than that,"
@@ -262,7 +262,7 @@ module Menu =
 
         let served seed (sitters, reach) =
             if Seating.hosted sitters then
-                Error "A game in a browser is one hot seat; there is nobody to join it. Open a table instead."
+                Error "A game in a browser is one hot seat - there is nobody to join it. Open a table instead."
             else
                 Ok(Serve(sitters, seed, reach))
 

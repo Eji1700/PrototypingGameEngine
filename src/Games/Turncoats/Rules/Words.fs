@@ -16,8 +16,12 @@ module Words =
         | Blue -> 'B'
         | Green -> 'G'
 
+    /// Read out the way a person would: "Red and Blue", "Red, Blue and Green".
     let colors colors =
-        colors |> List.map color |> String.concat ", "
+        match colors |> List.map color |> List.rev with
+        | [] -> ""
+        | [ one ] -> one
+        | last :: rest -> String.concat ", " (List.rev rest) + " and " + last
 
     let region regionId = (Board.region regionId).Name
 

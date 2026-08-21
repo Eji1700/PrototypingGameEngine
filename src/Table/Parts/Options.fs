@@ -170,17 +170,17 @@ module Options =
                 Keys.sends (Keys.nth (after + 1)) "save" "keep all this, and open that way next time" "save"
                 Keys.sends (Some '0') "done" "back to the settings" "done" ]
           Note =
-            [ "Left and right walk the one marked -> through what it can be, or say 'blue teal' to"
-              "name a colour outright, or 'view rich' to name a way of drawing."
+            [ "Left and right walk the one marked -> through what it can be. Or name one outright:"
+              "'blue teal' for a colour, 'view rich' for a way of drawing."
               "" ]
             @ [ sprintf "%-11s%s" "Drawn:" (String.concat ", " views) ]
             @ offered
             @ [ ""
-                "Only the rich view draws in colour. Set them from either - plain carries them along"
-                "until you ask for rich, and then they are what it draws in."
+                "Only the rich view draws in colour, but either view will set them: plain carries"
+                "the colours along, and rich draws in them the moment you ask for it."
                 ""
-                "What is kept here is this game's own, except the way it is drawn, which every game"
-                "picks up unless it was saved at one of them." ]
+                "What is kept here is this game's own, except the way it is drawn - every game picks"
+                "that up unless one of them saved its own." ]
           Backs = Some "done" }
 
     let chooseVideo palette (text: string) : Result<Step, string> =

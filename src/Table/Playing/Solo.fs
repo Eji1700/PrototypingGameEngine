@@ -8,10 +8,9 @@ type Reading<'Move, 'State, 'Notice> =
         Margins: Margins
         View: View<'Move, 'State, 'Notice>
 
-        /// Whether this console has asked not to be made a noise at. It sits beside the margins
-        /// rather than in them because it is not about how much of the screen is drawn - but it is
-        /// the same kind of thing: one console's standing preference, said at the table, and not
-        /// something the game is allowed an opinion about.
+        /// Whether this console has asked not to be made a noise at. Beside the margins rather than
+        /// in them because it is not about how much of the screen is drawn, but the same kind of
+        /// thing: one console's standing preference, said at the table.
         Hushed: bool
     }
 
@@ -67,8 +66,8 @@ module Solo =
             Model = model
             Rivals = rivals }
 
-    /// Undo and redo walk past the machine's moves as well as your own. One step back would otherwise
-    /// only take back what the machine last played, and hand the turn straight back to it.
+    /// Undo and redo walk past the machine's moves as well as your own - one step back would take
+    /// back only what the machine last played, and hand the turn straight back to it.
     let rec private walking msg solo =
         if not (Machines.holds (rules solo) solo.Rivals solo.Model) then
             solo
@@ -107,13 +106,9 @@ module Solo =
     let board console solo =
         readingAt console solo |> Option.map (boardFor solo)
 
-    /// The board as it would be drawn with these margins, without making them this console's.
-    ///
-    /// A table that draws over itself several times a beat has margins of its own to impose - the
-    /// notes and the list of commands go while the board is moving, and how far through the beat
-    /// it is changes every frame - and none of that is a choice the player made. Writing it into
-    /// what they *did* choose would lose the choice, which is what `reading` is for and this is
-    /// not.
+    /// The board as it would be drawn with these margins, without making them this console's. A
+    /// table that draws over itself several times a beat imposes margins of its own, and none of
+    /// that is a choice the player made - writing it into what they *did* choose would lose it.
     let drawnAt margins console solo =
         readingAt console solo
         |> Option.map (fun reading -> boardFor solo { reading with Margins = margins })
@@ -125,13 +120,11 @@ module Solo =
         solo.Watchers |> List.map (screenFor solo)
 
     /// What the board is sounding, said to everybody watching it. A sound goes *beside* a screen
-    /// rather than instead of one, and it is read off where the game stands rather than out of
-    /// what it said - so a board taken up from a record sounds the same as the one it was saved
-    /// from, and a table with no way to make a noise drops it without any of this knowing.
-    /// Only for a move that happened, though. A move the game refused leaves the state exactly as
-    /// it was, so what it would answer here is whatever the last move that *did* happen was
-    /// sounding - and a table that asked anyway would ring that sound again for every refusal and
-    /// every beat the game had nothing to do with.
+    /// rather than instead of one, and is read off where the game stands rather than out of what it
+    /// said - so a board taken up from a record sounds like the one it was saved from.
+    ///
+    /// Only for a move that happened: a refused move leaves the state as it was, so asking anyway
+    /// would ring the last move's sound again for every refusal and every idle beat.
     let private sounding before solo =
         if Timeline.movesMade solo.Model.Timeline = Timeline.movesMade before.Model.Timeline then
             []
@@ -182,13 +175,10 @@ module Solo =
         []
 
 
-    /// One beat of the clock.
-    ///
-    /// A beat that found nothing to do leaves no trace - `Update` does not write down a move the
-    /// game neither took nor spoke about - and so nothing is drawn for it either. That is what
-    /// lets a game beat while it is at rest without sending a board down every wire in the house
-    /// twice a second, and it is why a game whose board only moves in bursts may keep one clock
-    /// rather than starting and stopping one.
+    /// One beat of the clock. A beat that found nothing to do leaves no trace - `Update` does not
+    /// write down a move the game neither took nor spoke about - so nothing is drawn for it either.
+    /// That is what lets a game beat at rest without sending a board down every wire in the house
+    /// twice a second, and why a game that moves in bursts can keep one clock running throughout.
     let beaten solo =
         match solo.Game.Pulse with
         | Some pulse when not (isOver solo) && not (List.isEmpty solo.Watchers) ->

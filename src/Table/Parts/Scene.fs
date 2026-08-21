@@ -2,24 +2,19 @@ namespace TCModel.Table
 
 open TCModel.Engine
 
-/// How much of a screen to draw, and how far through a beat it is being drawn.
+/// How much of a screen to draw, and how far through a beat it is being drawn. The three switches
+/// are the boxes round the game itself; none is part of the game, so none reaches the model or the
+/// record, and at a table over a network each person has their own.
 ///
-/// The three switches are the three boxes round the game itself: the writing that explains the
-/// board, the list of what can be typed, and what the game has been saying. Not one of them is
-/// part of the game, so none reaches the model or the record, and at a table over a network each
-/// person has their own.
-///
-/// `Phase` is the one thing here that is not a choice a player made: it runs from 0 at a beat
-/// towards 1 just before the next one, and it is how a board drawn between two beats knows how
-/// far a piece that is moving has got. A game with no frame clock is only ever drawn at 0, so
-/// every screen in the program that never asked for one is drawn exactly as it was.
+/// `Phase` is the one thing here that is not a player's choice: it runs from 0 at a beat towards 1
+/// just before the next, and is how a board drawn between two beats knows how far a moving piece
+/// has got. A game with no frame clock is only ever drawn at 0.
 type Margins =
     { Notes: bool
       Commands: bool
 
-      // `Logged` rather than `Log`, because a `Model` has a `Log` and F# resolves a field on an
-      // un-annotated value by its name alone. Naming this one the same would have quietly made
-      // `model.Log` mean the wrong thing in code that had nothing to do with margins.
+      // `Logged` rather than `Log`: a `Model` has a `Log`, and F# resolves a field on an
+      // un-annotated value by name alone, so the clash would silently retype `model.Log`.
       Logged: bool
 
       Phase: float }
@@ -40,8 +35,8 @@ module Margins =
 
     let through phase margins = { margins with Phase = phase }
 
-    /// Which of `count` frames a phase falls in, which is what a terminal picking one of a few
-    /// pictures wants rather than the fraction itself.
+    /// Which of `count` frames a phase falls in - what a terminal picking one of a few pictures
+    /// wants, rather than the fraction itself.
     let frame count margins =
         if count <= 1 then 0 else margins.Phase * float count |> int |> max 0 |> min (count - 1)
 
@@ -87,15 +82,14 @@ and Scene =
 
     | Does of caption: string * line: string * tone: Tone
 
-    // A board of many small cells rather than a few big ones. `Walled` puts a wall round every
-    // cell, which is right for nine squares and unreadable at two hundred and fifty-six: a field
-    // is a glyph a cell, laid out in rows with a label down the side and a legend across the top.
+    // A board of many small cells rather than a few big ones. `Walled` walls every cell, which is
+    // right for nine squares and unreadable at two hundred and fifty-six; a field is a glyph a
+    // cell, in rows with a label down the side and a legend across the top.
     | Field of legend: string * rows: (string * Speck list) list
 
 /// One cell of a field. `Mood` is what the cell is *doing* rather than what it is - turning,
-/// landing, lit - and it is a list of bare words: a page turns them into classes it can animate
-/// from a game's own stylesheet, and a terminal, which has no way to be part-way through
-/// anything, ignores them and draws the glyph.
+/// landing, lit - as bare words: a page turns them into classes it animates from the game's own
+/// stylesheet, and a terminal, which cannot be part-way through anything, ignores them.
 and Speck =
     { Glyph: string
       Tone: Tone
@@ -146,9 +140,8 @@ module Scene =
     let listing (margins: Margins) title text =
         if margins.Commands then Block(title, [ Written text ]) else Blank
 
-    /// What the game has been saying, if the reader still wants to see it. A board that has
-    /// stopped moving is read by looking at it, and a dozen lines of what led to it under a board
-    /// somebody is trying to read is a dozen lines in the way.
+    /// What the game has been saying, if the reader still wants to see it - a dozen lines of what
+    /// led to a board, under the board somebody is trying to read, is a dozen lines in the way.
     let logged (margins: Margins) title body =
         if margins.Logged then Block(title, body) else Blank
 

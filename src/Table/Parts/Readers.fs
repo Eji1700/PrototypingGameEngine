@@ -7,16 +7,15 @@ module Readers =
 
     let private hush = Palette.slate
 
-    /// How wide the labels down the side of a field are. One width for all of them, because it
-    /// is what puts the legend across the top over the cells it names.
+    /// How wide the labels down the side of a field are. One width for all of them, which is what
+    /// puts the legend across the top over the cells it names.
     let private widest (rows: (string * Speck list) list) =
         rows
         |> List.fold (fun room (name: string, _) -> max room (String.length name)) 0
 
     /// A field, laid out the way every reader lays one out. What a label and a row of cells are
-    /// *drawn as* is the reader's business and is passed in; the arrangement is not, because a
-    /// board that lined up in one reader and not in another would be the same board saying two
-    /// different things about which cell is which.
+    /// *drawn as* is the reader's business and is passed in; the arrangement is not, or the same
+    /// board would say two different things about which cell is which.
     let private laid (label: string -> string) (drawn: Speck list -> string) legend rows =
         let wide = widest rows
 
@@ -26,12 +25,10 @@ module Readers =
               label (name.PadLeft wide + " ") + drawn specks ]
 
 
-    // Drawing a `Walled` grid as a honeycomb rather than as a table.
-    //
-    // Spectre can draw a table, but not one whose rows are offset by half a cell and whose cells
-    // join up where they belong to the same region. So this lays the whole thing out as a grid of
-    // characters, works out every join from what is on either side of it, and hands back rows of
-    // spans - which both the coloured and the plain readers can then print.
+    // Drawing a `Walled` grid as a honeycomb rather than as a table. Spectre can draw a table, but
+    // not one whose rows are offset by half a cell and whose cells join up where they belong to the
+    // same region. So this lays the whole thing out as a grid of characters, works out every join
+    // from what is on either side of it, and hands back rows of spans for either reader to print.
     module private Comb =
 
         type Facet =
@@ -118,11 +115,10 @@ module Readers =
             | _, _, false, false -> '|'
             | _ -> '+'
 
-        /// Lay the rows out and draw them.
-        ///
-        /// Every cell is the same size, and a row's `Shift` is counted in halves of one - which is
-        /// what lets a row sit between the two above it. So the cell width is forced odd, making
-        /// the width with its right-hand wall even, and half of that a whole number of characters.
+        /// Lay the rows out and draw them. Every cell is the same size and a row's `Shift` counts
+        /// in halves of one, which is what lets a row sit between the two above it - so the cell
+        /// width is forced odd, making the width with its right-hand wall even and half of that a
+        /// whole number of characters.
         let lay glyph across (rows: Course list) : Line list =
             let laid =
                 rows
@@ -597,9 +593,8 @@ module Readers =
             Elem.span (toned span.Tone) [ Text.enc span.Text ]
 
         /// A mood is a bare word a game made up, about to become a class in a stylesheet the same
-        /// game wrote. Anything that is not a letter, a digit or a dash is dropped rather than
-        /// escaped, because a class name is not text a reader sees and half a word that styles
-        /// nothing is better than a page that a stray character has broken.
+        /// game wrote. Anything but a letter, digit or dash is dropped rather than escaped: a class
+        /// name is not text a reader sees, and half a word that styles nothing beats a broken page.
         let private moods (mood: string list) =
             mood
             |> List.map (String.filter (fun letter -> System.Char.IsLetterOrDigit letter || letter = '-'))

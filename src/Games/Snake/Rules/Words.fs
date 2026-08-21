@@ -84,8 +84,8 @@ module Words =
         | HasStopped who -> $"{player who} has stopped. Nothing steers it now."
         | NoSuchSnake who -> $"There is no {player who} at this table."
         | NoSuchSpeed said ->
-            $"Speed {said}? The clock winds from {Session.Slowest} to {Session.Fastest} - or say 'faster' and 'slower', which is what + and - do."
-        | NotThisPace why -> $"Not at this way of playing: {why}."
+            $"Speed {said}? The clock winds from {Session.Slowest} to {Session.Fastest}, or say 'faster' and 'slower' - which is what + and - do."
+        | NotThisPace why -> $"Not in this way of playing - {why}."
 
     let command =
         Msg.written (function

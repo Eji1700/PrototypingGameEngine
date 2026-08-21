@@ -15,6 +15,7 @@ module Words =
 
     let line (n: int) = $"line {n}"
 
+    /// One of these lines, for a list somebody is choosing from.
     let lines =
         function
         | [] -> "no line at all"
@@ -24,6 +25,18 @@ module Words =
 
             String.concat ", " (List.truncate (List.length said - 1) said)
             + " or "
+            + List.last said
+
+    /// All of these lines, for a list of what is happening to every one of them.
+    let everyLine =
+        function
+        | [] -> "no line at all"
+        | [ only ] -> line only
+        | many ->
+            let said = many |> List.map line
+
+            String.concat ", " (List.truncate (List.length said - 1) said)
+            + " and "
             + List.last said
 
     let placed card =
@@ -374,8 +387,9 @@ module Words =
 
             $"{player who}'s {card placed.Card} lands on {line where}, {coming}."
         | Turning(who, placed, where) -> $"{player who}'s {card placed.Card} on {line where} is turned over."
-        | Escaping wiped -> $"anything in {lines wiped} that can get out of a compile does it now."
-        | Compiling wiped -> $"{lines wiped} compiles."
+        | Escaping wiped -> $"anything in {everyLine wiped} that can get out of a compile does it now."
+        | Compiling [ only ] -> $"{line only} compiles."
+        | Compiling wiped -> $"{everyLine wiped} compile."
         | Refreshing -> "the hand goes down and a new one comes up."
         | Trimming -> $"any hand over {Deck.HandSize} comes back down to it."
         | Opening -> "the start commands of everything face up and uncovered."

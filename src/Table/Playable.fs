@@ -10,13 +10,11 @@ type Pulse<'Move, 'State> =
 
         Beat: 'Move
 
-        /// How many times to draw the board between one beat and the next.
-        ///
-        /// A beat is a move; a frame is not. Nothing a frame draws reaches the rules, the timeline
-        /// or the record, and the only thing that differs between one frame and the next is
-        /// `Margins.Phase` - so a frame cannot change a game, only how far through a change it is
-        /// caught. Nought is a game with nothing moving between its beats, which is every game of
-        /// turns and Snake as well: a snake is on one square or the next and never between them.
+        /// How many times to draw the board between one beat and the next. A beat is a move; a
+        /// frame is not. Nothing a frame draws reaches the rules, the timeline or the record, and
+        /// all that differs between two frames is `Margins.Phase` - so a frame cannot change a
+        /// game, only how far through a change it is caught. Nought for a game with nothing moving
+        /// between its beats, which is every game of turns and Snake as well.
         Frames: 'State -> int
 
         Pressed: ConsoleKeyInfo -> string option
@@ -24,14 +22,10 @@ type Pulse<'Move, 'State> =
 
 module Pulse =
 
-    /// The next moment worth waking for: the next frame, or the beat itself if there is no frame
-    /// left before it.
-    ///
-    /// Frames are laid evenly across the beat rather than counted off one after another, so a
-    /// frame that arrived late does not push the ones behind it late as well - what is asked for
-    /// is the next boundary after *now*, whichever one that is. A game that asks for no frames is
-    /// only ever woken by the beat, which is the loop every clocked game had before there were
-    /// any frames to ask for.
+    /// The next moment worth waking for: the next frame, or the beat itself if none is left before
+    /// it. Frames are laid evenly across the beat rather than counted off one after another, so
+    /// what is asked for is the next boundary after *now* - a frame that arrived late does not push
+    /// the ones behind it late as well.
     let waking frames (since: DateTime) (due: DateTime) (now: DateTime) =
         if frames <= 1 || due <= since then
             due
@@ -39,9 +33,9 @@ module Pulse =
             let step = (due - since) / float frames
             min due (since + step * (floor ((now - since) / step) + 1.0))
 
-    /// How far a drawing made now is between one beat and the next: nought at the beat, and up
-    /// towards - but never reaching - one. Never reaching it is what keeps the last frame of a
-    /// beat the last picture of the turn rather than the first picture of the next one.
+    /// How far a drawing made now is between one beat and the next: nought at the beat, up towards
+    /// but never reaching one - which is what keeps the last frame of a beat the last picture of
+    /// this turn rather than the first of the next.
     let phase (since: DateTime) (due: DateTime) (now: DateTime) =
         if due <= since then 0.0 else (now - since) / (due - since) |> max 0.0 |> min 0.999
 
@@ -72,11 +66,9 @@ type Playable<'Move, 'State, 'Notice> =
 
         SeenBy: PlayerId -> 'Notice -> string
 
-        /// What the board is sounding, from where it stands.
-        ///
-        /// Read off the state after a move rather than out of the notices, which is what makes it
-        /// the same at a replayed table as at a played one, and lets a game say it once for every
-        /// table there is rather than once per endpoint. Empty at a game nobody needs to hear.
+        /// What the board is sounding, from where it stands. Read off the state after a move rather
+        /// than out of the notices, which is what makes a replayed table sound like a played one
+        /// and lets a game say it once for every table rather than once per endpoint.
         Rings: 'State -> Sound list
 
         Resign: 'Move option

@@ -1,11 +1,8 @@
 namespace TCModel.Table
 
-/// What is on the terminal, so that the same screen is not written over itself again.
-///
-/// It is a value rather than a line count because a count alone cannot answer "is this already
-/// there", and it lives here rather than in the loop that draws because `cleared` is here: a
-/// terminal that has just been wiped has nothing on it to be identical to, and the two halves of
-/// that fact have to be within reach of each other or they drift apart.
+/// What is on the terminal, so the same screen is not written over itself again. A value rather
+/// than a line count because a count cannot answer "is this already there", and it lives beside
+/// `cleared` because a terminal just wiped has nothing on it to be identical to.
 [<NoComparison>]
 type Drawn = { Lines: int; Text: string }
 
@@ -42,12 +39,10 @@ module Screens =
             System.Console.ReadKey true |> ignore
 
     /// Draw over what is already on the screen rather than clearing it first, which is what keeps a
-    /// board that is redrawn several times a second from flickering. Every line is padded out to the
-    /// width and any line the last drawing used and this one does not is blanked, so nothing is left
-    /// behind. A screen identical to the one already there is not written again, which is what keeps
-    /// a board at rest under a running clock from repainting as fast as the loop can poll it.
-    /// Answers with what is now on the terminal, to be passed back in next time - and after
-    /// `cleared` what that is, is `nothing`.
+    /// board redrawn several times a second from flickering. Every line is padded to the width and
+    /// any line the last drawing used and this one does not is blanked, so nothing is left behind.
+    /// A screen identical to the one already there is not written again. Answers with what is now
+    /// on the terminal, to be passed back in next time - after `cleared`, that is `nothing`.
     let redrawn (before: Drawn) (text: string) =
         if before.Text = text then
             before

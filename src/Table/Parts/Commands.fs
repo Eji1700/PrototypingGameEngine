@@ -43,10 +43,13 @@ module Commands =
         | _ -> Error $"'{text}' is not a seed."
 
     let tryPlayerCount (fewest, most) text =
+        let asked n =
+            if n = 1 then "1 player" else $"{n} players"
+
         match tryInt text with
         | Some n when n >= fewest && n <= most -> Ok n
-        | Some n when fewest = most -> Error $"{n} players? The game takes {fewest}."
-        | Some n -> Error $"{n} players? The game takes {fewest} to {most}."
+        | Some n when fewest = most -> Error $"{asked n}? The game takes {fewest}."
+        | Some n -> Error $"{asked n}? The game takes {fewest} to {most}."
         | None -> Error $"'{text}' is not a number of players."
 
     let private seed text = trySeed text |> Result.map Some

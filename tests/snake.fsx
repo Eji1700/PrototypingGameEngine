@@ -375,13 +375,13 @@ report
     "a step is refused at a table that keeps its own time"
     true
     (toldBy snake (played racing [ Go North ] ticking)
-     |> List.exists (mentions "Not at this way of playing"))
+     |> List.exists (mentions "Not in this way of playing"))
 
 report
     "and a beat is refused at a table that waits"
     true
     (toldBy turns (played turning [ Beat ] solo)
-     |> List.exists (mentions "Not at this way of playing"))
+     |> List.exists (mentions "Not in this way of playing"))
 
 report "giving up on a clock stops every snake" true (racing.Over(standing (played racing [ Resign ] pair)))
 

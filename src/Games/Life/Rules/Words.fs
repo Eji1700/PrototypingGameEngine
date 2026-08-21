@@ -41,7 +41,7 @@ module Words =
             $"Nothing would change: at generation {generation} this board is a still life, and the next generation would be this one again. Turn a cell on, take a move back, or restart."
         | NothingLeft -> "There is nothing on the board. Turn some cells on - 'f7' - or restart for another soup."
         | NoSuchSpeed said ->
-            $"Speed {said}? The clock winds from {World.Slowest} to {World.Fastest} - or say 'faster' and 'slower', which is what + and - do."
+            $"Speed {said}? The clock winds from {World.Slowest} to {World.Fastest}, or say 'faster' and 'slower' - which is what + and - do."
 
     let command =
         Msg.written (function

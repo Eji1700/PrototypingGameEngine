@@ -33,17 +33,13 @@ type Notice =
 
 module Turn =
 
-    /// The cells a wave sets off next.
+    /// The cells a wave sets off next, read off the board as it stands *after* the wave landed. A
+    /// cell that has just turned reaches along the two arms it now has, and whatever it reaches
+    /// has to be reaching back.
     ///
-    /// This is the whole of the rule, and it is read off the board as it stands *after* the wave
-    /// has landed. A cell that has just turned reaches out along the two arms it now has, and
-    /// whatever it reaches has to be reaching back: an arm pointing east finds a cell with an arm
-    /// pointing west, or it finds nothing.
-    ///
-    /// Nothing here skips a cell in the middle of a turn, and nothing needs to - everything that
-    /// was turning landed on this same beat, so there is no such cell left to skip. Nor is a cell
-    /// that has already turned during this activation spared, which is what lets a cascade come
-    /// back over its own ground, and why there is a cap on how far one may go.
+    /// Nothing skips a cell mid-turn because everything turning landed on this same beat, and a
+    /// cell that already turned during this activation is not spared - which is what lets a
+    /// cascade come back over its own ground, and why there is a cap on how far one may go.
     let private setOff landed cells =
         landed
         |> List.collect (fun cell ->
@@ -55,11 +51,9 @@ module Turn =
             |> List.map snd)
         |> Set.ofList
 
-    /// Which shapes are wholly turned over that were not before.
-    ///
-    /// A shape comes up once an activation. `Rotated` only ever grows while one is running, so a
-    /// shape that has come up stays up - which is why it is the ones already counted that are
-    /// taken out, rather than the ones already whole.
+    /// Which shapes are wholly turned over that were not before. A shape comes up once an
+    /// activation, and `Rotated` only grows while one is running, so a shape that has come up
+    /// stays up - hence subtracting the ones already counted rather than the ones already whole.
     let private cameUp made rotated =
         Shape.all
         |> List.filter (fun shape ->
@@ -67,11 +61,9 @@ module Turn =
             && Shape.cells shape |> List.forall (fun cell -> Set.contains cell rotated))
 
     /// One beat: everything that was turning lands, and whatever that sets off begins turning.
-    ///
-    /// Every cell in a wave lands at once, and the board is read for what comes next only once
-    /// they all have. That is what makes a cascade something that happens in waves rather than a
-    /// walk over the board in some order, and it is why two cells that set each other off turn
-    /// together rather than one after the other.
+    /// Every cell in a wave lands at once and the board is read only once they all have - which is
+    /// what makes this waves rather than a walk over the board in some order, and why two cells
+    /// that set each other off turn together rather than one after the other.
     let private landing run play =
         let wave = play.Wave + 1
         let landed = Set.toList play.Turning
@@ -124,9 +116,7 @@ module Turn =
                     Lines = play.Tally.Lines + Session.lines run.Made
                     Squares = play.Tally.Squares + Session.squares run.Made }
 
-        // What the wave did, and then what the board now is. Never more than one of each: the
-        // wave that completed a row and left the board at rest says both, and a page plays them a
-        // moment apart, but a wave that merely landed says only that it landed.
+        // What the wave did, then what the board now is - never more than one of each.
         let sounding =
             [ if lined then yield Lined
               elif Session.squares made > 0 then yield Squared
@@ -144,8 +134,8 @@ module Turn =
                 Lit = lit
                 Sounding = sounding
 
-                // The board is struck for whatever a terminal would have rung its one bell for,
-                // so the two say the same thing to a reader who can hear and to one who cannot.
+                // Struck for whatever a terminal would have rung its one bell for, so a reader who
+                // can hear and one who cannot are told the same thing.
                 Struck =
                     if sounding |> List.exists Session.strikes then
                         Some wave
@@ -163,14 +153,11 @@ module Turn =
         else
             Some(InPlay played), told
 
-    /// A sound belongs to the move that made it, and to no other.
-    ///
-    /// What the board is sounding is read off the state *after* a move, which is what makes a game
-    /// taken up from a record sound like the one it was saved from. It also means a sound left
-    /// lying in the state is heard again after the next move, and the one after that - moving the
-    /// hand about a board that had just come to rest rang the chime every time it moved. Only a
-    /// beat can land anything, so only a beat is allowed to leave a sound behind, and every other
-    /// move is quiet by construction rather than by remembering to say so.
+    /// A sound belongs to the move that made it and to no other. Sounding is read off the state
+    /// *after* a move, so a sound left lying there is heard again after the next move too - moving
+    /// the hand about a board that had just come to rest used to ring the chime every step. Only a
+    /// beat can land anything, so only a beat may leave a sound behind, and every other move is
+    /// quiet by construction rather than by remembering to say so.
     let private hushed =
         function
         | InPlay play -> InPlay { play with Sounding = [] }
@@ -200,10 +187,9 @@ module Turn =
             ),
             [ Happened(GaveIn play.Left); Happened(GameEnded play.Tally) ]
 
-        // A board that has come to rest may still have something to show - shapes lit, and the
-        // strike running down it - and a beat is what carries those along, so the clock goes on
-        // beating until they have finished. Once there is nothing moving and nothing showing, a
-        // beat takes nothing and says nothing, and `Update` leaves no line in the record for it.
+        // A board at rest may still have something to show - shapes lit, the strike running down
+        // it - and a beat is what carries those along. Once nothing is moving and nothing showing,
+        // a beat takes nothing and says nothing, and `Update` leaves no line in the record.
         | InPlay play, Beat when Session.atRest play && not (Session.settling play) -> None, []
 
         | InPlay play, Beat when Session.atRest play ->
@@ -224,10 +210,8 @@ module Turn =
             | None -> None, []
             | Some run -> landing run play
 
-        // Moving the hand is a move like any other, and it says nothing - a line in the log every
-        // time somebody nudged the cursor a square would bury what the board was actually doing.
-        // A push that would take it off the edge moves nothing, and `Update` does not write down a
-        // move that took nothing and said nothing.
+        // A push that would take the hand off the edge moves nothing, and `Update` does not write
+        // down a move that took nothing and said nothing.
         | InPlay play, Point way when Session.pushed way play = play.At -> None, []
 
         | InPlay play, Point way ->

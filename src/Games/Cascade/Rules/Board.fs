@@ -2,19 +2,15 @@ namespace TCModel.Cascade
 
 open System
 
-/// Which way an arm points.
 type Way =
     | North
     | East
     | South
     | West
 
-/// Which two ways a cell's arms point.
-///
-/// Four of them, and every cell on the board is one: an elbow is two arms at a right angle, and
-/// there is no fifth thing for it to be. Listed clockwise from the one that has an arm up, so a
-/// quarter turn to the right is one step along this list - which is the only place in the game
-/// that has to know what a quarter turn is.
+/// Which two ways a cell's arms point. Listed clockwise from the one with an arm up, so a quarter
+/// turn to the right is one step along this list - the only place that has to know what a quarter
+/// turn is.
 type Facing =
     | UpRight
     | RightDown
@@ -23,12 +19,9 @@ type Facing =
 
 type Cell = { Row: int; Column: int }
 
-/// A shape the board is watched for.
-///
-/// A rank is a whole row, a file a whole column, and a square is two cells by two, named by the
-/// one at its top left. More will be added, and the only thing that has to be said about a new
-/// one is which cells it stands over - everything that counts them, lights them and writes them
-/// out reads `Shape.cells` and knows nothing else.
+/// A shape the board is watched for: a whole row, a whole column, or two cells by two named by the
+/// one at its top left. All a new one has to say is which cells it stands over - everything that
+/// counts, lights and writes them reads `Shape.cells` and knows nothing else.
 type Shape =
     | Rank of row: int
     | File of column: int
@@ -66,9 +59,9 @@ module Facing =
 
     let reaches way facing = arms facing |> List.contains way
 
-    /// Half way round. An elbow's corner points between its two arms, and a quarter turn from a
-    /// corner pointing north-east is a corner pointing east - which is the second of the two arms
-    /// it started with. Nothing in the rules turns by halves; this is here for what draws them.
+    /// Half way round. A corner points between its two arms, so a quarter turn from one pointing
+    /// north-east leaves it pointing east - the second of the arms it started with. Nothing in the
+    /// rules turns by halves; this is for what draws them.
     let halfway facing = arms facing |> List.item 1
 
 module Board =
@@ -87,8 +80,8 @@ module Board =
     let holds cell =
         cell.Row >= 1 && cell.Row <= Height && cell.Column >= 1 && cell.Column <= Width
 
-    /// The next cell that way. It may be off the board, and the caller is the one that cares:
-    /// an arm pointing off the edge reaches nothing, which is all that being an edge means here.
+    /// The next cell that way. It may be off the board, and the caller is the one that cares - an
+    /// arm pointing off the edge reaches nothing, which is all being an edge means here.
     let along way cell =
         match way with
         | North -> { cell with Row = cell.Row - 1 }
@@ -130,9 +123,9 @@ module Shape =
                       { Row = at.Row + down
                         Column = at.Column + across } ]
 
-    /// Every shape there is, laid out once. Squares overlap, and are meant to: a run of cells
-    /// four wide and two deep is three squares and is worth three, because the shape that came
-    /// up is the shape and not the cells it happens to share with its neighbour.
+    /// Every shape there is, laid out once. Squares overlap and are meant to: a run four wide and
+    /// two deep is three squares and worth three, because the shape that came up is the shape and
+    /// not the cells it shares with its neighbour.
     let all =
         [ for row in 1 .. Board.Height -> Rank row ]
         @ [ for column in 1 .. Board.Width -> File column ]
