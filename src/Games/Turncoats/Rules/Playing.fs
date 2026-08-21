@@ -7,9 +7,11 @@ module Playing =
 
 
     let private refused =
+        let asked = Counting.several "player" "players"
+
         function
-        | TooFewPlayers n -> $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
-        | TooManyPlayers n -> $"{n} players? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
+        | TooFewPlayers n
+        | TooManyPlayers n -> $"{asked n}? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
 
     let opening game =
         InPlay

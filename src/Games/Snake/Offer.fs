@@ -1,5 +1,6 @@
 namespace TCModel.Snake
 
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Snake
@@ -7,11 +8,13 @@ open TCModel.Snake
 module Offer =
 
 
+    let private asked = Counting.several "player" "players"
+
     let private deal pace players seed =
         if players >= Session.Fewest && players <= Session.Most then
             Ok(Session.dealt pace players seed)
         else
-            Error $"{players} players? Snake takes {Session.Fewest} to {Session.Most}, a snake each."
+            Error $"{asked players}? Snake takes {Session.Fewest} to {Session.Most}, a snake each."
 
 
     [<Literal>]

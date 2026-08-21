@@ -13,6 +13,7 @@ open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 
@@ -578,9 +579,12 @@ module Server =
                 |> List.filter (fun record -> record.Game = Some hosting.Name)
                 |> List.choose (fun record -> home.Resumes record.Path |> Result.toOption)
 
-            printfn "  Took up %d game(s) from logs/." (List.length found)
+            printfn "  Took up %s from logs/." (Counting.several "game" "games" (List.length found))
 
-        home.Sweeping(TimeSpan.FromMinutes 5.0, (fun gone -> printfn "  Swept %d table(s) nobody was at." (List.length gone)))
+        home.Sweeping(
+            TimeSpan.FromMinutes 5.0,
+            (fun gone -> printfn "  Swept %s nobody was at." (Counting.several "table" "tables" (List.length gone)))
+        )
         |> ignore
 
         // The house beats faster than any game does; each table is asked only when its own next beat

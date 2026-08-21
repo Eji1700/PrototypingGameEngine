@@ -1,5 +1,6 @@
 namespace TCModel.Diplomacy
 
+open TCModel.Common
 open TCModel.Engine
 
 module Words =
@@ -93,9 +94,13 @@ module Words =
     let report (entry: Report) =
         $"{piece entry.Piece} {saying entry.Said}", fate entry.Fate
 
+    let centresOf = Counting.several "centre" "centres"
+
+    let unitsOf = Counting.several "unit" "units"
+
     let ending =
         function
-        | Solo(winner, centres) -> $"{Power.name winner} holds {centres} centres and has won outright"
+        | Solo(winner, held) -> $"{Power.name winner} holds {centresOf held} and has won outright"
         | LastStanding winner -> $"{Power.name winner} is the last power left"
         | Deserted -> "everybody has walked away"
 
@@ -178,20 +183,16 @@ module Words =
         | NothingToGiveUp at -> $"You have nothing to give up, so {province at} stays where it is."
         | NotThisPhase says -> $"'{saying says}' is not an order this phase takes."
 
-    let private several count one many =
-        let word = if abs count = 1 then one else many
-        $"{abs count} {word}"
-
     let rejection =
         function
         | Rejected(_, why) -> fault why
         | NothingWritten at -> $"There is no order written for {province at}."
         | AlreadyFinished who -> $"{Power.name who} has already said its orders are final."
         | ThatIsEnough(who, owed) when owed > 0 ->
-            let due = several owed "build" "builds"
+            let due = Counting.several "build" "builds" owed
             $"{Power.name who} has {due} coming and has written them all."
         | ThatIsEnough(who, owed) ->
-            let due = several owed "unit" "units"
+            let due = Counting.several "unit" "units" owed
             $"{Power.name who} has {due} to give up and has named them all."
         | TalkingToYourself -> "You are the one power you cannot send word to."
 

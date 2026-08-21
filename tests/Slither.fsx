@@ -8,6 +8,7 @@
 #load "../src/Common/Result.fs"
 #load "../src/Common/Cascade.fs"
 #load "../src/Common/Random.fs"
+#load "../src/Common/Counting.fs"
 #load "../src/Engine/Seats.fs"
 #load "../src/Engine/Messages.fs"
 #load "../src/Engine/Told.fs"

@@ -12,6 +12,7 @@
     <Compile Include="Common/Result.fs" />
     <Compile Include="Common/Cascade.fs" />
     <Compile Include="Common/Random.fs" />
+    <Compile Include="Common/Counting.fs" />
   </ItemGroup>
 
   <ItemGroup Label="Engine - how a game is played">

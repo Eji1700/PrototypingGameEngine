@@ -1,5 +1,6 @@
 namespace TCModel.Cascade
 
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Cascade
@@ -9,11 +10,13 @@ module Offer =
     [<Literal>]
     let Seats = 1
 
+    let private asked = Counting.several "player" "players"
+
     let private deal players seed =
         if players = Seats then
             Ok(Session.dealt seed)
         else
-            Error $"{players} players? Cascade seats one - whoever is touching the board."
+            Error $"{asked players}? Cascade seats one - whoever is touching the board."
 
 
     /// How long until the next beat: one quarter turn, at whatever notch the board is wound to. The

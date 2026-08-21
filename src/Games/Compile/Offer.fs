@@ -1,5 +1,6 @@
 namespace TCModel.Compile
 
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Compile
@@ -7,11 +8,13 @@ open TCModel.Compile
 module Offer =
 
 
+    let private asked = Counting.several "player" "players"
+
     let private deal control players seed =
         if players = Session.Seats then
             Ok(Session.dealt control seed)
         else
-            Error $"{players} players? Compile takes {Session.Seats}, sitting opposite each other."
+            Error $"{asked players}? Compile takes {Session.Seats}, sitting opposite each other."
 
 
     let private faults =

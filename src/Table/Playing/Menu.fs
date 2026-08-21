@@ -29,7 +29,7 @@ module Menu =
             [ for players in game.Fewest .. game.Most ->
                   Keys.sends
                       (Some(char (int '0' + players)))
-                      (if players = 1 then "1 player" else $"{players} players")
+                      (Counting.several "player" "players" players)
                       ""
                       $"seats {Seating.line (Seating.here players)}" ]
           Note =
@@ -146,8 +146,8 @@ module Menu =
 
     let continuing (game: Playable<_, _, _>) (records: Transcript.Saved list) : Keys.Screen =
         let row at (record: Transcript.Saved) =
-            let seats = if record.Players = 1 then "1 seat" else $"{record.Players} seats"
-            let moves = if record.Moves = 1 then "1 move" else $"{record.Moves} moves"
+            let seats = Counting.several "seat" "seats" record.Players
+            let moves = Counting.several "move" "moves" record.Moves
 
             let said =
                 match record.Game with

@@ -1,5 +1,6 @@
 namespace TCModel.Life
 
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Life
@@ -35,11 +36,13 @@ module Offer =
         | System.ConsoleKey.Subtract -> Some "slower"
         | _ -> None
 
+    let private asked = Counting.several "player" "players"
+
     let private deal players seed =
         if players = Seats then
             Ok(World.dealt seed)
         else
-            Error $"{players} players? Life is played by nobody - there is one seat at it, for whoever is watching."
+            Error $"{asked players}? Life is played by nobody - there is one seat at it, for whoever is watching."
 
 
     let private faults =

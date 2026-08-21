@@ -9,7 +9,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $scripts = @(
     "ruling", "outcome", "actions", "history", "knowledge"
     "lobby", "house", "solo", "view", "html", "reach", "cli"
-    "properties", "rival"
+    "properties", "rival", "counting"
     "tictactoe", "diplomacy", "compile", "life", "snake", "cascade"
 )
 
@@ -74,13 +74,18 @@ try {
     $failed = @($done | Where-Object { $_.Code -ne 0 })
 
     ""
-    "--- $($done.Count) script(s) in $([math]::Round($whole.Elapsed.TotalSeconds, 1))s ---"
+    $ran = if ($done.Count -eq 1) { "1 script" } else { "$($done.Count) scripts" }
+    "--- $ran in $([math]::Round($whole.Elapsed.TotalSeconds, 1))s ---"
     foreach ($r in $done | Sort-Object Seconds -Descending) {
         "{0}  {1,-11} {2,5}s" -f $(if ($r.Code -eq 0) { "ok  " } else { "FAIL" }), $r.Name, $r.Seconds
     }
 
     ""
-    if ($failed) { "$($failed.Count) script(s) failed: $($failed.Name -join ', ')"; exit 1 }
+    if ($failed) {
+        $lost = if ($failed.Count -eq 1) { "1 script" } else { "$($failed.Count) scripts" }
+        "$lost failed: $($failed.Name -join ', ')"
+        exit 1
+    }
     else { "all checks passed"; exit 0 }
 }
 finally {

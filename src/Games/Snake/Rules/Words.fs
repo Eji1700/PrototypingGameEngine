@@ -1,5 +1,6 @@
 namespace TCModel.Snake
 
+open TCModel.Common
 open TCModel.Engine
 
 module Words =
@@ -27,21 +28,11 @@ module Words =
         | South -> "down"
         | West -> "left"
 
-    let segments =
-        function
-        | 1 -> "1 segment"
-        | many -> $"{many} segments"
+    let segments = Counting.several "segment" "segments"
 
-    let steps =
-        function
-        | 1 -> "1 step"
-        | many -> $"{many} steps"
+    let steps = Counting.several "step" "steps"
 
-    let eaten =
-        function
-        | 0 -> "nothing yet"
-        | 1 -> "1 piece"
-        | many -> $"{many} pieces"
+    let eaten = Counting.orNone "nothing yet" "piece" "pieces"
 
     let fate =
         function

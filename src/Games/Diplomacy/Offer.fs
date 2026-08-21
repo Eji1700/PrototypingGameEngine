@@ -1,5 +1,6 @@
 namespace TCModel.Diplomacy
 
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Diplomacy
@@ -9,12 +10,14 @@ module Offer =
 
     let Seats = Power.Count
 
+    let private asked = Counting.several "player" "players"
+
     let private deal players _ =
         if players = Seats then
             Ok Session.dealt
         else
             Error
-                $"{players} players? Diplomacy takes {Seats}, one for each power - give the seats nobody is in to the machine with --rival."
+                $"{asked players}? Diplomacy takes {Seats}, one for each power - give the seats nobody is in to the machine with --rival."
 
 
     let private faults = Atlas.problems @ Position.problems

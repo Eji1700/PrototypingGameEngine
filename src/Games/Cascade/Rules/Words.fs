@@ -1,31 +1,25 @@
 namespace TCModel.Cascade
 
+open TCModel.Common
 open TCModel.Engine
 
 module Words =
 
     let cell = Board.name
 
-    let cells =
-        function
-        | 1 -> "1 cell"
-        | many -> $"{many} cells"
+    let cells = Counting.several "cell" "cells"
 
-    let turns =
-        function
-        | 1 -> "1 turn"
-        | many -> $"{many} turns"
+    let turns = Counting.several "turn" "turns"
 
-    let touches =
-        function
-        | 0 -> "no touches"
-        | 1 -> "1 touch"
-        | many -> $"{many} touches"
+    let touches = Counting.orNone "no touches" "touch" "touches"
 
-    let waves =
-        function
-        | 1 -> "1 wave"
-        | many -> $"{many} waves"
+    let waves = Counting.several "wave" "waves"
+
+    let squares = Counting.several "square" "squares"
+
+    /// A row and a column are worth the same and are counted together, so they are read out
+    /// together too - and at one of them there is no telling which it was.
+    let wholeLines = Counting.several "whole row or column" "whole rows or columns"
 
     let shape =
         function
@@ -76,7 +70,7 @@ module Words =
         | Wound notch -> $"A quarter turn now takes {Session.quarter notch}ms. Notch {notch}."
         | GaveIn left -> $"Put down with {touches left} unspent."
         | GameEnded tally ->
-            $"{turns tally.Rotations} in all, over {touches tally.Touches}: {tally.Lines} whole rows or columns, and {tally.Squares} squares."
+            $"{turns tally.Rotations} in all, over {touches tally.Touches}: {wholeLines tally.Lines}, and {squares tally.Squares}."
 
     let rejection =
         function

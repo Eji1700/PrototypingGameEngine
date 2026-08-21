@@ -1,5 +1,6 @@
 namespace TCModel.TicTacToe
 
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.TicTacToe
@@ -10,11 +11,13 @@ module Offer =
     [<Literal>]
     let Seats = 2
 
+    let private asked = Counting.several "player" "players"
+
     let private deal players _ =
         if players = Seats then
             Ok Session.dealt
         else
-            Error $"{players} players? Noughts and crosses takes {Seats}."
+            Error $"{asked players}? Noughts and crosses takes {Seats}."
 
 
     let private faults =

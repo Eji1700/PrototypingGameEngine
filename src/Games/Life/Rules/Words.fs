@@ -1,20 +1,15 @@
 namespace TCModel.Life
 
+open TCModel.Common
 open TCModel.Engine
 
 module Words =
 
     let cell = Grid.name
 
-    let cells =
-        function
-        | 1 -> "1 cell"
-        | many -> $"{many} cells"
+    let cells = Counting.several "cell" "cells"
 
-    let generations =
-        function
-        | 1 -> "1 generation"
-        | many -> $"{many} generations"
+    let generations = Counting.several "generation" "generations"
 
     let player (_: PlayerId) = "The watcher"
 

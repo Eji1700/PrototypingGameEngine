@@ -1,5 +1,6 @@
 namespace TCModel.Turncoats
 
+open TCModel.Common
 open TCModel.Engine
 
 module Words =
@@ -37,10 +38,9 @@ module Words =
     let tied = "tied"
 
     let stonesOf n c =
-        if n = 1 then $"a {color c} stone" else $"{n} {color c} stones"
+        Counting.a $"{color c} stone" $"{color c} stones" n
 
-    let moves n =
-        if n = 1 then "1 move" else $"{n} moves"
+    let moves = Counting.several "move" "moves"
 
     let pile stones =
         match Pile.toCounts stones with

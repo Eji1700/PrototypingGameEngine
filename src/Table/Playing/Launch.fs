@@ -383,8 +383,11 @@ module Launch =
         skills game names
         |> Result.bind (fun rivals ->
             if List.length rivals > players - 1 then
+                let spare = Counting.several "seat" "seats" (players - 1)
+                let given = List.length rivals
+
                 Error
-                    $"A game for {players} leaves {players - 1} seat(s) for the machine, and it was given {List.length rivals}. Deal for more, or ask for fewer."
+                    $"A game for {players} leaves {spare} for the machine, and it was given {given}. Deal for more, or ask for fewer."
             else
                 Ok rivals)
 

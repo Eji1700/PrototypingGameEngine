@@ -61,8 +61,8 @@ module Render =
 
             [ Scene.cell Tone.Yours (if Some power = acting && not (Session.isOver session) then ">" else "")
               Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key power)) (Words.seated yours seat)
-              Scene.cell Tone.Quiet $"{centres} centres"
-              Scene.cell Tone.Quiet $"{units} units"
+              Scene.cell Tone.Quiet (Words.centresOf centres)
+              Scene.cell Tone.Quiet (Words.unitsOf units)
               Scene.cell Tone.Quiet standing ])
         |> Aligned
 

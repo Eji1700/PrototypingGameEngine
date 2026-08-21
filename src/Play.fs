@@ -2,6 +2,7 @@ module TCModel.Play
 
 open System
 open System.IO
+open TCModel.Common
 open TCModel.Engine
 open TCModel.Table
 open TCModel.Net
@@ -241,7 +242,7 @@ let private takeUp game path =
 
     Transcript.takenUp elsewhere game path
     |> Result.map (fun (model, sitters, stamp, moves) ->
-        printfn "Took up %s from %s." (if moves = 1 then "1 move" else $"{moves} moves") path
+        printfn "Took up %s from %s." (Counting.several "move" "moves" moves) path
         printfn "Take them back with 'undo', or read them with 'history'."
         model, sitters, stamp)
 
