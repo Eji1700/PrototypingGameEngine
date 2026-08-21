@@ -102,13 +102,33 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         for line in lines do
             printf "%s" (line + Environment.NewLine)
 
-    let (|Typing|Holding|Restarting|Leaving'|Steering|) (key: ConsoleKeyInfo) =
+    // A game gets first refusal on every key but the two this loop cannot give up: Enter opens the
+    // line prompt and Escape puts the game down, and a game that could take those could leave
+    // somebody at a board with no way out of it. Everything else is the game's if it wants it,
+    // which is what lets one game steer with the space bar and another hold the clock with it.
+    //
+    // `h` holds as well as the space bar always does, so a game that takes the space bar does not
+    // cost a player the one key that stops the clock.
+    let (|Typing|Holding|Restarting|Leaving'|Steering|Idle|) (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> Typing
-        | ConsoleKey.Spacebar -> Holding
-        | ConsoleKey.R -> Restarting
         | ConsoleKey.Escape -> Leaving'
-        | _ -> Steering
+        | _ ->
+            match pulse.Pressed key with
+            | Some line -> Steering line
+            | None ->
+                match key.Key with
+                | ConsoleKey.Spacebar
+                | ConsoleKey.H -> Holding
+                | ConsoleKey.R -> Restarting
+                | _ -> Idle
+
+    // What to tell the player stops the clock, which is not the same key at every game.
+    let holds =
+        if (pulse.Pressed(ConsoleKeyInfo(' ', ConsoleKey.Spacebar, false, false, false))).IsSome then
+            "h"
+        else
+            "space"
 
     let rec spin holding wanted drawn said since due solo =
         let over = Solo.isOver solo
@@ -132,32 +152,32 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
                      Logged = wanted.Logged })
             |> Margins.through phase
 
-        let solo = Solo.reading Keyboard showing solo
-
         let screen =
             String.concat
                 Environment.NewLine
-                [ yield (Solo.board Keyboard solo |> Option.defaultValue "")
+                [ yield (Solo.drawnAt showing Keyboard solo |> Option.defaultValue "")
                   yield! said
                   yield
                       if over then
                           "  (over) r to deal another - Enter to type a line - Esc to put it down"
                       elif holding then
-                          "  (held) space to go on - r to deal another - Enter to type a line - Esc to put it down"
+                          $"  (held) {holds} to go on - r to deal another - Enter to type a line - Esc to put it down"
                       else
-                          "  space to hold and read the rest - Enter to type a line - Esc to put it down" ]
+                          $"  {holds} to hold and read the rest - Enter to type a line - Esc to put it down" ]
 
-        // A screen identical to the one already on the terminal is not written again. Without this
-        // a game at rest under a running clock repaints itself as fast as the loop can poll.
-        let drawn =
-            if snd drawn = screen then drawn else Screens.redrawn (fst drawn) screen, screen
+        let drawn = Screens.redrawn drawn screen
 
-        let heard holding since due line solo =
+        // `drawn` is passed in rather than taken from above, because the one caller that wipes the
+        // terminal first has to say so: a screen that came out identical would otherwise not be
+        // written at all, and the player would be left looking at the blank it was cleared to.
+        let heard holding drawn since due line solo =
             let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
             let answered = tell rings posts @ errand (Solo.game solo) sitters doing
 
-            let wanted =
-                if still then Solo.margins Keyboard next |> Option.defaultValue wanted else wanted
+            // What the player asked for, whether or not the clock is running - the margins this
+            // loop imposes on a moving board are never written into their choice, so there is
+            // nothing here that could overwrite it.
+            let wanted = Solo.margins Keyboard next |> Option.defaultValue wanted
 
             match doing with
             | Leaving _ ->
@@ -185,28 +205,26 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) since due next
         | Some key ->
             match key with
-            | Leaving' -> heard holding since due "quit" solo
+            | Leaving' -> heard holding drawn since due "quit" solo
             | Holding ->
                 let since, due = afresh ()
                 spin (not holding) wanted drawn said since due solo
             | Restarting when still ->
                 let since, due = afresh ()
-                heard holding since due "restart" solo
+                heard holding drawn since due "restart" solo
             | Restarting -> spin holding wanted drawn said since due solo
             | Typing ->
                 printf "> "
 
                 match Console.ReadLine() with
-                | null -> heard holding since due "quit" solo
+                | null -> heard holding drawn since due "quit" solo
                 | line ->
                     Screens.cleared ()
                     let since, due = afresh ()
-                    heard holding since due line solo
-            | Steering when over -> spin holding wanted drawn said since due solo
-            | Steering ->
-                match pulse.Pressed key with
-                | Some line -> heard holding since due line solo
-                | None -> spin holding wanted drawn said since due solo
+                    heard holding Screens.nothing since due line solo
+            | Steering _ when over -> spin holding wanted drawn said since due solo
+            | Steering line -> heard holding drawn since due line solo
+            | Idle -> spin holding wanted drawn said since due solo
 
     if Screens.steering () then
         Screens.cleared ()
@@ -215,7 +233,7 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         spin
             false
             (Solo.margins Keyboard solo |> Option.defaultValue Margins.all)
-            (0, "")
+            Screens.nothing
             said
             opened
             (opened + pulse.Every(Model.state (Solo.model solo)))

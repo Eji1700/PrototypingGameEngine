@@ -36,24 +36,43 @@ type Tally =
 /// this says which of them has just had a wave land on it. Keeping it here is also what makes a
 /// game taken up from a record sound exactly like the game it was saved from.
 ///
-/// One sound and not a list of them. A wave that landed, completed a shape and came to rest all
-/// at once is one moment, and three noises on top of one another is not three things heard.
+/// At most two: what the wave *did*, and what the board is now. Those are different things - a
+/// wave that completed a row and left the board at rest has both said something rare and handed
+/// it back to you - and a page can play the two of them a moment apart. What it never is, is
+/// three noises on top of one another for what was one moment.
 type Sounding =
     | Landing
+    | Squared
+    | Lined
     | Resting
-    | Completing
+    | Ending
 
 type Play =
-    { Cells: Map<Cell, Standing>
-      Turning: Set<Cell>
-      Wave: int
-      Left: int
-      Speed: int
-      Run: Run option
-      Tally: Tally
-      Lit: Lit list
-      Sounding: Sounding option
-      Rng: Rng }
+    {
+        Cells: Map<Cell, Standing>
+        Turning: Set<Cell>
+
+        /// Where the hand is resting. It is in the state rather than beside it because a key press
+        /// here stands for a line the game reads, the same as everywhere else in this program - so
+        /// moving the cursor is an ordinary move, in the record and undoable, and a board taken up
+        /// from a record comes back with the hand where it was left.
+        At: Cell
+        Wave: int
+        Left: int
+        Speed: int
+        Run: Run option
+        Tally: Tally
+        Lit: Lit list
+        Sounding: Sounding list
+
+        /// The beat the board was last struck on, if the strike still shows. A shape coming up or
+        /// a cascade coming to rest is worth more than a line in the log, and a band of light run
+        /// down the whole board is what a reader with no colour at all - which is what `plain` is
+        /// - has instead of hearing it.
+        Struck: int option
+
+        Rng: Rng
+    }
 
 type Ending =
     | Spent
@@ -155,13 +174,17 @@ module Session =
         InPlay
             { Cells = cells
               Turning = Set.empty
+              At =
+                { Row = (Board.Height + 1) / 2
+                  Column = (Board.Width + 1) / 2 }
               Wave = 0
               Left = Touches
               Speed = Ordinary
               Run = None
               Tally = fresh
               Lit = []
-              Sounding = None
+              Sounding = []
+              Struck = None
               Rng = rng }
 
     let active (_: Session) = Seat.at 1
@@ -192,6 +215,13 @@ module Session =
 
     let atRest play = Set.isEmpty play.Turning
 
+    /// Where the hand goes when it is pushed that way. A push off the edge of the board is a push
+    /// that does not move it, rather than one that wraps or one that is refused: a hand held
+    /// against the edge is what a player expects, and it says nothing about it either.
+    let pushed way play =
+        let there = Board.along way play.At
+        if Board.holds there then there else play.At
+
     /// How worn a cell is: a step further along for every five quarter turns it has made, and
     /// never further than the last step there is a way of drawing.
     let wear cell play =
@@ -202,7 +232,36 @@ module Session =
     let justLanded cell play =
         play.Wave > 0 && (standing cell play).Landed = play.Wave
 
+    /// Which soundings the board is *struck* for as well as heard.
+    ///
+    /// It is said here rather than at the table because the rules may not reach the table - but it
+    /// has to be the same three a terminal rings its one bell for, or what a reader sees and what
+    /// a reader hears would drift apart. `Offer` holds the two against each other and says so in
+    /// `Faults` if they ever disagree.
+    let strikes =
+        function
+        | Landing
+        | Squared -> false
+        | Lined
+        | Resting
+        | Ending -> true
+
     let sounding play = play.Sounding
+
+    /// Whether the board still has something to *show*, which is not the same as having something
+    /// left to do. A cascade that has come to rest is still lighting the shapes it made and still
+    /// running the strike down itself, and until that has finished the clock has a reason to go on
+    /// beating. A board with nothing moving and nothing showing has none, and its beats take
+    /// nothing, say nothing, and leave no line behind.
+    let settling play =
+        not (atRest play) || not (List.isEmpty play.Lit) || play.Struck.IsSome
+
+    /// How far down the board the strike has got, in rows, or nothing if it is not showing. Beats
+    /// and the frames within them are counted together, so the band goes on travelling across a
+    /// beat boundary rather than starting again at each one.
+    let struck pictures frame play =
+        play.Struck
+        |> Option.map (fun since -> ((play.Wave - since) * pictures + frame) * 2)
 
     /// The activation being watched, whether it is still running or was the last one there was.
     /// A board nobody has touched yet has none, and that is a different thing from one of nought.

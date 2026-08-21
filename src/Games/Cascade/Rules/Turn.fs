@@ -4,6 +4,8 @@ open TCModel.Engine
 
 type Move =
     | Touch of Cell
+    | Point of Way
+    | Press
     | Beat
     | Faster
     | Slower
@@ -110,6 +112,9 @@ module Turn =
             (play.Lit @ [ for shape in made -> { Shape = shape; Since = wave } ])
             |> List.filter (fun lit -> wave - lit.Since < Session.Lingers)
 
+        let lined = Session.lines made > 0
+        let ended = settled && (play.Left = 0 || halted)
+
         let tally =
             if not settled then
                 play.Tally
@@ -119,6 +124,16 @@ module Turn =
                     Lines = play.Tally.Lines + Session.lines run.Made
                     Squares = play.Tally.Squares + Session.squares run.Made }
 
+        // What the wave did, and then what the board now is. Never more than one of each: the
+        // wave that completed a row and left the board at rest says both, and a page plays them a
+        // moment apart, but a wave that merely landed says only that it landed.
+        let sounding =
+            [ if lined then yield Lined
+              elif Session.squares made > 0 then yield Squared
+              elif not settled then yield Landing
+
+              if settled then yield (if ended then Ending else Resting) ]
+
         let played =
             { play with
                 Cells = cells
@@ -127,12 +142,15 @@ module Turn =
                 Run = Some run
                 Tally = tally
                 Lit = lit
-                Sounding =
-                    Some(
-                        if not (List.isEmpty made) then Completing
-                        elif settled then Resting
-                        else Landing
-                    ) }
+                Sounding = sounding
+
+                // The board is struck for whatever a terminal would have rung its one bell for,
+                // so the two say the same thing to a reader who can hear and to one who cannot.
+                Struck =
+                    if sounding |> List.exists Session.strikes then
+                        Some wave
+                    else
+                        play.Struck |> Option.filter (fun since -> wave - since < Session.Lingers) }
 
         let told =
             [ for shape in made -> Happened(CameUp(shape, run.Rotations))
@@ -145,7 +163,28 @@ module Turn =
         else
             Some(InPlay played), told
 
-    let asked move session =
+    /// A sound belongs to the move that made it, and to no other.
+    ///
+    /// What the board is sounding is read off the state *after* a move, which is what makes a game
+    /// taken up from a record sound like the one it was saved from. It also means a sound left
+    /// lying in the state is heard again after the next move, and the one after that - moving the
+    /// hand about a board that had just come to rest rang the chime every time it moved. Only a
+    /// beat can land anything, so only a beat is allowed to leave a sound behind, and every other
+    /// move is quiet by construction rather than by remembering to say so.
+    let private hushed =
+        function
+        | InPlay play -> InPlay { play with Sounding = [] }
+        | Finished(play, ending) -> Finished({ play with Sounding = [] }, ending)
+
+    let rec asked move session =
+        match move with
+        | Beat -> asking move session
+        | _ ->
+            match asking move session with
+            | Some played, told -> Some(hushed played), told
+            | None, told -> None, told
+
+    and private asking move session =
         match session, move with
         | Finished _, _ -> None, []
 
@@ -155,22 +194,51 @@ module Turn =
                     { play with
                         Turning = Set.empty
                         Left = 0
-                        Lit = []
-                        Sounding = None },
+                        Lit = [] },
                     GaveUp
                 )
             ),
             [ Happened(GaveIn play.Left); Happened(GameEnded play.Tally) ]
 
-        // The clock beats over a board with nothing turning on it for as long as nobody touches
-        // anything, and a beat that found nothing to do did not happen: it takes nothing and says
-        // nothing, and `Update` leaves no line in the record for it.
-        | InPlay play, Beat when Session.atRest play -> None, []
+        // A board that has come to rest may still have something to show - shapes lit, and the
+        // strike running down it - and a beat is what carries those along, so the clock goes on
+        // beating until they have finished. Once there is nothing moving and nothing showing, a
+        // beat takes nothing and says nothing, and `Update` leaves no line in the record for it.
+        | InPlay play, Beat when Session.atRest play && not (Session.settling play) -> None, []
+
+        | InPlay play, Beat when Session.atRest play ->
+            let wave = play.Wave + 1
+
+            Some(
+                InPlay
+                    { play with
+                        Wave = wave
+                        Lit = play.Lit |> List.filter (fun lit -> wave - lit.Since < Session.Lingers)
+                        Sounding = []
+                        Struck = play.Struck |> Option.filter (fun since -> wave - since < Session.Lingers) }
+            ),
+            []
 
         | InPlay play, Beat ->
             match play.Run with
             | None -> None, []
             | Some run -> landing run play
+
+        // Moving the hand is a move like any other, and it says nothing - a line in the log every
+        // time somebody nudged the cursor a square would bury what the board was actually doing.
+        // A push that would take it off the edge moves nothing, and `Update` does not write down a
+        // move that took nothing and said nothing.
+        | InPlay play, Point way when Session.pushed way play = play.At -> None, []
+
+        | InPlay play, Point way ->
+            Some(
+                InPlay
+                    { play with
+                        At = Session.pushed way play }
+            ),
+            []
+
+        | InPlay play, Press -> asked (Touch play.At) session
 
         | InPlay _, Touch cell when not (Board.holds cell) -> None, [ Refused(NoSuchCell cell) ]
 
@@ -188,8 +256,7 @@ module Turn =
                         Tally =
                             { play.Tally with
                                 Touches = play.Tally.Touches + 1 }
-                        Lit = []
-                        Sounding = None }
+                        Lit = [] }
             ),
             [ Happened(Touched cell) ]
 

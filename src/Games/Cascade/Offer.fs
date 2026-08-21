@@ -35,20 +35,39 @@ module Offer =
     /// a board redrawn several times a second to show the same thing is a board flickering for no
     /// reason.
     let private frames session =
-        if Session.atRest (Session.play session) then 0 else Render.Pictures * 2
+        if Session.settling (Session.play session) then Render.Pictures * 2 else 0
 
     /// What the board is sounding, in the three the table has to make a noise with. A shape
     /// coming up is the rare thing and gets the rare sound; a cascade coming to rest is worth
     /// noticing; a wave landing is the small one, and there are a great many of those.
-    let private rings session =
-        match Session.sounding (Session.play session) with
-        | Some Completing -> [ Fanfare ]
-        | Some Resting -> [ Chime ]
-        | Some Landing -> [ Tap ]
-        | None -> []
+    /// What each of the board's own occasions is heard as. A square comes up on half of all
+    /// cascades and several times over in a long one, so it takes the sound that comes often; a
+    /// whole row or column is rarer by a factor of ten and takes the one that does not.
+    let private rung =
+        function
+        | Landing -> Tap
+        | Squared -> Chime
+        | Lined -> Fanfare
+        | Resting -> Ready
+        | Ending -> Knell
 
+    let private rings session =
+        Session.sounding (Session.play session) |> List.map rung
+
+    /// The hand, moved with the arrows or with `wasd`, and the space bar to press what it is on.
+    /// Every one of them is a line the game reads, so nothing can be pressed here that could not
+    /// have been typed.
     let private pressed (key: System.ConsoleKeyInfo) =
         match key.Key with
+        | System.ConsoleKey.UpArrow
+        | System.ConsoleKey.W -> Some "up"
+        | System.ConsoleKey.DownArrow
+        | System.ConsoleKey.S -> Some "down"
+        | System.ConsoleKey.LeftArrow
+        | System.ConsoleKey.A -> Some "left"
+        | System.ConsoleKey.RightArrow
+        | System.ConsoleKey.D -> Some "right"
+        | System.ConsoleKey.Spacebar -> Some "press"
         | System.ConsoleKey.OemPlus
         | System.ConsoleKey.Add -> Some "faster"
         | System.ConsoleKey.OemMinus
@@ -121,6 +140,16 @@ module Offer =
           if not (Session.atRest dealt) then
               yield "a board dealt with something already turning on it"
 
+          if not (Board.holds dealt.At) then
+              yield "a board dealt with the hand resting off the edge of it"
+
+          // The hand is dealt in the middle, so there is somewhere for it to go every way. A board
+          // that dealt it into a corner would be one where two of the four keys did nothing, and
+          // nothing above here would have any way of noticing.
+          for way in Way.all do
+              if Session.pushed way dealt = dealt.At then
+                  yield $"a hand dealt against the {Words.way way} edge, with nowhere to go that way"
+
           if Session.Touches < 1 then
               yield $"a board worth {Session.Touches} touches, which is not a board"
 
@@ -128,7 +157,15 @@ module Offer =
               yield $"a fastest notch of {Session.quarter Session.Fastest}ms, which is no time at all"
 
           if Session.quarter Session.Slowest <= Session.quarter Session.Fastest then
-              yield "a slowest notch that is not slower than the fastest one" ]
+              yield "a slowest notch that is not slower than the fastest one"
+
+          // What a reader hears and what a reader sees have to say the same thing. The rules
+          // decide which occasions strike the board and the table decides which sounds are worth
+          // its one bell, and neither can see the other - so the two lists are held up against
+          // each other here, where both are in reach.
+          for occasion in [ Landing; Squared; Lined; Resting; Ending ] do
+              if Session.strikes occasion <> Sound.worthABell (rung occasion) then
+                  yield $"{occasion} struck on the board and rung at the table differently" ]
 
 
     let private scenes: Readers.Scenes<Move, Session, Notice> =

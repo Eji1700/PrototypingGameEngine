@@ -205,14 +205,26 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
             [ "let horn=null;const wake=()=>{try{horn=horn||new (window.AudioContext||window.webkitAudioContext)();"
               "if(horn.state===`suspended`)horn.resume()}catch(e){}};"
               "addEventListener(`pointerdown`,wake);addEventListener(`keydown`,wake);"
+
+              // Five recipes: the notes to play, how far apart, how loud, how long each rings and
+              // what shape of wave it is. A tap is one low blip; a chime and a fanfare climb, the
+              // fanfare further and brighter; ready is a single clear note that says the board is
+              // yours again; a knell falls rather than climbs, lower and slower than any of them.
+              "const ways={"
+              "tap:[[392],0.00,0.045,0.13,`triangle`],"
+              "chime:[[659.25,987.77],0.07,0.06,0.19,`triangle`],"
+              "fanfare:[[523.25,659.25,783.99,1046.5],0.075,0.075,0.28,`triangle`],"
+              "ready:[[587.33],0.00,0.06,0.30,`sine`],"
+              "knell:[[329.63,220],0.16,0.07,0.55,`sine`]};"
+
               "window.rang=w=>{wake();if(!horn||horn.state!==`running`)return;"
-              "const notes=w===`fanfare`?[523.25,659.25,783.99]:w===`chime`?[659.25,987.77]:[392];"
-              "const loud=w===`tap`?0.04:0.07;const at=horn.currentTime;"
+              "const way=ways[w];if(!way)return;"
+              "const[notes,apart,loud,ring,shape]=way;const at=horn.currentTime;"
               "notes.forEach((hz,i)=>{const o=horn.createOscillator(),g=horn.createGain();"
-              "o.type=`triangle`;o.frequency.value=hz;const from=at+i*0.07;"
+              "o.type=shape;o.frequency.value=hz;const from=at+i*apart;"
               "g.gain.setValueAtTime(0.0001,from);g.gain.exponentialRampToValueAtTime(loud,from+0.012);"
-              "g.gain.exponentialRampToValueAtTime(0.0001,from+0.17);"
-              "o.connect(g);g.connect(horn.destination);o.start(from);o.stop(from+0.19)})}" ]
+              "g.gain.exponentialRampToValueAtTime(0.0001,from+ring);"
+              "o.connect(g);g.connect(horn.destination);o.start(from);o.stop(from+ring+0.02)})}" ]
 
     let private holding =
         String.concat

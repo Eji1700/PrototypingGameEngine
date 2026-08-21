@@ -412,8 +412,8 @@ let private posted (markup: string) =
 let private buttons = posted (asPage.Board Margins.all (Seat.at 1) (gliding 4))
 
 report
-    "the board offers the things a person does over and over"
-    [ "step"; "step 10"; "step 50"; "undo"; "clear"; "restart" ]
+    "the board offers the things a person does over and over, the clock first"
+    [ "stop"; "step"; "step 10"; "slower"; "faster"; "undo"; "clear"; "restart" ]
     buttons
 
 report
@@ -466,5 +466,156 @@ report
     (notes (Render.board Margins.all (Seat.at 1) (gliding 4)))
 
 report "and not one of them survives turning them off" [] (notes (Render.board Margins.none (Seat.at 1) (gliding 4)))
+
+// --- the clock ------------------------------------------------------------------------------
+//
+// The rule runs on its own now, which is a table keeping time and a game answering a beat. None
+// of what follows needs a clock: a beat is a move, and every one of these asks for it by hand.
+
+let private pulse = life.Pulse |> Option.get
+
+let private beating moves model =
+    moves
+    |> List.fold (fun model move -> Update.update rules (Make move) model) model
+
+report "a fresh soup is dealt running" true (standing dealt).Running
+
+report "at a notch in the middle of the range" 5 (standing dealt).Speed
+
+report "which is about three generations a second" true (pulse.Every(standing dealt) < TimeSpan.FromMilliseconds 400.0)
+
+report "a beat is one generation" 1 (rules.Turn(standing (beating [ Beat ] dealt)))
+
+report "and says nothing, because the board is already saying it" [] (toldBy (beating [ Beat ] dealt))
+
+// The whole point of the toggle: a board nobody has started costs nothing at all, however long
+// the clock goes on beating over it.
+
+let private stopped = beating [ Running None ] dealt
+
+report "'run' turns it the other way" false (standing stopped).Running
+
+report "and says so" true (toldBy stopped |> List.exists (mentions "Stopped at generation"))
+
+report "a beat at a stopped board does nothing" (standing stopped) (standing (beating (List.replicate 20 Beat) stopped))
+
+report
+    "and writes no record at all, twenty beats or none"
+    (Journal.length stopped.Journal)
+    (Journal.length (beating (List.replicate 20 Beat) stopped).Journal)
+
+report "nor says anything" (toldBy stopped) (toldBy (beating (List.replicate 20 Beat) stopped))
+
+report "and 'run' again starts it" true (standing (beating [ Running None ] stopped)).Running
+
+report
+    "'stop' says which outright, and twice over is still stopped"
+    false
+    (standing (beating [ Running(Some false); Running(Some false) ] dealt)).Running
+
+report "'start' likewise" true (standing (beating [ Running(Some false); Running(Some true) ] dealt)).Running
+
+// A board with nothing left to do is beaten just the same and answers the same way, so a settled
+// board is not a clock filling a record with refusals.
+
+let private stillLife =
+    played
+        [ Clear
+          Toggle(at "j10")
+          Toggle(at "j11")
+          Toggle(at "k10")
+          Toggle(at "k11") ]
+
+report
+    "a settled board takes a beat and does nothing with it"
+    (standing stillLife)
+    (standing (beating (List.replicate 10 Beat) stillLife))
+
+report "and an empty one the same" (standing died) (standing (beating (List.replicate 10 Beat) died))
+
+// Winding it, which is the same ladder Snake has and a slower one.
+
+report "winding it up shortens the beat" true (pulse.Every(standing (beating [ Faster ] dealt)) < pulse.Every(standing dealt))
+
+report "and down lengthens it" true (pulse.Every(standing (beating [ Slower ] dealt)) > pulse.Every(standing dealt))
+
+report "a notch can be asked for outright" 9 (standing (beating [ Speed 9 ] dealt)).Speed
+
+report
+    "the quickest is about nine a second"
+    true
+    (pulse.Every(standing (beating [ Speed 9 ] dealt)) < TimeSpan.FromMilliseconds 120.0)
+
+report "and the slowest about two" true (pulse.Every(standing (beating [ Speed 1 ] dealt)) > TimeSpan.FromMilliseconds 500.0)
+
+report
+    "a speed nobody has is refused, and says what there is"
+    true
+    (toldBy (beating [ Speed 12 ] dealt)
+     |> List.exists (mentions "The clock winds from 1 to 9"))
+
+report
+    "winding past the end of the range does nothing"
+    (standing (beating [ Speed 9 ] dealt))
+    (standing (beating [ Speed 9; Faster ] dealt))
+
+// The keys, held to the rule every control here is held to: a key stands for a line the game
+// itself reads.
+
+let private keyed key =
+    pulse.Pressed(ConsoleKeyInfo(' ', key, false, false, false))
+
+report "'p' starts and stops it" (Some "run") (keyed ConsoleKey.P)
+
+report "a full stop steps it once" (Some "step") (keyed ConsoleKey.OemPeriod)
+
+report "and a key this game has no use for is left to the table" None (keyed ConsoleKey.F7)
+
+report
+    "every key there is types a line this game reads"
+    []
+    ([ ConsoleKey.P
+       ConsoleKey.OemPeriod
+       ConsoleKey.C
+       ConsoleKey.OemPlus
+       ConsoleKey.OemMinus ]
+     |> List.choose keyed
+     |> List.filter (fun line -> Result.isError (reads line)))
+
+report
+    "and so does every key the page sends"
+    []
+    (life.Page.Keys
+     |> List.map snd
+     |> List.filter (fun line -> Result.isError (reads line)))
+
+report
+    "space is one of them, because a page has it going spare"
+    true
+    (life.Page.Keys |> List.exists (fun (key, line) -> key = " " && line = "run"))
+
+// And it is still a fold: a record of beats replays to the board it was saved from, with no
+// clock anywhere near it.
+
+let private clocked =
+    beating [ Beat; Beat; Running None; Toggle(at "c3"); Running None; Beat ] dealt
+
+let private clockedRecord = Transcript.write life [ Here ] clocked.Journal
+
+report
+    "a record of a running board is written in beats and runs"
+    true
+    (clockedRecord |> mentions "beat" && clockedRecord |> mentions "run")
+
+report
+    "and replays to the same board"
+    (standing clocked)
+    (let readBack = Transcript.read life clockedRecord |> Result.toOption |> Option.get
+
+     standing (
+         Update.replay rules readBack.Players readBack.Seed readBack.Moves
+         |> Result.toOption
+         |> Option.get
+     ))
 
 finish ()

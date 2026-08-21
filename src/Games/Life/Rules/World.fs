@@ -4,15 +4,32 @@ open TCModel.Common
 open TCModel.Engine
 
 type World =
-    { Cells: Cells
-      Behind: Cells list
-      Generation: int
-      Rng: Rng }
+    {
+        Cells: Cells
+        Behind: Cells list
+        Generation: int
+        /// Whether the rule is running of its own accord. The clock beats either way; a world that
+        /// is not running answers a beat with nothing at all, which the engine leaves out of the
+        /// record.
+        Running: bool
+        /// How fast it is wanted, from 1 to 9. What a notch is worth in time is `Offer`'s.
+        Speed: int
+        Rng: Rng
+    }
 
 module World =
 
     [<Literal>]
     let Density = 30
+
+    [<Literal>]
+    let Slowest = 1
+
+    [<Literal>]
+    let Fastest = 9
+
+    [<Literal>]
+    let Ordinary = 5
 
     let dealt seed =
         let cells, rng =
@@ -26,6 +43,10 @@ module World =
         { Cells = cells
           Behind = []
           Generation = 0
+          // Dealt running, because a soup nobody has asked to see is a soup that has done
+          // nothing. Stopping it is a keypress.
+          Running = true
+          Speed = Ordinary
           Rng = rng }
 
     let living world = Set.count world.Cells

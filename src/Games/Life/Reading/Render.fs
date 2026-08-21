@@ -50,6 +50,15 @@ module Render =
     let private standing world =
         [ Scene.says $"Generation {world.Generation}."
           Scene.says $"{Words.cells (World.living world)} alive, of {Grid.Width * Grid.Height} squares."
+          // Stays on the screen while the board is moving, where the notes and the box of
+          // commands do not: somebody watching it run is entitled to find out how to stop it
+          // without stopping it to read.
+          Scene.quietly (
+              if world.Running then
+                  $"running at speed {world.Speed} of {World.Fastest} - 'p' stops it, + and - wind the clock"
+              else
+                  $"stopped at speed {world.Speed} of {World.Fastest} - 'p' starts it, 'step' goes one generation"
+          )
           Scene.quietly (
               if World.isEmpty world then
                   "Nothing is left for the rule to work on. Turn cells on to draw something, or restart for another soup."
@@ -61,19 +70,26 @@ module Render =
                   "It is still going."
           ) ]
 
-    let private onwards =
+    let private onwards world =
         [ Scene.quietly "each of these is a line you could type"
+          Does((if world.Running then "stop" else "run"), (if world.Running then "stop" else "run"), Tone.Plainly)
           Does("step", "step", Tone.Plainly)
           Does("step 10", "step 10", Tone.Plainly)
-          Does("step 50", "step 50", Tone.Plainly)
+          Scene.quietly "and the clock"
+          Does("slower", "slower", Tone.Plainly)
+          Does("faster", "faster", Tone.Plainly)
+          Scene.quietly "and the board"
           Does("undo", "undo", Tone.Plainly)
           Does("clear", "clear", Tone.Plainly)
           Does("restart", "restart", Tone.Plainly) ]
 
 
     let private verbs =
-        [ "f7", "turn cell f7 on, or off (or 'toggle f7')"
-          "step, step 10", "let the rule run, once or ten times"
+        [ "run, p", "start the rule, and stop it again"
+          "f7", "turn cell f7 on, or off (or 'toggle f7')"
+          "step, step 10", "one generation, or ten, while it is stopped"
+          "+ and -", "wind the clock up or down ('faster', 'slower')"
+          "speed 7", "straight to a notch, from 1 to 9"
           "why f7", "what the rule will do with that cell, and why"
           "undo, redo", "walk the run back and forward"
           "clear", "sweep the board, to draw on it from nothing"
@@ -95,6 +111,9 @@ module Render =
         String.concat
             "\n"
             [ wrapped $"Conway's Game of Life, on a board of {Grid.Width} by {Grid.Height} with its edges joined."
+              ""
+              wrapped
+                  "The rule runs on a clock: 'run' - or 'p' at a terminal, space in a browser - starts it and stops it again, and + and - wind the clock between two and nine generations a second. Stopped, 'step' goes one generation at a time."
               ""
               wrapped Notes.rule
               ""
@@ -121,7 +140,7 @@ module Render =
               Block(Blocks.board, [ grid world; Scene.noted margins Notes.board ])
               Beside
                   [ Block(Blocks.run, standing world @ [ Scene.noted margins Notes.rule ])
-                    Block(Blocks.onwards, onwards) ]
+                    Scene.offering margins Blocks.onwards (onwards world) ]
               Scene.listing margins Blocks.commands commands
               Scene.logged margins Blocks.log (Scene.log wording model) ]
 
@@ -184,5 +203,15 @@ module Render =
     let shell =
         { Title = "Life"
           Sheet = Page.tightRows
-          Placeholder = "a cell to turn it on - 'f7' - or 'step 10' to run it on, or 'help'"
-          Keys = [] }
+          Placeholder = "'run' starts and stops the rule - or a cell to turn it on, 'f7', or 'help'"
+
+          // Space is the obvious key for starting and stopping a thing that runs, and on a page
+          // it is free - the table's own hold is a terminal's.
+          Keys =
+            [ " ", "run"
+              "p", "run"
+              ".", "step"
+              "+", "faster"
+              "=", "faster"
+              "-", "slower"
+              "_", "slower" ] }

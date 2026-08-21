@@ -16,6 +16,11 @@ let private at (name: string) = Board.read name |> Option.get
 
 let private mentions (needle: string) (text: string) = text.Contains needle
 
+/// The legend across the top of the board, which is the column letters with the one the hand is
+/// resting in put into capitals - so it is looked for without regard to case.
+let private hasLegend (text: string) =
+    text.ToLowerInvariant().Contains Board.letters
+
 /// A command as the line that would have made it. A `Command` is not something two of which may
 /// be compared - it carries a move, and nothing about a game says a move can be.
 let private reads typed =
@@ -377,11 +382,87 @@ report "a board at rest makes no sound" [] (cascade.Rings uniform)
 
 report "a wave landing taps" [ Tap ] (cascade.Rings(wave 1 started))
 
-report "a cascade coming to rest chimes" [ Chime ] (cascade.Rings(toRest 0 (uniform |> asked (Touch(at "h8")))))
+report
+    "a cascade coming to rest hands the board back, which is a sound of its own"
+    [ Ready ]
+    (cascade.Rings(toRest 0 (uniform |> asked (Touch(at "h8")))))
 
-report "a shape coming up is the rare one" [ Fanfare ] (cascade.Rings(toRest 0 (uniform |> asked (Touch(at "a1")))))
+report
+    "and a wave that completed a whole column and came to rest on the same beat says both"
+    [ Fanfare; Ready ]
+    (cascade.Rings(toRest 0 (uniform |> asked (Touch(at "a1")))))
+
+// A square comes up on half of all cascades and several times over in a long one; a whole row or
+// column is rarer by a factor of ten. They are told apart so that the common one can take the
+// sound that comes often and the rare one the sound that does not.
+let private completing shapes =
+    let rotated = shapes |> List.collect Shape.cells |> Set.ofList
+
+    InPlay
+        { Session.play uniform with
+            Turning = set [ at "p16" ]
+            Run =
+                Some
+                    { Session.opened (at "p16") with
+                        Rotated = Set.remove (at "p16") rotated } }
+    |> asked Beat
+
+report
+    "a square is heard as the common sound and a whole row or column as the rare one"
+    (true, true)
+    (cascade.Rings(completing [ Square(at "c3") ]) |> List.contains Chime,
+     cascade.Rings(completing [ Rank 5 ]) |> List.contains Fanfare)
 
 report "and a touch itself is silent - nothing has moved yet" [] (cascade.Rings started)
+
+// A sound belongs to the move that made it. Left lying in the state it is read again by the next
+// move, and the next - which is how moving the hand about a board that had just come to rest
+// rang the chime every time it moved.
+let private rested = toRest 0 (uniform |> asked (Touch(at "h8")))
+
+report "a board that has just come to rest is sounding" [ Ready ] (cascade.Rings rested)
+
+report
+    "and every other move there is leaves it quiet again"
+    []
+    ([ Point North
+       Point South
+       Point East
+       Point West
+       Faster
+       Slower
+       Speed 3
+       Touch(at "c3")
+       Press ]
+     |> List.collect (fun move -> cascade.Rings(asked move rested)))
+
+report
+    "and so does a beat, which carries the board''s own flashing along and says nothing itself"
+    []
+    (cascade.Rings(asked Beat rested))
+
+report
+    "a board that has come to rest is still showing something, and goes on beating until it has finished"
+    (true, false)
+    (let rec beating count session =
+        if count > 20 || not (Session.settling (Session.play session)) then
+            session, count
+        else
+            beating (count + 1) (asked Beat session)
+
+     let finished, count = beating 0 rested
+     count > 0, Session.settling (Session.play finished))
+
+report
+    "and once it has, a beat takes nothing and says nothing again"
+    (None, [])
+    (let rec beating count session =
+        if count > 20 || not (Session.settling (Session.play session)) then
+            session
+        else
+            beating (count + 1) (asked Beat session)
+
+     Turn.asked Beat (beating 0 rested))
 
 
 // === How it is drawn ===
@@ -416,7 +497,7 @@ let private drawn margins session =
              { model with
                  Timeline = Timeline.ofDeal session })
 
-report "the board is drawn with a legend across the top" true (drawn Margins.all uniform |> mentions Board.letters)
+report "the board is drawn with a legend across the top" true (drawn Margins.all uniform |> hasLegend)
 
 report
     "and every row of it"
@@ -562,8 +643,16 @@ let private posted (markup: string) =
 let private buttons = posted (paged Margins.all uniform)
 
 report
-    "the board offers buttons for a touch, a question, the clock, the two boxes and another deal"
-    [ "f7"; "why f7"; "faster"; "slower"; "mute"; "log"; "undo"; "restart" ]
+    "the board offers buttons for the hand, a touch, a question, the clock, the two boxes and another deal"
+    [ "press"
+      "f7"
+      "why f7"
+      "faster"
+      "slower"
+      "mute"
+      "log"
+      "undo"
+      "restart" ]
     buttons
 
 report
@@ -582,6 +671,63 @@ report
     (cascade.Page.Keys
      |> List.map snd
      |> List.filter (fun line -> Result.isError (reads line)))
+
+
+// === The hand ===
+
+report "the hand is dealt in the middle of the board" (at "h8") (Session.play (Session.dealt 0UL)).At
+
+report
+    "and there is somewhere for it to go every way from there"
+    []
+    (Way.all
+     |> List.filter (fun way -> Session.pushed way (Session.play (Session.dealt 0UL)) = (Session.play (Session.dealt 0UL)).At))
+
+report "pushing it moves it one cell" (at "h7") (Session.play (asked (Point North) (Session.dealt 0UL))).At
+
+report
+    "and pushing it off the edge does not move it, and is not written down either"
+    (None, [])
+    (let corner =
+        InPlay
+            { Session.play (Session.dealt 0UL) with
+                At = at "a1" }
+
+     Turn.asked (Point North) corner)
+
+report "pressing is touching whatever it is resting on" [ Happened(Touched(at "h8")) ] (told Press (Session.dealt 0UL))
+
+report "and it is refused for the same reasons a touch by name is" [ Refused(StillTurning 1) ] (told Press started)
+
+report
+    "moving the hand says nothing, so a board nudged about has an empty log"
+    []
+    (let walked = played [ Point North; Point West; Point West ]
+     walked.Log)
+
+report
+    "but it is in the record, so a board taken up from one comes back with the hand where it was left"
+    (at "f7")
+    (let walked = played [ Point North; Point West; Point West ]
+
+     match Update.replay rules 1 0UL (Journal.moves walked.Journal) with
+     | Ok again -> (Session.play (Model.state again)).At
+     | Error _ -> at "a1")
+
+report
+    "the hand is marked on the edges of the board rather than in it, so no cell loses its glyph"
+    (true, true)
+    (let drawn =
+        seen (rich.Board Margins.none (Seat.at 1) (played [ Point North; Point West; Point West ]))
+
+     drawn |> mentions "abcdeFghijklmnop",
+     deep drawn > 1
+     && (drawn.Split '\n' |> Array.exists (fun line -> line.Contains "> 7")))
+
+report
+    "and the page is told where it is instead, since it can ring a cell without taking anything from it"
+    true
+    (paged Margins.all (Session.dealt 0UL) |> mentions "at")
 
 
 // === What it says ===
@@ -603,7 +749,17 @@ report "a word that is not a cell is turned away" true (Result.isError (reads "z
 report
     "every move the game has is written as a line the game reads back"
     []
-    ([ Touch(at "f7"); Beat; Faster; Slower; Speed 7; Resign ]
+    ([ Touch(at "f7")
+       Point North
+       Point East
+       Point South
+       Point West
+       Press
+       Beat
+       Faster
+       Slower
+       Speed 7
+       Resign ]
      |> List.map (fun move -> move, Words.command (Make move))
      |> List.filter (fun (move, line) -> reads line <> Ok(Words.command (Make move))))
 
@@ -658,6 +814,32 @@ report "the last frame of a beat is the beat" next (waking 6 540)
 
 report "and a beat already overshot is due at once" next (waking 6 900)
 
+// The bug this pair is here for: the loop wipes the terminal before reading a typed line, and a
+// line that left the screen exactly as it was would then not be written at all - leaving the
+// player looking at the blank it had been cleared to.
+report
+    "a screen identical to the one on the terminal is not written over itself again"
+    true
+    (let standing =
+        { Lines = 3
+          Text =
+            "a
+b
+c"      }
+
+     Screens.redrawn
+         standing
+         "a
+b
+c" = standing)
+
+report
+    "and nothing is identical to what is on a terminal that has just been cleared"
+    false
+    (Screens.nothing.Text = "a
+b
+c")
+
 report "the phase is nought at the beat" 0.0 (Pulse.phase opened next opened)
 
 report "half way through, half" 0.5 (Pulse.phase opened next (opened + TimeSpan.FromMilliseconds 300.0))
@@ -708,7 +890,7 @@ report
      let hidden = { Margins.all with Logged = false }
 
      deep (rich.Board hidden (Seat.at 1) busy) < deep (rich.Board showing (Seat.at 1) busy),
-     seen (rich.Board hidden (Seat.at 1) busy) |> mentions Board.letters)
+     seen (rich.Board hidden (Seat.at 1) busy) |> hasLegend)
 
 report
     "and the log follows what a player asked for even while the board is moving, which the other two boxes do not"
@@ -747,15 +929,61 @@ report
      rangs touched, rangs muted, rangs back)
 
 report
-    "a terminal keeps its one bell for the sounds worth one, and a tap twice a second is not"
-    [ false; true; true ]
-    ([ Tap; Chime; Fanfare ] |> List.map Sound.worthABell)
+    "a terminal keeps its one bell for the three that come rarely, and the two that come often go unrung"
+    [ false; false; true; true; true ]
+    (Sound.all |> List.map Sound.worthABell)
 
 report
     "and a sound goes over the wire as itself, so the far end can tell which it was"
-    [ Some Tap; Some Chime; Some Fanfare ]
-    ([ Tap; Chime; Fanfare ] |> List.map (Sound.word >> Sound.byWord))
+    (Sound.all |> List.map Some)
+    (Sound.all |> List.map (Sound.word >> Sound.byWord))
 
+report
+    "and no two of them are worded the same"
+    (List.length Sound.all)
+    (Sound.all |> List.map Sound.word |> List.distinct |> List.length)
+
+
+
+// === The visual bell ===
+//
+// What `plain` has instead of hearing the bell: a band of light run down the whole board, marked
+// on the row labels so that it shows where there is no colour at all.
+
+let private rung = toRest 0 (uniform |> asked (Touch(at "a1")))
+
+let private banded phase model =
+    (plain.Board (Margins.through phase Margins.none) (Seat.at 1) model).Split '\n'
+    |> Array.choose (fun line ->
+        let trimmed = line.TrimStart()
+
+        if trimmed.StartsWith "*" then Some(trimmed.Substring(1, 2).Trim()) else None)
+    |> Array.toList
+
+report "a board that has just been struck says so" true (Session.play rung).Struck.IsSome
+
+report "and it is struck for exactly what a terminal would ring its one bell for" [] cascade.Faults
+
+report
+    "the band shows on the row labels, which is what a reader with no colour has"
+    true
+    (not (List.isEmpty (banded 0.0 (model rung))))
+
+report "and it travels down the board rather than sitting still" true (banded 0.0 (model rung) <> banded 0.67 (model rung))
+
+report "a board nobody has struck has no band on it at all" [] (banded 0.0 (model uniform))
+
+report
+    "the strike runs out, and once it has the board is quiet to look at as well as to listen to"
+    (false, [])
+    (let rec beating count session =
+        if count > 20 || not (Session.settling (Session.play session)) then
+            session
+        else
+            beating (count + 1) (asked Beat session)
+
+     let done' = beating 0 rung
+     (Session.play done').Struck.IsSome, banded 0.0 (model done'))
 
 
 // === Room to watch it in ===
@@ -778,8 +1006,36 @@ report
     (let drawn = seen (rich.Board Margins.none (Seat.at 1) busy)
 
      drawn.Split '\n'
-     |> Array.exists (fun line -> line.Contains Board.letters && (line |> Seq.filter ((=) '│') |> Seq.length) >= 4))
+     |> Array.exists (fun line -> hasLegend line && (line |> Seq.filter ((=) '│') |> Seq.length) >= 4))
 
+
+report
+    "a table rings for a move that happened and not for one that did not"
+    (1, 0, 0, 0)
+    (let rangs (_, posts, _) =
+        posts
+        |> List.filter (fun post ->
+            match post.Say with
+            | Rang _ -> true
+            | _ -> false)
+        |> List.length
+
+     let touched, _, _ = Solo.said "stamp" "keyboard" "a1" sitting
+
+     let rec beating count table =
+         if count = 0 then
+             table
+         else
+             let next, _, _ = Solo.beaten table
+             beating (count - 1) next
+
+     let settled = beating 40 touched
+     let elsewhere, _, _ = Solo.said "stamp" "keyboard" "c3" settled
+
+     rangs (Solo.beaten touched),
+     rangs (Solo.beaten settled),
+     rangs (Solo.said "stamp" "keyboard" "up" settled),
+     rangs (Solo.said "stamp" "keyboard" "a1" elsewhere))
 
 report
     "a table beaten over a cascade draws everybody watching, and rings"

@@ -15,7 +15,7 @@ README of its own:
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
-| [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
+| [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined - a soup, a rule, and nobody to play against. Runs on a clock you start and stop |
 | [**Snake**](src/Games/Snake/README.md) | 1 to 4 | The arcade game, on a clock: the snakes move on their own and quicken as they eat, and you only steer |
 | [**Cascade**](src/Games/Cascade/README.md) | 1 | Two hundred and fifty-six elbows. Touch one and it turns a quarter, and whatever it is now reaching that is reaching back turns too |
 
@@ -176,7 +176,7 @@ Those words, and the rules they are for, are in each game's own README:
 | [**Noughts and crosses**](src/Games/TicTacToe/README.md) | 2 | Nine squares, three in a row, and nothing hidden |
 | [**Diplomacy**](src/Games/Diplomacy/README.md) | 7 | Seven powers, thirty-four centres, no dice — and everybody writes at once |
 | [**Compile**](src/Games/Compile/README.md) | 2 | Fifteen protocols drafted 1-2-2-1, three lines across the table, and a deck each. All ninety cards, and an optional rule you turn on from its own settings page |
-| [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against |
+| [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined - a soup, a rule, and nobody to play against. Runs on a clock you start and stop |
 | [**Snake**](src/Games/Snake/README.md) | 1 to 4 | The arcade game, on a clock: the snakes move on their own and quicken as they eat, and you only steer |
 
 Everything below this line is about the program rather than about any of them.
@@ -1508,8 +1508,10 @@ is what makes [Games.fs](src/Games.fs) a three-line list.
 
 Everything above assumes a game of turns: nothing happens until somebody types, and a table left
 alone for an hour is a table where nothing has happened for an hour. An arcade game is the one
-shape that looks like it needs something else — and it does not, which is what
-[Snake](src/Games/Snake/README.md) is here to say.
+shape that looks like it needs something else - and it does not, which is what
+[Snake](src/Games/Snake/README.md) is here to say. [Life](src/Games/Life/README.md) takes the
+same clock and puts a switch on it: the rule runs at about three generations a second until you
+stop it, and stops without the clock stopping.
 
 **A beat is a move.** The game says what its beat is and how long a table should leave between
 them; the tables keep the time. One field on the second seam, `None` at every game of turns:
@@ -1526,6 +1528,14 @@ state rather than being a number, which is what lets a game quicken as it goes *
 player wind the clock themselves: Snake keeps a notch from one to nine in its own position, so
 `faster` is an ordinary move — in the record, replayed off it, and undoable like any other.
 
+**A game may switch it off.** The beat is asked for whatever the game is doing, so a game with
+nothing to do answers with nothing at all - and a move that neither moved the position nor said
+a word is left out of the record by the engine. That is the whole of Life's run-and-stop: `p`
+turns a flag in its own state, the clock goes on beating three times a second either way, and a
+stopped board costs one step of the rule and not a line anywhere. The same answer serves a board
+that has settled or died, which is why a clock left running over a still life does not fill a
+record with refusals.
+
 What that buys:
 
 - **The record is every beat**, so a real-time game replays to the square it was saved on. There
@@ -1538,6 +1548,14 @@ What that buys:
   a key press stands for a line the game already reads, so nothing can be pressed that could not
   have been typed, and the four hands at one keyboard — arrows, `wasd`, `ijkl`, the number pad —
   send `a north` and `b north` rather than a private language.
+
+  **The game is asked first.** The loop keeps two keys it cannot give up — Enter opens the line
+  prompt, Escape puts the game down — and offers every other key to `Pressed` before falling
+  back to its own. That is what lets Snake hold the clock with the space bar and Cascade press a
+  cell with it, out of the same loop and with neither game knowing the other exists. `h` holds as
+  well as the space bar always does, so a game that takes the space bar does not cost a player
+  the one key that stops the clock — and the line at the foot of the screen says which key that
+  is, because it asks the game rather than assuming.
 
 Three tables drive it, and each is a handful of lines because a beat is a move:
 
@@ -1557,7 +1575,14 @@ chosen. The third margin does *not* go with them: what the game has just said is
 somebody watching a board move actually wants, so `log` is obeyed at a running board and a
 held one alike. Nor is the terminal cleared per beat: [Screens.redrawn](src/Table/Parts/Screens.fs)
 writes the new screen over the old one and blanks whatever is left below it, because clearing
-three times a second is three flashes a second of an empty window.
+three times a second is three flashes a second of an empty window. It also declines to write a
+screen identical to the one already there, which is what keeps a board at rest under a running
+clock from repainting as fast as the loop can poll — and *that* is why what is on the terminal is
+a value rather than a line count, and why it lives next to `cleared`: a terminal that has just
+been wiped has nothing on it to be identical to, and the two halves of that fact have to be
+within reach of each other. Kept apart for one afternoon, they were not: the loop wiped the
+screen before reading a typed line, then compared the new screen against what had been there
+before the wipe, matched, wrote nothing, and left the player looking at the blank.
 
 Two rules the tables keep that the game does not know about: **a game nobody is watching does
 not beat** — a browser table is dealt when the process starts and read when somebody opens the
@@ -1628,7 +1653,14 @@ Three things this buys, and one it does not:
 turning wanted, and it goes on the same seam rather than into a view:
 
 ```fsharp
-Rings: 'State -> Sound list              // Tap, Chime, Fanfare - named for what happened
+Rings: 'State -> Sound list              // named for what happened, not for what it sounds like
+
+type Sound =
+    | Tap        // something small, and there will be a great many of them
+    | Chime      // something came out well
+    | Fanfare    // something came out well and rarely
+    | Ready      // the table is waiting on somebody again
+    | Knell      // something ended, or was stopped short
 ```
 
 Read off where the game stands *after* a move rather than out of the notices, which is what makes
@@ -1637,13 +1669,25 @@ occasion rather than for the noise, which is the bargain a `Tone` makes about co
 builds all three out of three oscillators and nothing it had to fetch, and a table with nothing
 to make a sound with drops them without any of it knowing.
 
-A terminal has *one* bell, and what it does with three sounds is the interesting half. It rings
-once however many a move produced - three bells in a beat is a noise rather than a sound - and
-it does not ring for a tap at all. A wave landing is the small sound and there are a great many
-of them; a bell twice a second is what a game sounds like when it was written by somebody who
-had three sounds and one bell and did not notice. So the bell is kept for the two worth
-interrupting somebody with, and `mute` at the table turns off even those, for that console
-alone.
+A terminal has *one* bell, and what it does with five sounds is the interesting half. That is
+not a limitation anybody chose - it was measured. `printf ""` costs nothing and works
+everywhere; `Console.Beep()` blocks for two hundred milliseconds and is still the same bell;
+`Console.Beep(freq, dur)` gives a real pitch but is `[SupportedOSPlatform("windows")]`, and this
+program publishes `linux-x64` containers. So: one bell.
+
+Which means `Sound.worthABell` is a judgement about *frequency* rather than about worth. It
+rings once however many sounds a move produced - three bells in a beat is a noise rather than a
+sound - and it does not ring at all for the two that come often. A bell twice a second is what a
+game sounds like when it was written by somebody who had several sounds and one bell and did not
+notice. `mute` at the table turns off even the rare ones, for that console alone.
+
+**And what a terminal cannot hear, it can see.** Cascade strikes the whole board - a band of
+light run down it over about three beats - for exactly the sounds a terminal would have rung
+for, and marks the band on the row labels so that it shows in `plain`, which has no colour at
+all. That is the only channel that genuinely reaches all three views, and it is worth saying
+that the rules decide what strikes the board while the table decides what rings the bell, and
+neither can see the other: the two lists are held up against each other in the game's `Faults`,
+so a board where they had drifted apart would say so before anybody sat down.
 
 ### Adding a game
 

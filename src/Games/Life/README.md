@@ -19,7 +19,7 @@ gets the timeline, the record on disk, the replay, the shared verbs, the seat, t
 command line, the wire and all three screens without a line of any of them being touched.
 
 ```powershell
-dotnet run -- life play 1                 # a soup off the clock
+dotnet run -- life play 1                 # a soup, running; 'p' stops and starts it
 dotnet run -- life play 1 --seed 42       # that soup, and the same one every time
 dotnet run -- life serve 1                # the same board in a browser
 
@@ -36,8 +36,11 @@ Every command that is not about cells or generations - `undo`, `redo`, `history`
 | --- | --- |
 | `f7` | turn cell f7 on, or off again |
 | `toggle f7` (`t`) | the same, the long way round |
-| `step` (`s`, `run`) | let the rule run one generation |
-| `step 10` (`run 10`, `10`) | ten of them, stopping early if there is nothing left to happen |
+| `run` (`p`, space in a browser) | start the rule, and stop it again |
+| `start`, `stop` | say which outright, rather than turning it the other way |
+| `step` (`s`) | one generation, which is what you want while it is stopped |
+| `step 10` (`10`) | ten of them, stopping early if there is nothing left to happen |
+| `+` and `-` | wind the clock (`faster`, `slower`); `speed 7` goes straight to a notch |
 | `clear` | sweep the board, to draw on it from nothing |
 | `why f7` (`ask`) | how many living neighbours that cell has, and what the rule will do with it |
 
@@ -61,6 +64,31 @@ is what a record is written in.
 
 `resign` is refused, and that is deliberate: there is nobody to resign to. A game that answered
 it with an ending would be a game inventing an opponent for the sake of a verb.
+
+## It runs on a clock
+
+The rule runs on its own, at about three generations a second, and `run` - or `p` at a terminal,
+space in a browser - starts and stops it. Dealt running, because a soup nobody has asked to see
+is a soup that has done nothing.
+
+| notch | 1 | 2 | 3 | 4 | **5** | 6 | 7 | 8 | 9 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| a generation | 510ms | 460ms | 410ms | 360ms | **310ms** | 260ms | 210ms | 160ms | 110ms |
+| a second | 2.0 | 2.2 | 2.4 | 2.8 | **3.2** | 3.8 | 4.8 | 6.2 | 9.1 |
+
+**Stopping it does not stop the clock**, and that is the whole trick. The table goes on asking
+for a beat three times a second whatever the board is doing; a stopped world answers with
+nothing at all, and the engine leaves a move that neither moved the game nor said a word out of
+the record. So a board sitting stopped for an hour is a board with an hour of nothing in its
+record, and starting it again is one keypress rather than something the table has to be told
+about. A board that has settled or died answers the same way, so a clock left running cannot
+fill a log with refusals either.
+
+Starting, stopping and winding are all ordinary moves, which means the record says when the rule
+was running and how fast, `undo` walks back through beats, and a saved game replays generation
+for generation with no clock involved. `beat` is the clock's own move spelt out, for a console
+that cannot press anything - a game piped in from a file plays its beats by asking for them in
+words.
 
 ## Rules as implemented
 
@@ -109,9 +137,9 @@ whose name does not read back as the cell it was drawn on.
 
 A machine here would sit in the one seat and type `step` for ever - and it would: the engine
 plays the machines between one prompt and the next for as long as the seat to act is theirs,
-and a glider on a board with joined edges neither dies nor settles, so that run would never
-come back. The rule already plays this game. What the person at the keyboard does is decide
-when to let it, which is not a thing to hand to the program.
+and a glider on a board with joined edges neither dies nor settles, so that run would never come
+back. The rule already plays this game, and the clock is what lets it: what the person at the
+keyboard does is decide when to let it run, which is a keypress rather than a seat.
 
 ## The board is drawn as rows, not as cells
 
@@ -122,9 +150,12 @@ every reader would draw something unreadable - a table four hundred columns of w
 page of four hundred boxes. What a cell of this board *is*, is one character in a shape made of
 its neighbours, and the shape is the whole point.
 
-So the controls are the things a player does over and over - `step`, `step 10`, `step 50`,
-`undo`, `clear`, `restart` - and each carries the line it would type, which is how the same
-description gives a browser six buttons and a terminal six words to type.
+So the controls are the things a player does over and over - `run` (captioned `stop` while it
+runs, because a caption that is not the line it types is a lie at a terminal), `step`, `step 10`,
+`slower`, `faster`, `undo`, `clear`, `restart` - and each carries the line it would type, which
+is how one description gives a browser its buttons and a terminal its words. While the clock is
+running a terminal draws none of them: the line saying which speed it is on and how to stop it
+stays, because that is the one thing somebody watching needs.
 
 ## The files
 

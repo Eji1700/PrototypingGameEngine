@@ -101,20 +101,93 @@ screen taller than its window walks the board off the top of it. Hold it with sp
 log comes back, along with the notes and the box of commands — a held board is one somebody is
 *reading* rather than watching.
 
-Three sounds: a **tap** as a wave lands, a **chime** as a cascade comes to rest, and a
-**fanfare** when a shape comes up. A browser makes all three. A terminal has one bell, so it
-rings for the chime and the fanfare and not for the tap - a bell twice a second is a noise
-rather than a sound. `mute` silences the lot, for that console alone, and `sound` turns them
-back on.
+Five sounds, and they are chosen by how *often* the thing happens as much as by what it is worth:
+
+| | | at a terminal |
+| --- | --- | --- |
+| **tap** | a wave landed | silent |
+| **chime** | a square came up | silent |
+| **fanfare** | a whole row or column came up | rings |
+| **ready** | the cascade came to rest — the board is yours again | rings |
+| **knell** | the touches are spent, or a cascade was stopped short | rings |
+
+A browser makes all five out of oscillators and nothing it had to fetch. A terminal has **one
+bell** — that is its entire vocabulary, measured rather than assumed — so it keeps it for the
+three that come rarely enough to be worth interrupting somebody with. Taps come twice a second
+and squares several times a cascade; ringing for those is what makes a game sound like a smoke
+alarm. `mute` silences the lot, for that console alone, and `sound` turns them back on.
+
+A wave can say two things at once and they are different kinds of thing: a wave that completed a
+whole column *and* left the board at rest says **fanfare** and **ready**, and a browser plays
+them a moment apart. What it never says is three noises on top of one another for what was one
+moment.
+
+### The bell you can see
+
+Whatever a terminal would ring its one bell for, the board is also **struck**: a band of light
+four rows deep runs down the whole of it, crossing in about three beats. That is what `plain`
+has instead of hearing anything, so the band is marked on the **row labels** as well as
+colouring the cells — a `*` running down the edge where there is no colour at all.
+
+```
+   1 ┘└┘└┘┐┌└┘┐┌┐┘┘┌┘
+ * 2 ┌┐└└┘┌┐└┌┘└└┐┐┘┌
+ * 3 └┌┘┘┘┌┘┌┐┐└┘└┘┌┌
+ * 4 ┌┐┌┐┘┌└┌┌└┐┘┘└┌┘
+   5 ┐┘┐┌└└└┘└┐┌┘└┘┌┐
+```
+
+Which occasions strike the board is decided in the rules and which sounds ring the bell is
+decided at the table, and neither can see the other — so the two lists are held up against each
+other in `Faults`, and a board where they disagreed would say so before anybody sat down.
+
+A board that has come to rest is still *showing* something, which is not the same as having
+something left to do, so the clock goes on beating until the lit shapes and the strike have
+finished. Those beats are three or four more lines in the record and they are honest ones: the
+board really is still doing something. Once there is nothing moving and nothing showing, a beat
+takes nothing, says nothing, and leaves no line behind.
+
+## The hand
+
+The board is steered with the arrow keys or `wasd`, and the space bar presses whatever the hand
+is resting on. Naming a cell outright still works and is often quicker across a wide board, and
+both go through the same move: a key here stands for a line the game already reads, so nothing
+can be pressed that could not have been typed.
+
+The hand is marked on the **edges** of the board rather than in it â the row down the side, the
+column in capitals across the top:
+
+```
+     abcdeFghijklmnop
+   1 ┘└┘└┘┐┌└┘┐┌┐┘┘┌┘
+ ...
+ > 6 └└└┌┌┘┐┐┌└┌┘┌┘┘┐
+```
+
+Every cell is one character wide and every one of them already says something â which way it
+faces and how worn it is â so a cursor drawn *in* the grid would be a cell that had stopped
+saying it. Marking the edges costs nothing and is legible in `plain`, which has no colour to
+fall back on. A browser, which can ring a cell without taking anything away from it, is told
+where the hand is instead and draws an outline.
+
+Because the space bar presses, it is `h` that holds the clock here rather than space.
+
+Moving the hand is an ordinary move: it is in the record, it undoes, and a board taken up from a
+record comes back with the hand where it was left. It says nothing in the log, though â a line
+every time somebody nudged the cursor a square would bury what the board was actually doing.
 
 ## Commands
 
 
 | | |
 | --- | --- |
-| `f7` | set that cell turning |
+| arrows, `wasd` | move the hand about the board |
+| space, `press` | set the cell the hand is on turning |
+| `f7` | set that cell turning, wherever the hand is |
 | `why f7` | what it would reach when it lands, and whether anything is reaching back |
 | `faster`, `slower`, `speed 7` | how long a quarter turn is given to take, from 900ms down to 100ms |
+| `up`, `down`, `left`, `right` | move the hand a cell (the arrows and `wasd` send these) |
+| `press` | set the cell the hand is on turning (the space bar sends this) |
 | `sound`, `mute` | whether this board is heard as well as read |
 | `log` | whether what the game has been saying is drawn under the board |
 | `undo`, `redo` | walk the cascade back and forward, a wave at a time |

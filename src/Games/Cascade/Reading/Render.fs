@@ -59,6 +59,17 @@ module Render =
 
         index <= head && head < index + 3
 
+    /// The visual bell: a band of light run down the whole board, four rows deep, crossing it in
+    /// about three beats.
+    ///
+    /// It is what `plain` has instead of hearing the bell, which is why the row *labels* are
+    /// marked as well as the cells being coloured - a reader with no colour at all still sees the
+    /// band travel down the edge of the board.
+    let private strikes margins play row =
+        match Session.struck Pictures (Margins.frame Pictures margins) play with
+        | Some head -> row - 1 <= head && head < row + 3
+        | None -> false
+
     let private litAt margins play cell =
         play.Lit
         |> List.tryPick (fun lit ->
@@ -78,6 +89,12 @@ module Render =
         let standing = Session.standing cell play
         let wear = Session.wear cell play
 
+        // A page can ring a cell without taking anything away from it, so it is told where the
+        // hand is as well; a terminal is told on the edges of the board instead.
+        let under = if cell = play.At then [ "at" ] else []
+
+        let struck = if strikes margins play cell.Row then [ "struck" ] else []
+
         if Session.isTurning cell play then
             let glyph =
                 match Margins.frame Pictures margins with
@@ -86,7 +103,7 @@ module Render =
                 | _ -> Ink.elbow wear (Facing.turned standing.Facing)
 
             Speck.slot Ink.Turning glyph
-            |> Speck.doing [ "turning"; $"pace-{play.Speed}"; $"wear-{wear}" ]
+            |> Speck.doing ([ "turning"; $"pace-{play.Speed}"; $"wear-{wear}" ] @ under)
         else
 
         let glyph = Ink.elbow wear standing.Facing
@@ -94,7 +111,7 @@ module Render =
         match litAt margins play cell with
         | Some(_, index) ->
             Speck.slot Ink.Lit glyph
-            |> Speck.doing [ "lit"; $"lit-{index % Board.Width}"; $"wear-{wear}" ]
+            |> Speck.doing ([ "lit"; $"lit-{index % Board.Width}"; $"wear-{wear}" ] @ under)
         | None ->
 
         // A cell that landed on the beat the board is standing on is shown in the turning ink for
@@ -104,15 +121,35 @@ module Render =
             let flashing = Margins.frame Pictures margins = 0
 
             Speck.slot (if flashing then Ink.Turning else Ink.wornBy wear) glyph
-            |> Speck.doing [ "landed"; $"wear-{wear}" ]
+            |> Speck.doing ([ "landed"; $"wear-{wear}" ] @ under)
+        elif strikes margins play cell.Row then
+            Speck.slot Ink.Lit glyph |> Speck.doing ([ $"wear-{wear}" ] @ struck @ under)
         else
-            Speck.slot (Ink.wornBy wear) glyph |> Speck.doing [ $"wear-{wear}" ]
+            Speck.slot (Ink.wornBy wear) glyph |> Speck.doing ([ $"wear-{wear}" ] @ under)
 
+    /// The board, with the hand marked on the edges of it rather than in it.
+    ///
+    /// A cell is one character wide and every one of them already means something - which way it
+    /// faces and how worn it is - so there is nowhere in the grid to put a cursor that would not
+    /// be taking a glyph away from the cell under it. The row it is on is marked down the side and
+    /// the column across the top, the way a diagram of a board marks a square, and both of those
+    /// are legible in plain text, which has no colour to fall back on.
     let private field margins play =
+        let legend =
+            Board.letters
+            |> String.mapi (fun column letter ->
+                if column + 1 = play.At.Column then System.Char.ToUpperInvariant letter else letter)
+
         Field(
-            Board.letters,
+            legend,
             [ for row in 1 .. Board.Height ->
-                  string row, [ for column in 1 .. Board.Width -> speck margins play { Row = row; Column = column } ] ]
+                  sprintf
+                      "%s%2d"
+                      (if row = play.At.Row then ">"
+                       elif strikes margins play row then "*"
+                       else " ")
+                      row,
+                  [ for column in 1 .. Board.Width -> speck margins play { Row = row; Column = column } ] ]
         )
 
 
@@ -154,6 +191,7 @@ module Render =
 
     let private onwards play =
         [ Scene.quietly "each of these is a line you could type"
+          Does("press", "press", Tone.Plainly)
           Does("f7", "f7", Tone.Plainly)
           Does("why f7", "why f7", Tone.Plainly)
           Does("faster", "faster", Tone.Plainly)
@@ -165,7 +203,9 @@ module Render =
 
 
     let private verbs =
-        [ "f7", "set cell f7 turning (or 'touch f7')"
+        [ "arrows, wasd", "move the hand about the board"
+          "space, press", "set the cell the hand is on turning"
+          "f7", "set that cell turning, wherever the hand is"
           "why f7", "what that cell would reach when it lands"
           "faster, slower", "how long a quarter turn is given to take"
           "speed 7", "that notch outright, from 1 to 9"
@@ -330,6 +370,17 @@ module Render =
             ([ ".field { font-size: 1.1rem; line-height: 1.15; }"
                ".field .speck { width: 1.15ch; transition: color 240ms linear; }"
                ""
+               "/* Where the hand is resting: a ring round the cell rather than anything in it, so
+   the glyph goes on saying which way it faces and how worn it is. */"
+               ".speck.at { outline: 1px solid var(--yours); outline-offset: 1px; border-radius: 2px; }"
+               ""
+               "/* The visual bell: the band a page shows for what a terminal would ring for. */"
+               ".speck.struck { animation: struck 320ms ease-out both; border-radius: 2px; }"
+               "@keyframes struck {"
+               "  0%   { background: var(--lit); color: var(--ground); }"
+               "  100% { background: transparent; }"
+               "}"
+               ""
                ".speck.turning { animation: turning var(--turn, 500ms) linear both; }"
                "@keyframes turning { from { transform: rotate(0deg); } to { transform: rotate(90deg); } }"
                "" ]
@@ -356,4 +407,15 @@ module Render =
         { Title = "Cascade"
           Sheet = sheet
           Placeholder = "a cell to set it turning - 'f7' - or 'help'"
-          Keys = [ "+", "faster"; "-", "slower" ] }
+          Keys =
+            [ "ArrowUp", "up"
+              "ArrowDown", "down"
+              "ArrowLeft", "left"
+              "ArrowRight", "right"
+              "w", "up"
+              "s", "down"
+              "a", "left"
+              "d", "right"
+              " ", "press"
+              "+", "faster"
+              "-", "slower" ] }

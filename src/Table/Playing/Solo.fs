@@ -107,13 +107,19 @@ module Solo =
     let board console solo =
         readingAt console solo |> Option.map (boardFor solo)
 
+    /// The board as it would be drawn with these margins, without making them this console's.
+    ///
+    /// A table that draws over itself several times a beat has margins of its own to impose - the
+    /// notes and the list of commands go while the board is moving, and how far through the beat
+    /// it is changes every frame - and none of that is a choice the player made. Writing it into
+    /// what they *did* choose would lose the choice, which is what `reading` is for and this is
+    /// not.
+    let drawnAt margins console solo =
+        readingAt console solo
+        |> Option.map (fun reading -> boardFor solo { reading with Margins = margins })
+
     let margins console solo =
         readingAt console solo |> Option.map (fun reading -> reading.Margins)
-
-    let reading console margins solo =
-        match readingAt console solo with
-        | Some reading -> withReading console { reading with Margins = margins } solo
-        | None -> solo
 
     let private drawAll solo =
         solo.Watchers |> List.map (screenFor solo)
@@ -122,10 +128,17 @@ module Solo =
     /// rather than instead of one, and it is read off where the game stands rather than out of
     /// what it said - so a board taken up from a record sounds the same as the one it was saved
     /// from, and a table with no way to make a noise drops it without any of this knowing.
-    let private sounding solo =
-        [ for sound in solo.Game.Rings(standing solo) do
-              for console, reading in solo.Watchers do
-                  if not reading.Hushed then { To = console; Say = Rang sound } ]
+    /// Only for a move that happened, though. A move the game refused leaves the state exactly as
+    /// it was, so what it would answer here is whatever the last move that *did* happen was
+    /// sounding - and a table that asked anyway would ring that sound again for every refusal and
+    /// every beat the game had nothing to do with.
+    let private sounding before solo =
+        if Timeline.movesMade solo.Model.Timeline = Timeline.movesMade before.Model.Timeline then
+            []
+        else
+            [ for sound in solo.Game.Rings(standing solo) do
+                  for console, reading in solo.Watchers do
+                      if not reading.Hushed then { To = console; Say = Rang sound } ]
 
     let private nudging console solo =
         if isOver solo then
@@ -187,7 +200,9 @@ module Solo =
             if Journal.length next.Model.Journal = Journal.length solo.Model.Journal then
                 next, [], Carrying
             else
-                next, drawAll next @ sounding next, (if isOver next then Keeping(next.Model, next.Stamp, false) else Carrying)
+                next,
+                drawAll next @ sounding solo next,
+                (if isOver next then Keeping(next.Model, next.Stamp, false) else Carrying)
         | Some _
         | None -> solo, [], Carrying
 
@@ -206,8 +221,8 @@ module Solo =
             let solo = withReading console reading solo
             solo, [ screenFor solo (console, reading) ], Carrying
 
-        let moved solo errand =
-            solo, drawAll solo @ sounding solo @ nudging console solo, errand
+        let moved next errand =
+            next, drawAll next @ sounding solo next @ nudging console next, errand
 
         match Playable.read solo.Game typed with
         | Error problem -> told problem

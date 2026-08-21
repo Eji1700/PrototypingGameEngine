@@ -2,11 +2,23 @@ namespace TCModel.Life
 
 type Move =
     | Step of generations: int
+    /// One generation, played by the clock rather than asked for. Quiet where a typed step
+    /// speaks, and nothing at all where the rule is stopped or has nowhere left to go - which
+    /// is what keeps a running board out of the log and out of the record.
+    | Beat
     | Toggle of cell: Cell
     | Clear
+    /// Start the rule, stop it, or - saying nothing about which - turn it the other way.
+    | Running of on: bool option
+    | Faster
+    | Slower
+    | Speed of notch: int
 
 type Happening =
     | Ran of generations: int * reached: int * living: int
+    | Started of generation: int
+    | Halted of generation: int
+    | Wound of notch: int
     | Settled of generation: int
     | DiedOut of generation: int
     | Toggled of cell: Cell * alive: bool
@@ -17,6 +29,7 @@ type Refusal =
     | NoSuchRun of said: int
     | NothingWouldChange of generation: int
     | NothingLeft
+    | NoSuchSpeed of said: int
 
 type Notice =
     | Happened of Happening
@@ -84,3 +97,54 @@ module Turn =
                 Some world,
                 Happened(Ran(ran, world.Generation, World.living world))
                 :: (ending |> Option.map Happened |> Option.toList)
+
+        // --- the clock ---------------------------------------------------------------------
+
+        // Nothing at all rather than a refusal, and that is what makes a stopped board cost
+        // nothing: a move the game neither took nor spoke about is left out of the record by the
+        // engine, so a clock beating over a world nobody has started writes no lines and draws
+        // no boards. The same answer serves a board that has settled or died - there is a beat
+        // every quarter of a second either way, and it has nothing to do.
+        | Beat when not world.Running || World.isEmpty world -> None, []
+
+        | Beat ->
+            match onwards world with
+            | None -> None, []
+            | Some world ->
+                Some world,
+                if World.isEmpty world then
+                    [ Happened(DiedOut world.Generation) ]
+                elif World.settled world then
+                    [ Happened(Settled world.Generation) ]
+                else
+                    // The board says which generation this is and what is on it, three times a
+                    // second. A line saying the same would be a log with nothing else in it.
+                    []
+
+        // --- and whether it is running -------------------------------------------------------
+
+        | Running wanted ->
+            let on = wanted |> Option.defaultValue (not world.Running)
+
+            if on = world.Running then
+                None, []
+            else
+                Some { world with Running = on }, [ Happened(if on then Started world.Generation else Halted world.Generation) ]
+
+        | Speed notch when notch < World.Slowest || notch > World.Fastest -> None, [ Refused(NoSuchSpeed notch) ]
+
+        | Speed notch when notch = world.Speed -> None, []
+        | Faster when world.Speed = World.Fastest -> None, []
+        | Slower when world.Speed = World.Slowest -> None, []
+
+        | Faster
+        | Slower
+        | Speed _ ->
+            let notch =
+                match move with
+                | Faster -> world.Speed + 1
+                | Slower -> world.Speed - 1
+                | Speed notch -> notch
+                | _ -> world.Speed
+
+            Some { world with Speed = notch }, [ Happened(Wound notch) ]

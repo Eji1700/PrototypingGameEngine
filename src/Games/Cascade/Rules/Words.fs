@@ -90,6 +90,11 @@ module Words =
     let command =
         Msg.written (function
             | Touch where -> cell where
+            | Point North -> "up"
+            | Point East -> "right"
+            | Point South -> "down"
+            | Point West -> "left"
+            | Press -> "press"
             | Beat -> "beat"
             | Faster -> "faster"
             | Slower -> "slower"

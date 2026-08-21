@@ -10,6 +10,31 @@ module Offer =
     [<Literal>]
     let Seats = 1
 
+    /// How long until the next beat. The notch is what a player winds; a board that is stopped
+    /// or has run out is beaten just the same and answers with nothing, which costs a step of the
+    /// rule and no line anywhere.
+    [<Literal>]
+    let private Slackest = 560
+
+    [<Literal>]
+    let private PerNotch = 50
+
+    let private every world =
+        System.TimeSpan.FromMilliseconds(float (Slackest - PerNotch * world.Speed))
+
+    /// A key stands for a line this game already reads, so nothing can be pressed that could not
+    /// have been typed. `p` is the one that matters: it starts and stops the rule.
+    let private pressed (key: System.ConsoleKeyInfo) =
+        match key.Key with
+        | System.ConsoleKey.P -> Some "run"
+        | System.ConsoleKey.OemPeriod -> Some "step"
+        | System.ConsoleKey.C -> Some "clear"
+        | System.ConsoleKey.OemPlus
+        | System.ConsoleKey.Add -> Some "faster"
+        | System.ConsoleKey.OemMinus
+        | System.ConsoleKey.Subtract -> Some "slower"
+        | _ -> None
+
     let private deal players seed =
         if players = Seats then
             Ok(World.dealt seed)
@@ -89,7 +114,16 @@ module Offer =
           Skills = []
           Seating = fun _ _ _ -> []
 
-          Pulse = None
+          Pulse =
+            Some
+                { Every = every
+                  Beat = Beat
+
+                  // A generation is on the board or it is not, and there is nothing in between
+                  // two of them to draw.
+                  Frames = fun _ -> 0
+
+                  Pressed = pressed }
 
 
           Page = Render.shell

@@ -22,6 +22,16 @@ module Parse =
 
     let line typed =
         match Commands.lowered typed with
+        | [ "up" ]
+        | [ "w" ] -> Ok(Send(Make(Point North)))
+        | [ "down" ]
+        | [ "s" ] -> Ok(Send(Make(Point South)))
+        | [ "left" ]
+        | [ "a" ] -> Ok(Send(Make(Point West)))
+        | [ "right" ]
+        | [ "d" ] -> Ok(Send(Make(Point East)))
+        | [ "press" ]
+        | [ "touch" ] -> Ok(Send(Make Press))
         | [ "beat" ]
         | [ "tick" ] -> Ok(Send(Make Beat))
         | [ "faster" ]

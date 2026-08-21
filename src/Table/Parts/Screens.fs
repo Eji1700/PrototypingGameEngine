@@ -1,6 +1,17 @@
 namespace TCModel.Table
 
+/// What is on the terminal, so that the same screen is not written over itself again.
+///
+/// It is a value rather than a line count because a count alone cannot answer "is this already
+/// there", and it lives here rather than in the loop that draws because `cleared` is here: a
+/// terminal that has just been wiped has nothing on it to be identical to, and the two halves of
+/// that fact have to be within reach of each other or they drift apart.
+[<NoComparison>]
+type Drawn = { Lines: int; Text: string }
+
 module Screens =
+
+    let nothing = { Lines = 0; Text = "" }
 
     let steering () = not System.Console.IsInputRedirected
 
@@ -33,8 +44,15 @@ module Screens =
     /// Draw over what is already on the screen rather than clearing it first, which is what keeps a
     /// board that is redrawn several times a second from flickering. Every line is padded out to the
     /// width and any line the last drawing used and this one does not is blanked, so nothing is left
-    /// behind. Answers with how many lines it drew, to be passed back in next time.
-    let redrawn (before: int) (text: string) =
+    /// behind. A screen identical to the one already there is not written again, which is what keeps
+    /// a board at rest under a running clock from repainting as fast as the loop can poll it.
+    /// Answers with what is now on the terminal, to be passed back in next time - and after
+    /// `cleared` what that is, is `nothing`.
+    let redrawn (before: Drawn) (text: string) =
+        if before.Text = text then
+            before
+        else
+
         let width =
             try
                 max 20 (System.Console.WindowWidth - 1)
@@ -63,11 +81,12 @@ module Screens =
             over.AppendLine(if line.Length >= width then line else line.PadRight width)
             |> ignore
 
-        for _ in lines.Length .. before - 1 do
+        for _ in lines.Length .. before.Lines - 1 do
             over.AppendLine(System.String(' ', width)) |> ignore
 
         printf "%s" (over.ToString())
-        lines.Length
+
+        { Lines = lines.Length; Text = text }
 
     let awaiting (until: System.DateTime) =
         let rec waiting () =

@@ -164,10 +164,16 @@ module Lobby =
     /// What the board is sounding, said to every console at the table. The same reading `Solo`
     /// takes: off where the game stands rather than out of what it said, so that two players at
     /// different keyboards hear the same board at the same beat.
-    let private sounding lobby =
-        [ for sound in lobby.Game.Rings(standing lobby) do
-              for console, seat in consoles lobby do
-                  if not seat.Hushed then { To = console; Say = Rang sound } ]
+    /// Only for a move that happened - the same reading `Solo` takes, and for the same reason: a
+    /// move the game refused leaves the state where it was, and what it would answer here is
+    /// whatever the last move that did happen was sounding.
+    let private sounding before lobby =
+        if Timeline.movesMade lobby.Model.Timeline = Timeline.movesMade before.Model.Timeline then
+            []
+        else
+            [ for sound in lobby.Game.Rings(standing lobby) do
+                  for console, seat in consoles lobby do
+                      if not seat.Hushed then { To = console; Say = Rang sound } ]
 
     let private nudging spoke lobby =
         if (rules lobby).Over(standing lobby) || not (everyoneHere lobby) then
@@ -193,7 +199,7 @@ module Lobby =
             if Journal.length next.Model.Journal = Journal.length lobby.Model.Journal then
                 next, []
             else
-                next, drawAll next @ sounding next
+                next, drawAll next @ sounding lobby next
         | Some _
         | None -> lobby, []
 
@@ -351,9 +357,9 @@ module Lobby =
             if lobby.Game.Pulse.IsNone && seat.Player <> active then
                 told $"It is {lobby.Game.Seat active}'s turn."
             else
-                let lobby =
+                let next =
                     answering
                         { lobby with
                             Model = Update.update (rules lobby) msg lobby.Model }
 
-                lobby, drawAll lobby @ sounding lobby @ nudging (Some console) lobby
+                next, drawAll next @ sounding lobby next @ nudging (Some console) next
