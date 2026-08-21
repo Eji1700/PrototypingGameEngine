@@ -16,6 +16,7 @@ type Seat<'Move, 'State, 'Notice> =
     { Player: PlayerId
       Occupant: Occupant
       Margins: Margins
+      Hushed: bool
       View: View<'Move, 'State, 'Notice> }
 
 [<NoComparison; NoEquality>]
@@ -40,6 +41,7 @@ module Lobby =
                 { Player = player
                   Occupant = (if rivals |> List.exists (fst >> (=) player) then Played else Empty)
                   Margins = Margins.all
+                  Hushed = false
                   View = plain }) }
 
     let model lobby = lobby.Model
@@ -164,7 +166,8 @@ module Lobby =
     /// different keyboards hear the same board at the same beat.
     let private sounding lobby =
         [ for sound in lobby.Game.Rings(standing lobby) do
-              for console, _ in consoles lobby -> { To = console; Say = Rang sound } ]
+              for console, seat in consoles lobby do
+                  if not seat.Hushed then { To = console; Say = Rang sound } ]
 
     let private nudging spoke lobby =
         if (rules lobby).Over(standing lobby) || not (everyoneHere lobby) then
@@ -319,6 +322,16 @@ module Lobby =
                     Margins =
                         { seat.Margins with
                             Commands = wanted |> Option.defaultValue (not seat.Margins.Commands) } }
+        | Ok(Logging wanted) ->
+            mine
+                { seat with
+                    Margins =
+                        { seat.Margins with
+                            Logged = wanted |> Option.defaultValue (not seat.Margins.Logged) } }
+        | Ok(Hushing wanted) ->
+            mine
+                { seat with
+                    Hushed = wanted |> Option.defaultValue (not seat.Hushed) }
         | Ok(Looking name) ->
             match Playable.byName seat.View.Shown seat.View.Palette lobby.Game name with
             | Ok view -> mine { seat with View = view }

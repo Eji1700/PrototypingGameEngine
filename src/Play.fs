@@ -33,14 +33,15 @@ let private errand game sitters doing =
 
 /// A terminal has one bell, so a batch of posts that a board rang three times over rings once:
 /// three bells in a beat is a noise rather than a sound, and this is the one place that knows how
-/// many posts came out of a single move.
+/// many posts came out of a single move. A tap is not worth one at all - `mute` at the table and
+/// the Audio setting are the two ways to have none of them.
 let private tell rings posts =
     let heard =
         posts
         |> List.exists (fun post ->
             match post.Say with
-            | Nudged
-            | Rang _ -> true
+            | Nudged -> true
+            | Rang sound -> Sound.worthABell sound
             | Seated _
             | Screen _
             | Told _
@@ -119,7 +120,18 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         // at the beat: a board nobody is going to move again should not be caught mid-stride.
         let phase = if still then 0.0 else Pulse.phase since due now
 
-        let showing = (if still then wanted else Margins.none) |> Margins.through phase
+        // The notes and the list of commands go while the board is moving: at three beats a second
+        // there is no room for them and nobody could read them anyway. The log does not go with
+        // them - what the game has just said is the one thing somebody watching a board move
+        // actually wants - so it follows what that player asked for and nothing else.
+        let showing =
+            (if still then
+                 wanted
+             else
+                 { Margins.none with
+                     Logged = wanted.Logged })
+            |> Margins.through phase
+
         let solo = Solo.reading Keyboard showing solo
 
         let screen =
@@ -510,6 +522,7 @@ let private play settled sitters stamp model =
         |> Solo.watching
             Keyboard
             { Margins = Margins.all
+              Hushed = false
               View = settled.View }
 
     let said = kept @ tell settled.Rings posts

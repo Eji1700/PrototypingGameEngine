@@ -124,10 +124,13 @@ module Render =
     let private count play =
         let mine reading = play.Run |> Option.map reading
 
+        // Padded left rather than left alone: `Aligned` lines its columns up on the left, and a
+        // column of counts read down wants its units under its units - four beside four thousand
+        // and ninety-six. Four is the width of the largest a cascade is allowed to reach.
         let shown =
             function
-            | Some(number: int) -> string number
-            | None -> "-"
+            | Some(number: int) -> (string number).PadLeft 4
+            | None -> "   -"
 
         let column (title: string) (now: int option) (all: int option) =
             [ Scene.cell Tone.Quiet title
@@ -136,17 +139,18 @@ module Render =
 
         Aligned
             [ [ Scene.cell Tone.Quiet ""
-                Scene.cell Tone.Quiet "this cascade"
-                Scene.cell Tone.Quiet "in all" ]
+                Scene.cell Tone.Quiet "this"
+                Scene.cell Tone.Quiet " all" ]
               column "Turns" (mine (fun run -> run.Rotations)) (Some play.Tally.Rotations)
-              column "Rows and columns" (mine (fun run -> Session.lines run.Made)) (Some play.Tally.Lines)
+              column "Rows, columns" (mine (fun run -> Session.lines run.Made)) (Some play.Tally.Lines)
               column "Squares" (mine (fun run -> Session.squares run.Made)) (Some play.Tally.Squares)
               column "Waves" (mine (fun run -> run.Waves)) None ]
 
     let private standing play =
         [ count play
+          Scene.quietly "this cascade, and every cascade so far"
           Scene.says $"{Words.touches play.Tally.Touches} spent of {Session.Touches}."
-          Scene.says $"A quarter turn takes {Session.quarter play.Speed}ms - notch {play.Speed} of {Session.Fastest}." ]
+          Scene.says $"{Session.quarter play.Speed}ms a quarter turn - notch {play.Speed} of {Session.Fastest}." ]
 
     let private onwards play =
         [ Scene.quietly "each of these is a line you could type"
@@ -154,6 +158,8 @@ module Render =
           Does("why f7", "why f7", Tone.Plainly)
           Does("faster", "faster", Tone.Plainly)
           Does("slower", "slower", Tone.Plainly)
+          Does("mute", "mute", Tone.Plainly)
+          Does("log", "log", Tone.Plainly)
           Does("undo", "undo", Tone.Plainly)
           Does("restart", "restart", Tone.Plainly) ]
 
@@ -163,12 +169,14 @@ module Render =
           "why f7", "what that cell would reach when it lands"
           "faster, slower", "how long a quarter turn is given to take"
           "speed 7", "that notch outright, from 1 to 9"
+          "sound, mute", "whether this board is heard as well as read"
           "undo, redo", "walk the cascade back and forward, a wave at a time"
           "restart", "deal another board; 'restart 42' deals that one"
           "resign", "put it down with the touches you have left unspent"
           "history", "the record so far"
           "notes", "hide the writing that explains the board"
           "commands", "hide this box"
+          "log", "hide what the game has been saying"
           "view <name>", "draw the board another way"
           "save", "write the record now"
           "help", "every command, at length"
@@ -207,17 +215,40 @@ module Render =
     let wording = Told.inWords Words.said Words.command
 
 
+    /// The log, cut down to its last few lines while the clock is running.
+    ///
+    /// A cascade says something every time a shape comes up, and a screen that grows a line every
+    /// beat is a screen that walks the board off the top of the terminal - which is the one thing
+    /// a board being watched must not do. Holding it puts the whole log back, along with the notes
+    /// and the box of commands, because a held board is one somebody is reading rather than
+    /// watching. It is the same bargain the margins make, and it is made on the same signal.
+    [<Literal>]
+    let private Lately = 3
+
+    let private lately (margins: Margins) lines =
+        if margins.Notes || margins.Commands then
+            lines
+        else
+            lines |> List.skip (max 0 (List.length lines - Lately))
+
+    /// The board on the left and everything counted on the right.
+    ///
+    /// Side by side rather than stacked, because a board sixteen deep with three boxes under it is
+    /// taller than a terminal, and a clock that redraws a screen taller than its window scrolls the
+    /// board off the top of it. What is beside the board is what a player watching one wants to
+    /// read without looking away from it.
     let board margins _ (model: Model<Move, Session, Notice>) =
         let play = Session.play (Model.state model)
 
         Stack
             [ Heading(heading play)
-              Block(Blocks.board, [ field margins play; Scene.noted margins Notes.board ])
               Beside
-                  [ Block(Blocks.count, standing play @ [ Scene.noted margins Notes.rule ])
-                    Block(Blocks.onwards, onwards play) ]
+                  [ Block(Blocks.board, [ field margins play; Scene.noted margins Notes.board ])
+                    Stack
+                        [ Block(Blocks.count, standing play @ [ Scene.noted margins Notes.rule ])
+                          Block(Blocks.onwards, onwards play) ] ]
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, Scene.log wording model) ]
+              Scene.logged margins Blocks.log (lately margins (Scene.log wording model)) ]
 
 
     let history _ (model: Model<Move, Session, Notice>) =

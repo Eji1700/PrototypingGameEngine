@@ -442,6 +442,7 @@ module Render =
           "history", "the record so far"
           "notes", "hide the writing that explains the board"
           "commands", "hide this box"
+          "log", "hide what the game has been saying"
           "view <name>", "draw the field another way"
           "save", "write the record now"
           "help", "every command, at length"
@@ -525,7 +526,7 @@ module Render =
               stage
               Block(Blocks.players, [ players beholder session ])
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, Scene.log (heardBy beholder) model) ]
+              Scene.logged margins Blocks.log (Scene.log (heardBy beholder) model) ]
 
 
     let private askedFor beholder session (entry: Entry<Move, Notice>) =

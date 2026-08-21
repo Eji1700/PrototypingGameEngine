@@ -165,7 +165,7 @@ Turncoats host 3 --open                              # from a published file
 same three lines whichever one is being played: `play`, `serve`, `host`, `house`, `join`,
 `replay`,
 `--seed`, `--rival`, `--view`, `--colour`, and at the prompt `undo`, `redo`, `history`,
-`save`, `notes`, `commands`, `view`, `restart`, `help` and `quit`. Each game adds the words for its own
+`save`, `notes`, `commands`, `log`, `sound`, `view`, `restart`, `help` and `quit`. Each game adds the words for its own
 moves and nothing else, and each has a `help` of its own for them.
 
 Those words, and the rules they are for, are in each game's own README:
@@ -323,11 +323,25 @@ type View =
 ```
 
 `Margins` is what the person reading wants round the game itself - the writing that explains
-the board, and the box that lists what can be typed - and it is a record rather than two
-booleans in a row because two booleans in a row get passed the wrong way round exactly once
-and then never look wrong again. Neither is part of the game, so both stay out of the model
-and out of the record, and at a table over a network each person has their own. `notes` and
-`commands` are the two words that turn them.
+the board, the box that lists what can be typed, and the box of what the game has been saying -
+and it is a record rather than three booleans in a row because three booleans in a row get
+passed the wrong way round exactly once and then never look wrong again. Not one of them is
+part of the game, so none of them reaches the model or the record, and at a table over a
+network each person has their own. `notes`, `commands` and `log` are the three words that turn
+them.
+
+The third arrived last and is the one that shows what the record is for. A log twelve lines
+deep under a board somebody has stopped moving is twelve lines in the way of the thing they are
+trying to read, and `log off` puts it away without losing anything: `history` still writes out
+the whole record, because the box on the screen and the record on disk were never the same
+thing. That is also why `log` had to *stop* being a second word for `history` to become the
+word for the box it names - `notes` turns the notes and `commands` turns the commands, and a
+switch named after something else would have been the odd one out.
+
+`sound` is a fourth of the same kind, and sits beside the margins rather than in them: a
+console that has said `mute` is not sent the sounds a board makes, and one at the next keyboard
+still is. Nothing about it reaches the game either - a game says what its board *is sounding*
+and never who is listening.
 
 | view | shown | |
 | --- | --- | --- |
@@ -1538,8 +1552,10 @@ Three tables drive it, and each is a handful of lines because a beat is a move:
 [margins](#how-the-board-is-shown) - the writing that explains the board, and the box listing
 what can be typed - and at three beats a second those are two blocks being repainted under a
 board that has moved by one square, which is a screen nobody can follow. So a running clock is
-the same thing as the margins being off, and holding it puts back whatever that player had
-chosen. Nor is the terminal cleared per beat: [Screens.redrawn](src/Table/Parts/Screens.fs)
+the same thing as those two being off, and holding it puts back whatever that player had
+chosen. The third margin does *not* go with them: what the game has just said is the one thing
+somebody watching a board move actually wants, so `log` is obeyed at a running board and a
+held one alike. Nor is the terminal cleared per beat: [Screens.redrawn](src/Table/Parts/Screens.fs)
 writes the new screen over the old one and blanks whatever is left below it, because clearing
 three times a second is three flashes a second of an empty window.
 
@@ -1573,8 +1589,9 @@ the record every screen is already drawn with:
 
 ```fsharp
 type Margins =
-    { Notes: bool                        // what a player turned on
-      Commands: bool
+    { Notes: bool                        // which of the three boxes round the game
+      Commands: bool                     // a player wants drawn
+      Logged: bool
       Phase: float }                     // and how far through a beat this drawing is: 0 at
                                          // the beat, towards 1 before the next
 ```
@@ -1617,9 +1634,16 @@ Rings: 'State -> Sound list              // Tap, Chime, Fanfare - named for what
 Read off where the game stands *after* a move rather than out of the notices, which is what makes
 a game taken up from a record sound exactly like the game it was saved from. Named for the
 occasion rather than for the noise, which is the bargain a `Tone` makes about colour: a browser
-builds all three out of three oscillators and nothing it had to fetch, a terminal has one bell
-and rings it once however many a move produced, and a table with nothing to make a sound with
-drops them without any of it knowing.
+builds all three out of three oscillators and nothing it had to fetch, and a table with nothing
+to make a sound with drops them without any of it knowing.
+
+A terminal has *one* bell, and what it does with three sounds is the interesting half. It rings
+once however many a move produced - three bells in a beat is a noise rather than a sound - and
+it does not ring for a tap at all. A wave landing is the small sound and there are a great many
+of them; a bell twice a second is what a game sounds like when it was written by somebody who
+had three sounds and one bell and did not notice. So the bell is kept for the two worth
+interrupting somebody with, and `mute` at the table turns off even those, for that console
+alone.
 
 ### Adding a game
 

@@ -37,7 +37,7 @@ there](../../../README.md#taking-it-back-and-writing-it-down).
 ## Playing
 
 Every command that is not about stones - `undo`, `redo`, `history`, `save`, `notes`,
-`commands`, `view`, `restart`, `players`, `help`, `quit` - belongs to the engine and is
+`commands`, `log`, `view`, `restart`, `players`, `help`, `quit` - belongs to the engine and is
 [documented there](../../../README.md). What follows is what this game adds.
 
 Once a game is dealt, everything else is typed at the prompt:

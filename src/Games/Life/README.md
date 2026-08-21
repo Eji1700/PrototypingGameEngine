@@ -29,7 +29,7 @@ dotnet run -- life replay logs/...-life-1p-seed<n>.log   # one you put down
 ## Playing
 
 Every command that is not about cells or generations - `undo`, `redo`, `history`, `save`,
-`notes`, `commands`, `view`, `restart`, `help`, `quit` - belongs to the engine and is
+`notes`, `commands`, `log`, `view`, `restart`, `help`, `quit` - belongs to the engine and is
 [documented there](../../../README.md). What this game adds is a cell and a count.
 
 | command | action |

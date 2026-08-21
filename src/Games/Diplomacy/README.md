@@ -32,7 +32,7 @@ keep theirs.
 
 The third of the three games here, and the engine it runs on is
 [one directory up](../../../README.md). Every command that is not about this board - `undo`,
-`redo`, `history`, `save`, `notes`, `commands`, `view`, `restart`, `help`, `quit` - belongs to the engine
+`redo`, `history`, `save`, `notes`, `commands`, `log`, `view`, `restart`, `help`, `quit` - belongs to the engine
 and is documented there.
 
 **Seven, and exactly seven.** There is no variant here for a table of five, and there should

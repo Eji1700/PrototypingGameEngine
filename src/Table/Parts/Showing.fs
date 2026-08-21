@@ -14,6 +14,32 @@ type Sound =
     | Chime
     | Fanfare
 
+module Sound =
+
+    /// Whether a table with one bell should ring for it.
+    ///
+    /// A tap is the small sound and there are a great many of them - a bell twice a second is a
+    /// noise rather than a sound - so a terminal keeps its one bell for the two worth interrupting
+    /// somebody with. A page, which can tell three sounds apart, makes all three.
+    let worthABell =
+        function
+        | Tap -> false
+        | Chime
+        | Fanfare -> true
+
+    let word =
+        function
+        | Tap -> "tap"
+        | Chime -> "chime"
+        | Fanfare -> "fanfare"
+
+    let byWord =
+        function
+        | "tap" -> Some Tap
+        | "chime" -> Some Chime
+        | "fanfare" -> Some Fanfare
+        | _ -> None
+
 type ToPlayer =
     | Seated of seat: int * token: string
     | Screen of text: string

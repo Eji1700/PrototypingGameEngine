@@ -108,10 +108,16 @@ module Client =
 
         connection.On(Protocol.Call.Nudged, Action(fun () -> ring rings)) |> ignore
 
-        // A terminal has one bell and no way to say which of three sounds it is making, so all
-        // three are it, and a board that rang twice in a beat rings once. The marking a nudge
-        // leaves on the window title is not made: a sound the board made is not a summons.
-        connection.On(Protocol.Call.Rang, Action(fun () -> if rings then bell ()))
+        // A sound the board made is not a summons, so this does not mark the window title the way a
+        // nudge does - and a terminal keeps its one bell for the sounds that are worth one.
+        connection.On<string>(
+            Protocol.Call.Rang,
+            fun word ->
+                match Sound.byWord word with
+                | Some sound when rings && Sound.worthABell sound -> bell ()
+                | Some _
+                | None -> ()
+        )
         |> ignore
 
         connection.add_Reconnecting (fun _ ->

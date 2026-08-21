@@ -8,7 +8,10 @@ open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
 
-let private reading = { Margins = Margins.all; View = plain }
+let private reading =
+    { Margins = Margins.all
+      Hushed = false
+      View = plain }
 
 let private sitting =
     Solo.opened playing "first" dealt |> Solo.watching "keyboard" reading |> fst
@@ -233,7 +236,11 @@ report
 
 let private inABrowser =
     Solo.opened playing "first" dealt
-    |> Solo.watching "page" { Margins = Margins.all; View = asPage }
+    |> Solo.watching
+        "page"
+        { Margins = Margins.all
+          Hushed = false
+          View = asPage }
     |> fst
 
 report

@@ -81,6 +81,7 @@ module Render =
           "history", "the record so far"
           "notes", "hide the writing that explains the board"
           "commands", "hide this box"
+          "log", "hide what the game has been saying"
           "view <name>", "draw the board another way"
           "save", "write the record now"
           "help", "every command, at length"
@@ -122,7 +123,7 @@ module Render =
                   [ Block(Blocks.run, standing world @ [ Scene.noted margins Notes.rule ])
                     Block(Blocks.onwards, onwards) ]
               Scene.listing margins Blocks.commands commands
-              Block(Blocks.log, Scene.log wording model) ]
+              Scene.logged margins Blocks.log (Scene.log wording model) ]
 
 
     let history _ (model: Model<Move, World, Notice>) =

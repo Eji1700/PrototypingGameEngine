@@ -138,7 +138,7 @@ module Offer =
           Rules = Render.rules
           Waiting = Render.waiting
           Marking = Ink.marking
-          Width = 72 }
+          Width = 84 }
 
 
     let playable: Playable<Move, Session, Notice> =

@@ -24,6 +24,20 @@ let private reads typed =
     | Ok Help -> Ok "help"
     | Ok(Notes wanted) -> Ok $"notes {wanted}"
     | Ok(Listing wanted) -> Ok $"commands {wanted}"
+    | Ok(Logging wanted) ->
+        Ok(
+            match wanted with
+            | Some true -> "log on"
+            | Some false -> "log off"
+            | None -> "log"
+        )
+    | Ok(Hushing hushed) ->
+        Ok(
+            match hushed with
+            | Some true -> "mute"
+            | Some false -> "unmute"
+            | None -> "sound"
+        )
     | Ok(Looking name) -> Ok $"view {name}"
     | Ok(Asking question) -> Ok $"asking {question}"
     | Ok Recount -> Ok "history"
@@ -375,6 +389,20 @@ report "and a touch itself is silent - nothing has moved yet" [] (cascade.Rings 
 let private seen (text: string) =
     Regex.Replace(text, @"\x1b\[[0-9;]*m", "")
 
+let private rich =
+    cascade.Views standard |> List.find (fun view -> view.Name = "rich")
+
+let private deep (text: string) = text.Split '\n' |> Array.length
+
+/// A board two long cascades have been run over: the log is full and the board is well worn.
+let private busy =
+    played (
+        [ Touch(at "a1") ]
+        @ List.replicate 40 Beat
+        @ [ Touch(at "c3") ]
+        @ List.replicate 40 Beat
+    )
+
 let private turning = wave 1 started
 
 let private drawn margins session =
@@ -534,8 +562,8 @@ let private posted (markup: string) =
 let private buttons = posted (paged Margins.all uniform)
 
 report
-    "the board offers buttons for a touch, a question, the clock and another deal"
-    [ "f7"; "why f7"; "faster"; "slower"; "undo"; "restart" ]
+    "the board offers buttons for a touch, a question, the clock, the two boxes and another deal"
+    [ "f7"; "why f7"; "faster"; "slower"; "mute"; "log"; "undo"; "restart" ]
     buttons
 
 report
@@ -654,7 +682,11 @@ report
 
 let private sitting =
     Solo.opened cascade "stamp" (model uniform)
-    |> Solo.watching "keyboard" { Margins = Margins.all; View = plain }
+    |> Solo.watching
+        "keyboard"
+        { Margins = Margins.all
+          Hushed = false
+          View = plain }
     |> fst
 
 report
@@ -662,6 +694,92 @@ report
     []
     (let _, posts, _ = Solo.beaten sitting
      posts)
+
+report "the log can be put away" (Ok "log off") (reads "log off")
+
+report "and turned the other way, whichever way it was" (Ok "log") (reads "log")
+
+report "and the word for the record itself is no longer the word for the box" (Ok "history") (reads "history")
+
+report
+    "a board with the log put away is shorter than one without, and the board itself is untouched"
+    (true, true)
+    (let showing = { Margins.all with Logged = true }
+     let hidden = { Margins.all with Logged = false }
+
+     deep (rich.Board hidden (Seat.at 1) busy) < deep (rich.Board showing (Seat.at 1) busy),
+     seen (rich.Board hidden (Seat.at 1) busy) |> mentions Board.letters)
+
+report
+    "and the log follows what a player asked for even while the board is moving, which the other two boxes do not"
+    (false, true)
+    (let watching = { Margins.none with Logged = true }
+
+     seen (rich.Board watching (Seat.at 1) busy) |> mentions Render.Notes.board,
+     seen (rich.Board watching (Seat.at 1) busy) |> mentions Render.Blocks.log)
+
+report "the board can be silenced at the table" (Ok "mute") (reads "mute")
+
+report "and by the long way round" (Ok "mute") (reads "sound off")
+
+report "and turned back on" (Ok "unmute") (reads "unmute")
+
+report "and turned the other way, whichever way it was" (Ok "sound") (reads "sound")
+
+report "a sound it cannot be is said so rather than swallowed" true (Result.isError (reads "sound sideways"))
+
+report
+    "a muted console is not rung at, and one that is not muted is"
+    (1, 0, 1)
+    (let rangs table =
+        let _, posts, _ = Solo.beaten table
+
+        posts
+        |> List.filter (fun post ->
+            match post.Say with
+            | Rang _ -> true
+            | _ -> false)
+        |> List.length
+
+     let touched, _, _ = Solo.said "stamp" "keyboard" "a1" sitting
+     let muted, _, _ = Solo.said "stamp" "keyboard" "mute" touched
+     let back, _, _ = Solo.said "stamp" "keyboard" "sound" muted
+     rangs touched, rangs muted, rangs back)
+
+report
+    "a terminal keeps its one bell for the sounds worth one, and a tap twice a second is not"
+    [ false; true; true ]
+    ([ Tap; Chime; Fanfare ] |> List.map Sound.worthABell)
+
+report
+    "and a sound goes over the wire as itself, so the far end can tell which it was"
+    [ Some Tap; Some Chime; Some Fanfare ]
+    ([ Tap; Chime; Fanfare ] |> List.map (Sound.word >> Sound.byWord))
+
+
+
+// === Room to watch it in ===
+
+report
+    "a board being watched fits a terminal, however long the log has grown"
+    true
+    (deep (rich.Board Margins.none (Seat.at 1) busy) <= 30)
+
+report
+    "and holding it puts the whole log back, along with everything else a held board says"
+    true
+    (deep (rich.Board Margins.all (Seat.at 1) busy) > deep (rich.Board Margins.none (Seat.at 1) busy))
+
+report
+    "the count is beside the board rather than under it, so the board is not walked off the top"
+    true
+    // Four walls on the line carrying the legend rather than two: the board panel's own pair,
+    // and another panel's pair beside it.
+    (let drawn = seen (rich.Board Margins.none (Seat.at 1) busy)
+
+     drawn.Split '\n'
+     |> Array.exists (fun line -> line.Contains Board.letters && (line |> Seq.filter ((=) '│') |> Seq.length) >= 4))
+
 
 report
     "a table beaten over a cascade draws everybody watching, and rings"

@@ -35,7 +35,7 @@ module Wire =
             | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why)
             | GotUp said -> console.SendAsync(Protocol.Call.GotUp, box said)
             | Nudged -> console.SendAsync Protocol.Call.Nudged
-            | Rang _ -> console.SendAsync Protocol.Call.Rang)
+            | Rang sound -> console.SendAsync(Protocol.Call.Rang, box (Sound.word sound)))
         |> Task.WhenAll
 
 type Finding =

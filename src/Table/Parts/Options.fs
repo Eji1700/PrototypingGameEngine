@@ -109,7 +109,8 @@ module Options =
           Prose =
             [ "The table rings when the turn comes round and nothing you did brought it round -"
               "so a game you are not watching can tell you it is waiting. It never rings for a"
-              "move you made yourself." ]
+              "move you made yourself. A game whose board makes a sound of its own rings for"
+              "that too, and mute at the table silences one board without touching this." ]
           Rows =
             [ Keys.sends (Keys.nth 0) "bell" (sprintf "%-24s%s" "" said) $"bell {said}"
               |> Keys.turning (stepping (sprintf "bell %s") [ "on"; "off" ] said)

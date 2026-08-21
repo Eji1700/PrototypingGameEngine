@@ -4,6 +4,11 @@ open TCModel.Engine
 
 /// How much of a screen to draw, and how far through a beat it is being drawn.
 ///
+/// The three switches are the three boxes round the game itself: the writing that explains the
+/// board, the list of what can be typed, and what the game has been saying. Not one of them is
+/// part of the game, so none reaches the model or the record, and at a table over a network each
+/// person has their own.
+///
 /// `Phase` is the one thing here that is not a choice a player made: it runs from 0 at a beat
 /// towards 1 just before the next one, and it is how a board drawn between two beats knows how
 /// far a piece that is moving has got. A game with no frame clock is only ever drawn at 0, so
@@ -11,6 +16,12 @@ open TCModel.Engine
 type Margins =
     { Notes: bool
       Commands: bool
+
+      // `Logged` rather than `Log`, because a `Model` has a `Log` and F# resolves a field on an
+      // un-annotated value by its name alone. Naming this one the same would have quietly made
+      // `model.Log` mean the wrong thing in code that had nothing to do with margins.
+      Logged: bool
+
       Phase: float }
 
 module Margins =
@@ -18,11 +29,13 @@ module Margins =
     let all =
         { Notes = true
           Commands = true
+          Logged = true
           Phase = 0.0 }
 
     let none =
         { Notes = false
           Commands = false
+          Logged = false
           Phase = 0.0 }
 
     let through phase margins = { margins with Phase = phase }
@@ -132,6 +145,12 @@ module Scene =
 
     let listing (margins: Margins) title text =
         if margins.Commands then Block(title, [ Written text ]) else Blank
+
+    /// What the game has been saying, if the reader still wants to see it. A board that has
+    /// stopped moving is read by looking at it, and a dozen lines of what led to it under a board
+    /// somebody is trying to read is a dozen lines in the way.
+    let logged (margins: Margins) title body =
+        if margins.Logged then Block(title, body) else Blank
 
     let offering (margins: Margins) title body =
         if margins.Commands then Block(title, body) else Blank

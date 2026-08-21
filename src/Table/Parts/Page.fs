@@ -44,14 +44,7 @@ module Page =
     /// What the page is asked to do when the table makes a sound. A `Sound` is named for what
     /// happened rather than for what it sounds like, so this is where the one becomes the other
     /// and it is the only place in the program that has an opinion about pitch.
-    let rang sound =
-        let word =
-            match sound with
-            | Tap -> "tap"
-            | Chime -> "chime"
-            | Fanfare -> "fanfare"
-
-        $"rang('{word}')"
+    let rang sound = $"rang('{Sound.word sound}')"
 
     type Signals =
         { [<JsonPropertyName("line")>]

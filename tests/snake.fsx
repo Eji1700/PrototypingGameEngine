@@ -474,6 +474,8 @@ let private reads (game: Playable<_, _, _>) typed =
     | Ok Help -> Ok "help"
     | Ok(Notes wanted) -> Ok $"notes {wanted}"
     | Ok(Listing wanted) -> Ok $"commands {wanted}"
+    | Ok(Logging wanted) -> Ok(sprintf "log %A" wanted)
+    | Ok(Hushing hushed) -> Ok $"sound {hushed}"
     | Ok(Looking name) -> Ok $"view {name}"
     | Ok(Asking question) -> Ok $"asking {question}"
     | Ok Recount -> Ok "history"
@@ -522,7 +524,11 @@ report
 
 let private sitting =
     Solo.opened snake "stamp" (dealt racing 1)
-    |> Solo.watching "keyboard" { Margins = Margins.all; View = plain }
+    |> Solo.watching
+        "keyboard"
+        { Margins = Margins.all
+          Hushed = false
+          View = plain }
     |> fst
 
 let private tocked, posts, _ = Solo.beaten sitting
@@ -539,6 +545,7 @@ report
         |> Solo.watching
             "keyboard"
             { Margins = Margins.all
+              Hushed = false
               View = Playable.plainest AtATerminal standard turns }
         |> fst
 

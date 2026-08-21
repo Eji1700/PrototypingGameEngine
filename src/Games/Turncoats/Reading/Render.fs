@@ -223,9 +223,16 @@ module Render =
           ("m g 8 5 2", "march 2 Green from 8 into 5"), ("undo, redo", "walk the game back")
           ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
           ("notes", "hide every note"), ("commands", "hide this box")
-          ("view <name>", "draw the board another way"), ("save", "write the record now")
-          ("help", "every command, at length"), ("quit", "leave; 'replay' takes the game up again") ]
-        |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) -> sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
+          ("log", "hide what has been said"), ("view <name>", "draw the board another way")
+          ("save", "write the record now"), ("help", "every command, at length")
+          ("quit", "leave; 'replay' takes the game up again"), ("", "") ]
+        // Two to a line, and an odd one out takes the line to itself rather than padding out a
+        // second column that has nothing in it.
+        |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) ->
+            if alsoTyped = "" then
+                sprintf "  %-13s%s" typed does
+            else
+                sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
 
     let private playerLine active beholder (playerId, bag) =
         let marker = if playerId = active then "->" else "  "
@@ -395,7 +402,8 @@ module Render =
         if margins.Commands then
             block sb Blocks.commands (commands @ [ ""; "  " + shorthand ])
 
-        block sb Blocks.log (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
+        if margins.Logged then
+            block sb Blocks.log (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
 
         sb.ToString()
 

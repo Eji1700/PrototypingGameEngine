@@ -10,6 +10,8 @@ type Command<'Move> =
     | Help
     | Notes of showing: bool option
     | Listing of showing: bool option
+    | Logging of showing: bool option
+    | Hushing of hushed: bool option
     | Looking of view: string
     | Asking of question: string
     | Recount
@@ -61,7 +63,7 @@ module Commands =
         | [ "exit" ]
         | [ "q" ] -> Some(Ok Leave)
         | [ "history" ]
-        | [ "log" ] -> Some(Ok Recount)
+        | [ "record" ] -> Some(Ok Recount)
         | [ "save" ] -> Some(Ok Keep)
         | [ "notes" ] -> Some(Ok(Notes None))
         | [ "notes"; "on" ] -> Some(Ok(Notes(Some true)))
@@ -71,6 +73,17 @@ module Commands =
         | [ "commands"; "on" ] -> Some(Ok(Listing(Some true)))
         | [ "commands"; "off" ] -> Some(Ok(Listing(Some false)))
         | "commands" :: _ -> Some(Error "Say 'commands' to turn the box the other way, or 'commands on' or 'commands off'.")
+        | [ "log" ] -> Some(Ok(Logging None))
+        | [ "log"; "on" ] -> Some(Ok(Logging(Some true)))
+        | [ "log"; "off" ] -> Some(Ok(Logging(Some false)))
+        | "log" :: _ ->
+            Some(Error "Say 'log' to turn the box the other way, or 'log on' or 'log off'. 'history' is the record itself.")
+        | [ "sound" ] -> Some(Ok(Hushing None))
+        | [ "sound"; "on" ] -> Some(Ok(Hushing(Some false)))
+        | [ "sound"; "off" ] -> Some(Ok(Hushing(Some true)))
+        | [ "mute" ] -> Some(Ok(Hushing(Some true)))
+        | [ "unmute" ] -> Some(Ok(Hushing(Some false)))
+        | "sound" :: _ -> Some(Error "Say 'sound' to turn it the other way, or 'sound on' or 'sound off'. 'mute' is 'sound off'.")
         | [ "view"; name ] -> Some(Ok(Looking name))
         | "view" :: _ -> Some(Error "Say 'view <name>' to change how the board is drawn.")
         | [ "undo" ]

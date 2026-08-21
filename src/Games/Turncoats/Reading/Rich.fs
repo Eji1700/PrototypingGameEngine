@@ -285,7 +285,7 @@ module Rich =
               wide Render.Blocks.landRuled (rows (landRuled palette game :: wideNote Render.Notes.landRuled)) ]
             @ result
             @ commands
-            @ [ wide Render.Blocks.log (log palette told model) ]
+            @ (if margins.Logged then [ wide Render.Blocks.log (log palette told model) ] else [])
         )
         |> Tint.renderAt width
 

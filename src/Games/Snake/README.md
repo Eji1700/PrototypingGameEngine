@@ -49,7 +49,7 @@ What that buys is that nothing about real time leaks into the game:
 
 ## Playing
 
-Every command that is not a direction — `undo`, `redo`, `history`, `save`, `notes`, `commands`,
+Every command that is not a direction — `undo`, `redo`, `history`, `save`, `notes`, `commands`, `log`,
 `view`, `resign`, `restart`, `help`, `quit` — belongs to the engine and is [documented
 there](../../../README.md). What this game adds is four ways to go, at two paces.
 

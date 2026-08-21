@@ -154,6 +154,7 @@ module Render =
           yield "history", "the record so far"
           yield "notes", "hide the writing that explains the board"
           yield "commands", "hide this box"
+          yield "log", "hide what the game has been saying"
           yield "view <name>", "draw the board another way"
           yield "save", "write the record now"
           yield "help", "every command, at length"
@@ -224,7 +225,7 @@ module Render =
                     )
                     Scene.offering margins Blocks.onwards (onwards beholder session) ]
               Scene.listing margins Blocks.commands (commands pace)
-              Block(Blocks.log, lately margins (Scene.log wording model)) ]
+              Scene.logged margins Blocks.log (lately margins (Scene.log wording model)) ]
 
 
     let history beholder (model: Model<Move, Session, Notice>) =

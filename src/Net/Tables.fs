@@ -79,7 +79,13 @@ type Aside<'Move, 'State, 'Notice>
             Playable.byName shown palette game view
             |> Result.defaultValue (Playable.plainest shown palette game)
 
-        this.Change(Solo.watching console { Margins = Margins.all; View = view })
+        this.Change(
+            Solo.watching
+                console
+                { Margins = Margins.all
+                  Hushed = false
+                  View = view }
+        )
 
     member _.Beats() =
         lock gate (fun () ->

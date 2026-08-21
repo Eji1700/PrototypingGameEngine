@@ -151,6 +151,8 @@ let private reads typed =
     | Ok Help -> Ok "help"
     | Ok(Notes wanted) -> Ok $"notes {wanted}"
     | Ok(Listing wanted) -> Ok $"commands {wanted}"
+    | Ok(Logging wanted) -> Ok(sprintf "log %A" wanted)
+    | Ok(Hushing hushed) -> Ok $"sound {hushed}"
     | Ok(Looking name) -> Ok $"view {name}"
     | Ok(Asking question) -> Ok $"asking {question}"
     | Ok Recount -> Ok "history"

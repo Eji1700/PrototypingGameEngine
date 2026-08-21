@@ -267,7 +267,7 @@ module Html =
               block Render.Blocks.landRuled (landRuled notes game) ]
             @ result
             @ commands
-            @ [ block Render.Blocks.log (log told model) ]
+            @ (if margins.Logged then [ block Render.Blocks.log (log told model) ] else [])
         )
 
     let waiting (seats: Waiting list) =

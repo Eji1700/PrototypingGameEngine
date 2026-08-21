@@ -94,17 +94,29 @@ half second the rules are written in. Wind the clock and the animation winds wit
 A cell that lands flashes, and a row, column or square that comes up is lit by a light that runs
 along it — a browser inverts them outright, a terminal brightens them.
 
+The count and what to type next are **beside** the board rather than under it, and while the
+clock is running the log is cut to its last three lines. Both for the same reason: a board
+sixteen deep with three boxes stacked under it is taller than a terminal, and a clock redrawing a
+screen taller than its window walks the board off the top of it. Hold it with space and the whole
+log comes back, along with the notes and the box of commands — a held board is one somebody is
+*reading* rather than watching.
+
 Three sounds: a **tap** as a wave lands, a **chime** as a cascade comes to rest, and a
-**fanfare** when a shape comes up. A browser makes all three; a terminal has one bell and makes
-that.
+**fanfare** when a shape comes up. A browser makes all three. A terminal has one bell, so it
+rings for the chime and the fanfare and not for the tap - a bell twice a second is a noise
+rather than a sound. `mute` silences the lot, for that console alone, and `sound` turns them
+back on.
 
 ## Commands
+
 
 | | |
 | --- | --- |
 | `f7` | set that cell turning |
 | `why f7` | what it would reach when it lands, and whether anything is reaching back |
 | `faster`, `slower`, `speed 7` | how long a quarter turn is given to take, from 900ms down to 100ms |
+| `sound`, `mute` | whether this board is heard as well as read |
+| `log` | whether what the game has been saying is drawn under the board |
 | `undo`, `redo` | walk the cascade back and forward, a wave at a time |
 | `restart`, `restart 42` | another board, or that one |
 | `resign` | put it down with the touches you have left unspent |

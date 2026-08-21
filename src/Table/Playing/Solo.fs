@@ -4,8 +4,16 @@ open TCModel.Engine
 
 [<NoComparison; NoEquality>]
 type Reading<'Move, 'State, 'Notice> =
-    { Margins: Margins
-      View: View<'Move, 'State, 'Notice> }
+    {
+        Margins: Margins
+        View: View<'Move, 'State, 'Notice>
+
+        /// Whether this console has asked not to be made a noise at. It sits beside the margins
+        /// rather than in them because it is not about how much of the screen is drawn - but it is
+        /// the same kind of thing: one console's standing preference, said at the table, and not
+        /// something the game is allowed an opinion about.
+        Hushed: bool
+    }
 
 [<NoComparison; NoEquality>]
 type Errand<'Move, 'State, 'Notice> =
@@ -116,7 +124,8 @@ module Solo =
     /// from, and a table with no way to make a noise drops it without any of this knowing.
     let private sounding solo =
         [ for sound in solo.Game.Rings(standing solo) do
-              for console, _ in solo.Watchers -> { To = console; Say = Rang sound } ]
+              for console, reading in solo.Watchers do
+                  if not reading.Hushed then { To = console; Say = Rang sound } ]
 
     let private nudging console solo =
         if isOver solo then
@@ -218,6 +227,16 @@ module Solo =
                     Margins =
                         { reading.Margins with
                             Commands = wanted |> Option.defaultValue (not reading.Margins.Commands) } }
+        | Ok(Logging wanted) ->
+            mine
+                { reading with
+                    Margins =
+                        { reading.Margins with
+                            Logged = wanted |> Option.defaultValue (not reading.Margins.Logged) } }
+        | Ok(Hushing wanted) ->
+            mine
+                { reading with
+                    Hushed = wanted |> Option.defaultValue (not reading.Hushed) }
         | Ok(Looking name) ->
             match Playable.byName reading.View.Shown reading.View.Palette solo.Game name with
             | Ok view -> mine { reading with View = view }
