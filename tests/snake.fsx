@@ -1,4 +1,5 @@
 #load "Slither.fsx"
+#load "Conforms.fsx"
 
 open System
 open System.Net
@@ -923,5 +924,12 @@ report
     "and a different seed is a different game"
     false
     (Journal.moves (playedOut [ "easy"; "easy" ] 7UL).Journal = Journal.moves (playedOut [ "easy"; "easy" ] 8UL).Journal)
+
+
+// === The seam every game fills in ===
+
+Conforms.against snake 2 [ "beat"; "faster"; "slower"; "b north" ]
+
+Conforms.against turns 2 [ "go"; "north"; "go" ]
 
 finish ()

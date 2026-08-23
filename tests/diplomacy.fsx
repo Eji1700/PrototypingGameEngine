@@ -1,4 +1,5 @@
 #load "Europe.fsx"
+#load "Conforms.fsx"
 
 open System
 open System.Text.RegularExpressions
@@ -766,5 +767,10 @@ report
     "every seat at a dealt game is one of the powers"
     (Power.all |> List.map Power.name)
     (Playable.seatsOf diplomacy (Model.state dealt) |> List.map diplomacy.Seat)
+
+
+// === The seam every game fills in ===
+
+Conforms.against diplomacy 7 [ "vie hold"; "done"; "ber hold"; "done" ]
 
 finish ()

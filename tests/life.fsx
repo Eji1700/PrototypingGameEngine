@@ -1,4 +1,5 @@
 #load "Living.fsx"
+#load "Conforms.fsx"
 
 open System
 open System.Net
@@ -617,5 +618,10 @@ report
          |> Result.toOption
          |> Option.get
      ))
+
+
+// === The seam every game fills in ===
+
+Conforms.against life 1 [ "a1"; "b2"; "step"; "run"; "clear"; "faster" ]
 
 finish ()

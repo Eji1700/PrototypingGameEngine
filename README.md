@@ -1500,7 +1500,7 @@ screen, the line that changes one, the form on the page and both halves of sendi
 down a wire stopped knowing there are three factions.
 
 There is one more seam, at the far end. Three games have different moves, states and notices,
-so no list holds all of them — [Play.fs](src/Play.fs) ends in a plain interface with no type
+so no list holds all of them — [Play.fs](src/Play/Play.fs) ends in a plain interface with no type
 parameters at all, implemented by closing over a game. That is where the types stop, which
 is what makes [Games.fs](src/Games.fs) a three-line list.
 
@@ -1561,7 +1561,7 @@ Three tables drive it, and each is a handful of lines because a beat is a move:
 
 | where | what keeps the time | what it calls |
 | --- | --- | --- |
-| a terminal | a loop that draws, watches the clock and polls for keys ([Play.fs](src/Play.fs)) | `Solo.beaten` |
+| a terminal | a loop that draws, watches the clock and polls for keys ([Play.fs](src/Play/Play.fs)) | `Solo.beaten` |
 | | *space holds it, `r` deals another, Enter types a line, Esc leaves - and a game that is over is read as a held one, so the clock comes back the moment a fresh board is dealt* | |
 | a browser | a timer beside the table it serves ([Server.fs](src/Net/Server.fs)) | `Aside.Beats` |
 | a house of tables | one timer, each table on its own beat ([House.fs](src/Net/House.fs)) | `Table.Beats` |
@@ -1718,7 +1718,7 @@ no general reader would think of writes its own `View` instead, and Turncoats do
 above ever sees.
 
 **4. A project of its own** — a `.fsproj` listing the game's files in order, referencing
-[TCModel.Engine.fsproj](src/TCModel.Engine.fsproj), and a `Program.fs` that is one line:
+[TCModel.Play.fsproj](src/Play/TCModel.Play.fsproj), and a `Program.fs` that is one line:
 
 ```fsharp
 [<EntryPoint>]
@@ -1918,8 +1918,8 @@ program that plays Diplomacy for you.
 
 ### Layout
 
-Seven layers, each depending only on the ones above it — and now six projects, because the
-seam between the engine and the games is a project boundary rather than a place in a list.
+Seven layers, each depending only on the ones above it — and now twelve projects, because
+every seam between them that can be a project boundary is one rather than a place in a list.
 
 **Within a project, the order in its `.fsproj` is the architecture and the only thing
 enforcing it**: F# compiles a project in the order its files are listed, so a layer cannot
@@ -1927,16 +1927,22 @@ reach into one beneath it even by accident. Read
 [TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) top to bottom — nothing in it mentions a
 game.
 
-**Between projects, the compiler enforces it outright.** A game references the engine; the
-engine references nothing. "A game may reach the engine and the engine may not reach a game"
-used to be a convention that happened to hold and could be checked by reading; it is now a
-thing that will not build. Not one line of code moved to get that — the split is project
-files, and every source file is where it always was, which is why the test scripts
-that `#load` them by path did not change either.
+**Between projects, the compiler enforces it outright.** A game references `Play`, `Play`
+references `Net`, `Net` references `Table`, `Table` references `Engine`, and `Engine` references
+nothing but `FSharp.Core`. "A game may reach the engine and the engine may not reach a game" used
+to be a convention that happened to hold and could be checked by reading; it is now a thing that
+will not build — and so is every other step of the layering. `Engine` cannot see a screen because
+it cannot see `Table`; `Table` cannot open a socket because it cannot see `Net`. One source file
+moved to get that — `Play.fs`, into a directory of its own, because a project wants one — and
+every other file is where it always was, which is why the test scripts that `#load` them by path
+did not change.
 
 | Project | What it is |
 | --- | --- |
-| [src/TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) | Everything that is not a game: `Common`, `Engine`, `Table`, `Net`, and `Play` |
+| [src/TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) | `Common` and `Engine`: the fold, the timeline, the record and the generator. Depends on `FSharp.Core` and nothing else |
+| [src/Table/TCModel.Table.fsproj](src/Table/TCModel.Table.fsproj) | The seam a game fills in, the screens, the parsing of a typed line, the record on disk and the menu. A terminal and a page, and no server |
+| [src/Net/TCModel.Net.fsproj](src/Net/TCModel.Net.fsproj) | The same table with the players at different keyboards. The only project with a web server in it |
+| [src/Play/TCModel.Play.fsproj](src/Play/TCModel.Play.fsproj) | Opening one. What a game's own `Program.fs` calls, and the only one of the four a game names |
 | [src/Games/Turncoats/Turncoats.fsproj](src/Games/Turncoats/Turncoats.fsproj) | One game, and its own executable |
 | [src/Games/TicTacToe/TicTacToe.fsproj](src/Games/TicTacToe/TicTacToe.fsproj) | " |
 | [src/Games/Diplomacy/Diplomacy.fsproj](src/Games/Diplomacy/Diplomacy.fsproj) | " |
@@ -2033,7 +2039,7 @@ The games never mention each other, and nothing above them names any of them unt
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.
 
-[Play.fs](src/Play.fs) is the last file in the engine rather than the first outside it, and
+[Play.fs](src/Play/Play.fs) is the last file in the engine rather than the first outside it, and
 that is the point of it: what opening a game *involves* — dealing one, keeping its record, the
 menu loops, the settings pages, both tables and the browser — is generic in the game, and ends
 in the interface that seals a game's types off. It is the whole of what a game's own door has
@@ -2041,7 +2047,7 @@ to call.
 
 | File | Role |
 | --- | --- |
-| [Play.fs](src/Play.fs) | The above, ending in `Chosen` — and `Play.only`, which is what `main` is at a game's own executable |
+| [Play.fs](src/Play/Play.fs) | The above, ending in `Chosen` — and `Play.only`, which is what `main` is at a game's own executable |
 | [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all seven: `Play.only Offer.ways argv` |
 | [Games.fs](src/Games.fs) | The games there are, and the only file in the program that names more than one |
 | [Program.fs](src/Program.fs) | Which game a line is about, the screen that asks when nothing says, and nothing else |

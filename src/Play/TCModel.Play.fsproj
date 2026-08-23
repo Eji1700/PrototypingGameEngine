@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Opening a game: the one call a game's own Program.fs makes, and the composition root that
+       ties a keyboard, a menu, a record and a wire together. This is what a game references. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <AssemblyName>TCModel.Play</AssemblyName>
+    <RootNamespace>TCModel</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Play.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Net/TCModel.Net.fsproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,4 +1,5 @@
 #load "Compiled.fsx"
+#load "Conforms.fsx"
 
 open TCModel.Common
 
@@ -4344,5 +4345,12 @@ report
      theirHandShown one asked (plain.Answer one "pile" asked),
      theirHandShown one asked (plain.Answer one "nonsense" asked),
      theirHandShown two asked (plain.Answer two "pile" asked) |> not)
+
+
+// === The seam every game fills in ===
+
+Conforms.against compiled 2 [ "draft fire"; "draft water"; "draft metal" ]
+
+Conforms.against controlled 2 [ "draft fire"; "draft water"; "draft metal" ]
 
 finish ()

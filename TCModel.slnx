@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TCModel.Engine.fsproj" />
+    <Project Path="src/Table/TCModel.Table.fsproj" />
+    <Project Path="src/Net/TCModel.Net.fsproj" />
+    <Project Path="src/Play/TCModel.Play.fsproj" />
   </Folder>
   <Folder Name="/src/Games/">
     <Project Path="src/Games/Cascade/Cascade.fsproj" />

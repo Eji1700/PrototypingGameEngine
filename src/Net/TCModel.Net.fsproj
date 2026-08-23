@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The same table, with the players at different keyboards. This is where the web server, the
+       page the browser reads and the console client live, and it is the only project that needs a
+       server in it at all. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <AssemblyName>TCModel.Net</AssemblyName>
+    <RootNamespace>TCModel</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Protocol.fs" />
+    <Compile Include="Browser.fs" />
+    <Compile Include="Lobby.fs" />
+    <Compile Include="Tables.fs" />
+    <Compile Include="House.fs" />
+    <Compile Include="Server.fs" />
+    <Compile Include="Client.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Table/TCModel.Table.fsproj" />
+  </ItemGroup>
+
+  <!-- Browser.fs reads this out of its own assembly, so it is carried rather than fetched. -->
+  <ItemGroup>
+    <EmbeddedResource Include="../../assets/datastar.js" LogicalName="datastar.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Falco.Datastar" Version="1.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

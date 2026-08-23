@@ -10,7 +10,7 @@ $scripts = @(
     "ruling", "outcome", "actions", "history", "knowledge"
     "lobby", "house", "solo", "view", "html", "reach", "cli"
     "properties", "rival", "counting"
-    "tictactoe", "diplomacy", "compile", "life", "snake", "cascade"
+    "turncoats", "tictactoe", "diplomacy", "compile", "life", "snake", "cascade"
 )
 
 if ($Only) {

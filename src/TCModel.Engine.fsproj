@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- The bottom of the stack, and the only part of it a game strictly needs: a fold, a timeline,
+       a record and a generator. It has no dependency on anything outside the framework, and the
+       three projects above it are what keep it that way - a reach upward from here is now a build
+       error rather than a house rule nothing checks. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -25,63 +29,6 @@
     <Compile Include="Engine/Model.fs" />
     <Compile Include="Engine/Update.fs" />
     <Compile Include="Engine/Machines.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Table - the parts a game and a table are described in">
-    <Compile Include="Table/Parts/Invoked.fs" />
-    <Compile Include="Table/Parts/Showing.fs" />
-    <Compile Include="Table/Parts/Waiting.fs" />
-    <Compile Include="Table/Parts/Scene.fs" />
-    <Compile Include="Table/Parts/Palette.fs" />
-    <Compile Include="Table/Parts/Settings.fs" />
-    <Compile Include="Table/Parts/Reach.fs" />
-    <Compile Include="Table/Parts/Keys.fs" />
-    <Compile Include="Table/Parts/Commands.fs" />
-    <Compile Include="Table/Parts/View.fs" />
-    <Compile Include="Table/Parts/Seating.fs" />
-    <Compile Include="Table/Parts/Tint.fs" />
-    <Compile Include="Table/Parts/Page.fs" />
-    <Compile Include="Table/Parts/Screens.fs" />
-    <Compile Include="Table/Parts/Options.fs" />
-    <Compile Include="Table/Parts/Readers.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Table - the seam">
-    <Compile Include="Table/Playable.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Table - playing one, and the two ways in">
-    <Compile Include="Table/Playing/Solo.fs" />
-    <Compile Include="Table/Playing/Transcript.fs" />
-    <Compile Include="Table/Playing/Menu.fs" />
-    <Compile Include="Table/Playing/Launch.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Net - the same table, with the players at different keyboards">
-    <Compile Include="Net/Protocol.fs" />
-    <Compile Include="Net/Browser.fs" />
-    <Compile Include="Net/Lobby.fs" />
-    <Compile Include="Net/Tables.fs" />
-    <Compile Include="Net/House.fs" />
-    <Compile Include="Net/Server.fs" />
-    <Compile Include="Net/Client.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="Opening a game">
-    <Compile Include="Play.fs" />
-  </ItemGroup>
-
-  <ItemGroup Label="The browser's own client, carried rather than fetched">
-    <EmbeddedResource Include="../assets/datastar.js" LogicalName="datastar.js" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Argu" Version="6.2.5" />
-    <PackageReference Include="Falco.Datastar" Version="1.3.0" />
-    <PackageReference Include="Falco.Markup" Version="1.4.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.10" />
-    <PackageReference Include="Spectre.Console" Version="0.51.1" />
   </ItemGroup>
 
 </Project>

@@ -20,9 +20,12 @@ it or it never runs.
 
 ## Layout
 
-`Common` → `Engine` → `Table` → `Net` → `Play`, compiled in that order by
-`src/TCModel.Engine.fsproj`, and nothing lower may reach up. Each game is its own project under
-`src/Games/<Name>/`, split into `Rules/` (how it is played) and `Reading/` (how it is read), with
+`Common` → `Engine` → `Table` → `Net` → `Play`, and nothing lower may reach up. The last three
+are projects of their own — `src/Table/TCModel.Table.fsproj`, `src/Net/TCModel.Net.fsproj`,
+`src/Play/TCModel.Play.fsproj` — so reaching up is a build error rather than a rule to remember.
+`Common` and `Engine` share `src/TCModel.Engine.fsproj`, which depends on `FSharp.Core` and
+nothing else; keep it that way. Each game is its own project under `src/Games/<Name>/`, referencing
+`TCModel.Play`, split into `Rules/` (how it is played) and `Reading/` (how it is read), with
 `Offer.fs` as the seam that hands a `Playable` to the table. A new game is registered in
 `src/Games.fs` and added to `TCModel.slnx`.
 

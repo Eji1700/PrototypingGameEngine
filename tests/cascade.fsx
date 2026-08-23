@@ -1,4 +1,5 @@
 #load "Cascading.fsx"
+#load "Conforms.fsx"
 
 open System
 open System.Net
@@ -1055,6 +1056,12 @@ report
          | Rang _ -> true
          | _ -> false)
      |> List.length)
+
+
+
+// === The seam every game fills in ===
+
+Conforms.against cascade 1 [ "a1"; "beat"; "faster"; "slower"; "press" ]
 
 
 finish ()

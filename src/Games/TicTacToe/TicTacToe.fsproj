@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../TCModel.Engine.fsproj" />
+    <ProjectReference Include="../../Play/TCModel.Play.fsproj" />
   </ItemGroup>
 
 </Project>

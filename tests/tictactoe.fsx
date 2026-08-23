@@ -1,4 +1,5 @@
 #load "Noughts.fsx"
+#load "Conforms.fsx"
 
 open System
 open System.Net
@@ -484,5 +485,10 @@ report
     "and a different seed is a different game"
     false
     (Journal.moves (playedOut [ "easy"; "easy" ] 7UL).Journal = Journal.moves (playedOut [ "easy"; "easy" ] 8UL).Journal)
+
+
+// === The seam every game fills in ===
+
+Conforms.against noughts 2 [ "5"; "1"; "9"; "3" ]
 
 finish ()

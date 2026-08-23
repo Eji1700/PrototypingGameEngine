@@ -232,7 +232,9 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
     else
         loop rings sitters said solo
 
-let private dealt game players seed = Update.start game.Rules players seed
+// Annotated because `Playable` and `View` both carry a field called `Rules`, and with the two of
+// them now in different assemblies it is the view's - a string - that a bare `game.Rules` finds.
+let private dealt (game: Playable<_, _, _>) players seed = Update.start game.Rules players seed
 
 let private takeUp game path =
     let elsewhere other =
