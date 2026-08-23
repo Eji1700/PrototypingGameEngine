@@ -69,14 +69,19 @@ let private disagrees (text: string) =
 let private fingerprint (game: Playable<'Move, 'State, 'Notice>) (view: View<'Move, 'State, 'Notice>) model =
     let state = Model.state model
 
-    [ $"turn {game.Rules.Turn state}"
-      $"active {PlayerId.value (game.Rules.Active state)}"
-      $"over {game.Rules.Over state}"
-      $"seats {game.Rules.Seats state}"
+    // Spelt with `yield` throughout: a list that mixes bare expressions with a `for` drops the
+    // bare ones on the floor, and a fingerprint of nothing but the board compares equal to itself
+    // whatever the turn says.
+    [ yield $"turn {game.Rules.Turn state}"
+      yield $"active {PlayerId.value (game.Rules.Active state)}"
+      yield $"over {game.Rules.Over state}"
+      yield $"seats {game.Rules.Seats state}"
+
       // `Margins.none`, because the boxes round the board are not the board: the log carries
       // "Taken back: ..." after an undo, and a position is not a different position for having
       // been arrived at a different way.
-      for place in 1 .. game.Rules.Seats state -> uncoloured (view.Board Margins.none (Seat.at place) model) ]
+      for place in 1 .. game.Rules.Seats state do
+          yield uncoloured (view.Board Margins.none (Seat.at place) model) ]
 
 
 let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) =

@@ -73,6 +73,20 @@ Checks match on rendered text in places. That is deliberate and worth keeping, b
 deliberate change to what a game says will sometimes need the matching assertion updated. Update
 the assertion; do not bend the wording to keep a test quiet.
 
+`tests/Conforms.fsx` is the contract every `Playable` is held to — the deal, the seats, the
+reading and writing of a line, the timeline, the record, the notices, every view at every state,
+the machines, the clock and the page. It is not a suite and does not run alone: a game's suite
+loads its own harness, then `Conforms.fsx`, then says
+
+```fsharp
+Conforms.against <game> <seats> [ "a line"; "another" ]
+```
+
+The lines are typed commands played from the deal. A line the rules refuse is a fine one to pass —
+a refusal is something the seam carries, and the checks hold for it either way. **A new game gets
+a suite that calls this before it gets anything else**, and a change to the seam belongs in
+`Conforms.fsx` so all seven answer for it at once rather than one of them.
+
 ## Records
 
 `logs/` is committed on purpose. The files are replay fixtures — CI takes two of them back up on
