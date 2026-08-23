@@ -1,7 +1,7 @@
 param(
     [ValidateSet("both", "portable", "standalone")]
     [string]$Shape = "both",
-    [ValidateSet("all", "TCModel", "Turncoats", "TicTacToe", "Diplomacy", "Compile", "Life", "Snake", "Cascade")]
+    [ValidateSet("all", "TCModel", "Turncoats", "TicTacToe", "Diplomacy", "Compile", "Life", "Snake", "Cascade", "Warband")]
     [string]$Program = "all",
     [string]$Runtime = "",
     [string]$Into = "",
@@ -39,9 +39,10 @@ $programs = @(
     @{ Name = "Life"; Project = "src/Games/Life/Life.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15" }
     @{ Name = "Snake"; Project = "src/Games/Snake/Snake.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15" }
     @{ Name = "Cascade"; Project = "src/Games/Cascade/Cascade.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.speck" }
+    @{ Name = "Warband"; Project = "src/Games/Warband/Warband.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "--cell: 3\.6rem" }
 ) | Where-Object { $Program -eq "all" -or $_.Name -eq $Program }
 
-$seats = @{ TCModel = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2; Life = 1; Snake = 2; Cascade = 1 }
+$seats = @{ TCModel = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2; Life = 1; Snake = 2; Cascade = 1; Warband = 2 }
 
 
 function Test-Published($exe, $made) {

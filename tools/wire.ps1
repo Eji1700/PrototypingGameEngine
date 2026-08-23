@@ -1,7 +1,7 @@
 ﻿
 param(
     [int]$Port = 5100,
-    [ValidateSet("", "turncoats", "tictactoe", "compile")]
+    [ValidateSet("", "turncoats", "tictactoe", "compile", "warband")]
     [string]$Game = "",
     [string]$Code = "wire-runs-here"
 )
@@ -15,7 +15,7 @@ $failed = 0
 # What this drives is the wire, which does not know what game it is carrying - so the game only
 # has to supply a line to type and something the *other* console should then be told.
 #
-# Three of the seven are not here and cannot be. Life and Cascade seat one, so there is no other
+# Three of the eight are not here and cannot be. Life and Cascade seat one, so there is no other
 # console for a move to reach; Snake runs on a clock, and a board that moves on its own while the
 # check waits for a phrase is a flake rather than a check. Diplomacy seats seven, which this could
 # be taught, but its orders are written in secret - "the move reached the other console" is the
@@ -27,6 +27,11 @@ $moves = @{
     # Compile opens on a draft rather than on a turn, which is why what a filled table first draws
     # is the game's to say rather than this file's.
     "compile" = @{ Line = "draft fire"; Heard = "drafts Fire"; Opens = "The draft" }
+
+    # Warband musters in secret, so what reaches the other console is that a muster happened and
+    # nothing about what it was - which is the interesting thing to ask of the wire, and the reason
+    # this one is worth having here alongside the three that hide nothing.
+    "warband" = @{ Line = "rider f2"; Heard = "musters, out of your sight"; Opens = "The muster" }
 }
 
 $named = $(if ($Game) { $Game } else { "turncoats" })

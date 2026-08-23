@@ -3,7 +3,7 @@ param(
     [int]$Port = 5300
 )
 
-# Whether the engine works as a *dependency*, which is not what the seven games here prove. They
+# Whether the engine works as a *dependency*, which is not what the eight games here prove. They
 # reach it by project reference, side by side in one solution and one restore; somebody building a
 # game of their own gets four packages off a feed. That is a different question - the version graph
 # has to line up, the framework reference has to travel, and the browser's client has to come out

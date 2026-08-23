@@ -14,9 +14,9 @@
 #load "../src/Engine/Update.fs"
 #load "../src/Engine/Machines.fs"
 
-// The three games that count things, as far as the words they count them in. Loaded here rather
-// than through their own harnesses because those compile a copy of the engine apiece, and a check
-// that holds three games against one another needs the one engine underneath all of them.
+// The games that count things, as far as the words they count them in. Loaded here rather than
+// through their own harnesses because those compile a copy of the engine apiece, and a check that
+// holds several games against one another needs the one engine underneath all of them.
 #load "../src/Games/Cascade/Rules/Board.fs"
 #load "../src/Games/Cascade/Rules/Session.fs"
 #load "../src/Games/Cascade/Rules/Turn.fs"
@@ -30,6 +30,14 @@
 #load "../src/Games/Snake/Rules/Session.fs"
 #load "../src/Games/Snake/Rules/Turn.fs"
 #load "../src/Games/Snake/Rules/Words.fs"
+#load "../src/Games/Warband/Rules/Formation.fs"
+#load "../src/Games/Warband/Rules/Kinds.fs"
+#load "../src/Games/Warband/Rules/Squads.fs"
+#load "../src/Games/Warband/Rules/Session.fs"
+#load "../src/Games/Warband/Rules/Events.fs"
+#load "../src/Games/Warband/Rules/Battle.fs"
+#load "../src/Games/Warband/Rules/Turn.fs"
+#load "../src/Games/Warband/Rules/Words.fs"
 
 open System.Text.RegularExpressions
 open TCModel.Common
@@ -80,7 +88,11 @@ let private counters =
       "Life generations", TCModel.Life.Words.generations
       "Snake segments", TCModel.Snake.Words.segments
       "Snake steps", TCModel.Snake.Words.steps
-      "Snake eaten", TCModel.Snake.Words.eaten ]
+      "Snake eaten", TCModel.Snake.Words.eaten
+      "Warband units", TCModel.Warband.Words.units
+      "Warband hexes", TCModel.Warband.Words.hexes
+      "Warband rounds", TCModel.Warband.Words.rounds
+      "Warband blows", TCModel.Warband.Words.blows ]
 
 /// A one standing against a plural, which is what every one of these bugs has been. The nouns are
 /// named rather than matched as "any word ending in s", because "1 this" and "1 has" are neither
@@ -108,7 +120,10 @@ let private counted =
       "games"
       "tables"
       "centres"
-      "protocols" ]
+      "protocols"
+      "hexes"
+      "rounds"
+      "blows" ]
 
 let private disagrees (text: string) =
     Regex.IsMatch(text, @"\b1 (" + String.concat "|" counted + @")\b")
@@ -137,7 +152,13 @@ let private refusals =
           "Snake NoSuchSpeed", TCModel.Snake.Words.said (TCModel.Snake.Refused(TCModel.Snake.NoSuchSpeed n))
 
       "Cascade NoneLeft", TCModel.Cascade.Words.said (TCModel.Cascade.Refused TCModel.Cascade.NoneLeft)
-      "Life NothingLeft", TCModel.Life.Words.said (TCModel.Life.Refused TCModel.Life.NothingLeft) ]
+      "Life NothingLeft", TCModel.Life.Words.said (TCModel.Life.Refused TCModel.Life.NothingLeft)
+
+      // Warband counts a kind in its own plural, so this one is read back once for every kind
+      // there is rather than at nought, one and two.
+      for kind in TCModel.Warband.Kinds.all do
+          $"Warband TooAlike {TCModel.Warband.Kinds.name kind}",
+          TCModel.Warband.Words.said (TCModel.Warband.Refused(TCModel.Warband.TooAlike(1, kind))) ]
 
 report
     "no refusal any of them makes puts a one against a plural"
@@ -164,7 +185,10 @@ let private said =
           TCModel.Cascade.Words.said (TCModel.Cascade.Happened(TCModel.Cascade.CameUp(TCModel.Cascade.Rank 1, n)))
           TCModel.Life.Words.said (TCModel.Life.Happened(TCModel.Life.Ran(n, n, n)))
           TCModel.Life.Words.said (TCModel.Life.Happened(TCModel.Life.Swept n))
-          TCModel.Snake.Words.said (TCModel.Snake.Happened(TCModel.Snake.Ate(Seat.at 1, n, n))) ]
+          TCModel.Snake.Words.said (TCModel.Snake.Happened(TCModel.Snake.Ate(Seat.at 1, n, n)))
+          TCModel.Warband.Words.atLength (TCModel.Warband.Strikes(n, n))
+          TCModel.Warband.Words.atLength (TCModel.Warband.Shoots(n, n))
+          TCModel.Warband.Words.ending (TCModel.Warband.Outlasted n) ]
 
 report "nor anything a game reads out as it plays" [] (said |> List.filter disagrees)
 

@@ -13,6 +13,7 @@
     <Project Path="src/Games/Snake/Snake.fsproj" />
     <Project Path="src/Games/TicTacToe/TicTacToe.fsproj" />
     <Project Path="src/Games/Turncoats/Turncoats.fsproj" />
+    <Project Path="src/Games/Warband/Warband.fsproj" />
   </Folder>
   <Project Path="TCModel.fsproj" />
 </Solution>

@@ -58,7 +58,10 @@ let private counted =
       "games"
       "tables"
       "centres"
-      "protocols" ]
+      "protocols"
+      "hexes"
+      "rounds"
+      "blows" ]
 
 let private disagrees (text: string) =
     Regex.IsMatch(text, @"\b1 (" + String.concat "|" counted + @")\b")

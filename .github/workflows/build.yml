@@ -40,6 +40,7 @@ jobs:
           pwsh tools/wire.ps1
           pwsh tools/wire.ps1 -Game tictactoe
           pwsh tools/wire.ps1 -Game compile
+          pwsh tools/wire.ps1 -Game warband
 
       - name: Replay every committed record
         run: pwsh tools/records.ps1
@@ -71,7 +72,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        game: [Turncoats, TicTacToe, Diplomacy, Compile, Life, Snake, Cascade]
+        game: [Turncoats, TicTacToe, Diplomacy, Compile, Life, Snake, Cascade, Warband]
 
     steps:
       - uses: actions/checkout@v4

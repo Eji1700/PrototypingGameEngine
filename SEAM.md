@@ -1,6 +1,6 @@
 # The seam, and what moved it
 
-Seven games sit on this engine, and about four fifths of the program is not about any of them.
+Eight games sit on this engine, and about four fifths of the program is not about any of them.
 That claim is only worth something if there is a record of what it cost to keep — so this file is
 the ledger: every change to the seam, which game demanded it, and what would break without it.
 
@@ -8,9 +8,9 @@ The seam is three types and thirty-one members between them:
 [`Rules`](src/Engine/Rules.fs) (7), [`Playable`](src/Table/Playable.fs) (20) and `Pulse` (4).
 Everything else a game touches is vocabulary it may use and need not.
 
-**The headline is what is missing from the table below.** Three of the seven games — Diplomacy,
-Compile and Life — changed the seam in no way at all. Neither `Rules` nor `Playable` has a commit
-against it from any of them.
+**The headline is what is missing from the table below.** Four of the eight games — Diplomacy,
+Compile, Life and Warband — changed the seam in no way at all. Neither `Rules` nor `Playable` has
+a commit against it from any of them.
 
 | | Game | What it added to the seam |
 | --- | --- | --- |
@@ -21,6 +21,7 @@ against it from any of them.
 | 2026-08-16 | **Life** | *nothing* |
 | 2026-08-17 | **Snake** | `Pulse` — `Every`, `Beat`, `Pressed`; and `Playable.Pulse` |
 | 2026-08-20 | **Cascade** | `Pulse.Frames`; `Playable.Rings` |
+| 2026-08-23 | **Warband** | *nothing* |
 
 ## What each one was for
 
@@ -54,7 +55,7 @@ hand. `Conforms.against` checks that for every game that has a clock.
   notices — which is what makes a game taken up from a record sound like the game it was saved
   from, and lets a game say it once for every table rather than once per endpoint.
 
-## What the three quiet games did instead
+## What the four quiet games did instead
 
 They are the evidence, so what they found is worth as much as what they changed.
 
@@ -76,6 +77,28 @@ the menu, the command line, the wire and all three screens for nothing. What it 
 three places where code right for four games had never been handed a *one*: "1 players" in the
 list of games, a clause about machines at a game with none, and a block that loses its name. See
 [what it turned up](src/Games/Life/README.md#what-it-turned-up).
+
+**Warband** — the first game that is **hidden and on a clock at once**, which was the only thing
+about it worth doubting. Turncoats and Diplomacy keep things back but wait for everybody; Life,
+Snake and Cascade beat on their own but hide nothing. Putting the two together asks a question
+neither half had been asked: a table with a `Pulse` lets any console speak whenever it likes
+(`Lobby` only enforces whose turn it is at a game *without* one), so a game that hides something
+cannot lean on the turn order to keep it hidden. It does not have to — `SeenBy` and the per-seat
+board were already the whole of the curtain, and the lobby draws every console its own seat's board
+either way. Nothing moved.
+
+Two things it found that are worth writing down and are not seam:
+
+- **A game's state may not have a field called `Phase`.** `Margins` has one, and F# resolves a
+  field on an un-annotated value by name alone, so half of `Render` silently retyped itself. It is
+  the same trap `Margins.Logged` was named around, and the second time it has been sprung —
+  `Model.Log`, and now this.
+- **`Rules.Active` is read by more things than "whose turn is it".** One keyboard draws the board
+  for whoever is active, so a game that names a different seat every beat turns the board over
+  under the person reading it. Naming the side about to swing was tried and taken out again; the
+  cost of the plain answer is that nothing can be given up mid-battle, which for this game turns
+  out to be right anyway. [`Rules/Session.fs`](src/Games/Warband/Rules/Session.fs) says so where
+  somebody would go looking.
 
 ## Things that changed near the seam without changing it
 

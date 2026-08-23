@@ -24,6 +24,7 @@
     <ProjectReference Include="src/Games/Life/Life.fsproj" />
     <ProjectReference Include="src/Games/Snake/Snake.fsproj" />
     <ProjectReference Include="src/Games/Cascade/Cascade.fsproj" />
+    <ProjectReference Include="src/Games/Warband/Warband.fsproj" />
   </ItemGroup>
 
 </Project>

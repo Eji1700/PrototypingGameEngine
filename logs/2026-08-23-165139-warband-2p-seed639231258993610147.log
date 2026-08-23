@@ -1,0 +1,153 @@
+# A Warband game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program. The format
+# line above it is the shape of the file itself, so a later engine reading this
+# one knows what it is looking at.
+#
+#   dotnet run -- warband replay <this file>
+
+format 1
+deal 2 639231258993610147 you you
+
+#   1  turn 0, Squad One
+run
+#      The battle is stopped. 'step' takes it a blow at a time.
+
+#   2  turn 1, Squad One
+run
+#      The battle runs on.
+
+#   3  turn 2, Squad One
+muster spearman m1
+#      Squad One musters a spearman at m1.
+
+#   4  turn 3, Squad Two
+run
+#      The battle is stopped. 'step' takes it a blow at a time.
+
+#   5  turn 4, Squad Two
+muster bowman b3
+#      Squad Two musters a bowman at b3.
+
+#   6  turn 5, Squad One
+muster mender m2
+#      Squad One musters a mender at m2.
+
+#   7  turn 6, Squad Two
+muster bowman b1
+#      Squad Two musters a bowman at b1.
+
+#   8  turn 7, Squad One
+muster warder f1
+#      Squad One musters a warder at f1.
+
+#   9  turn 8, Squad Two
+muster footman f1
+#      Squad Two musters a footman at f1.
+
+#  10  turn 9, Squad One
+muster rider f3
+#      Squad One musters a rider at f3.
+
+#  11  turn 10, Squad Two
+muster footman f3
+#      Squad Two musters a footman at f3.
+
+#  12  turn 11, Squad One
+muster footman b3
+#      Squad One musters a footman at b3.
+
+#  13  turn 12, Squad Two
+muster rider m2
+#      Squad Two musters a rider at m2.
+#      Both squads are mustered. The battle begins, and nobody is asked anything more.
+
+#  14  turn 13, Squad One
+run
+#      The battle runs on.
+
+#  15  turn 14, Squad One
+beat
+#      Round 1.
+#      Squad One's rider at f3 strikes Squad Two's footman at f1 for 3, and leaves it 7.
+#      Squad One's rider at f3 strikes Squad Two's footman at f3 for 3, and leaves it 7.
+#      Squad One's rider at f3 strikes Squad Two's footman at f1 for 3, and leaves it 4.
+
+#  16  turn 15, Squad One
+beat
+#      Squad Two's rider at m2 strikes Squad One's warder at f1 for 3, and leaves it 11.
+
+#  17  turn 16, Squad One
+beat
+#      Squad Two's bowman at b1 shoots for 2, and Squad One's warder at f1 steps in front of it and is left with 9.
+#      Squad Two's bowman at b1 shoots for 2, and Squad One's warder at f1 steps in front of it and is left with 7.
+#      Squad Two's bowman at b1 shoots for 2, and Squad One's warder at f1 steps in front of it and is left with 5.
+
+#  18  turn 17, Squad One
+beat
+#      Squad Two's bowman at b3 shoots Squad One's warder at f1 for 2, and leaves it 3.
+#      Squad Two's bowman at b3 shoots Squad One's warder at f1 for 2, and leaves it 1.
+#      Squad Two's bowman at b3 shoots Squad One's warder at f1 for 2, and leaves it nothing.
+#      Squad One's warder at f1 falls.
+
+#  19  turn 18, Squad One
+beat
+#      Squad One's spearman at m1 strikes Squad Two's footman at f3 for 3, and leaves it 4.
+#      Squad One's spearman at m1 strikes Squad Two's footman at f1 for 3, and leaves it 1.
+
+#  20  turn 19, Squad One
+beat
+#      Squad One's footman at b3 strikes Squad Two's footman at f3 for 1, and leaves it 3.
+
+#  21  turn 20, Squad One
+beat
+#      Squad Two's footman at f1 strikes Squad One's rider at f3 for 3, and leaves it 9.
+#      Squad Two's footman at f1 strikes Squad One's rider at f3 for 3, and leaves it 6.
+
+#  22  turn 21, Squad One
+beat
+#      Squad Two's footman at f3 strikes Squad One's rider at f3 for 3, and leaves it 3.
+#      Squad Two's footman at f3 strikes Squad One's rider at f3 for 3, and leaves it nothing.
+#      Squad One's rider at f3 falls.
+
+#  23  turn 22, Squad One
+beat
+#      Squad One's mender at m2 has nobody hurt on a hex it touches.
+
+#  24  turn 23, Squad One
+beat
+#      Round 2.
+#      Squad Two's rider at m2 strikes Squad One's spearman at m1 for 3, and leaves it 6.
+
+#  25  turn 24, Squad One
+beat
+#      Squad Two's bowman at b1 shoots Squad One's spearman at m1 for 2, and leaves it 4.
+#      Squad Two's bowman at b1 shoots Squad One's spearman at m1 for 2, and leaves it 2.
+#      Squad Two's bowman at b1 shoots Squad One's spearman at m1 for 2, and leaves it nothing.
+#      Squad One's spearman at m1 falls.
+
+#  26  turn 25, Squad One
+beat
+#      Squad Two's bowman at b3 shoots Squad One's mender at m2 for 2, and leaves it 4.
+#      Squad Two's bowman at b3 shoots Squad One's mender at m2 for 2, and leaves it 2.
+#      Squad Two's bowman at b3 shoots Squad One's mender at m2 for 2, and leaves it nothing.
+#      Squad One's mender at m2 falls.
+
+#  27  turn 26, Squad One
+beat
+#      Squad Two's footman at f1 strikes Squad One's footman at b3 for 3, and leaves it 7.
+#      Squad Two's footman at f1 strikes Squad One's footman at b3 for 3, and leaves it 4.
+
+#  28  turn 27, Squad One
+beat
+#      Squad Two's footman at f3 strikes Squad One's footman at b3 for 3, and leaves it 1.
+#      Squad Two's footman at f3 strikes Squad One's footman at b3 for 3, and leaves it nothing.
+#      Squad One's footman at b3 falls.
+#      The game is over: Squad One is broken, and Squad Two holds the field.
+

@@ -1,4 +1,4 @@
-# TCModel — an engine for turn-based games, and seven games in it
+# TCModel — an engine for turn-based games, and eight games in it
 
 Answer seven questions about how a game is *played* and fifteen about how it is *read*, and
 you are handed the rest: a history to walk back through, a record that replays, seats and
@@ -18,6 +18,7 @@ README of its own:
 | [**Life**](src/Games/Life/README.md) | 1 | Conway's, on a board with its edges joined - a soup, a rule, and nobody to play against. Runs on a clock you start and stop |
 | [**Snake**](src/Games/Snake/README.md) | 1 to 4 | The arcade game, on a clock: the snakes move on their own and quicken as they eat, and you only steer |
 | [**Cascade**](src/Games/Cascade/README.md) | 1 | Two hundred and fifty-six elbows. Touch one and it turns a quarter, and whatever it is now reaching that is reaching back turns too |
+| [**Warband**](src/Games/Warband/README.md) | 2 | Two squads of five on ten hexes apiece, mustered out of each other's sight - and then a battle neither of you plays, settled the moment it is joined |
 
 ```powershell
 dotnet run                      # asks which game, then that game's own menu
@@ -400,7 +401,7 @@ gold rather than a fourth hue that could be mistaken for a stone.
 Three pages because there are three kinds of question. **Video** is how a board reaches your
 eyes. **Audio** is how it reaches your ears, which at a terminal is one bell and a question about
 whether you want it. **Game** is whatever this particular game lets you settle about itself,
-which for six of these seven games is nothing at all.
+which for seven of these eight games is nothing at all.
 
 The split is not decoration. Before it there was one screen with a view row and a colour row
 on it, and every new kind of question would have gone on the end of the same list until it was
@@ -423,8 +424,8 @@ sitting in, so it is asked once, kept above all the games, and every game picks 
 
 #### Game
 
-The page a game answers for itself, and the reason `Games.all` is six entries rather than
-seven. Compile can be played with an optional rule in it, and that used to be a second game in
+The page a game answers for itself, and the reason `Games.all` is seven entries rather than
+eight. Compile can be played with an optional rule in it, and that used to be a second game in
 the picker — so the front door asked which game and then asked the same question again in
 different words. It is one game with two ways of being played now:
 
@@ -1725,7 +1726,7 @@ above ever sees.
 let main argv = TCModel.Play.only Offer.ways argv
 ```
 
-That line is the same at all seven games, and its being the same is the fair test of the two
+That line is the same at all eight games, and its being the same is the fair test of the two
 seams: by the time a game is a `Playable` there is nothing left for a way in to decide.
 
 **5. And one line in [Games.fs](src/Games.fs)**, if it is also to appear in the program that
@@ -1950,10 +1951,11 @@ did not change.
 | [src/Games/Life/Life.fsproj](src/Games/Life/Life.fsproj) | " |
 | [src/Games/Snake/Snake.fsproj](src/Games/Snake/Snake.fsproj) | " |
 | [src/Games/Cascade/Cascade.fsproj](src/Games/Cascade/Cascade.fsproj) | " |
-| [TCModel.fsproj](TCModel.fsproj) | All seven in one program, which asks which. What a clone runs |
+| [src/Games/Warband/Warband.fsproj](src/Games/Warband/Warband.fsproj) | " |
+| [TCModel.fsproj](TCModel.fsproj) | All eight in one program, which asks which. What a clone runs |
 
 A game's own executable is one game, one port and nothing else in the image, which is what
-goes in a container. `TCModel` is what somebody who wants all seven downloads once, and what
+goes in a container. `TCModel` is what somebody who wants all eight downloads once, and what
 every `dotnet run` line in this README is.
 
 **`src/Common`** — generic, and knows nothing about the game.
@@ -2035,6 +2037,7 @@ The games never mention each other, and nothing above them names any of them unt
 | [Compile](src/Games/Compile/README.md#the-files) | 17 | a deck each, ninety cards of rules text, a draft, and a game that is three games in a row |
 | [Life](src/Games/Life/README.md#the-files) | 8 | one seat, no opponent, no ending, and a board of four hundred cells drawn as rows rather than as cells |
 | [Snake](src/Games/Snake/README.md#the-files) | 10 | a clock, one to four seats on one board, a generator that keeps drawing, and a machine that cannot see the end of the game |
+| [Warband](src/Games/Warband/README.md#what-is-where) | 13 | ten hexes to a squad, six kinds of unit that are three answers apiece, a muster kept from the other seat, and a battle on a clock that nobody plays |
 
 **And the way in**, which needs every layer above it — F# compiles in order and a file sees
 only what came before it, so the door has to be the last thing built.
@@ -2048,7 +2051,7 @@ to call.
 | File | Role |
 | --- | --- |
 | [Play.fs](src/Play/Play.fs) | The above, ending in `Chosen` — and `Play.only`, which is what `main` is at a game's own executable |
-| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all seven: `Play.only Offer.ways argv` |
+| [Games/*/Program.fs](src/Games/Turncoats/Program.fs) | One line each, and the same line at all eight: `Play.only Offer.ways argv` |
 | [Games.fs](src/Games.fs) | The games there are, and the only file in the program that names more than one |
 | [Program.fs](src/Program.fs) | Which game a line is about, the screen that asks when nothing says, and nothing else |
 
@@ -2457,7 +2460,7 @@ into that machinery rather than into the table, and a third game is what found t
 script waited for a board whose heading `startsWith('Turn')`, which was true of two games that
 count their turns and is not true of one whose seasons are called Spring and Autumn. And the
 number of seats was the literal `2`, because there had never been a game that was not — a
-browser can only sit in one of seven, so every other seat has to be filled or the table waits
+browser can only sit in one of seven seats, so every other seat has to be filled or the table waits
 forever for people who are not coming.
 
 **And it found a check that had stopped running.** `-Game tictactoe` had been failing since
@@ -2520,17 +2523,17 @@ pwsh tools/publish.ps1 -Program Turncoats  # just the one game
 pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
 ```
 
-Eight programs come out: one per game, and `TCModel`, which has all seven in it and asks
+Nine programs come out: one per game, and `TCModel`, which has all eight in it and asks
 which. A game's own file is one game, one port and nothing else — which is what goes in a
-container — and `TCModel` is what somebody who wants all seven downloads once.
+container — and `TCModel` is what somebody who wants all eight downloads once.
 
 | | size | wants |
 | --- | --- | --- |
 | `portable` | 6.1 – 7.2 MB | the ASP.NET Core 10 runtime installed |
 | `standalone` | ~105 MB | nothing at all |
 
-The checks below are run against each of the seven, and they are not the same lines at each: a
-game's own file takes `serve 2` and the one with seven games in it takes `tictactoe serve 2`.
+The checks below are run against each of the eight, and they are not the same lines at each: a
+game's own file takes `serve 2` and the one with eight games in it takes `tictactoe serve 2`.
 That difference is the whole of what publishing separately changed, so it is checked rather
 than assumed — `Turncoats.exe` printing `Turncoats turncoats play 2` is a line that runs and
 then refuses, which is worse than one that does not run at all.

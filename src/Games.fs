@@ -7,7 +7,8 @@ let all =
       Play.chosen TCModel.Compile.Offer.ways TCModel.Compile.Offer.playable
       Play.chosen TCModel.Life.Offer.ways TCModel.Life.Offer.playable
       Play.chosen TCModel.Snake.Offer.ways TCModel.Snake.Offer.playable
-      Play.chosen TCModel.Cascade.Offer.ways TCModel.Cascade.Offer.playable ]
+      Play.chosen TCModel.Cascade.Offer.ways TCModel.Cascade.Offer.playable
+      Play.chosen TCModel.Warband.Offer.ways TCModel.Warband.Offer.playable ]
 
 let usually = List.head all
 

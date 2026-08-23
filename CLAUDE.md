@@ -100,7 +100,7 @@ Conforms.against <game> <seats> [ "a line"; "another" ]
 The lines are typed commands played from the deal. A line the rules refuse is a fine one to pass —
 a refusal is something the seam carries, and the checks hold for it either way. **A new game gets
 a suite that calls this before it gets anything else**, and a change to the seam belongs in
-`Conforms.fsx` so all seven answer for it at once rather than one of them.
+`Conforms.fsx` so all eight answer for it at once rather than one of them.
 
 ## Records
 

@@ -59,12 +59,14 @@ $games = @{
     }
 }
 
-# Three of the seven are not here, and it is not for want of asking. Life, Snake and Cascade draw
+# Four of the eight are not here, and it is not for want of asking. Life, Snake and Cascade draw
 # their boards as a field - a glyph a cell, two hundred and fifty-six of them at Cascade - and
 # nothing in a field is a button, so "a board's own button types its own line" has nothing to click
 # at any of them. Two of the three run on a clock as well, which would have the board moving under
-# every assertion below. What their pages do is checked by `Conforms.against` instead, which reads
-# them without a browser.
+# every assertion below. Warband draws a honeycomb of hexes, and a hex is not a button either: a
+# muster is a kind *and* a hex, which is two answers, and a board that could only click one of them
+# would be a board lying about what it takes. What their pages do is checked by `Conforms.against`
+# instead, which reads them without a browser.
 
 $g = $games[$(if ($Game) { $Game } else { "turncoats" })]
 
