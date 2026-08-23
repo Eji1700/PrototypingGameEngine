@@ -9,6 +9,32 @@ module Transcript =
     [<Literal>]
     let private DealWord = "deal"
 
+    [<Literal>]
+    let private FormatWord = "format"
+
+    /// Which shape of record this build writes, and the highest it knows how to read.
+    ///
+    /// It exists because the engine is packaged and versioned apart from the games built on it, so
+    /// a record written by one version will be read by another. Without a number on the file the
+    /// only thing a later shape could do is misparse - a move read as a deal, a seat read as a
+    /// seed - and say something unhelpful about it. Records written before this was here have no
+    /// marker at all, and are read as what they are: format 1.
+    [<Literal>]
+    let private Format = 1
+
+    /// The marker off the front, if there is one. Anything this build cannot read is refused here
+    /// rather than parsed into nonsense further down.
+    let private formatted lines =
+        match lines with
+        | (head: string) :: rest when head.StartsWith(FormatWord + " ") ->
+            match Int32.TryParse(head.Substring(FormatWord.Length).Trim()) with
+            | true, said when said <= Format -> Ok rest
+            | true, said ->
+                Error
+                    $"That record is written in format {said}, and this build reads up to {Format}. It was saved by a later version of the engine than this one."
+            | _ -> Error $"'{head}' does not say which format the record is in."
+        | lines -> Ok lines
+
     [<NoComparison; NoEquality>]
     type Reading<'Move> =
         { Players: int
@@ -33,10 +59,13 @@ module Transcript =
           "# arrives at the same position it was saved from."
           "#"
           "# The deal line says how many were playing, what they were dealt from, and who"
-          "# was in each seat - 'you' for a person here, a skill for the program."
+          "# was in each seat - 'you' for a person here, a skill for the program. The format"
+          "# line above it is the shape of the file itself, so a later engine reading this"
+          "# one knows what it is looking at."
           "#"
           $"#   {Invoked.opening game.Name} replay <this file>"
           ""
+          $"{FormatWord} {Format}"
           dealt
           "" ]
 
@@ -74,6 +103,10 @@ module Transcript =
                 | Ok(Send msg) -> Ok(msg :: moves)
                 | Ok _ -> Error $"'{line}' is not a move, so it cannot be part of a record."
                 | Error problem -> Error problem)
+
+        match formatted meaningful with
+        | Error problem -> Error problem
+        | Ok meaningful ->
 
         match meaningful with
         | head :: rest ->
@@ -202,8 +235,13 @@ module Transcript =
                     File.ReadAllLines path
                     |> Array.map (fun line -> line.Trim())
                     |> Array.filter (fun line -> line <> "" && not (line.StartsWith "#"))
-                    |> Array.length
-                    |> fun lines -> max 0 (lines - 1)
+                    |> List.ofArray
+                    // Through the same door the reader uses, so the count is of moves rather than
+                    // of lines: without this a record with a format marker reads as one move long
+                    // before it has any moves in it.
+                    |> formatted
+                    |> Result.map (fun lines -> max 0 (List.length lines - 1))
+                    |> Result.defaultValue 0
                 with _ ->
                     0
 

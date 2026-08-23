@@ -1,0 +1,21 @@
+# A Compile game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program. The format
+# line above it is the shape of the file itself, so a later engine reading this
+# one knows what it is looking at.
+#
+#   dotnet run -- compile replay <this file>
+
+format 1
+deal 2 639230689183668239 you you
+
+#   1  turn 1, Player 1
+draft fire
+#      Player 1 drafts Fire.
+

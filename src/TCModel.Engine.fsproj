@@ -10,6 +10,9 @@
     <WarningLevel>5</WarningLevel>
     <AssemblyName>TCModel.Engine</AssemblyName>
     <RootNamespace>TCModel</RootNamespace>
+
+    <IsPackable>true</IsPackable>
+    <Description>The pure core of the TCModel engine: a game dealt from a seed, a fold from a move to the next position, a timeline to walk back through and a record that replays. Depends on FSharp.Core and nothing else.</Description>
   </PropertyGroup>
 
   <ItemGroup Label="Common - generic, knows nothing of any game">

@@ -6,12 +6,18 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
+# Found rather than listed. A suite is a tests/*.fsx with a lower-case name; the capitalised
+# ones are harnesses and contracts that other files load and that do not run alone. Written out by
+# hand this list was one edit away from a suite that existed and never ran, which is a check that
+# passes by not happening.
 $scripts = @(
-    "ruling", "outcome", "actions", "history", "knowledge"
-    "lobby", "house", "solo", "view", "html", "reach", "cli"
-    "properties", "rival", "counting"
-    "turncoats", "tictactoe", "diplomacy", "compile", "life", "snake", "cascade"
+    Get-ChildItem (Join-Path $root "tests") -Filter *.fsx |
+        Where-Object { $_.Name -cmatch "^[a-z]" } |
+        ForEach-Object { $_.BaseName } |
+        Sort-Object
 )
+
+if (-not $scripts) { throw "no suites found in tests/. Something is wrong with the working directory." }
 
 if ($Only) {
     $Only = @($Only) -split ',' | Where-Object { $_ }

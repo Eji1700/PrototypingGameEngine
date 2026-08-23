@@ -177,4 +177,26 @@ report "and a file under this name that is some other game is not added to" writ
 
 System.IO.File.Delete filedAt
 
+
+// === The shape of the file itself ===
+
+// The engine is versioned apart from the games built on it, so a record written by one version
+// will be read by another. These three are the whole of what that marker is for.
+
+let private readBack (text: string) =
+    Transcript.read playing text |> Result.map (fun read -> read.Players, read.Seed)
+
+let private newline = System.Environment.NewLine
+
+report "a record this build writes says which format it is in" true (written.Contains(newline + "format 1" + newline))
+
+report "a record written before there was a marker is read as the format it is" (Ok(2, 42UL)) (readBack "deal 2 42\nnegotiate")
+
+report
+    "and one written by a later engine is refused rather than misread"
+    (Error
+        "That record is written in format 99, and this build reads up to 1. It was saved by a later version of the engine than this one.")
+    (readBack "format 99\ndeal 2 42\nnegotiate")
+
+
 finish ()

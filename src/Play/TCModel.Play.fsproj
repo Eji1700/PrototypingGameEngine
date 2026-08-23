@@ -8,6 +8,9 @@
     <WarningLevel>5</WarningLevel>
     <AssemblyName>TCModel.Play</AssemblyName>
     <RootNamespace>TCModel</RootNamespace>
+
+    <IsPackable>true</IsPackable>
+    <Description>Opening a TCModel game. The one call a game's own Program.fs makes, and the composition root that ties a keyboard, a menu, a record and a wire together.</Description>
   </PropertyGroup>
 
   <ItemGroup>

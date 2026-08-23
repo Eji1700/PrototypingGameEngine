@@ -138,7 +138,7 @@ try {
     }
 
     ""
-    if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
 }
 finally {
     Stop-Tables

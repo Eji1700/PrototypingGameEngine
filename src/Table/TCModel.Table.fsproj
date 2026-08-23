@@ -9,6 +9,9 @@
     <WarningLevel>5</WarningLevel>
     <AssemblyName>TCModel.Table</AssemblyName>
     <RootNamespace>TCModel</RootNamespace>
+
+    <IsPackable>true</IsPackable>
+    <Description>A TCModel game described well enough to be read: the seam a game fills in, three ways of drawing a board, the parsing of a typed line, the record on disk and the menu.</Description>
   </PropertyGroup>
 
   <ItemGroup Label="The parts a game and a table are described in">

@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- What every project here shares. The version lives in one place because the four engine
+       projects are packed together and a game asks for one of them by number: TCModel.Play 0.1.0
+       has to mean the Table and Engine that were built alongside it, or a restore will find a
+       mixture. Nothing is packable unless it says so - the games are programs, not libraries. -->
+
+  <PropertyGroup>
+    <TCModelVersion>0.1.0</TCModelVersion>
+    <Version>$(TCModelVersion)</Version>
+
+    <IsPackable>false</IsPackable>
+
+    <Product>TCModel</Product>
+    <PackageTags>fsharp;game;turn-based;mvu</PackageTags>
+
+    <!-- No PackageProjectUrl or RepositoryUrl: there is no remote to name yet. Both belong here
+         the day there is one. -->
+  </PropertyGroup>
+
+</Project>

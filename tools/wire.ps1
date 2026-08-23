@@ -1,7 +1,7 @@
 ﻿
 param(
     [int]$Port = 5100,
-    [ValidateSet("", "turncoats", "tictactoe")]
+    [ValidateSet("", "turncoats", "tictactoe", "compile")]
     [string]$Game = "",
     [string]$Code = "wire-runs-here"
 )
@@ -12,9 +12,21 @@ $failed = 0
 
 . (Join-Path $PSScriptRoot "Driving.ps1")
 
+# What this drives is the wire, which does not know what game it is carrying - so the game only
+# has to supply a line to type and something the *other* console should then be told.
+#
+# Three of the seven are not here and cannot be. Life and Cascade seat one, so there is no other
+# console for a move to reach; Snake runs on a clock, and a board that moves on its own while the
+# check waits for a phrase is a flake rather than a check. Diplomacy seats seven, which this could
+# be taught, but its orders are written in secret - "the move reached the other console" is the
+# wrong thing to ask of a game whose whole point is that it did not.
 $moves = @{
-    "turncoats" = @{ Line = "negotiate"; Heard = "reserve" }
-    "tictactoe" = @{ Line = "5"; Heard = "takes square" }
+    "turncoats" = @{ Line = "negotiate"; Heard = "reserve"; Opens = "Turn 1" }
+    "tictactoe" = @{ Line = "5"; Heard = "takes square"; Opens = "Turn 1" }
+
+    # Compile opens on a draft rather than on a turn, which is why what a filled table first draws
+    # is the game's to say rather than this file's.
+    "compile" = @{ Line = "draft fire"; Heard = "drafts Fire"; Opens = "The draft" }
 }
 
 $named = $(if ($Game) { $Game } else { "turncoats" })
@@ -57,7 +69,7 @@ try {
     Wait-For "the second console to be seated" 60 { (Told $two) -match "You are at seat 2" } | Out-Null
 
     Wait-For "the table to fill and draw both consoles a board" 60 {
-        ((Told $one) -match "Turn 1") -and ((Told $two) -match "Turn 1")
+        ((Told $one) -match $m.Opens) -and ((Told $two) -match $m.Opens)
     } | Out-Null
 
     Types $one $m.Line
@@ -81,7 +93,7 @@ try {
     Report "the seat it hands back is a line that opens this game" ($first -match "dotnet run -- $named join") ($first -split "`n" | Where-Object { $_ -match "dotnet run" } | Select-Object -First 1)
 
     Report "a console alone is shown the table filling up rather than a board" ($first -match "Waiting for the table to fill") "no waiting screen reached it"
-    Report "and once it is full, both are drawn a board" (($first -match "Turn 1") -and ($second -match "Turn 1")) "one saw a board: $($first -match 'Turn 1'); two saw one: $($second -match 'Turn 1')"
+    Report "and once it is full, both are drawn a board" (($first -match $m.Opens) -and ($second -match $m.Opens)) "one saw a board: $($first -match $m.Opens); two saw one: $($second -match $m.Opens)"
 
     Report "a move made at one console reaches the other" ($second -match $m.Heard) "the second console never heard it"
 
@@ -128,7 +140,7 @@ try {
         Wait-For "a second console to be seated at the same table" 60 { (Told $four) -match "You are at seat 2" } | Out-Null
 
         Wait-For "the house's table to fill and draw both a board" 60 {
-            ((Told $three) -match "Turn 1") -and ((Told $four) -match "Turn 1")
+            ((Told $three) -match $m.Opens) -and ((Told $four) -match $m.Opens)
         } | Out-Null
 
         Types $three $m.Line
@@ -140,7 +152,7 @@ try {
 
         Report "a console can sit down at a table a house dealt" ($atThree -match "You are at seat 1") "it was never seated"
         Report "and the next is given the next seat at that same table" ($atFour -match "You are at seat 2") "the second was not seated"
-        Report "both are drawn a board once it is full" (($atThree -match "Turn 1") -and ($atFour -match "Turn 1")) "one saw a board: $($atThree -match 'Turn 1'); two saw one: $($atFour -match 'Turn 1')"
+        Report "both are drawn a board once it is full" (($atThree -match $m.Opens) -and ($atFour -match $m.Opens)) "one saw a board: $($atThree -match $m.Opens); two saw one: $($atFour -match $m.Opens)"
         Report "and a move made at one reaches the other, through the house" ($atFour -match $m.Heard) "the move never arrived"
 
         $nowhere = "run --project ""$root"" --"
@@ -191,7 +203,7 @@ try {
 
         $six = Start-Console "dotnet" $atFill $box
         $consoles += $six
-        Wait-For "the table to fill" 60 { (Told $six) -match "Turn 1" } | Out-Null
+        Wait-For "the table to fill" 60 { (Told $six) -match $m.Opens } | Out-Null
 
         Types $five $m.Line
         Wait-For "the move to reach the other console" 60 { (Told $six) -match $m.Heard } | Out-Null
@@ -232,7 +244,7 @@ try {
 
 
     ""
-    if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
 }
 finally {
     foreach ($console in $consoles) { Close-Console $console }

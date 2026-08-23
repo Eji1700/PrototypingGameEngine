@@ -39,11 +39,31 @@ jobs:
         run: |
           pwsh tools/wire.ps1
           pwsh tools/wire.ps1 -Game tictactoe
+          pwsh tools/wire.ps1 -Game compile
 
-      - name: Replay the committed records
+      - name: Replay every committed record
+        run: pwsh tools/records.ps1
+
+      - name: The engine as a package, and a game outside the repository built on it
+        run: pwsh tools/package.ps1
+
+  # The browser. Windows because tools/smoke.ps1 clears up after itself through Win32_Process,
+  # and because Edge is on the runner; until this job existed the only thing driving a real page
+  # was somebody typing the command.
+  browser:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: A game played in a browser
         run: |
-          echo quit | dotnet run --no-build -- replay logs/2026-08-03-193909-2p-seed639214079490240407.log | head -2
-          echo quit | dotnet run --no-build -- tictactoe replay logs/2026-08-07-190000-2p-noughts.log | head -2
+          pwsh tools/smoke.ps1
+          pwsh tools/smoke.ps1 -Game compile
 
   image:
     runs-on: ubuntu-latest
@@ -51,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        game: [Turncoats, TicTacToe]
+        game: [Turncoats, TicTacToe, Diplomacy, Compile, Life, Snake, Cascade]
 
     steps:
       - uses: actions/checkout@v4

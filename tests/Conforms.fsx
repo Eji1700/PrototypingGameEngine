@@ -19,6 +19,7 @@ open System
 open System.Text.RegularExpressions
 open TCModel.Engine
 open TCModel.Table
+open TCModel.Net
 open Checks
 
 
@@ -410,6 +411,104 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
           for key, does in game.Page.Keys do
               if key = "" || does = "" then
                   yield $"a key on the page that says '{key}' and does '{does}'" ]
+
+
+    // --- the same table, with the players at different keyboards --------------------------------------------------
+
+    // The wire does not know what game it is carrying either, and until this was here it was only
+    // ever asked about one: `lobby.fsx` and `house.fsx` are Turncoats. Nothing below opens a
+    // socket - a lobby is a value like everything else here, and joining it is a function.
+
+    let named place = $"console-{place}"
+
+    let heard console posts =
+        posts
+        |> List.filter (fun post -> post.To = console)
+        |> List.choose (fun post ->
+            match post.Say with
+            | Told text
+            | Screen text
+            | TurnedAway text
+            | GotUp text -> Some text
+            | Seated(seat, _) -> Some $"seated at {seat}"
+            | Nudged
+            | Rang _ -> None)
+        |> String.concat "\n"
+
+    let sits place lobby =
+        Lobby.join (named place) $"token-{place}" None plain lobby
+
+    let filled =
+        [ 1..seats ]
+        |> List.fold
+            (fun (lobby, said) place -> sits place lobby ||> (fun lobby posts -> lobby, said @ [ place, posts ]))
+            (Lobby.opened game dealt [], [])
+
+    let lobby, seating = filled
+
+    report
+        "every console that joins is given a seat of its own, and told which"
+        []
+        [ for place, posts in seating do
+              if not ((heard (named place) posts).Contains $"seated at {place}") then
+                  yield $"the console that arrived {place} was told: {heard (named place) posts}" ]
+
+    report
+        "and the one after the last is turned away in words rather than dropped"
+        []
+        [ let _, posts = sits (seats + 1) lobby
+          let said = heard (named (seats + 1)) posts
+
+          if said = "" then
+              yield "a console arriving at a full table was told nothing at all" ]
+
+    report
+        "a full table draws every console a board"
+        []
+        [ let _, posts = seating |> List.last
+
+          for place in 1..seats do
+              let drawn =
+                  posts
+                  |> List.filter (fun post -> post.To = named place)
+                  |> List.choose (fun post ->
+                      match post.Say with
+                      | Screen text -> Some text
+                      | _ -> None)
+
+              if drawn |> List.forall (fun text -> text = "") then
+                  yield $"console {place} was drawn nothing when the table filled" ]
+
+    report
+        "a line said at the seat whose turn it is moves the game for everybody"
+        []
+        [ match lines with
+          | [] -> ()
+          | line :: _ ->
+              let acting = PlayerId.value (game.Rules.Active(Model.state (Lobby.model lobby)))
+              let after, posts = Lobby.said (named acting) line lobby
+
+              if Timeline.movesMade (Lobby.model after).Timeline = Timeline.movesMade (Lobby.model lobby).Timeline then
+                  // A refusal is a fine answer - but it has to be an answer.
+                  if heard (named acting) posts = "" then
+                      yield $"'{line}' at seat {acting} neither moved the game nor said why"
+              else
+                  for place in 1..seats do
+                      if heard (named place) posts = "" then
+                          yield $"'{line}' moved the game and console {place} was told nothing" ]
+
+    // A console that drops off is told nothing, because there is nothing left to tell it on. What
+    // it leaves behind is the seat, held against the token it was given - which is the whole of
+    // what makes a dropped connection a pause rather than a forfeit.
+    report
+        "and a console that gets up leaves its seat to be taken up again with the same token"
+        []
+        [ let dropped, _ = Lobby.left (named 1) lobby
+          let _, posts = Lobby.join "back-again" "token-fresh" (Some "token-1") plain dropped
+          let said = heard "back-again" posts
+
+          if not (said.Contains "seated at 1") then
+              yield $"coming back to seat 1 with its token was answered: {said}" ]
 
 
     // --- and the words all of it came out in --------------------------------------------------------------------

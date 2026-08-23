@@ -3,7 +3,7 @@ param(
     [int]$Port = 5000,
     [int]$DebugPort = 9222,
     [string]$Browser = "",
-    [ValidateSet("", "turncoats", "tictactoe", "diplomacy")]
+    [ValidateSet("", "turncoats", "tictactoe", "diplomacy", "compile")]
     [string]$Game = "",
     [string]$Rival = "",
     [string]$Code = "smoke-runs-here"
@@ -47,7 +47,24 @@ $games = @{
         Opens = "Spring 1901"
         Machine = "England"; Answers = "Turkey"
     }
+    "compile" = @{
+        Seats = 2
+        Pieces = ".tile"; Fewest = 12; Called = "table"
+        Typed  = "draft fire"; Then = "undo"
+        Button = ".tile .types"; Types = "^draft "
+        Asking = ""; Working = ""
+        Elsewhere = ""; Heard = ""
+        Opens = "The draft"
+        Machine = "Player 2"; Answers = "Player 2"
+    }
 }
+
+# Three of the seven are not here, and it is not for want of asking. Life, Snake and Cascade draw
+# their boards as a field - a glyph a cell, two hundred and fifty-six of them at Cascade - and
+# nothing in a field is a button, so "a board's own button types its own line" has nothing to click
+# at any of them. Two of the three run on a clock as well, which would have the board moving under
+# every assertion below. What their pages do is checked by `Conforms.against` instead, which reads
+# them without a browser.
 
 $g = $games[$(if ($Game) { $Game } else { "turncoats" })]
 
@@ -588,7 +605,7 @@ try {
     }
 
     ""
-    if ($failed -gt 0) { "$failed check(s) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
 }
 finally {
     foreach ($p in @($browser, $table)) {

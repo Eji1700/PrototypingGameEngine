@@ -9,6 +9,9 @@
     <WarningLevel>5</WarningLevel>
     <AssemblyName>TCModel.Net</AssemblyName>
     <RootNamespace>TCModel</RootNamespace>
+
+    <IsPackable>true</IsPackable>
+    <Description>The same TCModel table with the players at different keyboards: a web server, the page a browser reads, and a console client.</Description>
   </PropertyGroup>
 
   <ItemGroup>

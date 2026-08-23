@@ -1,8 +1,9 @@
 # Working in this repository
 
 `README.md` explains the machinery and each game has a README of its own under
-`src/Games/<Name>/`. This file is only the house rules — the things the code follows but does not
-say out loud.
+`src/Games/<Name>/`. `SEAM.md` is the ledger of what moved the seam and which game moved it —
+**a change to `Rules`, `Playable` or `Pulse` gets a row in it**. This file is only the house
+rules: the things the code follows but does not say out loud.
 
 ## Commands
 
@@ -15,11 +16,17 @@ dotnet run -- <game> <command>     # e.g. dotnet run -- cascade play
 
 dotnet new install templates/game          # then: dotnet new tcmodel-game -n <Name> -o src/Games/<Name>
 pwsh tools/template.ps1                    # generate one, build it, play it, hold it to the seam
+
+pwsh tools/records.ps1                     # take every record in logs/ back up
+pwsh tools/package.ps1                     # pack the four, build a game outside the repo on them
+pwsh tools/wire.ps1 -Game compile          # a table over a real socket
+pwsh tools/smoke.ps1 -Game compile         # a table in a real browser (Windows)
 ```
 
 A change is finished when the build is clean, `fantomas --check` is clean, and every suite passes.
-The suite list in `tools/tests.ps1` is hand-written — a new `tests/<name>.fsx` has to be added to
-it or it never runs.
+`tools/tests.ps1` finds the suites rather than listing them: a `tests/*.fsx` with a **lower-case**
+name is a suite and runs, a capitalised one is a harness other files load. Name a new suite
+accordingly and it runs; name it wrongly and it never will.
 
 ## Layout
 
@@ -82,8 +89,9 @@ the assertion; do not bend the wording to keep a test quiet.
 
 `tests/Conforms.fsx` is the contract every `Playable` is held to — the deal, the seats, the
 reading and writing of a line, the timeline, the record, the notices, every view at every state,
-the machines, the clock and the page. It is not a suite and does not run alone: a game's suite
-loads its own harness, then `Conforms.fsx`, then says
+the machines, the clock, the page, and the same table with the players at different keyboards. It
+is not a suite and does not run alone: a game's suite loads its own harness, then `Conforms.fsx`,
+then says
 
 ```fsharp
 Conforms.against <game> <seats> [ "a line"; "another" ]
@@ -96,6 +104,11 @@ a suite that calls this before it gets anything else**, and a change to the seam
 
 ## Records
 
-`logs/` is committed on purpose. The files are replay fixtures — CI takes two of them back up on
-every run, and `--fill` reads the whole directory on boot so a restart is a pause rather than a
-loss. Do not add it to `.gitignore`, and do not delete records to tidy up.
+`logs/` is committed on purpose. The files are replay fixtures — CI takes every one of them back
+up on every run (`tools/records.ps1`), and `--fill` reads the whole directory on boot so a restart
+is a pause rather than a loss. Do not add it to `.gitignore`, and do not delete records to tidy up.
+
+A record is named `<stamp>-<game>-<n>p-seed<seed>.log`, and **the game in the middle carries
+weight**: it is how `--fill` knows which game a record belongs to, and a record without it is one
+the house will never offer. Fifteen of them were missing it, from before the program held more
+than one game; they have been renamed, and anything written since names itself.
