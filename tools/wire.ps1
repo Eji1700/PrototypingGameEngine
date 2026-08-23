@@ -38,6 +38,11 @@ function Report($name, $ok, $detail) {
 }
 
 
+# A table hosted from the repository writes its record into logs/, which is committed on purpose -
+# so what is already there is noted, and anything this run leaves is taken away again.
+$logs = Join-Path $root "logs"
+$before = @(Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+
 $table = $null
 $consoles = @()
 
@@ -252,4 +257,8 @@ finally {
     if ($table -and -not $table.HasExited) { try { Stop-Process -Id $table.Id -Force } catch {} }
 
     Stop-Tables
+
+    Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notin $before } |
+        Remove-Item -Force
 }

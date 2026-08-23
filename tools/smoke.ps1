@@ -381,6 +381,11 @@ $profile = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-smoke-$PID"
 $table = $null
 $browser = $null
 
+# A table served from the repository writes its record into logs/, which is committed on purpose -
+# so what is already there is noted, and anything this run leaves is taken away again.
+$logs = Join-Path $root "logs"
+$before = @(Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+
 try {
     "Serving a game and opening it in $(Split-Path -Leaf $exe)..."
 
@@ -617,4 +622,8 @@ finally {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
+
+    Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notin $before } |
+        Remove-Item -Force
 }
