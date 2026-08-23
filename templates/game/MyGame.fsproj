@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <SelfContained>false</SelfContained>
+    <AssemblyName>MyGame</AssemblyName>
+    <RootNamespace>TCModel.MyGame</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup Label="How it is played">
+    <Compile Include="Rules/Row.fs" />
+    <Compile Include="Rules/Round.fs" />
+    <Compile Include="Rules/Turn.fs" />
+    <Compile Include="Rules/Words.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="How it is read">
+    <Compile Include="Reading/Ink.fs" />
+    <Compile Include="Reading/Parse.fs" />
+    <Compile Include="Reading/Render.fs" />
+    <Compile Include="Offer.fs" />
+  </ItemGroup>
+
+  <ItemGroup Label="And the door">
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Play/TCModel.Play.fsproj" />
+  </ItemGroup>
+
+</Project>

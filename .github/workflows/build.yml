@@ -27,10 +27,13 @@ jobs:
         run: dotnet build --no-restore -warnaserror
 
       - name: Check formatting
-        run: dotnet fantomas --check src tests tools
+        run: dotnet fantomas --check src tests tools templates
 
       - name: Checks
         run: pwsh tools/tests.ps1
+
+      - name: A game out of the template
+        run: pwsh tools/template.ps1
 
       - name: A table over the wire
         run: |

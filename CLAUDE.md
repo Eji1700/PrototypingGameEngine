@@ -10,8 +10,11 @@ say out loud.
 dotnet build TCModel.slnx          # everything; CI builds with -warnaserror
 pwsh tools/tests.ps1               # every check suite, in parallel
 pwsh tools/tests.ps1 -Only cascade # one of them
-dotnet fantomas src tests tools    # format; CI runs --check and fails on a diff
+dotnet fantomas src tests tools templates   # format; CI runs --check and fails on a diff
 dotnet run -- <game> <command>     # e.g. dotnet run -- cascade play
+
+dotnet new install templates/game          # then: dotnet new tcmodel-game -n <Name> -o src/Games/<Name>
+pwsh tools/template.ps1                    # generate one, build it, play it, hold it to the seam
 ```
 
 A change is finished when the build is clean, `fantomas --check` is clean, and every suite passes.
@@ -28,6 +31,10 @@ nothing else; keep it that way. Each game is its own project under `src/Games/<N
 `TCModel.Play`, split into `Rules/` (how it is played) and `Reading/` (how it is read), with
 `Offer.fs` as the seam that hands a `Playable` to the table. A new game is registered in
 `src/Games.fs` and added to `TCModel.slnx`.
+
+**Start a new game from `templates/game`** rather than by copying one — it generates the whole
+shape, already playing and already passing `Conforms.against`, and its README lists the three
+things it cannot do for you. `tools/template.ps1` is what keeps it honest, and CI runs it.
 
 Files are compiled in the order the `.fsproj` lists them, not alphabetically. Adding a file means
 adding a `<Compile Include=...>` line in the right place.
