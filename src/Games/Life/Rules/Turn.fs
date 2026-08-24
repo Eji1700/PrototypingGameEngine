@@ -1,4 +1,4 @@
-namespace TCModel.Life
+namespace Prototyping.Life
 
 type Move =
     | Step of generations: int

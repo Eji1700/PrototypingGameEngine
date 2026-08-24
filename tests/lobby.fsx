@@ -1,9 +1,9 @@
 #load "Whole.fsx"
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Net
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Net
+open Prototyping.Turncoats
 open Harness
 open Whole
 

@@ -1,7 +1,7 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Engine
+open Prototyping.Table
 
 module Render =
 

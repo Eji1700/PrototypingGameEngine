@@ -1,4 +1,4 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
 [<NoComparison; NoEquality>]
 type Rules<'Move, 'State, 'Notice> =

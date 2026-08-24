@@ -362,7 +362,7 @@ Two decisions taken while building it:
 
   One decision worth keeping: **configuration is the command line, not the environment.** The
   design note above asked for env vars; that was wrong for the same reason a second door was.
-  This program has one language for what to open and how far it reaches, and `TCMODEL_PORT`
+  This program has one language for what to open and how far it reaches, and `PROTO_PORT`
   beside `--port` is a second one to keep in step for ever. The entry point is the game, the
   command is a default, and `docker run turncoats house --code hunter2` is how it is
   configured.

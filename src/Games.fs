@@ -1,14 +1,14 @@
-module TCModel.Games
+module Prototyping.Games
 
 let all =
-    [ Play.chosen TCModel.Turncoats.Offer.ways TCModel.Turncoats.Offer.playable
-      Play.chosen TCModel.TicTacToe.Offer.ways TCModel.TicTacToe.Offer.playable
-      Play.chosen TCModel.Diplomacy.Offer.ways TCModel.Diplomacy.Offer.playable
-      Play.chosen TCModel.Compile.Offer.ways TCModel.Compile.Offer.playable
-      Play.chosen TCModel.Life.Offer.ways TCModel.Life.Offer.playable
-      Play.chosen TCModel.Snake.Offer.ways TCModel.Snake.Offer.playable
-      Play.chosen TCModel.Cascade.Offer.ways TCModel.Cascade.Offer.playable
-      Play.chosen TCModel.Warband.Offer.ways TCModel.Warband.Offer.playable ]
+    [ Play.chosen Prototyping.Turncoats.Offer.ways Prototyping.Turncoats.Offer.playable
+      Play.chosen Prototyping.TicTacToe.Offer.ways Prototyping.TicTacToe.Offer.playable
+      Play.chosen Prototyping.Diplomacy.Offer.ways Prototyping.Diplomacy.Offer.playable
+      Play.chosen Prototyping.Compile.Offer.ways Prototyping.Compile.Offer.playable
+      Play.chosen Prototyping.Life.Offer.ways Prototyping.Life.Offer.playable
+      Play.chosen Prototyping.Snake.Offer.ways Prototyping.Snake.Offer.playable
+      Play.chosen Prototyping.Cascade.Offer.ways Prototyping.Cascade.Offer.playable
+      Play.chosen Prototyping.Warband.Offer.ways Prototyping.Warband.Offer.playable ]
 
 let usually = List.head all
 

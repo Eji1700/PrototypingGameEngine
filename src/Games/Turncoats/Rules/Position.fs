@@ -1,4 +1,4 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
 type Position = private Position of Map<RegionId, Pile>
 

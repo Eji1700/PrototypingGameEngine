@@ -1,6 +1,6 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Shown =
     | AtATerminal

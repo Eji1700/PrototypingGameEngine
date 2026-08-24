@@ -1,8 +1,8 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.TicTacToe
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.TicTacToe
 
 module Parse =
 

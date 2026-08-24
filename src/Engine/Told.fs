@@ -1,4 +1,4 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
 type Told<'Move, 'Notice> =
     | Said of 'Notice

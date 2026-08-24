@@ -4,9 +4,9 @@
 
 open FsCheck
 open FsCheck.FSharp
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Turncoats
 open Harness
 open Whole
 

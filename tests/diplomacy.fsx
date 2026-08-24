@@ -4,9 +4,9 @@
 open System
 open System.Text.RegularExpressions
 open System.Xml
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Diplomacy
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Diplomacy
 open Checks
 open Europe
 

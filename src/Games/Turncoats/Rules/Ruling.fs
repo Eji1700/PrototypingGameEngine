@@ -1,6 +1,6 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
-open TCModel.Common
+open Prototyping.Common
 
 type RulingMeasure =
     | StonesInRegion

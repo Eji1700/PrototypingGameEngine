@@ -1,6 +1,6 @@
-namespace TCModel.Compile
+namespace Prototyping.Compile
 
-open TCModel.Common
+open Prototyping.Common
 
 type Card = { Protocol: Protocol; Value: int }
 

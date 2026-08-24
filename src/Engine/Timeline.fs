@@ -1,4 +1,4 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
 type Step<'Move, 'State> = { Move: Msg<'Move>; After: 'State }
 

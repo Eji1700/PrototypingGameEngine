@@ -1,4 +1,4 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
 /// Where the five of a squad stand: ten hexes in three ranks, three across the front, four across
 /// the middle and three at the back.

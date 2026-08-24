@@ -1,4 +1,4 @@
-namespace TCModel.Common
+namespace Prototyping.Common
 
 /// A count and the word that agrees with it.
 ///

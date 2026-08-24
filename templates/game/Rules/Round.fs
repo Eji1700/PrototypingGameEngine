@@ -1,6 +1,6 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Ending =
     | TookTheLast of seat: int

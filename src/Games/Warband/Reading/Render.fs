@@ -1,7 +1,7 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Engine
+open Prototyping.Table
 
 module Render =
 

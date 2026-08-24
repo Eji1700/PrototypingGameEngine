@@ -1,4 +1,4 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
 type Move =
     | Give of at: ProvinceId * Instruction

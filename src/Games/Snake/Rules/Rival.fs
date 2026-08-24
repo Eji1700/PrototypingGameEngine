@@ -1,7 +1,7 @@
-namespace TCModel.Snake
+namespace Prototyping.Snake
 
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 type Skill =
     { Name: string

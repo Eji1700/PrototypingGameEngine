@@ -1,8 +1,8 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
 open System
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Engine
+open Prototyping.Table
 
 type Table =
     abstract Sits:

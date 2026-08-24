@@ -59,9 +59,9 @@
 #load "../src/Games/Diplomacy/Reading/Render.fs"
 #load "../src/Games/Diplomacy/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let diplomacy = TCModel.Diplomacy.Offer.playable
+let diplomacy = Prototyping.Diplomacy.Offer.playable
 
 let standard = Playable.standard diplomacy
 

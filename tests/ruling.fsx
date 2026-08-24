@@ -1,6 +1,6 @@
 #load "Harness.fsx"
 
-open TCModel.Turncoats
+open Prototyping.Turncoats
 open Harness
 
 let check name expected axe flag stones =

@@ -1,6 +1,6 @@
 #load "Harness.fsx"
 
-open TCModel.Turncoats
+open Prototyping.Turncoats
 open Harness
 
 let private at n = Board.tryId n |> Option.get

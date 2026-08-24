@@ -1,11 +1,11 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
 open System
 open Spectre.Console
 open Spectre.Console.Rendering
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Turncoats
 
 module Rich =
 

@@ -1,9 +1,9 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Diplomacy
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Diplomacy
 
 module Offer =
 

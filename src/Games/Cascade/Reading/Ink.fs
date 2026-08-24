@@ -1,7 +1,7 @@
-namespace TCModel.Cascade
+namespace Prototyping.Cascade
 
-open TCModel.Table
-open TCModel.Cascade
+open Prototyping.Table
+open Prototyping.Cascade
 
 module Ink =
 

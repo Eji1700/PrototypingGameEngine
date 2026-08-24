@@ -1,6 +1,6 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
-open TCModel.Common
+open Prototyping.Common
 
 [<NoComparison; NoEquality>]
 type Machine<'Move, 'State> = Choosing of ('State -> ('Move * Machine<'Move, 'State>) option)

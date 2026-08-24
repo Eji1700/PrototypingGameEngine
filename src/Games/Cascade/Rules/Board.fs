@@ -1,4 +1,4 @@
-namespace TCModel.Cascade
+namespace Prototyping.Cascade
 
 open System
 

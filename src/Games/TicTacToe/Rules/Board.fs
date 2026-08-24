@@ -1,4 +1,4 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
 type Board = private Board of Map<int, Mark>
 

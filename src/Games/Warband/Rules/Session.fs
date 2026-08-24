@@ -1,6 +1,6 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Ending =
     | Broke of winner: int * loser: int

@@ -1,4 +1,4 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System
 open System.Security.Cryptography
@@ -31,7 +31,7 @@ module Reach =
     let Header = "X-Table-Code"
 
     [<Literal>]
-    let Cookie = "tcmodel-code"
+    let Cookie = "proto-code"
 
     let private letters = "23456789abcdefghjkmnpqrstvwxyz"
 

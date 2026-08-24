@@ -61,11 +61,11 @@
 #load "../src/Games/Compile/Reading/Render.fs"
 #load "../src/Games/Compile/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let compiled = TCModel.Compile.Offer.playable
+let compiled = Prototyping.Compile.Offer.playable
 
-let controlled = TCModel.Compile.Offer.withControl
+let controlled = Prototyping.Compile.Offer.withControl
 
 let standard = Playable.standard compiled
 

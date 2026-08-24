@@ -1,4 +1,4 @@
-# TCModel — an engine for turn-based games, and eight games in it
+# PrototypingGameEngine — an engine for turn-based games, and eight games in it
 
 Answer seven questions about how a game is *played* and fifteen about how it is *read*, and
 you are handed the rest: a history to walk back through, a record that replays, seats and
@@ -1083,14 +1083,14 @@ happened. [DESIGN.md](src/Net/DESIGN.md) is how it was built and what it cost.
 ```powershell
 docker build -t turncoats .
 docker build -t tictactoe --build-arg GAME=TicTacToe .
-docker run -p 5000:5000 -v tcmodel-logs:/data/logs turncoats
+docker run -p 5000:5000 -v proto-logs:/data/logs turncoats
 docker run -p 5000:5000 turncoats house --code hunter2     # a word at the door
 docker run -p 5000:5000 turncoats host 3 --open            # one table, not a house
 ```
 
 **The command line is the configuration, and there is deliberately no second way to say any
 of it.** This program has one language for what to open and how far it reaches — the one a
-person types, and the one it writes back out. A set of `TCMODEL_*` environment variables
+person types, and the one it writes back out. A set of `PROTO_*` environment variables
 would be a second, to be kept in step with the first for ever. So the entry point is the game
 and the command is a default anybody may replace, which is what the lines above are doing.
 
@@ -1719,11 +1719,11 @@ no general reader would think of writes its own `View` instead, and Turncoats do
 above ever sees.
 
 **4. A project of its own** — a `.fsproj` listing the game's files in order, referencing
-[TCModel.Play.fsproj](src/Play/TCModel.Play.fsproj), and a `Program.fs` that is one line:
+[Prototyping.Play.fsproj](src/Play/Prototyping.Play.fsproj), and a `Program.fs` that is one line:
 
 ```fsharp
 [<EntryPoint>]
-let main argv = TCModel.Play.only Offer.ways argv
+let main argv = Prototyping.Play.only Offer.ways argv
 ```
 
 That line is the same at all eight games, and its being the same is the fair test of the two
@@ -1925,7 +1925,7 @@ every seam between them that can be a project boundary is one rather than a plac
 **Within a project, the order in its `.fsproj` is the architecture and the only thing
 enforcing it**: F# compiles a project in the order its files are listed, so a layer cannot
 reach into one beneath it even by accident. Read
-[TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) top to bottom — nothing in it mentions a
+[Prototyping.Engine.fsproj](src/Prototyping.Engine.fsproj) top to bottom — nothing in it mentions a
 game.
 
 **Between projects, the compiler enforces it outright.** A game references `Play`, `Play`
@@ -1940,10 +1940,10 @@ did not change.
 
 | Project | What it is |
 | --- | --- |
-| [src/TCModel.Engine.fsproj](src/TCModel.Engine.fsproj) | `Common` and `Engine`: the fold, the timeline, the record and the generator. Depends on `FSharp.Core` and nothing else |
-| [src/Table/TCModel.Table.fsproj](src/Table/TCModel.Table.fsproj) | The seam a game fills in, the screens, the parsing of a typed line, the record on disk and the menu. A terminal and a page, and no server |
-| [src/Net/TCModel.Net.fsproj](src/Net/TCModel.Net.fsproj) | The same table with the players at different keyboards. The only project with a web server in it |
-| [src/Play/TCModel.Play.fsproj](src/Play/TCModel.Play.fsproj) | Opening one. What a game's own `Program.fs` calls, and the only one of the four a game names |
+| [src/Prototyping.Engine.fsproj](src/Prototyping.Engine.fsproj) | `Common` and `Engine`: the fold, the timeline, the record and the generator. Depends on `FSharp.Core` and nothing else |
+| [src/Table/Prototyping.Table.fsproj](src/Table/Prototyping.Table.fsproj) | The seam a game fills in, the screens, the parsing of a typed line, the record on disk and the menu. A terminal and a page, and no server |
+| [src/Net/Prototyping.Net.fsproj](src/Net/Prototyping.Net.fsproj) | The same table with the players at different keyboards. The only project with a web server in it |
+| [src/Play/Prototyping.Play.fsproj](src/Play/Prototyping.Play.fsproj) | Opening one. What a game's own `Program.fs` calls, and the only one of the four a game names |
 | [src/Games/Turncoats/Turncoats.fsproj](src/Games/Turncoats/Turncoats.fsproj) | One game, and its own executable |
 | [src/Games/TicTacToe/TicTacToe.fsproj](src/Games/TicTacToe/TicTacToe.fsproj) | " |
 | [src/Games/Diplomacy/Diplomacy.fsproj](src/Games/Diplomacy/Diplomacy.fsproj) | " |
@@ -1952,10 +1952,10 @@ did not change.
 | [src/Games/Snake/Snake.fsproj](src/Games/Snake/Snake.fsproj) | " |
 | [src/Games/Cascade/Cascade.fsproj](src/Games/Cascade/Cascade.fsproj) | " |
 | [src/Games/Warband/Warband.fsproj](src/Games/Warband/Warband.fsproj) | " |
-| [TCModel.fsproj](TCModel.fsproj) | All eight in one program, which asks which. What a clone runs |
+| [Proto.fsproj](Proto.fsproj) | All eight in one program, which asks which. What a clone runs |
 
 A game's own executable is one game, one port and nothing else in the image, which is what
-goes in a container. `TCModel` is what somebody who wants all eight downloads once, and what
+goes in a container. `Proto` is what somebody who wants all eight downloads once, and what
 every `dotnet run` line in this README is.
 
 **`src/Common`** — generic, and knows nothing about the game.
@@ -2401,7 +2401,7 @@ and running them at once cannot change what any of them decides. Started togethe
 fourteen seconds, and the runner caps how many at once by the number of cores, so a two-core
 build machine still gets half its time back rather than thrashing.
 
-The obvious next step is not taken: the scripts could `#r` the built `TCModel.dll` instead
+The obvious next step is not taken: the scripts could `#r` the built assemblies instead
 of `#load`ing the sources, which would cut each one from five seconds to under two. It is
 declined because it changes what is being tested. `#load` cannot go stale, needs no build,
 and tests the source in the working tree; a reference tests whatever was last compiled, and
@@ -2523,9 +2523,9 @@ pwsh tools/publish.ps1 -Program Turncoats  # just the one game
 pwsh tools/publish.ps1 -Runtime linux-x64  # for somebody else's machine
 ```
 
-Nine programs come out: one per game, and `TCModel`, which has all eight in it and asks
+Nine programs come out: one per game, and `Proto`, which has all eight in it and asks
 which. A game's own file is one game, one port and nothing else — which is what goes in a
-container — and `TCModel` is what somebody who wants all eight downloads once.
+container — and `Proto` is what somebody who wants all eight downloads once.
 
 | | size | wants |
 | --- | --- | --- |
@@ -2540,7 +2540,7 @@ then refuses, which is worse than one that does not run at all.
 
 **Publishing passes `-p:SelfContained` rather than `--self-contained`, and the difference is
 load-bearing.** The second sets the property on the project named and on nothing else, so
-publishing `TCModel` portable left the games it references self-contained and the SDK
+publishing `Proto` portable left the games it references self-contained and the SDK
 refused the mixture outright (NETSDK1151). A `-p:` on the command line is a global property:
 it reaches every project in the graph and overrides what each says for itself, which is
 exactly what "this whole publish is one shape" means.
@@ -2557,7 +2557,7 @@ serialiser that reflects. A trimmed build is 24 MB, emits **no IL warning whatso
 throws on the first line it is given:
 
 ```
-The type initializer for '<StartupCode$TCModel>.$Launch' threw an exception.
+The type initializer for '<StartupCode$Proto>.$Launch' threw an exception.
 ```
 
 So [publish.ps1](tools/publish.ps1) does not just build the file, it runs it: `--help`, a
@@ -2574,7 +2574,7 @@ sent, called by its own name.
 
 ```
     dotnet run -- turncoats join greg-pc --code kbd4-9mtx-7rfp     # from a clone
-    TCModel turncoats join greg-pc --code kbd4-9mtx-7rfp           # from a published file
+    Proto turncoats join greg-pc --code kbd4-9mtx-7rfp             # from a published file
     Turncoats join greg-pc --code kbd4-9mtx-7rfp                   # from that game's own file
 ```
 

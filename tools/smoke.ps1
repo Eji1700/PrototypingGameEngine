@@ -379,7 +379,7 @@ $counted = @'
 
 
 $exe = Find-Browser
-$profile = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-smoke-$PID"
+$profile = Join-Path ([IO.Path]::GetTempPath()) "proto-smoke-$PID"
 $table = $null
 $browser = $null
 
@@ -391,7 +391,7 @@ $before = @(Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue | Fo
 try {
     "Serving a game and opening it in $(Split-Path -Leaf $exe)..."
 
-    Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like "*--remote-debugging-port=$DebugPort*" } |
@@ -514,7 +514,7 @@ try {
     ""
     "A house, and a table opened at it..."
 
-    Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 
     $housePort = $Port + 1
@@ -622,7 +622,7 @@ finally {
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like "*--remote-debugging-port=$DebugPort*" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Get-Process -Name "TCModel" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
 
     Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue |

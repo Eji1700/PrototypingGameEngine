@@ -27,8 +27,8 @@
 #load "../src/Games/Turncoats/Rules/Turn.fs"
 #load "../src/Games/Turncoats/Rules/Playing.fs"
 
-open TCModel.Engine
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Turncoats
 
 let report = Checks.report
 

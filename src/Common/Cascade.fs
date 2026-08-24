@@ -1,4 +1,4 @@
-namespace TCModel.Common
+namespace Prototyping.Common
 
 module Cascade =
 

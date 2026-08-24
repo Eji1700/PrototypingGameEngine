@@ -1,7 +1,7 @@
-namespace TCModel.Life
+namespace Prototyping.Life
 
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 type World =
     {

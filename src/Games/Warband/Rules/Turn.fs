@@ -1,6 +1,6 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Move =
     /// Put a unit of that kind on that hex. The only move anybody makes in this game.

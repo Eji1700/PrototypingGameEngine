@@ -1,4 +1,4 @@
-namespace TCModel.Life
+namespace Prototyping.Life
 
 open System
 

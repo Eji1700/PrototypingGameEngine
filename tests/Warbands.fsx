@@ -58,9 +58,9 @@
 #load "../src/Games/Warband/Reading/Render.fs"
 #load "../src/Games/Warband/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let warband = TCModel.Warband.Offer.playable
+let warband = Prototyping.Warband.Offer.playable
 
 let standard = Playable.standard warband
 

@@ -1,4 +1,4 @@
-module TCModel.Snake.Program
+module Prototyping.Snake.Program
 
 [<EntryPoint>]
-let main argv = TCModel.Play.only Offer.ways argv
+let main argv = Prototyping.Play.only Offer.ways argv

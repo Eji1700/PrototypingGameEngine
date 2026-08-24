@@ -1,4 +1,4 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
 type Model<'Move, 'State, 'Notice> =
     { Timeline: Timeline<'Move, 'State>

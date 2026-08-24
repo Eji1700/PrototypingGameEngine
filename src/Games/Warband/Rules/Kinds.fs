@@ -1,4 +1,4 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
 /// What a unit does from a rank, and the whole of what a kind of unit is.
 ///

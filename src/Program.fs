@@ -1,6 +1,6 @@
-module TCModel.Program
+module Prototyping.Program
 
-open TCModel.Table
+open Prototyping.Table
 
 let private picked argv =
     match argv with

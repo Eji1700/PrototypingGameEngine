@@ -1,4 +1,4 @@
-module TCModel.Diplomacy.Program
+module Prototyping.Diplomacy.Program
 
 [<EntryPoint>]
-let main argv = TCModel.Play.only Offer.ways argv
+let main argv = Prototyping.Play.only Offer.ways argv

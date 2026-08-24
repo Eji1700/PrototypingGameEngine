@@ -1,4 +1,4 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
 open System
 open System.Net
@@ -13,9 +13,9 @@ open Microsoft.AspNetCore.SignalR
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
 
 module Wire =
 
@@ -451,7 +451,7 @@ module Server =
               Standard = hosting.Standard }
 
         let home =
-            TCModel.Net.House(hosting, (fun () -> DateTime.Now), Reach.minted, Housekeeping.ordinary)
+            Prototyping.Net.House(hosting, (fun () -> DateTime.Now), Reach.minted, Housekeeping.ordinary)
 
         let pages = Browser.Pages()
 

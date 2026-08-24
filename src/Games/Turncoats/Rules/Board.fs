@@ -1,4 +1,4 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
 type RegionId = private RegionId of int
 

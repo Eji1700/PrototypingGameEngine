@@ -1,6 +1,6 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
-open TCModel.Engine
+open Prototyping.Engine
 
 /// How much of a screen to draw, and how far through a beat it is being drawn. The three switches
 /// are the boxes round the game itself; none is part of the game, so none reaches the model or the

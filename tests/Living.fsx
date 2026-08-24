@@ -53,9 +53,9 @@
 #load "../src/Games/Life/Reading/Render.fs"
 #load "../src/Games/Life/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let life = TCModel.Life.Offer.playable
+let life = Prototyping.Life.Offer.playable
 
 let standard = Playable.standard life
 

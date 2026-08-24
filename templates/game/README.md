@@ -31,7 +31,7 @@ alphabetically — a new file means a new `<Compile Include=...>` line in the ri
 
 ## Three things the template could not do
 
-**1. Put it in the solution.** Add it to `TCModel.slnx` under the `/src/Games/` folder:
+**1. Put it in the solution.** Add it to `PrototypingGameEngine.slnx` under the `/src/Games/` folder:
 
 ```xml
 <Project Path="src/Games/MyGame/MyGame.fsproj" />
@@ -40,10 +40,10 @@ alphabetically — a new file means a new `<Compile Include=...>` line in the ri
 **2. Register it.** `src/Games.fs` is the only file in the program that names more than one game:
 
 ```fsharp
-Play.chosen TCModel.MyGame.Offer.ways TCModel.MyGame.Offer.playable
+Play.chosen Prototyping.MyGame.Offer.ways Prototyping.MyGame.Offer.playable
 ```
 
-and add a `<ProjectReference>` to it in the root `TCModel.fsproj`.
+and add a `<ProjectReference>` to it in the root `Proto.fsproj`.
 
 **3. Give it a suite.** `tests/mygame.fsx`, with a harness that `#load`s this game's sources over
 the engine's — copy `tests/Living.fsx`, which is the shortest — and then:
@@ -68,7 +68,7 @@ the clock and the page. Add `"mygame"` to the list in `tools/tests.ps1` or the s
 - **A board that moves on its own** — fill in `Pulse`, and a beat becomes a move.
   [`src/Games/Life/Offer.fs`](../../src/Games/Life/Offer.fs) is the plain case;
   [`src/Games/Snake/`](../../src/Games/Snake/) is the one that also draws between beats.
-- **Chance** — `Deal` is handed a seed, and `TCModel.Common.Rng` is a generator you pass along
+- **Chance** — `Deal` is handed a seed, and `Prototyping.Common.Rng` is a generator you pass along
   rather than one that mutates, so a seed and a list of moves still reproduce the game exactly.
 - **Something hidden** — `SeenBy` is where a seat is told less than the table is, and it is the
   only place that difference lives. [`src/Games/Turncoats/`](../../src/Games/Turncoats/) is the
@@ -78,6 +78,6 @@ the clock and the page. Add `"mygame"` to the list in `tools/tests.ps1` or the s
 
 ## Counting
 
-Never build a count by hand — `TCModel.Common.Counting` has the three shapes, and nought and one
+Never build a count by hand — `Prototyping.Common.Counting` has the three shapes, and nought and one
 are where counts read wrong. If this game starts counting something the rest do not, add the noun
 to the lists in `tests/counting.fsx` and `tests/Conforms.fsx`.

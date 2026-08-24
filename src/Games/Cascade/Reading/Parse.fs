@@ -1,8 +1,8 @@
-namespace TCModel.Cascade
+namespace Prototyping.Cascade
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Cascade
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Cascade
 
 module Parse =
 

@@ -1,7 +1,7 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
 open System
-open TCModel.Table
+open Prototyping.Table
 
 [<NoComparison; NoEquality>]
 type Opened =

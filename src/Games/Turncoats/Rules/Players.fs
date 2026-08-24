@@ -1,6 +1,6 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Player = { Id: PlayerId; Bag: Pile }
 

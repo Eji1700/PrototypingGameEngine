@@ -1,9 +1,9 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System
 open Argu
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 [<RequireQualifiedAccess>]
 type Start =
@@ -239,20 +239,18 @@ module Launch =
     let private parser =
         ArgumentParser.Create<Argument>(programName = "", errorHandler = ExceptionExiter())
 
-    let private playing = ArgumentParser.Create<PlayArgs>(programName = "tcmodel play")
+    let private playing = ArgumentParser.Create<PlayArgs>(programName = "proto play")
 
-    let private serving =
-        ArgumentParser.Create<ServeArgs>(programName = "tcmodel serve")
+    let private serving = ArgumentParser.Create<ServeArgs>(programName = "proto serve")
 
-    let private hosting = ArgumentParser.Create<HostArgs>(programName = "tcmodel host")
+    let private hosting = ArgumentParser.Create<HostArgs>(programName = "proto host")
 
-    let private housing =
-        ArgumentParser.Create<HouseArgs>(programName = "tcmodel house")
+    let private housing = ArgumentParser.Create<HouseArgs>(programName = "proto house")
 
-    let private joining = ArgumentParser.Create<JoinArgs>(programName = "tcmodel join")
+    let private joining = ArgumentParser.Create<JoinArgs>(programName = "proto join")
 
     let private replaying =
-        ArgumentParser.Create<ReplayArgs>(programName = "tcmodel replay")
+        ArgumentParser.Create<ReplayArgs>(programName = "proto replay")
 
 
     let private reaching port code opened cert password behind at (reach: Reach) =

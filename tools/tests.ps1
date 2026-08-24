@@ -26,7 +26,7 @@ if ($Only) {
     $scripts = $scripts | Where-Object { $_ -in $Only }
 }
 
-$out = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-tests-$PID"
+$out = Join-Path ([IO.Path]::GetTempPath()) "proto-tests-$PID"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 $whole = [Diagnostics.Stopwatch]::StartNew()

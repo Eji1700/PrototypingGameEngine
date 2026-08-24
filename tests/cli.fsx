@@ -5,9 +5,9 @@
 open System
 open FsCheck
 open FsCheck.FSharp
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Turncoats
 open Harness
 open Whole
 
@@ -32,7 +32,7 @@ let private holds name property =
 
 
 let private certificate =
-    let path = IO.Path.Combine(IO.Path.GetTempPath(), "tcmodel-check.pfx")
+    let path = IO.Path.Combine(IO.Path.GetTempPath(), "proto-check.pfx")
     IO.File.WriteAllText(path, "not a certificate")
     path
 

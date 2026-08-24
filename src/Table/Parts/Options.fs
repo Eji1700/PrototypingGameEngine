@@ -1,4 +1,4 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 module Options =
 

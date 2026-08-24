@@ -1,7 +1,7 @@
-namespace TCModel.Compile
+namespace Prototyping.Compile
 
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 // Carrying out what the cards say.
 //

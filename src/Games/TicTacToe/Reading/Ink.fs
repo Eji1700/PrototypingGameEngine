@@ -1,7 +1,7 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
-open TCModel.Table
-open TCModel.TicTacToe
+open Prototyping.Table
+open Prototyping.TicTacToe
 
 module Ink =
 

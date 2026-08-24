@@ -53,9 +53,9 @@
 #load "../src/Games/Cascade/Reading/Render.fs"
 #load "../src/Games/Cascade/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let cascade = TCModel.Cascade.Offer.playable
+let cascade = Prototyping.Cascade.Offer.playable
 
 let standard = Playable.standard cascade
 

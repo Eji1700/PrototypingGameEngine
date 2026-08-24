@@ -1,4 +1,4 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System.IO
 open System.Text.RegularExpressions

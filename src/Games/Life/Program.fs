@@ -1,4 +1,4 @@
-module TCModel.Life.Program
+module Prototyping.Life.Program
 
 [<EntryPoint>]
-let main argv = TCModel.Play.only Offer.ways argv
+let main argv = Prototyping.Play.only Offer.ways argv

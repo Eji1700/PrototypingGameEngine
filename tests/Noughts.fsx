@@ -55,9 +55,9 @@
 #load "../src/Games/TicTacToe/Reading/Render.fs"
 #load "../src/Games/TicTacToe/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let noughts = TCModel.TicTacToe.Offer.playable
+let noughts = Prototyping.TicTacToe.Offer.playable
 
 let standard = Playable.standard noughts
 

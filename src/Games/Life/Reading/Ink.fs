@@ -1,7 +1,7 @@
-namespace TCModel.Life
+namespace Prototyping.Life
 
-open TCModel.Table
-open TCModel.Life
+open Prototyping.Table
+open Prototyping.Life
 
 module Ink =
 

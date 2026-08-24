@@ -1,11 +1,11 @@
 #load "Compiled.fsx"
 #load "Conforms.fsx"
 
-open TCModel.Common
+open Prototyping.Common
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Compile
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Compile
 open Checks
 open Compiled
 

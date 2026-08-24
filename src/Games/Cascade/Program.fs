@@ -1,4 +1,4 @@
-module TCModel.Cascade.Program
+module Prototyping.Cascade.Program
 
 [<EntryPoint>]
-let main argv = TCModel.Play.only Offer.ways argv
+let main argv = Prototyping.Play.only Offer.ways argv

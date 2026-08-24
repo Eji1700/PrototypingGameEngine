@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
-if (-not $Tag) { $Tag = "tcmodel-$($Game.ToLowerInvariant())" }
+if (-not $Tag) { $Tag = "proto-$($Game.ToLowerInvariant())" }
 
 function Report($name, $ok, $detail) {
     if ($ok) { "ok   $name" }

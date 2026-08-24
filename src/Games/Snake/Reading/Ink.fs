@@ -1,8 +1,8 @@
-namespace TCModel.Snake
+namespace Prototyping.Snake
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Snake
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Snake
 
 module Ink =
 

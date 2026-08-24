@@ -1,11 +1,11 @@
-module TCModel.Play
+module Prototyping.Play
 
 open System
 open System.IO
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Net
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Net
 
 let private clockSeed () = uint64 DateTime.UtcNow.Ticks
 

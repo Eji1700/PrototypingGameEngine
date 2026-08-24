@@ -1,7 +1,7 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 module Words =
 

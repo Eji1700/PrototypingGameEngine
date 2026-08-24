@@ -1,4 +1,4 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
 /// The battle, which nobody plays. Once both squads are mustered every blow that follows is
 /// settled - there is no chance in this game anywhere, and the same two musters fight the same

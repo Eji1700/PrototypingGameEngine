@@ -1,9 +1,9 @@
 #load "Whole.fsx"
 
 open System.Text.RegularExpressions
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Turncoats
 open Harness
 open Whole
 

@@ -1,9 +1,9 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.TicTacToe
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.TicTacToe
 
 module Offer =
 

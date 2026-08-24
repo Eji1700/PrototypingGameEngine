@@ -55,11 +55,11 @@
 #load "../src/Games/Snake/Reading/Render.fs"
 #load "../src/Games/Snake/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let snake = TCModel.Snake.Offer.playable
+let snake = Prototyping.Snake.Offer.playable
 
-let turns = TCModel.Snake.Offer.ways |> List.item 1
+let turns = Prototyping.Snake.Offer.ways |> List.item 1
 
 let standard = Playable.standard snake
 

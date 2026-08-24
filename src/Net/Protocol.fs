@@ -1,4 +1,4 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
 module Protocol =
 

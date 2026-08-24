@@ -1,6 +1,6 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
-open TCModel.Table
+open Prototyping.Table
 
 module Ink =
 

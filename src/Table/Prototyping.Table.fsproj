@@ -7,11 +7,11 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
-    <AssemblyName>TCModel.Table</AssemblyName>
-    <RootNamespace>TCModel</RootNamespace>
+    <AssemblyName>Prototyping.Table</AssemblyName>
+    <RootNamespace>Prototyping</RootNamespace>
 
     <IsPackable>true</IsPackable>
-    <Description>A TCModel game described well enough to be read: the seam a game fills in, three ways of drawing a board, the parsing of a typed line, the record on disk and the menu.</Description>
+    <Description>A PrototypingGameEngine game described well enough to be read: the seam a game fills in, three ways of drawing a board, the parsing of a typed line, the record on disk and the menu.</Description>
   </PropertyGroup>
 
   <ItemGroup Label="The parts a game and a table are described in">
@@ -45,7 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../TCModel.Engine.fsproj" />
+    <ProjectReference Include="../Prototyping.Engine.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

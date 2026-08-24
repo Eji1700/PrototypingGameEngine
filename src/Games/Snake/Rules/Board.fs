@@ -1,4 +1,4 @@
-namespace TCModel.Snake
+namespace Prototyping.Snake
 
 type Cell = { Row: int; Column: int }
 

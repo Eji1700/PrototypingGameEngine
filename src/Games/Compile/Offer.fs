@@ -1,9 +1,9 @@
-namespace TCModel.Compile
+namespace Prototyping.Compile
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Compile
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Compile
 
 module Offer =
 

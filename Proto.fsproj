@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup Label="The engine, and the games it can open">
-    <ProjectReference Include="src/Play/TCModel.Play.fsproj" />
+    <ProjectReference Include="src/Play/Prototyping.Play.fsproj" />
     <ProjectReference Include="src/Games/Turncoats/Turncoats.fsproj" />
     <ProjectReference Include="src/Games/TicTacToe/TicTacToe.fsproj" />
     <ProjectReference Include="src/Games/Diplomacy/Diplomacy.fsproj" />

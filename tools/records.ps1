@@ -38,7 +38,7 @@ if (-not $records) { throw "no records found in logs/$(if ($Only) { " matching '
 
 # Nothing on the way in: a console that reads end-of-file at the prompt puts the game down, which
 # is what takes each of these up and leaves again without a keyboard.
-$nothing = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-nothing-$PID"
+$nothing = Join-Path ([IO.Path]::GetTempPath()) "proto-nothing-$PID"
 New-Item -ItemType File -Path $nothing -Force | Out-Null
 
 foreach ($record in $records) {
@@ -47,7 +47,7 @@ foreach ($record in $records) {
 
     # Started rather than piped: redirecting a native program's stderr inside PowerShell 5.1 wraps
     # every line in an error record and takes the script down with it.
-    $out = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-record-$PID"
+    $out = Join-Path ([IO.Path]::GetTempPath()) "proto-record-$PID"
 
     $arguments = @("run", "--no-build", "--")
     if ($game) { $arguments += $game }

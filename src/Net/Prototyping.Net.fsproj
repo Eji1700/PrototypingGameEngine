@@ -7,11 +7,11 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <WarningLevel>5</WarningLevel>
-    <AssemblyName>TCModel.Net</AssemblyName>
-    <RootNamespace>TCModel</RootNamespace>
+    <AssemblyName>Prototyping.Net</AssemblyName>
+    <RootNamespace>Prototyping</RootNamespace>
 
     <IsPackable>true</IsPackable>
-    <Description>The same TCModel table with the players at different keyboards: a web server, the page a browser reads, and a console client.</Description>
+    <Description>The same PrototypingGameEngine table with the players at different keyboards: a web server, the page a browser reads, and a console client.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Table/TCModel.Table.fsproj" />
+    <ProjectReference Include="../Table/Prototyping.Table.fsproj" />
   </ItemGroup>
 
   <!-- Browser.fs reads this out of its own assembly, so it is carried rather than fetched. -->

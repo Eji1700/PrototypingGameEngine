@@ -1,8 +1,8 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System
 open System.IO
-open TCModel.Engine
+open Prototyping.Engine
 
 module Transcript =
 

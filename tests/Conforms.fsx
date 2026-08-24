@@ -17,9 +17,9 @@
 
 open System
 open System.Text.RegularExpressions
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Net
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Net
 open Checks
 
 

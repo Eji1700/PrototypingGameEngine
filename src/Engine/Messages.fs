@@ -1,4 +1,4 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
 type Msg<'Move> =
     | Make of 'Move

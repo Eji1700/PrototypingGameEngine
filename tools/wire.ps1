@@ -187,7 +187,7 @@ try {
     Start-Sleep -Milliseconds 500
 
     $fillPort = $Port + 2
-    $box = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-fill-$PID"
+    $box = Join-Path ([IO.Path]::GetTempPath()) "proto-fill-$PID"
     Remove-Item -Recurse -Force $box -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force -Path $box | Out-Null
 

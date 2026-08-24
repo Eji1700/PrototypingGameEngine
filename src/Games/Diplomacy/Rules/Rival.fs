@@ -1,8 +1,8 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Diplomacy
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Diplomacy
 
 type Skill =
     { Name: string

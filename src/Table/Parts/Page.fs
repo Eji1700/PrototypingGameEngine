@@ -1,4 +1,4 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System
 open System.Text.Json.Serialization

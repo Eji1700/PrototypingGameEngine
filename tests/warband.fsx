@@ -1,9 +1,9 @@
 #load "Warbands.fsx"
 #load "Conforms.fsx"
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Warband
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Warband
 open Checks
 open Warbands
 
@@ -479,7 +479,7 @@ report
     (5, 5, None)
     (let rival =
         { Skill = Rival.steady
-          Rng = TCModel.Common.Rng.ofSeed 7UL
+          Rng = Prototyping.Common.Rng.ofSeed 7UL
           Plan = [] }
 
      // Both seats, since a rival is asked for a move whenever the seat it is sitting at is the one

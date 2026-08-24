@@ -1,4 +1,4 @@
-namespace TCModel.Common
+namespace Prototyping.Common
 
 type Rng = private Rng of state: uint64
 

@@ -1,6 +1,6 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
-open TCModel.Table
+open Prototyping.Table
 
 module Ink =
 

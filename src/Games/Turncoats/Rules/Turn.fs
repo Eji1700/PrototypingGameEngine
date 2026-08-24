@@ -1,6 +1,6 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Move =
     | Recruit of color: StoneColor * into: RegionId
@@ -34,13 +34,13 @@ type Notice =
     | Refused of Rejection
 
 
-type Msg = TCModel.Engine.Msg<Move>
+type Msg = Prototyping.Engine.Msg<Move>
 
-type Told = TCModel.Engine.Told<Move, Notice>
+type Told = Prototyping.Engine.Told<Move, Notice>
 
-type Entry = TCModel.Engine.Entry<Move, Notice>
+type Entry = Prototyping.Engine.Entry<Move, Notice>
 
-type Model = TCModel.Engine.Model<Move, Session, Notice>
+type Model = Prototyping.Engine.Model<Move, Session, Notice>
 
 module Session =
 

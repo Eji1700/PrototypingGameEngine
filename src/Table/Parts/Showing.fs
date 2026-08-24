@@ -1,6 +1,6 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
-open TCModel.Engine
+open Prototyping.Engine
 
 /// What a table can be heard doing, named for what happened rather than for what it sounds like -
 /// the same bargain a `Tone` makes about colour, so a table is free to make them however it can.

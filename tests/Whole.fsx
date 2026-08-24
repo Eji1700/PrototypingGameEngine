@@ -40,9 +40,9 @@
 #load "../src/Games/Turncoats/Reading/Html.fs"
 #load "../src/Games/Turncoats/Offer.fs"
 
-open TCModel.Table
+open Prototyping.Table
 
-let playing = TCModel.Turncoats.Offer.playable
+let playing = Prototyping.Turncoats.Offer.playable
 
 let standard = Playable.standard playing
 

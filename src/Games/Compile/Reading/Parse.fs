@@ -1,8 +1,8 @@
-namespace TCModel.Compile
+namespace Prototyping.Compile
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Compile
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Compile
 
 module Parse =
 

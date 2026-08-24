@@ -1,4 +1,4 @@
-namespace TCModel.Common
+namespace Prototyping.Common
 
 type ResultBuilder() =
     member _.Return value = Ok value

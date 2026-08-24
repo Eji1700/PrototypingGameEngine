@@ -1,4 +1,4 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
 /// The row the game is played on. Two numbers, and every rule below this file is about them.
 module Row =

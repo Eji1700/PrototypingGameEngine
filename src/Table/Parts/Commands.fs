@@ -1,8 +1,8 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 [<NoComparison; NoEquality>]
 type Command<'Move> =

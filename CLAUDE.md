@@ -8,13 +8,13 @@ rules: the things the code follows but does not say out loud.
 ## Commands
 
 ```
-dotnet build TCModel.slnx          # everything; CI builds with -warnaserror
-pwsh tools/tests.ps1               # every check suite, in parallel
-pwsh tools/tests.ps1 -Only cascade # one of them
-dotnet fantomas src tests tools templates   # format; CI runs --check and fails on a diff
-dotnet run -- <game> <command>     # e.g. dotnet run -- cascade play
+dotnet build PrototypingGameEngine.slnx    # everything; CI builds with -warnaserror
+pwsh tools/tests.ps1                       # every check suite, in parallel
+pwsh tools/tests.ps1 -Only cascade         # one of them
+dotnet fantomas src tests tools templates  # format; CI runs --check and fails on a diff
+dotnet run -- <game> <command>             # e.g. dotnet run -- cascade play
 
-dotnet new install templates/game          # then: dotnet new tcmodel-game -n <Name> -o src/Games/<Name>
+dotnet new install templates/game          # then: dotnet new proto-game -n <Name> -o src/Games/<Name>
 pwsh tools/template.ps1                    # generate one, build it, play it, hold it to the seam
 
 pwsh tools/records.ps1                     # take every record in logs/ back up
@@ -28,16 +28,30 @@ A change is finished when the build is clean, `fantomas --check` is clean, and e
 name is a suite and runs, a capitalised one is a harness other files load. Name a new suite
 accordingly and it runs; name it wrongly and it never will.
 
+## The three names
+
+**PrototypingGameEngine** is the repository and the solution, and what the README calls the
+thing. **`Prototyping`** is the namespace root and the first half of every package name —
+`Prototyping.Engine`, `Prototyping.Table`, `Prototyping.Net`, `Prototyping.Play` — because
+`PrototypingGameEngine.Engine` stutters and `open` lines are read far more often than the
+product is. **`proto`** is what a person types, and so it is the usage line, the template's
+`proto-game`, the cookie names and the Docker tags.
+
+The all-eight program is `Proto.fsproj`, and it has to stay named after the file it builds:
+[Invoked.fs](src/Table/Parts/Invoked.fs) decides whether to say `dotnet run --` or the
+program's own name by looking for `<assembly>.fsproj` in the working directory, so a project
+renamed on one side and not the other tells people to type something that is not there.
+
 ## Layout
 
 `Common` → `Engine` → `Table` → `Net` → `Play`, and nothing lower may reach up. The last three
-are projects of their own — `src/Table/TCModel.Table.fsproj`, `src/Net/TCModel.Net.fsproj`,
-`src/Play/TCModel.Play.fsproj` — so reaching up is a build error rather than a rule to remember.
-`Common` and `Engine` share `src/TCModel.Engine.fsproj`, which depends on `FSharp.Core` and
+are projects of their own — `src/Table/Prototyping.Table.fsproj`, `src/Net/Prototyping.Net.fsproj`,
+`src/Play/Prototyping.Play.fsproj` — so reaching up is a build error rather than a rule to remember.
+`Common` and `Engine` share `src/Prototyping.Engine.fsproj`, which depends on `FSharp.Core` and
 nothing else; keep it that way. Each game is its own project under `src/Games/<Name>/`, referencing
-`TCModel.Play`, split into `Rules/` (how it is played) and `Reading/` (how it is read), with
+`Prototyping.Play`, split into `Rules/` (how it is played) and `Reading/` (how it is read), with
 `Offer.fs` as the seam that hands a `Playable` to the table. A new game is registered in
-`src/Games.fs` and added to `TCModel.slnx`.
+`src/Games.fs` and added to `PrototypingGameEngine.slnx`.
 
 **Start a new game from `templates/game`** rather than by copying one — it generates the whole
 shape, already playing and already passing `Conforms.against`, and its README lists the three
@@ -62,7 +76,7 @@ paragraph above it say the same thing, one of them is left over from an edit —
 The program's voice is plain, concrete and unhurried, and it is the same voice everywhere: at the
 menu, in a refusal, on a card. Match the surrounding text rather than inventing a register.
 
-Never build a count by hand. `TCModel.Common.Counting` has the three shapes:
+Never build a count by hand. `Prototyping.Common.Counting` has the three shapes:
 
 ```fsharp
 let turns = Counting.several "turn" "turns"          // "1 turn", "3 turns"

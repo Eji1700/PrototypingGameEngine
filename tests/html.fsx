@@ -4,9 +4,9 @@ open System
 open System.Net
 open System.Text.RegularExpressions
 open System.Xml
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Turncoats
 open Harness
 open Whole
 

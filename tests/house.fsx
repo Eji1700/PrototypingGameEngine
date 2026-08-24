@@ -2,9 +2,9 @@
 
 open System
 open System.IO
-open TCModel.Table
-open TCModel.Net
-open TCModel.Turncoats
+open Prototyping.Table
+open Prototyping.Net
+open Prototyping.Turncoats
 open Harness
 open Whole
 
@@ -34,7 +34,7 @@ swept ()
 
 let private twoPeople = Seating.here 2
 
-let private full (table: TCModel.Net.Table) =
+let private full (table: Prototyping.Net.Table) =
     table.Sits("one", "tok-one", None, AtATerminal, "plain", "") |> ignore
     table.Sits("two", "tok-two", None, AtATerminal, "plain", "") |> ignore
     table
@@ -133,7 +133,7 @@ report
 report
     "a record that is not there is refused rather than thrown"
     true
-    (match hosting().Resumes(Path.Combine(Path.GetTempPath(), "tcmodel-no-such-record.log")) with
+    (match hosting().Resumes(Path.Combine(Path.GetTempPath(), "proto-no-such-record.log")) with
      | Error said -> said <> ""
      | Ok _ -> false)
 
@@ -218,7 +218,7 @@ let private listedAs entries =
         { Id = name
           At = at minutes
           Way = "turncoats"
-          Table = Unchecked.defaultof<TCModel.Net.Table> },
+          Table = Unchecked.defaultof<Prototyping.Net.Table> },
         standing)
     |> Housekeeping.listed
     |> List.map (fun (opened, _) -> opened.Id)

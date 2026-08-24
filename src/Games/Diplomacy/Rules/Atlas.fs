@@ -1,4 +1,4 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
 type Terrain =
     | Inland

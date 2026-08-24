@@ -1,4 +1,4 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
 /// One blow, and everything a player wants to know about it afterwards: who swung, from where,
 /// who took it, whether a warder stepped in front of it, and what it left them with. Kept as one

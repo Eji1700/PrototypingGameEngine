@@ -1,8 +1,8 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
 
 /// The seam. Everything above this file is how the game is played and how it is read; everything
 /// below it is a table, a menu, a command line, a record, a browser and a wire, and none of that

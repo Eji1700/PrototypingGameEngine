@@ -1,4 +1,4 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
 open System.Collections.Generic
 

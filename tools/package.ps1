@@ -23,13 +23,13 @@ function Report($name, $ok, $detail) {
     else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
 }
 
-$version = ([xml](Get-Content (Join-Path $root "Directory.Build.props"))).Project.PropertyGroup.TCModelVersion
+$version = ([xml](Get-Content (Join-Path $root "Directory.Build.props"))).Project.PropertyGroup.PrototypingVersion
 $feed = Join-Path $root "publish/packages"
 $template = Join-Path $root "templates/game"
 
 # Outside the repository on purpose: a consumer that happened to sit inside it could reach the
 # projects by accident, and then this would be proving nothing.
-$outside = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-consumer-$PID"
+$outside = Join-Path ([IO.Path]::GetTempPath()) "proto-consumer-$PID"
 $into = Join-Path $outside $Name
 
 # The consumer writes its record into whatever directory it is run from, and logs/ here is
@@ -44,10 +44,10 @@ try {
     Remove-Item $feed -Recurse -Force -ErrorAction SilentlyContinue
 
     foreach ($project in @(
-            "src/TCModel.Engine.fsproj"
-            "src/Table/TCModel.Table.fsproj"
-            "src/Net/TCModel.Net.fsproj"
-            "src/Play/TCModel.Play.fsproj")) {
+            "src/Prototyping.Engine.fsproj"
+            "src/Table/Prototyping.Table.fsproj"
+            "src/Net/Prototyping.Net.fsproj"
+            "src/Play/Prototyping.Play.fsproj")) {
 
         dotnet pack (Join-Path $root $project) -c Release -o $feed | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "$project would not pack" }
@@ -60,7 +60,7 @@ try {
     $installed = $true
 
     New-Item -ItemType Directory -Force -Path $outside | Out-Null
-    dotnet new tcmodel-game -n $Name -o $into | Out-Null
+    dotnet new proto-game -n $Name -o $into | Out-Null
 
     # Nothing but the local feed. A consumer that could still reach nuget.org would restore
     # FSharp.Core and Falco from there and this would not notice a dependency we failed to declare
@@ -79,8 +79,8 @@ try {
     # The one line that makes this a consumer rather than another project in the solution.
     $project = Join-Path $into "$Name.fsproj"
     (Get-Content $project -Raw) -replace `
-        '<ProjectReference Include="[^"]*TCModel\.Play\.fsproj" />', `
-        "<PackageReference Include=`"TCModel.Play`" Version=`"$version`" />" |
+        '<ProjectReference Include="[^"]*Prototyping.Play.fsproj" />', `
+        "<PackageReference Include=`"Prototyping.Play`" Version=`"$version`" />" |
         Set-Content $project -Encoding utf8
 
     Report "and a game outside the repository asks for them by name" (
@@ -99,7 +99,7 @@ try {
         Report "and plays" ($played -match "takes 2 tokens") "nothing was taken"
 
         # The one thing a package can break that a project reference never would: datastar.js is an
-        # embedded resource read out of TCModel.Net's own assembly, and this is where a packed
+        # embedded resource read out of Prototyping.Net's own assembly, and this is where a packed
         # assembly that lost it would say so.
         $here = Split-Path -Parent $exe
         $served = Start-Console $exe "serve 2 --port $Port --open" $here

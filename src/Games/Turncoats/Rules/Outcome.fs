@@ -1,8 +1,8 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
-open TCModel.Engine
+open Prototyping.Engine
 
-open TCModel.Common
+open Prototyping.Common
 
 type FactionMeasure =
     | LandRuled

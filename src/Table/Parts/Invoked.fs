@@ -1,4 +1,4 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 open System
 open System.IO
@@ -7,9 +7,13 @@ module Invoked =
 
     let private ourName =
         match Environment.ProcessPath with
-        | null -> "TCModel"
+        | null -> "Proto"
         | path -> Path.GetFileNameWithoutExtension path
 
+    // Which ties a project's file name to the assembly it builds: `Proto.fsproj` has to produce
+    // `Proto`, and `Turncoats.fsproj` `Turncoats`, or a clone stops recognising itself and starts
+    // telling people to type a name that is not on disk yet. Renaming a project means renaming
+    // both, or setting `AssemblyName` to match.
     let private inOurProject () =
         try
             File.Exists(Path.Combine(Directory.GetCurrentDirectory(), $"{ourName}.fsproj"))

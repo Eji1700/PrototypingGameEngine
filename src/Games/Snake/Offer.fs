@@ -1,9 +1,9 @@
-namespace TCModel.Snake
+namespace Prototyping.Snake
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Snake
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Snake
 
 module Offer =
 

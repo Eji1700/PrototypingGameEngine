@@ -1,6 +1,6 @@
-namespace TCModel.Cascade
+namespace Prototyping.Cascade
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Move =
     | Touch of Cell

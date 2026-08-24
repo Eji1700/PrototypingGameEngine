@@ -1,4 +1,4 @@
-namespace TCModel.Engine
+namespace Prototyping.Engine
 
 type Entry<'Move, 'Notice> =
     { Ordinal: int

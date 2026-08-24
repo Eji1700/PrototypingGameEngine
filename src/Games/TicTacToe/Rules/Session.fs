@@ -1,6 +1,6 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Ending =
     | Won of Mark * line: int list

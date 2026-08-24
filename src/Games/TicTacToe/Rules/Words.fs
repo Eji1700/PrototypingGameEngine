@@ -1,6 +1,6 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
-open TCModel.Engine
+open Prototyping.Engine
 
 module Words =
 

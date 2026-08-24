@@ -1,7 +1,7 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Engine
+open Prototyping.Table
 
 /// Who has a seat. `Taken` with no console is somebody who is sitting there but whose connection has
 /// gone - the seat is held for them and nobody else may take it, and the token is what brings them

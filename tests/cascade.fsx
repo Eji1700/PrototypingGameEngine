@@ -5,9 +5,9 @@ open System
 open System.Net
 open System.Text.RegularExpressions
 open System.Xml
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Cascade
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Cascade
 open Checks
 open Cascading
 

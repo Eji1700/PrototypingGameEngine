@@ -1,4 +1,4 @@
-namespace TCModel.Compile
+namespace Prototyping.Compile
 
 module Printed =
 

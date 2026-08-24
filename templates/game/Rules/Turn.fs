@@ -1,4 +1,4 @@
-namespace TCModel.MyGame
+namespace Prototyping.MyGame
 
 type Move =
     | Take of count: int

@@ -1,7 +1,7 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
 open System.Text.RegularExpressions
-open TCModel.Table
+open Prototyping.Table
 
 module Ink =
 

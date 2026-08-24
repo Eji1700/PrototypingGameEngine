@@ -1,8 +1,8 @@
-namespace TCModel.Turncoats
+namespace Prototyping.Turncoats
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
 
 module Parse =
 

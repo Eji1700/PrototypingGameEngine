@@ -1,9 +1,9 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/TCModel.Engine.fsproj" />
-    <Project Path="src/Table/TCModel.Table.fsproj" />
-    <Project Path="src/Net/TCModel.Net.fsproj" />
-    <Project Path="src/Play/TCModel.Play.fsproj" />
+    <Project Path="src/Prototyping.Engine.fsproj" />
+    <Project Path="src/Table/Prototyping.Table.fsproj" />
+    <Project Path="src/Net/Prototyping.Net.fsproj" />
+    <Project Path="src/Play/Prototyping.Play.fsproj" />
   </Folder>
   <Folder Name="/src/Games/">
     <Project Path="src/Games/Cascade/Cascade.fsproj" />
@@ -15,5 +15,5 @@
     <Project Path="src/Games/Turncoats/Turncoats.fsproj" />
     <Project Path="src/Games/Warband/Warband.fsproj" />
   </Folder>
-  <Project Path="TCModel.fsproj" />
+  <Project Path="Proto.fsproj" />
 </Solution>

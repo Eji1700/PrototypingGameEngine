@@ -1,7 +1,7 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
-open TCModel.Table
-open TCModel.Diplomacy
+open Prototyping.Table
+open Prototyping.Diplomacy
 
 module Ink =
 

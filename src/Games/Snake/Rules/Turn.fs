@@ -1,6 +1,6 @@
-namespace TCModel.Snake
+namespace Prototyping.Snake
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Move =
     | Go of Direction

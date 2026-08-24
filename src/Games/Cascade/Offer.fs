@@ -1,9 +1,9 @@
-namespace TCModel.Cascade
+namespace Prototyping.Cascade
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Cascade
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Cascade
 
 module Offer =
 

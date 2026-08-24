@@ -33,7 +33,7 @@ try {
     dotnet new install $template --force | Out-Null
     $installed = $true
 
-    dotnet new tcmodel-game -n $Name -o $into | Out-Null
+    dotnet new proto-game -n $Name -o $into | Out-Null
     Report "the template generates a game" (Test-Path (Join-Path $into "$Name.fsproj")) "no $Name.fsproj came out"
 
     $offer = Get-Content (Join-Path $into "Offer.fs") -Raw
@@ -79,13 +79,13 @@ try {
      ($ordered | ForEach-Object { "#load `"../src/Games/$Name/$($_ -replace '\\', '/')`"" }) +
      @("#load `"Conforms.fsx`"",
        "",
-       "Conforms.against TCModel.$Name.Offer.playable 2 [ `"2`"; `"1`"; `"3`" ]",
+       "Conforms.against Prototyping.$Name.Offer.playable 2 [ `"2`"; `"1`"; `"3`" ]",
        "",
        "Checks.finish ()")) | Set-Content $suite -Encoding utf8
 
     # Started rather than piped: redirecting a native program's stderr inside PowerShell 5.1 wraps
     # every line in an error record and takes the script down with it.
-    $out = Join-Path ([IO.Path]::GetTempPath()) "tcmodel-template-$PID"
+    $out = Join-Path ([IO.Path]::GetTempPath()) "proto-template-$PID"
     $p = Start-Process -PassThru -NoNewWindow -Wait -WorkingDirectory $root -FilePath "dotnet" `
         -ArgumentList @("fsi", $suite) -RedirectStandardOutput "$out.out" -RedirectStandardError "$out.err"
 

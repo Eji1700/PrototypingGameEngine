@@ -1,6 +1,6 @@
-namespace TCModel.Diplomacy
+namespace Prototyping.Diplomacy
 
-open TCModel.Engine
+open Prototyping.Engine
 
 type Season =
     | Spring

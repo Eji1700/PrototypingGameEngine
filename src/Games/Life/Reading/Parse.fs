@@ -1,8 +1,8 @@
-namespace TCModel.Life
+namespace Prototyping.Life
 
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Life
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Life
 
 module Parse =
 

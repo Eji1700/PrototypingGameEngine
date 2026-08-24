@@ -1,6 +1,6 @@
-namespace TCModel.Compile
+namespace Prototyping.Compile
 
-open TCModel.Engine
+open Prototyping.Engine
 
 module Draft =
 

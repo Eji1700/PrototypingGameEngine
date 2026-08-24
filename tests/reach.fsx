@@ -1,7 +1,7 @@
 #load "Harness.fsx"
 #load "../src/Table/Parts/Reach.fs"
 
-open TCModel.Table
+open Prototyping.Table
 open Harness
 
 

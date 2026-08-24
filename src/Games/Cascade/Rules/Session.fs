@@ -1,7 +1,7 @@
-namespace TCModel.Cascade
+namespace Prototyping.Cascade
 
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 
 type Standing =
     { Facing: Facing

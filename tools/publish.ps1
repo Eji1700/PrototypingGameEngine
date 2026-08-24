@@ -1,7 +1,7 @@
 param(
     [ValidateSet("both", "portable", "standalone")]
     [string]$Shape = "both",
-    [ValidateSet("all", "TCModel", "Turncoats", "TicTacToe", "Diplomacy", "Compile", "Life", "Snake", "Cascade", "Warband")]
+    [ValidateSet("all", "Proto", "Turncoats", "TicTacToe", "Diplomacy", "Compile", "Life", "Snake", "Cascade", "Warband")]
     [string]$Program = "all",
     [string]$Runtime = "",
     [string]$Into = "",
@@ -31,7 +31,7 @@ $building = @(
 ) | Where-Object { $Shape -eq "both" -or $_.Name -eq $Shape }
 
 $programs = @(
-    @{ Name = "TCModel"; Project = "TCModel.fsproj"; Words = @{ Serve = "tictactoe serve"; Host = "turncoats host"; Join = "turncoats join" }; Draws = "\.grid" }
+    @{ Name = "Proto"; Project = "Proto.fsproj"; Words = @{ Serve = "tictactoe serve"; Host = "turncoats host"; Join = "turncoats join" }; Draws = "\.grid" }
     @{ Name = "Turncoats"; Project = "src/Games/Turncoats/Turncoats.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.map" }
     @{ Name = "TicTacToe"; Project = "src/Games/TicTacToe/TicTacToe.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.grid" }
     @{ Name = "Diplomacy"; Project = "src/Games/Diplomacy/Diplomacy.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
@@ -42,7 +42,7 @@ $programs = @(
     @{ Name = "Warband"; Project = "src/Games/Warband/Warband.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "--cell: 3\.6rem" }
 ) | Where-Object { $Program -eq "all" -or $_.Name -eq $Program }
 
-$seats = @{ TCModel = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2; Life = 1; Snake = 2; Cascade = 1; Warband = 2 }
+$seats = @{ Proto = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2; Life = 1; Snake = 2; Cascade = 1; Warband = 2 }
 
 
 function Test-Published($exe, $made) {

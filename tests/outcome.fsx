@@ -1,7 +1,7 @@
 #load "Harness.fsx"
 
-open TCModel.Engine
-open TCModel.Turncoats
+open Prototyping.Engine
+open Prototyping.Turncoats
 open Harness
 
 

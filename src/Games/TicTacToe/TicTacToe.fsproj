@@ -7,7 +7,7 @@
     <WarningLevel>5</WarningLevel>
     <SelfContained>false</SelfContained>
     <AssemblyName>TicTacToe</AssemblyName>
-    <RootNamespace>TCModel.TicTacToe</RootNamespace>
+    <RootNamespace>Prototyping.TicTacToe</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup Label="How it is played">
@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../Play/TCModel.Play.fsproj" />
+    <ProjectReference Include="../../Play/Prototyping.Play.fsproj" />
   </ItemGroup>
 
 </Project>

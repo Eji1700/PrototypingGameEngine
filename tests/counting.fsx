@@ -40,8 +40,8 @@
 #load "../src/Games/Warband/Rules/Words.fs"
 
 open System.Text.RegularExpressions
-open TCModel.Common
-open TCModel.Engine
+open Prototyping.Common
+open Prototyping.Engine
 open Checks
 
 
@@ -80,19 +80,19 @@ report "and none of it is counted rather than named" "0 stones" (stones 0)
 // --- and every counter the games kept for themselves -------------------------------------------
 
 let private counters =
-    [ "Cascade cells", TCModel.Cascade.Words.cells
-      "Cascade turns", TCModel.Cascade.Words.turns
-      "Cascade touches", TCModel.Cascade.Words.touches
-      "Cascade waves", TCModel.Cascade.Words.waves
-      "Life cells", TCModel.Life.Words.cells
-      "Life generations", TCModel.Life.Words.generations
-      "Snake segments", TCModel.Snake.Words.segments
-      "Snake steps", TCModel.Snake.Words.steps
-      "Snake eaten", TCModel.Snake.Words.eaten
-      "Warband units", TCModel.Warband.Words.units
-      "Warband hexes", TCModel.Warband.Words.hexes
-      "Warband rounds", TCModel.Warband.Words.rounds
-      "Warband blows", TCModel.Warband.Words.blows ]
+    [ "Cascade cells", Prototyping.Cascade.Words.cells
+      "Cascade turns", Prototyping.Cascade.Words.turns
+      "Cascade touches", Prototyping.Cascade.Words.touches
+      "Cascade waves", Prototyping.Cascade.Words.waves
+      "Life cells", Prototyping.Life.Words.cells
+      "Life generations", Prototyping.Life.Words.generations
+      "Snake segments", Prototyping.Snake.Words.segments
+      "Snake steps", Prototyping.Snake.Words.steps
+      "Snake eaten", Prototyping.Snake.Words.eaten
+      "Warband units", Prototyping.Warband.Words.units
+      "Warband hexes", Prototyping.Warband.Words.hexes
+      "Warband rounds", Prototyping.Warband.Words.rounds
+      "Warband blows", Prototyping.Warband.Words.blows ]
 
 /// A one standing against a plural, which is what every one of these bugs has been. The nouns are
 /// named rather than matched as "any word ending in s", because "1 this" and "1 has" are neither
@@ -145,23 +145,23 @@ report "and none of them says nothing at all" [] (amiss (fun text -> text = ""))
 /// the point, since a refusal nobody read back is exactly how "1 cell are still turning" got in.
 let private refusals =
     [ for n in 0..2 do
-          "Cascade StillTurning", TCModel.Cascade.Words.said (TCModel.Cascade.Refused(TCModel.Cascade.StillTurning n))
-          "Cascade NoSuchSpeed", TCModel.Cascade.Words.said (TCModel.Cascade.Refused(TCModel.Cascade.NoSuchSpeed n))
-          "Life NoSuchRun", TCModel.Life.Words.said (TCModel.Life.Refused(TCModel.Life.NoSuchRun n))
-          "Life NothingWouldChange", TCModel.Life.Words.said (TCModel.Life.Refused(TCModel.Life.NothingWouldChange n))
-          "Snake NoSuchSpeed", TCModel.Snake.Words.said (TCModel.Snake.Refused(TCModel.Snake.NoSuchSpeed n))
+          "Cascade StillTurning", Prototyping.Cascade.Words.said (Prototyping.Cascade.Refused(Prototyping.Cascade.StillTurning n))
+          "Cascade NoSuchSpeed", Prototyping.Cascade.Words.said (Prototyping.Cascade.Refused(Prototyping.Cascade.NoSuchSpeed n))
+          "Life NoSuchRun", Prototyping.Life.Words.said (Prototyping.Life.Refused(Prototyping.Life.NoSuchRun n))
+          "Life NothingWouldChange", Prototyping.Life.Words.said (Prototyping.Life.Refused(Prototyping.Life.NothingWouldChange n))
+          "Snake NoSuchSpeed", Prototyping.Snake.Words.said (Prototyping.Snake.Refused(Prototyping.Snake.NoSuchSpeed n))
 
-      "Cascade NoneLeft", TCModel.Cascade.Words.said (TCModel.Cascade.Refused TCModel.Cascade.NoneLeft)
-      "Life NothingLeft", TCModel.Life.Words.said (TCModel.Life.Refused TCModel.Life.NothingLeft)
+      "Cascade NoneLeft", Prototyping.Cascade.Words.said (Prototyping.Cascade.Refused Prototyping.Cascade.NoneLeft)
+      "Life NothingLeft", Prototyping.Life.Words.said (Prototyping.Life.Refused Prototyping.Life.NothingLeft)
 
       for n in 0..2 do
-          "Warband NoSuchGround", TCModel.Warband.Words.said (TCModel.Warband.Refused(TCModel.Warband.NoSuchGround n))
+          "Warband NoSuchGround", Prototyping.Warband.Words.said (Prototyping.Warband.Refused(Prototyping.Warband.NoSuchGround n))
 
       // Warband counts a kind in its own plural, so this one is read back once for every kind
       // there is rather than at nought, one and two.
-      for kind in TCModel.Warband.Kinds.all do
-          $"Warband TooAlike {TCModel.Warband.Kinds.name kind}",
-          TCModel.Warband.Words.said (TCModel.Warband.Refused(TCModel.Warband.TooAlike(1, kind))) ]
+      for kind in Prototyping.Warband.Kinds.all do
+          $"Warband TooAlike {Prototyping.Warband.Kinds.name kind}",
+          Prototyping.Warband.Words.said (Prototyping.Warband.Refused(Prototyping.Warband.TooAlike(1, kind))) ]
 
 report
     "no refusal any of them makes puts a one against a plural"
@@ -175,7 +175,7 @@ report "nor does any of them come out empty" [] (refusals |> List.filter (snd >>
 
 // --- nor the counts a game reads out as it goes ------------------------------------------------
 
-let private tally n : TCModel.Cascade.Tally =
+let private tally n : Prototyping.Cascade.Tally =
     { Touches = n
       Rotations = n
       Lines = n
@@ -183,25 +183,25 @@ let private tally n : TCModel.Cascade.Tally =
 
 let private said =
     [ for n in 0..2 do
-          TCModel.Cascade.Words.said (TCModel.Cascade.Happened(TCModel.Cascade.GameEnded(tally n)))
-          TCModel.Cascade.Words.said (TCModel.Cascade.Happened(TCModel.Cascade.GaveIn n))
-          TCModel.Cascade.Words.said (TCModel.Cascade.Happened(TCModel.Cascade.CameUp(TCModel.Cascade.Rank 1, n)))
-          TCModel.Life.Words.said (TCModel.Life.Happened(TCModel.Life.Ran(n, n, n)))
-          TCModel.Life.Words.said (TCModel.Life.Happened(TCModel.Life.Swept n))
-          TCModel.Snake.Words.said (TCModel.Snake.Happened(TCModel.Snake.Ate(Seat.at 1, n, n)))
-          TCModel.Warband.Words.atLength (TCModel.Warband.Strikes(n, n, n))
-          TCModel.Warband.Words.atLength (TCModel.Warband.Shoots(n, n, n))
-          TCModel.Warband.Words.ending (TCModel.Warband.Outlasted n)
-          TCModel.Warband.Words.ground n
-          TCModel.Warband.Words.said (TCModel.Warband.Happened(TCModel.Warband.GroundSet n))
+          Prototyping.Cascade.Words.said (Prototyping.Cascade.Happened(Prototyping.Cascade.GameEnded(tally n)))
+          Prototyping.Cascade.Words.said (Prototyping.Cascade.Happened(Prototyping.Cascade.GaveIn n))
+          Prototyping.Cascade.Words.said (Prototyping.Cascade.Happened(Prototyping.Cascade.CameUp(Prototyping.Cascade.Rank 1, n)))
+          Prototyping.Life.Words.said (Prototyping.Life.Happened(Prototyping.Life.Ran(n, n, n)))
+          Prototyping.Life.Words.said (Prototyping.Life.Happened(Prototyping.Life.Swept n))
+          Prototyping.Snake.Words.said (Prototyping.Snake.Happened(Prototyping.Snake.Ate(Seat.at 1, n, n)))
+          Prototyping.Warband.Words.atLength (Prototyping.Warband.Strikes(n, n, n))
+          Prototyping.Warband.Words.atLength (Prototyping.Warband.Shoots(n, n, n))
+          Prototyping.Warband.Words.ending (Prototyping.Warband.Outlasted n)
+          Prototyping.Warband.Words.ground n
+          Prototyping.Warband.Words.said (Prototyping.Warband.Happened(Prototyping.Warband.GroundSet n))
 
-          TCModel.Warband.Words.said (
-              TCModel.Warband.Happened(
-                  TCModel.Warband.Unreached(
+          Prototyping.Warband.Words.said (
+              Prototyping.Warband.Happened(
+                  Prototyping.Warband.Unreached(
                       1,
-                      { Rank = TCModel.Warband.Front
+                      { Rank = Prototyping.Warband.Front
                         Step = 1 },
-                      TCModel.Warband.Footman,
+                      Prototyping.Warband.Footman,
                       n
                   )
               )

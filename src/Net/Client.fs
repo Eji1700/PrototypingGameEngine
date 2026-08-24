@@ -1,11 +1,11 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
 open System
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http.Connections.Client
 open Microsoft.AspNetCore.SignalR.Client
-open TCModel.Table
+open Prototyping.Table
 
 module Client =
 

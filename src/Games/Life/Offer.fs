@@ -1,9 +1,9 @@
-namespace TCModel.Life
+namespace Prototyping.Life
 
-open TCModel.Common
-open TCModel.Engine
-open TCModel.Table
-open TCModel.Life
+open Prototyping.Common
+open Prototyping.Engine
+open Prototyping.Table
+open Prototyping.Life
 
 module Offer =
 

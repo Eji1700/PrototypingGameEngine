@@ -1,4 +1,4 @@
-namespace TCModel.Warband
+namespace Prototyping.Warband
 
 /// A squad: five units on ten hexes, and everything that has to be asked of one before a blow can
 /// be aimed. Nothing here changes over the course of a battle except how much is left of somebody.

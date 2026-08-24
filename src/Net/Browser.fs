@@ -1,4 +1,4 @@
-namespace TCModel.Net
+namespace Prototyping.Net
 
 open System
 open System.Collections.Generic
@@ -11,12 +11,12 @@ open Falco.Datastar
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Http.Features
 open Microsoft.Extensions.Primitives
-open TCModel.Table
+open Prototyping.Table
 
 module Browser =
 
     [<Literal>]
-    let private Cookie = "tcmodel-console"
+    let private Cookie = "proto-console"
 
     [<Literal>]
     let Prefix = "page-"
@@ -122,7 +122,7 @@ module Browser =
             minted
 
     [<Literal>]
-    let private AtTable = "tcmodel-table"
+    let private AtTable = "proto-table"
 
     let sitAt (id: string) (ctx: HttpContext) =
         ctx.Response.Cookies.Append(AtTable, id, kept ctx)

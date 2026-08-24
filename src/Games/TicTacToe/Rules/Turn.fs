@@ -1,4 +1,4 @@
-namespace TCModel.TicTacToe
+namespace Prototyping.TicTacToe
 
 type Move =
     | Place of square: int

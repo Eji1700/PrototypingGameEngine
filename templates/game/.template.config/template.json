@@ -1,11 +1,11 @@
 {
   "$schema": "http://json.schemastore.org/template",
-  "author": "TCModel",
-  "classifications": [ "TCModel", "Game" ],
-  "identity": "TCModel.Game",
-  "name": "TCModel game",
-  "description": "A game for the TCModel engine: the seam filled in, a project, and a game that already plays.",
-  "shortName": "tcmodel-game",
+  "author": "PrototypingGameEngine",
+  "classifications": [ "PrototypingGameEngine", "Game" ],
+  "identity": "Prototyping.Game",
+  "name": "PrototypingGameEngine game",
+  "description": "A game for PrototypingGameEngine: the seam filled in, a project, and a game that already plays.",
+  "shortName": "proto-game",
   "tags": {
     "language": "F#",
     "type": "project"
@@ -32,7 +32,7 @@
       "continueOnError": true,
       "manualInstructions": [
         {
-          "text": "1. Add the project to TCModel.slnx, under the /src/Games/ folder.\n2. Register it in src/Games.fs, which is the only file in the program that names more than one game.\n3. Give it a suite: tests/<name>.fsx, loading a harness of its own and tests/Conforms.fsx, then Conforms.against. Add the name to the list in tools/tests.ps1 or it never runs.\n\nThe game's own README.md has all three written out."
+          "text": "1. Add the project to PrototypingGameEngine.slnx, under the /src/Games/ folder.\n2. Register it in src/Games.fs, which is the only file in the program that names more than one game.\n3. Give it a suite: tests/<name>.fsx, loading a harness of its own and tests/Conforms.fsx, then Conforms.against. Add the name to the list in tools/tests.ps1 or it never runs.\n\nThe game's own README.md has all three written out."
         }
       ]
     }

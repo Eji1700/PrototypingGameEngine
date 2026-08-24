@@ -1,4 +1,4 @@
-namespace TCModel.Table
+namespace Prototyping.Table
 
 /// What is on the terminal, so the same screen is not written over itself again. A value rather
 /// than a line count because a count cannot answer "is this already there", and it lives beside
@@ -22,10 +22,10 @@ module Screens =
         lazy
             (try
                 match System.Console.Title with
-                | "" -> "TCModel"
+                | "" -> "Proto"
                 | title -> title
              with _ ->
-                 "TCModel")
+                 "Proto")
 
     let marking wanted =
         try
