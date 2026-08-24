@@ -91,34 +91,93 @@ module Render =
         $"{Words.side place} has mustered {Words.units (Squad.mustered (Session.squadOf place play))}, where you cannot see."
 
 
+    // --- and the ground between them -----------------------------------------------------------
+
+    /// How many hexes across a row of ground is drawn. The width of the middle rank, so the band
+    /// reads as the same country the two formations are standing in.
+    [<Literal>]
+    let private Across = 4
+
+    /// The ground between the two lines: a row of hexes for each hex of it, quiet, and fading
+    /// towards the middle of the gap.
+    ///
+    /// These are not hexes anybody stands on and there is nothing in the rules that could put a
+    /// unit on one - so this is a hint rather than a map, and it is drawn thin on purpose. What it
+    /// buys is that "they are a long way apart" is something the board says, rather than something
+    /// only the line underneath it says.
+    let private ground play =
+        let deep = play.Engaged
+
+        // How far into the gap a row is, counted from whichever edge is nearer, so the fading is
+        // deepest in the middle. Four steps is as many as the page has classes for.
+        let faded index =
+            min index (deep - 1 - index) |> max 0 |> min 3
+
+        let row index =
+            "",
+            [ yield Speck.quiet (if index % 2 = 0 then "     " else "       ")
+
+              for step in 1..Across do
+                  // No tail on the last of them, so a row of ground leaves no trailing blanks in a
+                  // reader that prints it as text.
+                  yield
+                      Speck.quiet (if step = Across then "." else ".   ")
+                      |> Speck.doing [ "ground"; $"far-{faded index}" ] ]
+
+        Field("", [ for index in 0 .. deep - 1 -> row index ])
+
+    /// What the ground is, in words, and how to move it while there is still time to.
+    let private betweenThem play =
+        let said = Words.ground play.Engaged
+
+        let sentence =
+            string (System.Char.ToUpperInvariant said[0]) + said.Substring 1 + "."
+
+        if not (Session.isMustering play) then
+            sentence
+        elif play.Engaged <= Session.Closest then
+            sentence + " 'engage 3' would stand them three hexes apart."
+        else
+            sentence + " 'engage 1' brings them back together."
+
+
     // --- the boxes beside them ----------------------------------------------------------------
 
-    let private roster =
+    /// The six kinds and their three answers apiece. Anything that cannot get across the ground as
+    /// it stands is drawn quiet, so winding the lines apart puts the roster out one column at a
+    /// time in front of whoever is mustering.
+    let private roster play =
         let head =
             [ Scene.cell Tone.Quiet ""
               Scene.cell Tone.Quiet "front"
               Scene.cell Tone.Quiet "middle"
               Scene.cell Tone.Quiet "back"
               Scene.cell Tone.Quiet "vigour"
-              Scene.cell Tone.Quiet "quick" ]
+              Scene.cell Tone.Quiet "quick"
+              Scene.cell Tone.Quiet "reach" ]
+
+        let toned stance =
+            match stance with
+            | Idles -> Tone.Quiet
+            | Mends _ -> Tone.Plainly
+            | _ when not (Kinds.carries play.Engaged stance) -> Tone.Quiet
+            | _ -> Tone.Plainly
 
         let row kind =
             [ yield Scene.cell Tone.Plainly $"{(Kinds.code kind).PadRight 4}  {Kinds.name kind}"
 
               for rank in Formation.ranks do
                   let stance = Kinds.stance rank kind
-
-                  yield
-                      Scene.cell
-                          (match stance with
-                           | Idles -> Tone.Quiet
-                           | _ -> Tone.Plainly)
-                          (Words.briefly stance)
+                  yield Scene.cell (toned stance) (Words.briefly stance)
 
               yield Scene.cell Tone.Quiet (string (Kinds.vigour kind))
-              yield Scene.cell Tone.Quiet (string (Kinds.quick kind)) ]
+              yield Scene.cell Tone.Quiet (string (Kinds.quick kind))
+              yield Scene.cell Tone.Quiet (string (Kinds.furthest kind)) ]
 
         Aligned(head :: (Kinds.all |> List.map row))
+
+    let private rosterNote =
+        "Reach is how many hexes of ground a unit will put a blow across, at the furthest of its three ranks; mending never crosses the ground at all. Anything drawn quiet cannot reach the other line from where it is standing now."
 
     let private mustering beholder play =
         let squad = Session.squadOf (PlayerId.value beholder) play
@@ -135,7 +194,8 @@ module Render =
               | [] -> "Nothing of yours is on the field yet."
               | placed -> "Yours so far: " + String.concat ", " placed + "."
           )
-          Scene.quietly $"Five to a squad, and {Squad.Alike} of a kind at the most." ]
+          Scene.quietly $"Five to a squad, and {Squad.Alike} of a kind at the most."
+          Scene.quietly (betweenThem play) ]
 
     let private field play =
         let next =
@@ -156,8 +216,21 @@ module Render =
             | Fighting _ -> Scene.quietly "The battle is stopped - 'run' sets it going, 'step' takes one blow."
             | _ -> Scene.quietly "There is nothing left to fight."
 
+        // Who is standing in a field with nothing they can do about the other squad. Said here
+        // rather than a unit at a time in the log, because it is a fact about where the two lines
+        // are standing and it does not change from one blow to the next.
+        let outranged =
+            match Session.places |> List.map (fun place -> place, Session.outranged place play) with
+            | left when left |> List.forall (fun (_, many) -> many = 0) -> Blank
+            | left ->
+                left
+                |> List.filter (fun (_, many) -> many > 0)
+                |> List.map (fun (place, many) -> $"{Words.units many} of {Words.side place}")
+                |> String.concat " and "
+                |> fun said -> Scene.quietly $"{said} cannot put a blow across {Words.hexes play.Engaged} of ground."
+
         (Session.places |> List.map (fun place -> Scene.says (standing place play)))
-        @ [ next; clock ]
+        @ [ Scene.quietly (betweenThem play); outranged; next; clock ]
 
     let private onwards play =
         [ Scene.quietly "each of these is a line you could type"
@@ -171,6 +244,7 @@ module Render =
 
     let private verbs =
         [ "bowman b2", "muster a bowman on hex b2 (or 'muster bowman b2')"
+          "engage 3", "stand the two lines three hexes apart, while the muster is on"
           "why bowman", "what one of those does from each rank"
           "why m2", "what that hex is, and what it touches"
           "run, p", "set the battle going once both squads are mustered, and stop it again"
@@ -207,6 +281,16 @@ module Render =
               "THE RANKS"
               wrapped Notes.ranks
               ""
+              "THE GROUND"
+              wrapped
+                  $"The two lines are drawn up a hex apart, which is touching, and 'engage 3' while the muster is on stands them three hexes apart instead - out to {Session.Furthest}. The hexes in between are ground: nobody stands on them and nothing can be mustered there."
+              ""
+              wrapped
+                  "What the ground changes is who can do anything at all. Every blow has a reach, and a reach shorter than the ground between the lines lands nowhere. Hand to hand reaches one hex, so at anything but touching most of the roster stands and watches; a spear reaches two and so does a charge from the front rank; a bow carries four. Wind the lines far enough apart and neither can touch the other, and the game says so rather than standing there for twelve rounds."
+              ""
+              wrapped
+                  "A rank is who you are rather than how far away you are: standing at the back does not put you further from the other line, it changes what you do. That may be worth another look when a unit has stats of its own."
+              ""
               "THE BATTLE"
               wrapped
                   "Once both squads are mustered nobody is asked anything again. Every unit still up acts once a round, quickest first. A strike falls on the foremost rank of the other squad that still has anybody up, on whoever there has the most left in them; a shot ignores rank and finds whoever is nearest to falling; a mender puts back into whichever hex it touches is missing the most; and a warder steps in front of any blow aimed at a unit on a hex it touches."
@@ -233,7 +317,7 @@ module Render =
             | Mustering _ ->
                 Stack
                     [ Block(Blocks.muster, mustering beholder play @ [ Scene.noted margins Notes.ranks ])
-                      Block(Blocks.roster, [ roster ]) ]
+                      Block(Blocks.roster, [ roster play; Scene.noted margins rosterNote ]) ]
             | Fighting _
             | Ended _ ->
                 Beside
@@ -247,6 +331,14 @@ module Render =
                   [ Scene.says (if Session.isMustering play then curtain them play else standing them play)
                     formation beholder them play true ]
               )
+
+              // Between the two blocks rather than inside either, because the ground is neither
+              // squad's. It is the only thing on this screen with no box round it, which is about
+              // right for a piece of country - and the band runs down to your own block, since
+              // that is where the ground ends.
+              Scene.quietly (betweenThem play)
+              ground play
+
               Block(
                   Blocks.yours,
                   [ formation beholder you play false
@@ -315,7 +407,8 @@ module Render =
             Block(
                 Blocks.roster,
                 [ Scene.says $"'{asked}' is neither a kind of unit nor a hex. Ask about one by name - 'why bowman', or 'why m2'."
-                  roster ]
+                  roster play
+                  Scene.quietly rosterNote ]
             )
 
     let rules = Scene.rules help
@@ -323,11 +416,20 @@ module Render =
     let waiting = Scene.waiting Words.seated
 
 
+    /// The fading the ground is drawn with. A mood is a bare word the game made up, and this is
+    /// the stylesheet that game wrote - so the four steps of `far-` are the two halves of one
+    /// thing, and a terminal, which cannot be part-way through a colour, ignores them and gets a
+    /// quiet row of dots.
     let private sheet =
         """
 .grid { --cell: 3.6rem; }
 .grid .tile { padding: .2rem; font-size: .8rem; line-height: 1.2; text-align: center; }
 .beside { align-items: flex-start; }
+.field .speck.ground { letter-spacing: .1ch; }
+.speck.far-0 { opacity: .55; }
+.speck.far-1 { opacity: .42; }
+.speck.far-2 { opacity: .32; }
+.speck.far-3 { opacity: .24; }
 """
 
     let shell =

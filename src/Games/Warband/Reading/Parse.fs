@@ -48,6 +48,14 @@ module Parse =
         | [ "why"; what ]
         | [ "ask"; what ] -> Ok(Asking what)
 
+        | [ "engage"; hexes ]
+        | [ "ground"; hexes ] ->
+            match Commands.tryInt hexes with
+            | Some hexes -> Ok(Send(Make(Engage hexes)))
+            | None ->
+                Error
+                    $"'{hexes}' is not a distance. The lines stand from {Session.Closest} hex apart to {Session.Furthest} - 'engage 3'."
+
         | [ "muster"; what; where ]
         | [ what; where ] -> mustering what where
 

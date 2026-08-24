@@ -23,6 +23,11 @@ type Landed =
 
 type Happening =
     | Mustered of side: int * kind: Kind * hex: Hex
+
+    /// The ground between the two lines was wound out or in. Said to both squads: where the lines
+    /// stand is not either of theirs to keep quiet about.
+    | GroundSet of hexes: int
+
     | Joined
     | RoundOpened of round: int
     | Struck of Landed
@@ -30,6 +35,9 @@ type Happening =
     | Tended of side: int * from: Hex * at: Hex * kind: Kind * by: int * left: int
     | Untended of side: int * hex: Hex * kind: Kind
     | Idled of side: int * hex: Hex * kind: Kind
+
+    /// It had something to do and no way of doing it across that much ground.
+    | Unreached of side: int * hex: Hex * kind: Kind * reach: int
     | Started
     | Halted
     | GameEnded of Ending
@@ -44,6 +52,8 @@ type Refusal =
     | NotMustering
     | NoBattleYet
     | NoGivingUp
+    | NoSuchGround of said: int
+    | GroundIsSet
 
 type Notice =
     | Happened of Happening

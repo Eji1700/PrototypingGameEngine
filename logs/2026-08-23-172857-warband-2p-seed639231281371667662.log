@@ -1,0 +1,342 @@
+# A Warband game, written down move by move.
+#
+# Lines that are not comments are commands, exactly as they are typed at the
+# prompt. Undo and redo are moves like any other, so reading this file back
+# retraces the game as it was really played - second thoughts and all - and
+# arrives at the same position it was saved from.
+#
+# The deal line says how many were playing, what they were dealt from, and who
+# was in each seat - 'you' for a person here, a skill for the program. The format
+# line above it is the shape of the file itself, so a later engine reading this
+# one knows what it is looking at.
+#
+#   Warband replay <this file>
+
+format 1
+deal 2 639231281371667662 you steady
+
+#   1  turn 0, Squad One
+engage 3
+#      The lines are drawn up 3 hexes apart.
+
+#   2  turn 1, Squad One
+muster rider f2
+#      Squad One musters a rider at f2.
+
+#   3  turn 2, Squad Two
+muster warder f2
+#      Squad Two musters a warder at f2.
+
+#   4  turn 3, Squad One
+muster footman f1
+#      Squad One musters a footman at f1.
+
+#   5  turn 4, Squad Two
+muster rider f1
+#      Squad Two musters a rider at f1.
+
+#   6  turn 5, Squad One
+muster spearman m2
+#      Squad One musters a spearman at m2.
+
+#   7  turn 6, Squad Two
+muster spearman m3
+#      Squad Two musters a spearman at m3.
+
+#   8  turn 7, Squad One
+muster bowman b2
+#      Squad One musters a bowman at b2.
+
+#   9  turn 8, Squad Two
+muster bowman b2
+#      Squad Two musters a bowman at b2.
+
+#  10  turn 9, Squad One
+muster bowman b3
+#      Squad One musters a bowman at b3.
+
+#  11  turn 10, Squad Two
+muster bowman b3
+#      Squad Two musters a bowman at b3.
+#      Both squads are mustered. The battle begins, and nobody is asked anything more.
+
+#  12  turn 11, Squad One
+stop
+#      The battle is stopped. 'step' takes it a blow at a time.
+
+#  13  turn 12, Squad One
+step
+#      Round 1.
+#      Squad One's bowman at b2 shoots Squad Two's bowman at b2 for 2, and leaves it 5.
+#      Squad One's bowman at b2 shoots Squad Two's bowman at b2 for 2, and leaves it 3.
+#      Squad One's bowman at b2 shoots Squad Two's bowman at b2 for 2, and leaves it 1.
+
+#  14  turn 13, Squad One
+step
+#      Squad One's bowman at b3 shoots Squad Two's bowman at b2 for 2, and leaves it nothing.
+#      Squad Two's bowman at b2 falls.
+#      Squad One's bowman at b3 shoots Squad Two's bowman at b3 for 2, and leaves it 5.
+#      Squad One's bowman at b3 shoots Squad Two's bowman at b3 for 2, and leaves it 3.
+
+#  15  turn 14, Squad One
+step
+#      Squad Two's bowman at b3 shoots Squad One's bowman at b2 for 2, and leaves it 5.
+#      Squad Two's bowman at b3 shoots Squad One's bowman at b2 for 2, and leaves it 3.
+#      Squad Two's bowman at b3 shoots Squad One's bowman at b2 for 2, and leaves it 1.
+
+#  16  turn 15, Squad One
+step
+#      Round 2.
+#      Squad Two's bowman at b3 shoots Squad One's bowman at b2 for 2, and leaves it nothing.
+#      Squad One's bowman at b2 falls.
+#      Squad Two's bowman at b3 shoots Squad One's bowman at b3 for 2, and leaves it 5.
+#      Squad Two's bowman at b3 shoots Squad One's bowman at b3 for 2, and leaves it 3.
+
+#  17  turn 16, Squad One
+step
+#      Squad One's bowman at b3 shoots Squad Two's bowman at b3 for 2, and leaves it 1.
+#      Squad One's bowman at b3 shoots Squad Two's bowman at b3 for 2, and leaves it nothing.
+#      Squad Two's bowman at b3 falls.
+#      Squad One's bowman at b3 shoots for 2, and Squad Two's warder at f2 steps in front of it and is left with 12.
+
+#  18  turn 17, Squad One
+step
+#      Round 3.
+#      Squad One's bowman at b3 shoots for 2, and Squad Two's warder at f2 steps in front of it and is left with 10.
+#      Squad One's bowman at b3 shoots for 2, and Squad Two's warder at f2 steps in front of it and is left with 8.
+#      Squad One's bowman at b3 shoots Squad Two's warder at f2 for 2, and leaves it 6.
+
+#  19  turn 18, Squad One
+step
+#      Round 4.
+#      Squad One's bowman at b3 shoots Squad Two's warder at f2 for 2, and leaves it 4.
+#      Squad One's bowman at b3 shoots Squad Two's warder at f2 for 2, and leaves it 2.
+#      Squad One's bowman at b3 shoots Squad Two's warder at f2 for 2, and leaves it nothing.
+#      Squad Two's warder at f2 falls.
+
+#  20  turn 19, Squad One
+step
+#      Round 5.
+#      Squad One's bowman at b3 shoots Squad Two's spearman at m3 for 2, and leaves it 7.
+#      Squad One's bowman at b3 shoots Squad Two's spearman at m3 for 2, and leaves it 5.
+#      Squad One's bowman at b3 shoots Squad Two's spearman at m3 for 2, and leaves it 3.
+
+#  21  turn 20, Squad One
+step
+#      Round 6.
+#      Squad One's bowman at b3 shoots Squad Two's spearman at m3 for 2, and leaves it 1.
+#      Squad One's bowman at b3 shoots Squad Two's spearman at m3 for 2, and leaves it nothing.
+#      Squad Two's spearman at m3 falls.
+#      Squad One's bowman at b3 shoots Squad Two's rider at f1 for 2, and leaves it 10.
+
+#  22  turn 21, Squad One
+step
+#      Round 7.
+#      Squad One's bowman at b3 shoots Squad Two's rider at f1 for 2, and leaves it 8.
+#      Squad One's bowman at b3 shoots Squad Two's rider at f1 for 2, and leaves it 6.
+#      Squad One's bowman at b3 shoots Squad Two's rider at f1 for 2, and leaves it 4.
+
+#  23  turn 22, Squad One
+step
+#      Round 8.
+#      Squad One's bowman at b3 shoots Squad Two's rider at f1 for 2, and leaves it 2.
+#      Squad One's bowman at b3 shoots Squad Two's rider at f1 for 2, and leaves it nothing.
+#      Squad Two's rider at f1 falls.
+#      The game is over: Squad Two is broken, and Squad One holds the field.
+
+#  24  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  25  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  26  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  27  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  28  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  29  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  30  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  31  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  32  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  33  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  34  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  35  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  36  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  37  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  38  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  39  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  40  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  41  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  42  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  43  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  44  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  45  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  46  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  47  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  48  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  49  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  50  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  51  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  52  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  53  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  54  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  55  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  56  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  57  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  58  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  59  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  60  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  61  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  62  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  63  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  64  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  65  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  66  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  67  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  68  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  69  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  70  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  71  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+
+#  72  turn 23, Squad One
+step
+#      The game is over, so there is nothing left to play. Take a move back to look at it again, or restart.
+

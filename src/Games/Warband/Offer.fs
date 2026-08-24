@@ -100,6 +100,23 @@ module Offer =
           if Kinds.all |> List.exists (fun kind -> Kinds.vigour kind < 1) then
               yield "a kind of unit that is down before the battle starts"
 
+          if Session.Closest < 1 || Session.Furthest < Session.Closest then
+              yield $"ground running from {Session.Closest} to {Session.Furthest} hexes, which is no range at all"
+
+          if not (Session.groundHolds Session.dealt.Engaged) then
+              yield $"a deal standing the lines {Words.hexes Session.dealt.Engaged} apart, which is off the range they may take"
+
+          // A kind that cannot reach across the ground a game is dealt at is a kind nobody would
+          // ever muster, which is a hole in the roster rather than a choice in it.
+          for kind in Kinds.all do
+              if
+                  not (
+                      Formation.ranks
+                      |> List.exists (fun rank -> Kinds.carries Session.Closest (Kinds.stance rank kind))
+                  )
+              then
+                  yield $"a {Kinds.name kind} that reaches nothing from any rank, even with the lines touching"
+
           if
               List.distinct (Kinds.all |> List.map Kinds.name) |> List.length
               <> List.length Kinds.all
@@ -149,7 +166,7 @@ module Offer =
           Rules = Render.rules
           Waiting = Render.waiting
           Marking = Ink.marking
-          Width = 76 }
+          Width = 84 }
 
 
     let playable: Playable<Move, Play, Notice> =

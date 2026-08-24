@@ -70,6 +70,12 @@ module Battle =
         match Kinds.stance hex.Rank unit.Kind with
         | Idles -> play, [ Idled(side, hex, unit.Kind) ]
 
+        // Before anything else about a blow: whether it gets there at all. At the hex of ground the
+        // lines are dealt at every reach on the roster is enough and this never fires, which is the
+        // point - the ground is a dial that starts turned all the way down.
+        | Strikes(_, _, reach)
+        | Shoots(_, _, reach) when reach < play.Engaged -> play, [ Unreached(side, hex, unit.Kind, reach) ]
+
         | Mends power ->
             match Squad.mostHurt (Formation.touches hex) mine with
             | None -> play, [ Untended(side, hex, unit.Kind) ]
@@ -77,8 +83,8 @@ module Battle =
                 let mine, by, left = Squad.mend where power mine
                 Session.withSquad side mine play, [ Tended(side, hex, where, hurt.Kind, by, left) ]
 
-        | Strikes(power, times)
-        | Shoots(power, times) ->
+        | Strikes(power, times, _)
+        | Shoots(power, times, _) ->
             let shot =
                 match Kinds.stance hex.Rank unit.Kind with
                 | Shoots _ -> true
@@ -102,14 +108,20 @@ module Battle =
         | [ _; _ ] -> Some Drawn
         | _ -> None
 
+    /// Which squad has more left standing, where either has.
+    let private stronger play =
+        let left place = Squad.left (Session.squadOf place play)
+
+        if left 1 > left 2 then Some 1
+        elif left 2 > left 1 then Some 2
+        else None
+
     /// How it is settled when neither squad broke: on what is left standing, and drawn if that is
     /// equal too.
     let private counted play =
-        let left place = Squad.left (Session.squadOf place play)
-
-        if left 1 > left 2 then Outlasted 1
-        elif left 2 > left 1 then Outlasted 2
-        else Drawn
+        match stronger play with
+        | Some winner -> Outlasted winner
+        | None -> Drawn
 
     let private ended ending play told =
         { play with Stage = Ended ending }, told @ [ GameEnded ending ]
@@ -118,10 +130,16 @@ module Battle =
     /// here rather than costing a beat of its own, and a unit felled before its turn came round is
     /// stepped over the same way - so every beat of the clock is something happening, and a board
     /// that has nothing to draw is never drawn.
+    ///
+    /// A round is opened only if there is somebody who can reach somebody. Two lines wound far
+    /// enough apart cannot touch each other at all, and twelve rounds of saying so one unit at a
+    /// time is a hundred and twenty beats that say nothing - so it is said once, at the top.
     let rec private onwards fight play told =
         match fight.Waiting with
         | [] ->
-            if fight.Round >= Session.Rounds then
+            if not (Session.anythingReaches play) then
+                ended (Stood(stronger play)) play told
+            elif fight.Round >= Session.Rounds then
                 ended (counted play) play told
             else
                 let round = fight.Round + 1

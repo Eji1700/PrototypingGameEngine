@@ -154,6 +154,9 @@ let private refusals =
       "Cascade NoneLeft", TCModel.Cascade.Words.said (TCModel.Cascade.Refused TCModel.Cascade.NoneLeft)
       "Life NothingLeft", TCModel.Life.Words.said (TCModel.Life.Refused TCModel.Life.NothingLeft)
 
+      for n in 0..2 do
+          "Warband NoSuchGround", TCModel.Warband.Words.said (TCModel.Warband.Refused(TCModel.Warband.NoSuchGround n))
+
       // Warband counts a kind in its own plural, so this one is read back once for every kind
       // there is rather than at nought, one and two.
       for kind in TCModel.Warband.Kinds.all do
@@ -186,9 +189,23 @@ let private said =
           TCModel.Life.Words.said (TCModel.Life.Happened(TCModel.Life.Ran(n, n, n)))
           TCModel.Life.Words.said (TCModel.Life.Happened(TCModel.Life.Swept n))
           TCModel.Snake.Words.said (TCModel.Snake.Happened(TCModel.Snake.Ate(Seat.at 1, n, n)))
-          TCModel.Warband.Words.atLength (TCModel.Warband.Strikes(n, n))
-          TCModel.Warband.Words.atLength (TCModel.Warband.Shoots(n, n))
-          TCModel.Warband.Words.ending (TCModel.Warband.Outlasted n) ]
+          TCModel.Warband.Words.atLength (TCModel.Warband.Strikes(n, n, n))
+          TCModel.Warband.Words.atLength (TCModel.Warband.Shoots(n, n, n))
+          TCModel.Warband.Words.ending (TCModel.Warband.Outlasted n)
+          TCModel.Warband.Words.ground n
+          TCModel.Warband.Words.said (TCModel.Warband.Happened(TCModel.Warband.GroundSet n))
+
+          TCModel.Warband.Words.said (
+              TCModel.Warband.Happened(
+                  TCModel.Warband.Unreached(
+                      1,
+                      { Rank = TCModel.Warband.Front
+                        Step = 1 },
+                      TCModel.Warband.Footman,
+                      n
+                  )
+              )
+          ) ]
 
 report "nor anything a game reads out as it plays" [] (said |> List.filter disagrees)
 

@@ -6,6 +6,11 @@ type Move =
     /// Put a unit of that kind on that hex. The only move anybody makes in this game.
     | Muster of kind: Kind * hex: Hex
 
+    /// Wind the ground between the two lines out or in, in hexes. The ground is not either squad's,
+    /// so either of them may say while the muster is on and the last word stands - which is a thing
+    /// to take out again the day a battle is dealt from a scenario rather than agreed at the table.
+    | Engage of hexes: int
+
     /// One blow, asked for by hand. What the clock does of its own accord, for a console with no
     /// clock and for anybody who would rather take the battle a blow at a time.
     | Step
@@ -62,6 +67,14 @@ module Turn =
 
         | Mustering side, Muster(kind, hex) -> mustering side kind hex play
         | Fighting _, Muster _ -> None, [ Refused NotMustering ]
+
+        | Mustering _, Engage hexes when not (Session.groundHolds hexes) -> None, [ Refused(NoSuchGround hexes) ]
+        | Mustering _, Engage hexes when hexes = play.Engaged -> None, []
+        | Mustering _, Engage hexes -> Some { play with Engaged = hexes }, [ Happened(GroundSet hexes) ]
+
+        // The lines are formed. Nothing walks them towards each other yet, and a game that let the
+        // ground move under a battle would be a different game from the one that was mustered for.
+        | Fighting _, Engage _ -> None, [ Refused GroundIsSet ]
 
         | Mustering _, Step -> None, [ Refused NoBattleYet ]
 

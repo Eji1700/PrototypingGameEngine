@@ -1,7 +1,7 @@
 # Warband
 
-Two squads of five, mustered onto ten hexes apiece out of each other's sight, and then a battle
-neither of you plays. Two players.
+Two squads of five, mustered onto ten hexes apiece out of each other's sight, a stretch of ground
+between them, and then a battle neither of you plays. Two players.
 
 ```
 dotnet run -- warband play 2                    # two people at one keyboard
@@ -11,7 +11,7 @@ dotnet run -- warband play 2 --rival steady     # or one, against the machine
 Everything you decide, you decide before the fighting starts. There is no chance in the battle
 anywhere: the same two musters fight the same battle every time, blow for blow. That is not an
 economy, it is the game — it is why the muster is hidden, and why what a squad is worth is entirely
-a question of where each of the five is standing.
+a question of where each of the five is standing, and of how far off the other line is.
 
 ## The formation
 
@@ -41,6 +41,7 @@ hexes empty and the log says only that a muster happened.
 
 ```
 bowman b2         a bowman on b2 (or 'muster bowman b2')
+engage 3          stand the two lines three hexes apart
 why bowman        what one does from each rank
 why m2            what that hex is and what it touches
 ```
@@ -54,14 +55,19 @@ its warder covering six hexes instead of three.
 Where a unit stands is what it does. This is the whole game, and it is the one thing every kind
 below is an answer to.
 
-| | front | middle | back | vigour | quick |
-| --- | --- | --- | --- | --- | --- |
-| **Footman** | strike 3 ×2 | strike 3 | strike 1 | 10 | 3 |
-| **Spearman** | strike 5 | strike 3 ×2 | strike 1 | 9 | 3 |
-| **Bowman** | strike 1 | shoot 2 ×2 | shoot 2 ×3 | 7 | 4 |
-| **Rider** | strike 3 ×3 | strike 3 | *nothing* | 12 | 5 |
-| **Mender** | strike 1 | mend 2 | mend 4 | 6 | 2 |
-| **Warder** | strike 2 ×2 | strike 2 | strike 1 | 14 | 1 |
+| | front | middle | back | vigour | quick | reach |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Footman** | strike 3 ×2 | strike 3 | strike 1 | 10 | 3 | 1 |
+| **Spearman** | strike 5 | strike 3 ×2 | strike 1 | 9 | 3 | 2 |
+| **Bowman** | strike 1 | shoot 2 ×2 | shoot 2 ×3 | 7 | 4 | 4 |
+| **Rider** | strike 3 ×3 | strike 3 | *nothing* | 12 | 5 | 2 |
+| **Mender** | strike 1 | mend 2 | mend 4 | 6 | 2 | 1 |
+| **Warder** | strike 2 ×2 | strike 2 | strike 1 | 14 | 1 | 1 |
+
+Reach is per stance rather than per kind, and the column is the furthest of the three: a rider
+charges across two hexes from the front rank and only one from the middle. `why rider` reads them
+out rank by rank. With the lines touching — where a game is dealt — every reach on the roster is
+enough, and none of them bites.
 
 - A **footman** is the plain answer and wants the front.
 - A **spearman** reaches past the rank in front of it, and is the one kind that would rather be in
@@ -72,6 +78,55 @@ below is an answer to.
 - A **mender** is the only thing that puts anything back, and only into hexes it touches.
 - A **warder** takes blows meant for its neighbours wherever it stands. What the rank changes for a
   warder is how many neighbours it has.
+
+## The ground
+
+The two formations are not drawn up on top of each other. There are hexes between them, and how
+many is the **engagement**: one hex is the lines touching, and `engage 3` while the muster is on
+stands them three hexes apart instead, out to nine.
+
+```
+     b1  b2  b3          Squad Two, drawn facing you
+   m1  m2  m3  m4
+     f1  f2  f3
+
+     .   .   .   .       the ground - three hexes of it, fading
+   .   .   .   .
+     .   .   .   .
+
+     f1  f2  f3          yours
+   m1  m2  m3  m4
+     b1  b2  b3
+```
+
+The hexes in between are ground: nobody stands on one and nothing in the rules could put a unit
+there, so the board draws them thin and fading rather than as a map. They are there to say *how far*
+and nothing else.
+
+What the ground changes is **who can do anything at all**. Every blow has a reach, and a reach
+shorter than the ground between the lines lands nowhere.
+
+| ground | what still works |
+| --- | --- |
+| 1 — touching | everything. This is where a game is dealt |
+| 2 | the spear, the charge from the front rank, and the bow |
+| 3 – 4 | the bow, and nothing else. An archery duel |
+| 5 – 9 | nothing. Neither line can touch the other, and the game says so at once rather than standing there for twelve rounds |
+
+Menders are the exception, and not really an exception: mending happens inside your own formation,
+so no amount of ground stops it. A unit that cannot reach is left out of the round entirely rather
+than handed a beat to say so in — the roster greys it out and the field box counts it, which is
+where a standing fact belongs.
+
+**A rank is who you are, not how far away you are.** Standing at the back does not add to the
+crossing; it changes what you do. Counting the ranks into the distance as well would be the more
+unified model and it is the obvious thing to try when a unit gets stats of its own — it is left
+alone for now because it would quietly rewrite the roster above, and the roster is the part that is
+going to change anyway.
+
+Either squad may set the ground while the muster is on and the last word stands. That is a
+placeholder: the day a battle is dealt from a scenario rather than agreed at the table, the ground
+comes with the scenario and `engage` goes.
 
 ## The battle
 
@@ -90,8 +145,8 @@ Once both squads are mustered nobody is asked anything again. It runs on a clock
 
 A tie on quickness goes to the first squad in odd rounds and the second in even ones, so neither is
 always the one that swings first. A squad with nobody left up is broken and the other holds the
-field. If neither breaks in twelve rounds — which takes two squads of warders and menders — it is
-settled on what is left standing.
+field. If neither breaks in twelve rounds — two squads of warders and menders will do it, and so
+will an archery duel at three hexes — it is settled on what is left standing.
 
 There is no resigning a battle. It was decided the moment it was joined, and the game says so
 rather than pretending otherwise; `undo` walks back into the muster if you would rather try
@@ -102,11 +157,11 @@ something else.
 | | |
 | --- | --- |
 | [Rules/Formation.fs](Rules/Formation.fs) | The ten hexes, and what touches what. The only file that knows this is not a square grid |
-| [Rules/Kinds.fs](Rules/Kinds.fs) | The six kinds, as three answers apiece — one for each rank |
+| [Rules/Kinds.fs](Rules/Kinds.fs) | The six kinds, as three answers apiece — one for each rank — and how far each answer reaches |
 | [Rules/Squads.fs](Rules/Squads.fs) | A squad, and every question a blow has to ask of one before it can be aimed |
-| [Rules/Session.fs](Rules/Session.fs) | The state: a muster, a battle, or an ending — and the order a round acts in |
+| [Rules/Session.fs](Rules/Session.fs) | The state: a muster, a battle, or an ending — the ground between the lines, and the order a round acts in |
 | [Rules/Events.fs](Rules/Events.fs) | Everything the game can say happened, and everything it can refuse |
-| [Rules/Battle.fs](Rules/Battle.fs) | One blow, and everything that follows from it. Nobody plays this |
+| [Rules/Battle.fs](Rules/Battle.fs) | One blow, whether it gets there, and everything that follows from it. Nobody plays this |
 | [Rules/Turn.fs](Rules/Turn.fs) | The moves and the fold |
 | [Rules/Words.fs](Rules/Words.fs) | Every word a player reads — and the one place anything is hidden |
 | [Rules/Rival.fs](Rules/Rival.fs) | The machine, which only ever musters |

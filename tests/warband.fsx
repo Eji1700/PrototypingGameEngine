@@ -109,13 +109,32 @@ report
          |> List.forall (fun rank -> Kinds.stance rank kind = Kinds.stance Front kind))
      |> List.map Kinds.name)
 
-report "a rider strikes three times from the front" (Strikes(3, 3)) (Kinds.stance Front Rider)
+report "a rider strikes three times from the front" (Strikes(3, 3, 2)) (Kinds.stance Front Rider)
 
 report "and has nowhere to ride from the back" Idles (Kinds.stance Back Rider)
 
-report "a bowman is the other way about" (Shoots(2, 3)) (Kinds.stance Back Bowman)
+report "a bowman is the other way about" (Shoots(2, 3, 4)) (Kinds.stance Back Bowman)
 
-report "and is worth almost nothing in front of everybody" (Strikes(1, 1)) (Kinds.stance Front Bowman)
+report "and is worth almost nothing in front of everybody" (Strikes(1, 1, 1)) (Kinds.stance Front Bowman)
+
+report
+    "how far each kind reaches at the furthest of its three ranks"
+    [ "footman", 1
+      "spearman", 2
+      "bowman", 4
+      "rider", 2
+      "mender", 1
+      "warder", 1 ]
+    (Kinds.all |> List.map (fun kind -> Kinds.name kind, Kinds.furthest kind))
+
+report
+    "and with the lines touching, every one of them can reach from somewhere"
+    []
+    (Kinds.all
+     |> List.filter (fun kind ->
+         Formation.ranks
+         |> List.forall (fun rank -> not (Kinds.carries Session.Closest (Kinds.stance rank kind))))
+     |> List.map Kinds.name)
 
 
 // --- the muster -----------------------------------------------------------------------------------
@@ -193,19 +212,24 @@ let private squadOf units =
     |> List.map (fun (kind, where, left) -> at where, { Kind = kind; Left = left })
     |> Map.ofList
 
+let private fighting engaged waiting mine theirs =
+    { Squads = Map.ofList [ 1, squadOf mine; 2, squadOf theirs ]
+      Stage = Fighting { Round = 1; Waiting = waiting }
+      Engaged = engaged
+      Running = true
+      Turn = 0 }
+
 /// What one unit does when its turn comes round, and nothing else: the order has that one unit in
 /// it and stops.
-let private acting side where mine theirs =
-    let play =
-        { Squads = Map.ofList [ 1, squadOf mine; 2, squadOf theirs ]
-          Stage =
-            Fighting
-                { Round = 1
-                  Waiting = [ (side, at where) ] }
-          Running = true
-          Turn = 0 }
+let private actingAt engaged side where mine theirs =
+    Turn.asked Step (fighting engaged [ (side, at where) ] mine theirs)
+    |> snd
+    |> List.map Words.said
 
-    Turn.asked Step play |> snd |> List.map Words.said
+/// The same with the two lines touching, which is where a game is dealt and where every reach on
+/// the roster is enough - so nothing below is about the ground unless it says so.
+let private acting side where mine theirs =
+    actingAt Session.Closest side where mine theirs
 
 report
     "a rider in the back rank can do nothing, and says so rather than passing quietly"
@@ -258,6 +282,107 @@ report
     (acting 1 "b1" [ Mender, "b1", 6; Footman, "m1", 0 ] [ (Footman, "f1", 10) ])
 
 
+// --- the ground between the two lines ---------------------------------------------------------------
+
+report "a game is dealt with the lines touching" 1 (Model.state dealt).Engaged
+
+report
+    "and nothing on the roster is held back by that, which is the point of dealing there"
+    []
+    (Kinds.all
+     |> List.collect (fun kind ->
+         Formation.ranks
+         |> List.map (fun rank -> kind, rank, Kinds.stance rank kind)
+         |> List.filter (fun (_, _, stance) ->
+             match stance with
+             | Mends _
+             | Idles -> false
+             | stance -> not (Kinds.carries Session.Closest stance))
+         |> List.map (fun (kind, rank, _) -> $"{Kinds.name kind} from the {Words.rank rank} rank")))
+
+report
+    "the ground is set by a move, and both squads are told what it was set to"
+    (3, [ "The lines are drawn up 3 hexes apart." ])
+    (let model = played [ Engage 3 ]
+     (standing model).Engaged, model.Log |> List.map (Playable.toldSeenBy warband (Seat.at 2)))
+
+report
+    "setting it to where it already is is not a move at all"
+    (Timeline.movesMade dealt.Timeline)
+    (Timeline.movesMade (played [ Engage Session.Closest ]).Timeline)
+
+report
+    "ground off the range is refused in words"
+    (Session.Closest,
+     [ $"0 hexes of ground? The lines are drawn up somewhere from 1 hex apart - touching - to {Session.Furthest} hexes." ])
+    (let model = played [ Engage 0 ]
+     (standing model).Engaged, lastSaid model)
+
+report
+    "and it will not move once the lines are formed"
+    (Session.Closest, true)
+    (let model = played (woven strong feeble @ [ Engage 4 ])
+     (standing model).Engaged, (lastSaid model |> List.head).Contains "not moving now")
+
+report
+    "a blow that will not carry that far lands nowhere, and says so"
+    [ "Squad One's footman at f1 reaches 1 hex and the other line is further off than that, so nothing of it lands." ]
+    (actingAt 3 1 "f1" [ (Footman, "f1", 10) ] [ (Footman, "f1", 10) ])
+
+report
+    "a spear carries a hex further than a sword, which is the only melee that does"
+    [ "Squad One's spearman at f2 strikes Squad Two's footman at f1 for 5, and leaves it 5." ]
+    (actingAt 2 1 "f2" [ (Spearman, "f2", 9) ] [ (Footman, "f1", 10) ])
+
+report
+    "and a bow carries to four - three shots of it, from the back rank"
+    "Squad One's bowman at b2 shoots Squad Two's footman at f1 for 2, and leaves it 8."
+    (List.head (actingAt 4 1 "b2" [ (Bowman, "b2", 7) ] [ (Footman, "f1", 10) ]))
+
+// The mender is in the order and the four that cannot reach are not: mending happens inside your
+// own formation, so no amount of ground between the lines stops it.
+report
+    "a unit that cannot reach is left out of the round rather than given a beat to say so in"
+    ([ 1, "b2"; 2, "b1" ], 4)
+    (let play =
+        fighting
+            3
+            []
+            [ Bowman, "b2", 7
+              Footman, "f1", 10
+              Rider, "f2", 12
+              Spearman, "m2", 9
+              Warder, "m3", 14 ]
+            [ (Mender, "b1", 6) ]
+
+     Session.order 1 play |> List.map (fun (place, hex) -> place, Formation.name hex), Session.outranged 1 play)
+
+report
+    "two lines neither of them can reach across are told so at once, rather than standing there for twelve rounds"
+    (Some(Stood(Some 2)), 1)
+    (let play =
+        fighting 6 [] [ (Footman, "f1", 10) ] [ Footman, "f1", 10; Footman, "f3", 10 ]
+
+     let after, _ = Turn.asked Beat play
+
+     (after
+      |> Option.bind (fun play ->
+          match play.Stage with
+          | Ended ending -> Some ending
+          | _ -> None)),
+     (after |> Option.map (fun play -> play.Turn) |> Option.defaultValue 0))
+
+report
+    "the board draws a row of ground for every hex of it"
+    (1, 5)
+    (let rows model =
+        (plain.Board Margins.all (Seat.at 1) model).Split '\n'
+        |> Array.filter (fun line -> line.Trim().StartsWith "." && line.Contains ".   .")
+        |> Array.length
+
+     rows dealt, rows (played [ Engage 5 ]))
+
+
 // --- and how a battle ends -----------------------------------------------------------------------
 
 /// Both squads mustered, then beaten out to the end. No clock is involved anywhere: a beat is a
@@ -289,6 +414,7 @@ report
     (let play =
         { Squads = Map.ofList [ 1, squadOf [ (Warder, "f1", 3) ]; 2, squadOf [ (Warder, "f1", 9) ] ]
           Stage = Fighting { Round = Session.Rounds; Waiting = [] }
+          Engaged = Session.Closest
           Running = true
           Turn = 0 }
 
@@ -305,6 +431,7 @@ report
     (let play =
         { Squads = Map.ofList [ 1, squadOf [ (Warder, "f1", 9) ]; 2, squadOf [ (Warder, "f1", 9) ] ]
           Stage = Fighting { Round = Session.Rounds; Waiting = [] }
+          Engaged = Session.Closest
           Running = true
           Turn = 0 }
 
@@ -379,7 +506,8 @@ report
 Conforms.against
     warband
     2
-    [ "rider f2"
+    [ "engage 2"
+      "rider f2"
       "muster warder m2"
       "bowman b2"
       "warder m2"
