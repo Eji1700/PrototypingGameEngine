@@ -60,16 +60,22 @@ let private tell rings posts =
         | Screen _
         | Seated _ -> None)
 
-let rec private loop rings sitters said solo =
+/// Playing a game of turns at this keyboard.
+///
+/// Two ways in, and `at` is why they are one function. A game that offers rows for where it stands
+/// is *steered* - the arrows and w/a/s/d walk them, Enter takes the marked one, and Enter with a
+/// line underway sends the line instead, so the prompt is never taken away. A game that offers
+/// none, or a console that cannot read a key at all, gets the loop it always had.
+///
+/// `at` is where the mark had got to, carried across a move on purpose: every line rebuilds the
+/// screen from the state it left behind, and a mark that went back to the top each time would make
+/// walking one row through its choices impossible.
+let rec private loop rings sitters said at solo =
     let show lines =
         for line in lines do
             printf "%s" (line + Environment.NewLine)
 
-    Solo.board Keyboard solo |> Option.iter (printf "%s")
-    show said
-    printf "%s" (if Solo.isOver solo then "(over) > " else "> ")
-
-    let heard line =
+    let heard at line =
         let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
         let answered = tell rings posts @ errand (Solo.game solo) sitters doing
 
@@ -78,11 +84,26 @@ let rec private loop rings sitters said solo =
             show answered
             Solo.model next
         | Carrying
-        | Keeping _ -> loop rings sitters answered next
+        | Keeping _ -> loop rings sitters answered at next
 
-    match Console.ReadLine() with
-    | null -> heard "quit"
-    | line -> heard line
+    match (if Screens.steering () then Solo.steering Keyboard solo else None) with
+    | Some screen ->
+        let says = Solo.painting Keyboard solo |> Option.defaultValue id
+
+        Screens.cleared ()
+
+        match Screens.asking says (String.concat Environment.NewLine said) screen at with
+        | None, at -> heard at "quit"
+        | Some line, at -> heard at line
+
+    | None ->
+        Solo.board Keyboard solo |> Option.iter (printf "%s")
+        show said
+        printf "%s" (if Solo.isOver solo then "(over) > " else "> ")
+
+        match Console.ReadLine() with
+        | null -> heard at "quit"
+        | line -> heard at line
 
 /// Playing a game that runs on a clock at this keyboard, drawn over itself as it goes. The loop
 /// waits for a keypress, the next frame or the next beat, whichever comes first; holding stops the
@@ -230,7 +251,7 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             (opened + pulse.Every(Model.state (Solo.model solo)))
             solo
     else
-        loop rings sitters said solo
+        loop rings sitters said 0 solo
 
 // Annotated because `Playable` and `View` both carry a field called `Rules`, and with the two of
 // them now in different assemblies it is the view's - a string - that a bare `game.Rules` finds.
@@ -429,6 +450,7 @@ let private starting settled choice =
     | Menu.Sitting _
     | Menu.Reaching _
     | Menu.Continuing
+    | Menu.Working
     | Menu.Rules
     | Menu.Looking _
     | Menu.Options
@@ -461,6 +483,31 @@ and private answering settled word sitters reach at line asked =
         | Ok opening -> Some opening
         | Error problem -> again sitters reach problem
     | Error problem -> again sitters reach problem
+
+/// The game's own section of the menu, if it has one.
+///
+/// `Menu.choose` is deliberately not consulted here. At a bench, the game's words come first and
+/// the menu's do not get in the way - otherwise a bench with a row called '3' would deal a game of
+/// three instead, and every word a bench wanted would be one the menu had not already taken. The
+/// four that navigate are answered here and by name, so nothing a game does can take them away.
+let rec private working settled (aside: Aside) at said =
+    match Screens.asking settled.View.Says said (aside.Screen()) at with
+    | None, _ -> Some(Done 0)
+    | Some line, at ->
+
+    let again = working settled aside at
+
+    match Commands.lowered line with
+    | [] -> again ""
+    | [ "back" ]
+    | [ "menu" ] -> None
+    | [ "quit" ]
+    | [ "exit" ]
+    | [ "q" ] -> Some(Done 0)
+    | _ ->
+        match aside.Read line with
+        | Ok said -> again said
+        | Error problem -> again problem
 
 let rec private taking settled at said =
     let game = settled.Game
@@ -508,6 +555,13 @@ let rec private welcome settled behind at said =
         match taking settled 0 "" with
         | Some opening -> opening
         | None -> again ()
+    | Ok Menu.Working ->
+        match game.Aside with
+        | None -> again ()
+        | Some aside ->
+            match working settled aside 0 "" with
+            | Some opening -> opening
+            | None -> again ()
     | Ok(Menu.Sitting(sitters, asked)) ->
         let word = Reach.minted ()
 
@@ -540,7 +594,7 @@ let private play settled sitters stamp model =
 
     match game.Pulse with
     | Some pulse -> racing settled.Rings sitters said pulse solo |> ignore
-    | None -> loop settled.Rings sitters said solo |> ignore
+    | None -> loop settled.Rings sitters said 0 solo |> ignore
 
     0
 

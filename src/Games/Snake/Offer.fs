@@ -187,6 +187,12 @@ module Offer =
 
                       Pressed = pressed }
 
+          // Nothing but a board on offer, so no section of the menu belongs to this game.
+          Aside = None
+
+          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
+          Steering = fun _ _ _ -> None
+
           Page = Render.shell pace
           Views = Readers.views (scenes pace) }
 

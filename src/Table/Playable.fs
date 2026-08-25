@@ -44,6 +44,36 @@ type Seated<'Move, 'State> =
     { Skill: string
       Plays: Machine<'Move, 'State> }
 
+/// A section of the main menu that belongs to the game rather than to the table.
+///
+/// Everything else a game offers happens at a board, between players, inside a game. This is the
+/// one thing that does not: a bench a player works at with nobody else connected and nothing dealt,
+/// whose results are theirs to keep between games. The table draws the screen and carries the
+/// lines; **whatever the section remembers, the game remembers** - which is why there is no state
+/// in this type. A `Playable` carrying a type parameter for it would put one on every game that has
+/// no bench at all, which is seven of the eight.
+///
+/// `Screen` is a function rather than a value because the screen is drawn again after every line,
+/// and a bench that could not show what the last line did to it would be a bench nobody could work
+/// at.
+[<NoComparison; NoEquality>]
+type Aside =
+    {
+        /// What a player types to open it, and what the menu row sends. One lower-case word, and
+        /// not one the menu already answers to.
+        Word: string
+
+        Says: string
+        Does: string
+
+        Screen: unit -> Keys.Screen
+
+        /// A line typed at the bench. `Ok` says what to print under the screen, which may be
+        /// nothing; `Error` is a complaint, in words. The lines the menu itself answers to - back,
+        /// quit and the rest - are read before this is reached.
+        Read: string -> Result<string, string>
+    }
+
 [<NoComparison; NoEquality>]
 type Playable<'Move, 'State, 'Notice> =
     {
@@ -82,6 +112,24 @@ type Playable<'Move, 'State, 'Notice> =
         Seating: uint64 -> string option list -> 'State -> (PlayerId * Seated<'Move, 'State>) list
 
         Pulse: Pulse<'Move, 'State> option
+
+        /// A section of the main menu the game owns, if it wants one. `None` for a game whose whole
+        /// offer is a board.
+        Aside: Aside option
+
+        /// Rows a player may steer at the board, where this game has any for where it stands.
+        ///
+        /// A row stands for a line the game already reads - exactly as `Pulse.Pressed` does for a
+        /// game on a clock - so nothing can be picked that could not have been typed, and a game
+        /// driven by the arrow keys writes the same record as one driven by hand. Enter with nothing
+        /// typed takes the marked row; Enter with a line underway sends the line, so the prompt is
+        /// never taken away from anybody.
+        ///
+        /// The board as this table drew it is handed in, with the seat it was drawn for, so a game
+        /// may put it above the rows, replace it, or ignore it - the table has already chosen the
+        /// view and the margins, and this does not second-guess either. `None` means what it always
+        /// meant: draw the board and read a line.
+        Steering: string -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Screen option
 
         Page: Shell
 

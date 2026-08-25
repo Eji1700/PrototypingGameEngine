@@ -403,6 +403,135 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                       | Error problem -> yield $"{key} presses '{line}', which does not read: {problem}" ]
 
 
+    // --- the section of the menu the game owns, if it has one ------------------------------------------------
+
+    // A bench is the one thing a game offers that is not a board, so it is the one thing here that is
+    // checked without a game being dealt. What it must not do is take a word the menu needs, draw
+    // nothing, or swallow a line it does not understand - a bench that answered everything would be
+    // one nobody could type 'back' at.
+    match game.Aside with
+    | None -> ()
+    | Some aside ->
+
+        report
+            "the section of the menu it owns says what it is called, and by a word the menu has left"
+            []
+            [ yield! blank "a section with no word to open it" aside.Word
+              yield! blank "a section with no name" aside.Says
+
+              if aside.Word <> aside.Word.ToLowerInvariant() then
+                  yield $"a word with capitals in it, which is typed at a menu: '{aside.Word}'"
+
+              if aside.Word.Contains " " then
+                  yield $"a word with a space in it: '{aside.Word}'"
+
+              // The menu answers to all of these itself, and a game that took one would take it away
+              // from every player at every screen.
+              for taken in
+                  [ "quit"
+                    "exit"
+                    "q"
+                    "back"
+                    "menu"
+                    "rules"
+                    "help"
+                    "?"
+                    "replay"
+                    "continue"
+                    "resume"
+                    "saved"
+                    "seats"
+                    "reaches"
+                    "play"
+                    "host"
+                    "vs"
+                    "serve"
+                    "view"
+                    "settings"
+                    "colours"
+                    "colors"
+                    "options"
+                    "join"
+                    "players" ] do
+                  if aside.Word = taken then
+                      yield $"a section opened by '{taken}', which is a word the menu already answers to" ]
+
+        report
+            "and draws itself, and is drawn again after a line it did not understand"
+            []
+            [ let drawn = aside.Screen()
+
+              yield! blank "a section that draws no title" drawn.Title
+
+              if List.isEmpty drawn.Rows && List.isEmpty drawn.Prose then
+                  yield "a section with nothing on it at all"
+
+              for row in drawn.Rows do
+                  if row.Says = "" then yield "a row on the section with nothing on it"
+
+              // Drawn twice with nothing done between: a screen read off state the game keeps has to
+              // come back the same when the state has not moved, or nothing about it is repeatable.
+              if (aside.Screen()).Title <> drawn.Title then
+                  yield "a section that draws a different title every time it is drawn"
+
+              match aside.Read "certainly not a line this bench knows" with
+              | Ok _ -> yield "a section that took a line nobody could have meant, rather than saying so"
+              | Error problem -> yield! blank "a section that refuses a line without saying why" problem ]
+
+
+    // --- rows steered at the board ------------------------------------------------------------------------------
+
+    // The same bargain `Pulse.Pressed` makes: a row stands for a line the game already reads, so
+    // nothing can be picked that could not have been typed, and a game driven by the arrow keys
+    // writes the same record as one driven by hand. Checked at every state the suite's lines walk
+    // through, since a game may offer rows at one phase and none at another.
+    report
+        "and nothing can be picked at the board that could not have been typed"
+        []
+        [ for shown, model in states do
+              for place in 1 .. game.Rules.Seats(Model.state model) do
+                  let seat = Seat.at place
+                  let drawn = plain.Board Margins.all seat model
+
+                  match game.Steering drawn seat model with
+                  | None -> ()
+                  | Some screen ->
+                      let where = $"{shown}, seat {place}"
+
+                      yield! blank $"{where}: a screen steered at the board with no title" screen.Title
+
+                      if List.isEmpty screen.Rows then
+                          yield $"{where}: a screen offered to be steered with no rows on it"
+
+                      for row in screen.Rows do
+                          yield! blank $"{where}: a row with nothing on it" row.Says
+
+                          let lines =
+                              [ match row.Pick with
+                                | Keys.Sends line -> yield line
+                                | Keys.Types _
+                                | Keys.Opens _ -> ()
+
+                                match row.Turns with
+                                | Some turn -> yield! [ turn -1; turn 1 ]
+                                | None -> () ]
+
+                          for line in lines do
+                              match Playable.read game line with
+                              | Ok(Send _) -> ()
+                              | Ok _ -> yield $"{where}: '{row.Says}' picks '{line}', which is not a move"
+                              | Error problem -> yield $"{where}: '{row.Says}' picks '{line}', which does not read: {problem}"
+
+                      // Escape backs out of the outermost screen by sending this, so it has to read
+                      // as well - a board somebody cannot get out of is worse than one with no rows.
+                      match screen.Backs with
+                      | None -> ()
+                      | Some line ->
+                          match Playable.read game line with
+                          | Ok _ -> ()
+                          | Error problem -> yield $"{where}: backing out sends '{line}', which does not read: {problem}" ]
+
+
     // --- the page a browser reads ------------------------------------------------------------------------------
 
     report

@@ -4,13 +4,17 @@ Eight games sit on this engine, and about four fifths of the program is not abou
 That claim is only worth something if there is a record of what it cost to keep — so this file is
 the ledger: every change to the seam, which game demanded it, and what would break without it.
 
-The seam is three types and thirty-one members between them:
-[`Rules`](src/Engine/Rules.fs) (7), [`Playable`](src/Table/Playable.fs) (20) and `Pulse` (4).
+The seam is three types and thirty-three members between them:
+[`Rules`](src/Engine/Rules.fs) (7), [`Playable`](src/Table/Playable.fs) (22) and `Pulse` (4).
 Everything else a game touches is vocabulary it may use and need not.
 
-**The headline is what is missing from the table below.** Four of the eight games — Diplomacy,
-Compile, Life and Warband — changed the seam in no way at all. Neither `Rules` nor `Playable` has
-a commit against it from any of them.
+**The headline is what is missing from the table below.** Four of the eight games in this
+repository — Diplomacy, Compile, Life and Warband — changed the seam in no way at all. Neither
+`Rules` nor `Playable` has a commit against it from any of them.
+
+EndTimes is the ninth and the first from *outside* the repository, built against the packages rather
+than beside the sources. That it could ask for something is the point of packaging them; that it
+asked for two fields is the answer worth keeping.
 
 | | Game | What it added to the seam |
 | --- | --- | --- |
@@ -22,6 +26,8 @@ a commit against it from any of them.
 | 2026-08-17 | **Snake** | `Pulse` — `Every`, `Beat`, `Pressed`; and `Playable.Pulse` |
 | 2026-08-20 | **Cascade** | `Pulse.Frames`; `Playable.Rings` |
 | 2026-08-23 | **Warband** | *nothing* |
+| 2026-08-24 | **EndTimes** | `Playable.Aside`; and `Menu.Choice.Working` |
+| 2026-08-24 | **EndTimes** | `Playable.Steering` |
 
 ## What each one was for
 
@@ -54,6 +60,50 @@ hand. `Conforms.against` checks that for every game that has a clock.
 - `Rings` reads what the board is sounding off the state after a move rather than out of the
   notices — which is what makes a game taken up from a record sound like the game it was saved
   from, and lets a game say it once for every table rather than once per endpoint.
+
+**EndTimes — `Playable.Aside`, 2026-08-24.** The first game with something to offer that is not a
+board. Its players build a summoner — an archetype and six things it brings — before any game is
+dealt, keep it between games, and pick it up at the start of one. Every screen the table had was a
+screen *of a game in progress*, and there was nowhere for that to live.
+
+The demand is narrow and the answer is deliberately narrower. An `Aside` is a word, two lines of
+label, a screen and a line-reader; it holds **no state at all**. Everything the bench remembers,
+the game remembers — which is what keeps this one field instead of a type parameter on `Playable`
+that seven games with no bench would have had to carry. `Screen` is a function rather than a value
+because the screen is redrawn after every line, and a bench that could not show what the last line
+did to it would be a bench nobody could work at.
+
+Two things are worth knowing about where it sits.
+[`Menu.screen`](src/Table/Playing/Menu.fs) now numbers its rows by where they end up rather than by
+hand, because a bench puts a row in the middle of that list and every number after it was otherwise
+one out. And [`Play.working`](src/Play/Play.fs) does **not** consult `Menu.choose`: at a bench the
+game's words come first, so a bench with a row called `3` opens that row instead of dealing a game
+of three. The four words that navigate — `back`, `menu`, `quit`, `exit` — are answered there by
+name, so nothing a game does can take them away from a player. `Conforms.against` holds a bench to
+that: it may not be opened by a word the menu already answers to, and it may not swallow a line it
+did not understand.
+
+**EndTimes — `Playable.Steering`, 2026-08-24.** A second ask from the same game, and the one that
+finally joined the two halves of the program that had been steered differently since Snake.
+
+A game on a clock has been steerable since `Pulse.Pressed`: keys do things, Enter opens the prompt.
+A game of turns had a board and a `ReadLine`, and the arrow keys that walk every *menu* in the
+program did nothing at a board. `Steering` closes that: a game hands back a `Keys.Screen` for where
+it stands and the table steers it with the machinery the menus already use, so there is one way of
+walking a list in this program rather than two.
+
+It makes the same bargain `Pressed` does, and `Conforms.against` holds it to it at every state the
+suite walks through: **a row stands for a line the game already reads**. Nothing can be picked that
+could not have been typed, a board driven by the arrow keys writes the same record as one driven by
+hand, and `Escape` backs out by sending a line that reads too. Enter with nothing typed takes the
+marked row; Enter with a line underway sends the line, so no game can take the prompt away from
+anybody.
+
+The board as the table drew it is handed in with the seat it was drawn for, so a game may put it
+above its rows, replace it, or ignore it — the table has already chosen the view and the margins,
+and the seam does not second-guess either. The one thing `Play.loop` now carries across a move is
+where the mark had got to: every line rebuilds the screen from the state it left behind, and a mark
+that went back to the top each time would make walking one row through its choices impossible.
 
 ## What the four quiet games did instead
 
@@ -124,4 +174,4 @@ down too — and worth a second look, because a seam that grows without a game a
 growing towards one game's idea of what a game is.
 
 The other half of holding the line is [`tests/Conforms.fsx`](tests/Conforms.fsx), which is the
-contract all thirty-one members are checked against, for every game, on every run.
+contract all thirty-three members are checked against, for every game, on every run.

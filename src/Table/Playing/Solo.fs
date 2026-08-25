@@ -116,6 +116,17 @@ module Solo =
     let margins console solo =
         readingAt console solo |> Option.map (fun reading -> reading.Margins)
 
+    /// How this console's view puts the colour back into a line of plain words. A screen steered at
+    /// the board is drawn through it, so the rows and the board are painted the same way.
+    let painting console solo =
+        readingAt console solo |> Option.map (fun reading -> reading.View.Says)
+
+    /// The rows this game offers for where it stands, if any, over the board as this console draws
+    /// it and for the seat it was drawn for.
+    let steering console solo =
+        board console solo
+        |> Option.bind (fun drawn -> solo.Game.Steering drawn (active solo) solo.Model)
+
     let private drawAll solo =
         solo.Watchers |> List.map (screenFor solo)
 

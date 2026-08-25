@@ -14,6 +14,10 @@ module Menu =
         | Join of address: string * code: string option
         | Replay of path: string
         | Continuing
+
+        /// Open the section of the menu the game owns, if it has one.
+        | Working
+
         | Rules
         | Looking of View<'Move, 'State, 'Notice>
         | Options
@@ -202,19 +206,30 @@ module Menu =
             $"view {names[((at + step) % count + count) % count]}"
 
         let drawn =
-            Keys.sends (Keys.nth 3) "How it is drawn" $"now {showing.Name} - {showing.Describe}" (looking 1)
+            Keys.sends None "How it is drawn" $"now {showing.Name} - {showing.Describe}" (looking 1)
             |> Keys.turning looking
+
+        // Numbered by where they end up rather than by hand, because a game with a bench of its own
+        // puts a row in the middle of this list and every number after it would otherwise be one
+        // out - which is the kind of thing that is right until the day somebody adds a row.
+        let rows =
+            [ Keys.opens None "New game" "how many are playing, and who each of them is" (counting game)
+
+              match game.Aside with
+              | Some aside -> Keys.sends None aside.Says aside.Does aside.Word
+              | None -> ()
+
+              Keys.types None "Join a table" "sit down at one somebody else is hosting" "join "
+              Keys.sends None "Continue a game" "one you put down, taken up where it was left" "continue"
+              drawn
+              Keys.sends None "Settings" "sound, how it is drawn, and what this game lets you settle" "settings"
+              Keys.sends None "Rules" "the rules and the commands, at length" "rules"
+              Keys.sends None "Quit" "" "quit" ]
+            |> List.mapi (fun at row -> { row with Digit = Keys.nth at })
 
         { Title = game.Title
           Prose = [ game.Blurb ]
-          Rows =
-            [ Keys.opens (Keys.nth 0) "New game" "how many are playing, and who each of them is" (counting game)
-              Keys.types (Keys.nth 1) "Join a table" "sit down at one somebody else is hosting" "join "
-              Keys.sends (Keys.nth 2) "Continue a game" "one you put down, taken up where it was left" "continue"
-              drawn
-              Keys.sends (Keys.nth 4) "Settings" "sound, how it is drawn, and what this game lets you settle" "settings"
-              Keys.sends (Keys.nth 5) "Rules" "the rules and the commands, at length" "rules"
-              Keys.sends (Keys.nth 6) "Quit" "" "quit" ]
+          Rows = rows
           Note =
             [ "Move with the arrows or w and s. Enter takes the one marked ->, and so does its number."
               ""
@@ -226,7 +241,9 @@ module Menu =
                | [] -> $"'host {game.Fewest}',"
                | _ -> $"'host {game.Fewest}', 'vs <skill>...' for {machines},")
               $"'join <address> [word]', 'continue', 'replay <file>',"
-              $"'view <{Playable.namesFor AtATerminal game}>',"
+              (match game.Aside with
+               | Some aside -> $"'{aside.Word}', 'view <{Playable.namesFor AtATerminal game}>',"
+               | None -> $"'view <{Playable.namesFor AtATerminal game}>',")
               (if behind then "'settings', 'rules', 'back', 'quit'." else "'settings', 'rules', 'quit'.") ]
           Backs = (if behind then Some "back" else None) }
 
@@ -333,6 +350,14 @@ module Menu =
             | ("settings" | "colours" | "colors" | "options"), [] -> Ok Options
             | ("settings" | "colours" | "colors" | "options"), _ ->
                 Error "Say 'settings' on its own; the screen it opens says the rest."
+
+            // Before the two clauses that read a bare word as a number of players, so a game whose
+            // bench is called '7' would still open its bench - and after everything the menu itself
+            // answers to, so no game can take 'quit' away from a player.
+            | word, [] when game.Aside |> Option.exists (fun aside -> aside.Word = word) -> Ok Working
+            | word, _ when game.Aside |> Option.exists (fun aside -> aside.Word = word) ->
+                let aside = Option.get game.Aside
+                Error $"Say '{aside.Word}' on its own; the screen it opens says the rest."
             | "join", [ address ] -> Ok(Join(address, None))
             | "join", [ address; code ] -> Ok(Join(address, Some code))
             | "join", _ ->

@@ -2313,6 +2313,83 @@ by feeding it lines is untouched.
 Like the rest of the console layer `Menu` and `Options` are pure: they say what a screen
 reads like and what a line means, and `Program` does the reading and the writing.
 
+### A bench, for what is not a board
+
+Everything above is a screen of a game — being dealt, being joined, being taken up. The ninth
+game asked for one that is not. EndTimes has its players build a summoner before anything is
+dealt, keep it between games and pick it up at the start of one, and there was nowhere for that
+to live.
+
+`Playable.Aside` is the answer, and it is a word, two labels, a screen and a reader:
+
+```fsharp
+type Aside =
+    { Word: string                       // what opens it, typed or picked
+      Says: string
+      Does: string
+      Screen: unit -> Keys.Screen        // drawn again after every line
+      Read: string -> Result<string, string> }
+```
+
+**It holds no state**, which is the whole of why it is one field rather than a type parameter on
+`Playable` that seven games with no bench would have carried anyway. Whatever the bench remembers,
+the game remembers — on disk, in a `lazy`, wherever it likes; the table neither knows nor asks.
+`Screen` is a function for the same reason `Rings` reads off the state: it is drawn again after
+every line, and a bench that could not show what the last line did to it would be a bench nobody
+could work at.
+
+Two things about where it sits. `Menu.screen` now numbers its rows **by where they end up** rather
+than by hand, because a bench puts a row in the middle of that list and every number after it was
+otherwise one out — right until the day somebody adds a row. And the loop that drives a bench does
+*not* go through `Menu.choose`:
+
+```fsharp
+| [ "back" ] | [ "menu" ] -> None
+| [ "quit" ] | [ "exit" ] | [ "q" ] -> Some(Done 0)
+| _ -> aside.Read line
+```
+
+At a bench the game's words come first, so a bench with a row called `3` opens that row instead of
+dealing a game of three, and a bench may have any word it likes without first checking what the
+menu had left. The four that navigate are answered there by name, so nothing a game does can take
+them away from a player — and `Conforms.against` holds every bench to the other half of that
+bargain: it may not be opened by a word the menu already answers to, and it may not swallow a line
+it did not understand.
+
+### And the same keys at a board
+
+Every menu in this program has been steerable since there were menus. A game on a clock has been
+steerable since Snake — `Pulse.Pressed`, keys doing things, Enter opening the prompt. A game of
+*turns* had a board and a `ReadLine`, and the arrow keys that walk every list in the program did
+nothing at one. `Playable.Steering` closes that gap:
+
+```fsharp
+Steering: string -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Screen option
+```
+
+A game hands back a screen for where it stands and the table steers it with the machinery the menus
+already use, so there is **one** way of walking a list here rather than two. `None` means what it
+always meant: draw the board and read a line.
+
+It makes the same bargain `Pressed` does, and `Conforms.against` holds it to it at every state the
+suite walks through: **a row stands for a line the game already reads.** Nothing can be picked that
+could not have been typed, a board driven by the arrow keys writes the same record as one driven by
+hand, and `Backs` — what Escape sends — has to read as a line too. Enter with nothing typed takes
+the marked row; Enter with a line underway sends the line, so no game can take the prompt away from
+anybody, and `w`/`a`/`s`/`d` are letters again the moment a line is started.
+
+The board as the table drew it is handed in with the seat it was drawn for, so a game may put it
+above its rows, replace it, or ignore it — the table has already chosen the view and the margins,
+and the seam does not second-guess either.
+
+The one thing [`Play.loop`](src/Play/Play.fs) now carries across a move is **where the mark had got
+to**. Every line rebuilds the screen from the state it left behind, and a mark that sprang back to
+the top each time would make walking one row through its choices impossible — press right, the line
+goes, the screen comes back, and the mark is still on the row you were walking.
+
+A console reading piped lines has no arrow to press, so it takes the other branch and is exactly the
+loop it always was. Every script that drives a game by feeding it lines is untouched.
+
 ## Tests
 
 ```powershell
