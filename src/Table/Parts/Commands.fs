@@ -13,6 +13,12 @@ type Command<'Move> =
     | Logging of showing: bool option
     | Hushing of hushed: bool option
     | Looking of view: string
+
+    /// Draw this console one of the game's own screens from now on, by whatever name the game calls
+    /// it. Never read from a typed line here - `Playable.Read` is what turns a word into one, since
+    /// the table has no idea what screens a game has or what they are called.
+    | Showing of screen: string
+
     | Asking of question: string
     | Recount
     | Keep

@@ -493,7 +493,7 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                   let seat = Seat.at place
                   let drawn = plain.Board Margins.all seat model
 
-                  match game.Steering drawn seat model with
+                  match game.Steering drawn Margins.all seat model with
                   | None -> ()
                   | Some screen ->
                       let where = $"{shown}, seat {place}"

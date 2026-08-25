@@ -108,7 +108,7 @@ module Offer =
           Aside = None
 
           // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
-          Steering = fun _ _ _ -> None
+          Steering = fun _ _ _ _ -> None
 
           Page = Html.shell
           Views = views }

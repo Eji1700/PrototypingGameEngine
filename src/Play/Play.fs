@@ -89,10 +89,13 @@ let rec private loop rings sitters said at solo =
     match (if Screens.steering () then Solo.steering Keyboard solo else None) with
     | Some screen ->
         let says = Solo.painting Keyboard solo |> Option.defaultValue id
+        let board = Solo.board Keyboard solo |> Option.defaultValue ""
 
         Screens.cleared ()
 
-        match Screens.asking says (String.concat Environment.NewLine said) screen at with
+        // The board goes above the rows, and goes up *as its view drew it*: it has been painted
+        // once already, and painting it again would throw that away rather than add to it.
+        match Screens.askingOver says (String.concat Environment.NewLine said) board screen at with
         | None, at -> heard at "quit"
         | Some line, at -> heard at line
 

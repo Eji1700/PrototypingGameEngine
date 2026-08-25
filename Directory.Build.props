@@ -6,7 +6,7 @@
        mixture. Nothing is packable unless it says so - the games are programs, not libraries. -->
 
   <PropertyGroup>
-    <PrototypingVersion>0.3.0</PrototypingVersion>
+    <PrototypingVersion>0.4.1</PrototypingVersion>
     <Version>$(PrototypingVersion)</Version>
 
     <IsPackable>false</IsPackable>

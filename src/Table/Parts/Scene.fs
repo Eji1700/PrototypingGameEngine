@@ -10,14 +10,25 @@ open Prototyping.Engine
 /// just before the next, and is how a board drawn between two beats knows how far a moving piece
 /// has got. A game with no frame clock is only ever drawn at 0.
 type Margins =
-    { Notes: bool
-      Commands: bool
+    {
+        Notes: bool
+        Commands: bool
 
-      // `Logged` rather than `Log`: a `Model` has a `Log`, and F# resolves a field on an
-      // un-annotated value by name alone, so the clash would silently retype `model.Log`.
-      Logged: bool
+        // `Logged` rather than `Log`: a `Model` has a `Log`, and F# resolves a field on an
+        // un-annotated value by name alone, so the clash would silently retype `model.Log`.
+        Logged: bool
 
-      Phase: float }
+        /// Which of its own screens a game is drawing for this console, by whatever name the game
+        /// calls it. Empty means "whatever you show by default", which is every game with only one.
+        ///
+        /// The table neither knows nor asks what the word means. It carries it the way it carries the
+        /// three switches above - per console, and never into the model or the record - so a game
+        /// with several screens keeps them apart at a shared keyboard, over a socket and in a browser
+        /// without holding any state of its own.
+        Showing: string
+
+        Phase: float
+    }
 
 module Margins =
 
@@ -25,15 +36,21 @@ module Margins =
         { Notes = true
           Commands = true
           Logged = true
+          Showing = ""
           Phase = 0.0 }
 
     let none =
         { Notes = false
           Commands = false
           Logged = false
+          Showing = ""
           Phase = 0.0 }
 
     let through phase margins = { margins with Phase = phase }
+
+    /// What this console is looking at, or the game's own default where it has not said.
+    let showing fallback margins =
+        if margins.Showing = "" then fallback else margins.Showing
 
     /// Which of `count` frames a phase falls in - what a terminal picking one of a few pictures
     /// wants, rather than the fraction itself.

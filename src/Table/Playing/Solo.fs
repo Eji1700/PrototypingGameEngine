@@ -124,8 +124,8 @@ module Solo =
     /// The rows this game offers for where it stands, if any, over the board as this console draws
     /// it and for the seat it was drawn for.
     let steering console solo =
-        board console solo
-        |> Option.bind (fun drawn -> solo.Game.Steering drawn (active solo) solo.Model)
+        readingAt console solo
+        |> Option.bind (fun reading -> solo.Game.Steering (boardFor solo reading) reading.Margins (active solo) solo.Model)
 
     let private drawAll solo =
         solo.Watchers |> List.map (screenFor solo)
@@ -249,6 +249,12 @@ module Solo =
                     Margins =
                         { reading.Margins with
                             Logged = wanted |> Option.defaultValue (not reading.Margins.Logged) } }
+        | Ok(Showing screen) ->
+            mine
+                { reading with
+                    Margins =
+                        { reading.Margins with
+                            Showing = screen } }
         | Ok(Hushing wanted) ->
             mine
                 { reading with

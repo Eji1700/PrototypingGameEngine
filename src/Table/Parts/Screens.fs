@@ -97,15 +97,30 @@ module Screens =
 
     /// A screen to steer with the arrows - unless input is coming from somewhere that has no keys to
     /// press, in which case the screen is printed once and a line is read.
-    let asking (says: string -> string) said screen at =
+    ///
+    /// `above` is something already drawn - a board, in a view of its own choosing - and it is
+    /// printed as it stands rather than handed to `says`. Painting a drawing that has already been
+    /// painted throws it away: what a rich board is made of is escapes rather than markup, and the
+    /// second pass eats them. A menu has nothing drawn for it and passes "".
+    let askingOver (says: string -> string) said (above: string) screen at =
+        let drawn showing index =
+            (if above = "" then "" else above + System.Environment.NewLine)
+            + says (Keys.draw index showing)
+
         let rec steer standing =
             let showing, index = Keys.facing standing
             cleared ()
-            printf "%s" (says (Keys.draw (Some index) showing))
+            printf "%s" (drawn showing (Some index))
 
             if said <> "" then printfn "%s" (says said)
 
-            printf "> %s" standing.Buffer
+            // Whose the keyboard is, said where somebody is about to press a key. A mode with no
+            // sign of itself is a mode people press keys into and wonder at.
+            if Keys.typing standing then
+                printf "> %s_" standing.Buffer
+            else
+                printf "%s" (says "  (space to type a line)")
+                printf "%s> " System.Environment.NewLine
 
             match Keys.answer (Keys.pressed (Keys.typing standing) (System.Console.ReadKey true)) standing with
             | Keys.Steering next -> steer next
@@ -114,7 +129,7 @@ module Screens =
         if steering () then
             steer (Keys.standing screen at)
         else
-            printf "%s" (says (Keys.draw None screen))
+            printf "%s" (drawn screen None)
 
             if said <> "" then printfn "%s" (says said)
 
@@ -123,3 +138,6 @@ module Screens =
             match System.Console.ReadLine() with
             | null -> None, at
             | line -> Some line, at
+
+    /// The same, for a screen that is the whole of what is on the terminal - which is every menu.
+    let asking says said screen at = askingOver says said "" screen at

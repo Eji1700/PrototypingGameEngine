@@ -28,6 +28,7 @@ asked for two fields is the answer worth keeping.
 | 2026-08-23 | **Warband** | *nothing* |
 | 2026-08-24 | **EndTimes** | `Playable.Aside`; and `Menu.Choice.Working` |
 | 2026-08-24 | **EndTimes** | `Playable.Steering` |
+| 2026-08-24 | **EndTimes** | `Margins.Showing`; `Command.Showing`; `Screens.askingOver` |
 
 ## What each one was for
 
@@ -104,6 +105,22 @@ above its rows, replace it, or ignore it — the table has already chosen the vi
 and the seam does not second-guess either. The one thing `Play.loop` now carries across a move is
 where the mark had got to: every line rebuilds the screen from the state it left behind, and a mark
 that went back to the top each time would make walking one row through its choices impossible.
+
+**EndTimes — `Margins.Showing`, 2026-08-24.** Not the seam, but next to it: a game with eight
+screens and a tab bar needed somewhere to keep *which one this console is looking at*.
+
+It could not go in the game's state - it is not part of the game, would ride into the record, and
+would be the same for everybody at a shared keyboard. It could not go in a mutable of the game's
+own either, for the last of those reasons. Where it belongs is beside the three switches the table
+has carried per console since there were margins: `Notes`, `Commands`, `Logged` - and now one word
+that the table neither knows nor asks the meaning of. `Command.Showing` is how a game asks for it,
+and it is never read from a typed line here: `Playable.Read` decides which words mean it, because
+the table has no idea what screens a game has or what they are called.
+
+`Screens.askingOver` came with it. A board that is drawn and then steered has to go up **as its
+view drew it** - handing an already-painted board back to `Says` throws it away, because what a
+rich board is made of is escapes rather than markup and the second pass eats them. Menus have
+nothing drawn for them and go through `asking`, which is the same function passing "".
 
 ## What the four quiet games did instead
 

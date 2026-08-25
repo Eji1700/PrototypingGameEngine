@@ -98,26 +98,47 @@ module Keys =
         | Picked
         | Numbered of char
         | Typed of char
+
+        /// Hand the keyboard to the prompt, with nothing typed into it yet.
+        | Prompting
+
         | Rubbed
         | Backed
         | Sent
         | Ignored
 
-    /// What a keypress means. Once anything has been typed the letter keys are letters again, so
-    /// w, a, s and d only steer a screen nobody is typing a line into.
+    /// What a keypress means, which depends on whose the keyboard is.
+    ///
+    /// Steering, the letter keys are the letter keys: w, a, s and d walk the rows and a digit takes
+    /// one. Typing, **every** printable key is a letter, those four included - which is the whole
+    /// point of there being a mode at all. Reading the mode off "has anything been typed yet" is
+    /// what this used to do, and it left every word beginning with one of those four impossible to
+    /// type: the first press steered instead of starting the line, so there was never a line under
+    /// way for the rest of it to belong to. `search` was untypeable at a game about searching.
+    ///
+    /// The space bar is what hands the keyboard over, since a line never usefully begins with one.
+    /// Any other printable key that is not a steering key hands it over as well and is the first
+    /// letter, so nothing about the old way of starting a line has been taken away.
     let pressed typing (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> if typing then Sent else Picked
         | ConsoleKey.Backspace -> Rubbed
         | ConsoleKey.Escape -> Backed
+
+        // The arrows are never ambiguous, so they steer whether or not a line is under way.
         | ConsoleKey.UpArrow -> Moved -1
         | ConsoleKey.DownArrow
         | ConsoleKey.Tab -> Moved 1
         | ConsoleKey.LeftArrow -> if typing then Ignored else Turned -1
         | ConsoleKey.RightArrow -> if typing then Ignored else Turned 1
+
+        // Matched as a key as well as a character, because a space arrives as both: a terminal
+        // sends ' ' with it and some send nothing at all.
+        | ConsoleKey.Spacebar -> if typing then Typed ' ' else Prompting
         | _ ->
             match key.KeyChar with
             | letter when typing -> if Char.IsControl letter then Ignored else Typed letter
+            | ' ' -> Prompting
             | 'w'
             | 'W' -> Moved -1
             | 's'
@@ -133,18 +154,26 @@ module Keys =
 
     [<NoComparison; NoEquality>]
     type Standing =
-        { Stack: (Screen * int) list
-          Buffer: string }
+        {
+            Stack: (Screen * int) list
+            Buffer: string
+
+            /// Whose the keyboard is. Held rather than worked out from whether anything has been typed,
+            /// so that a line may begin with one of the steering letters - and so that the prompt can
+            /// be open and empty, which is what backspacing a line back to nothing leaves.
+            Typing: bool
+        }
 
     let standing screen at =
         { Stack = [ (screen, at) ]
-          Buffer = "" }
+          Buffer = ""
+          Typing = false }
 
     let facing standing = List.head standing.Stack
 
     let started standing = List.last standing.Stack |> snd
 
-    let typing standing = standing.Buffer <> ""
+    let typing standing = standing.Typing
 
     [<NoComparison; NoEquality>]
     type Answer =
@@ -158,11 +187,19 @@ module Keys =
         let taking (row: Row) =
             match row.Pick with
             | Sends line -> Answered line
-            | Types text -> Steering { standing with Buffer = text }
+
+            // A row that writes the beginning of a line and waits hands the keyboard over as well,
+            // or the rest of what it asked for could not be typed.
+            | Types text ->
+                Steering
+                    { standing with
+                        Buffer = text
+                        Typing = true }
             | Opens under ->
                 Steering
                     { Stack = (under, 0) :: standing.Stack
-                      Buffer = "" }
+                      Buffer = ""
+                      Typing = false }
 
         // Backing out of the innermost screen; from the outermost there is nowhere to go, so it
         // answers with whatever line the screen said stands for leaving it, if any.
@@ -172,8 +209,19 @@ module Keys =
                 match showing.Backs with
                 | Some line -> Answered line
                 | None -> Steering standing
-            | _ :: behind -> Steering { Stack = behind; Buffer = "" }
+            | _ :: behind ->
+                Steering
+                    { Stack = behind
+                      Buffer = ""
+                      Typing = false }
             | [] -> Steering standing
+
+        /// Out of the prompt and back to the rows, with whatever was half-typed thrown away.
+        let dropped () =
+            Steering
+                { standing with
+                    Buffer = ""
+                    Typing = false }
 
         let rubbed () =
             Steering
@@ -182,13 +230,21 @@ module Keys =
 
         match press with
         | Ignored -> Steering standing
+        | Prompting -> Steering { standing with Typing = true }
         | Typed letter ->
             Steering
                 { standing with
-                    Buffer = standing.Buffer + string letter }
+                    Buffer = standing.Buffer + string letter
+                    Typing = true }
         | Sent -> Answered standing.Buffer
-        | Backed -> out ()
-        | Rubbed -> if typing standing then rubbed () else out ()
+
+        // Escape leaves the prompt before it leaves the screen: somebody half-way through a line
+        // who changed their mind wants the line gone, not the screen.
+        | Backed -> if typing standing then dropped () else out ()
+        | Rubbed ->
+            if not (typing standing) then out ()
+            elif standing.Buffer = "" then dropped ()
+            else rubbed ()
         | Moved by ->
             Steering
                 { standing with

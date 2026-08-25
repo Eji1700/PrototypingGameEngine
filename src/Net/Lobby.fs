@@ -332,6 +332,10 @@ module Lobby =
                     Margins =
                         { seat.Margins with
                             Logged = wanted |> Option.defaultValue (not seat.Margins.Logged) } }
+        | Ok(Showing screen) ->
+            mine
+                { seat with
+                    Margins = { seat.Margins with Showing = screen } }
         | Ok(Hushing wanted) ->
             mine
                 { seat with

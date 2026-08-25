@@ -125,11 +125,11 @@ type Playable<'Move, 'State, 'Notice> =
         /// typed takes the marked row; Enter with a line underway sends the line, so the prompt is
         /// never taken away from anybody.
         ///
-        /// The board as this table drew it is handed in, with the seat it was drawn for, so a game
-        /// may put it above the rows, replace it, or ignore it - the table has already chosen the
-        /// view and the margins, and this does not second-guess either. `None` means what it always
-        /// meant: draw the board and read a line.
-        Steering: string -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Screen option
+        /// The board as this table drew it is handed in, with the margins and the seat it was drawn
+        /// for - the same three the board itself was drawn from, so the rows and the board are
+        /// answers about one screen rather than two. `None` means what it always meant: draw the
+        /// board and read a line.
+        Steering: string -> Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Screen option
 
         Page: Shell
 

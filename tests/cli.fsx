@@ -753,6 +753,61 @@ report
         |> fun keys -> keys @ [ key ConsoleKey.Enter ]
     ))
 
+// The prompt is a mode, and this is why it had to become one. Reading "is somebody typing" off
+// "has anything been typed yet" left every line beginning with w, a, s or d impossible to say: the
+// first press steered instead of starting the line, so there was never a line under way for the
+// rest of it to belong to. The space bar hands the keyboard over, and then the four are letters.
+report
+    "a line may begin with one of the steering letters, once the prompt is open"
+    (Some "settings")
+    (walked (
+        [ key ConsoleKey.Spacebar ]
+        @ ([ 's'; 'e'; 't'; 't'; 'i'; 'n'; 'g'; 's' ] |> List.map letter)
+        @ [ key ConsoleKey.Enter ]
+    ))
+
+report
+    "and the space that opened it is not one of the letters"
+    (Some "rules")
+    (walked (
+        [ key ConsoleKey.Spacebar ]
+        @ ([ 'r'; 'u'; 'l'; 'e'; 's' ] |> List.map letter)
+        @ [ key ConsoleKey.Enter ]
+    ))
+
+report
+    "with the prompt shut those same letters still steer"
+    (Some "rules")
+    (walked (List.replicate 5 (letter 's') @ [ key ConsoleKey.Enter ]))
+
+report
+    "escape leaves the prompt rather than the screen, and what was half-typed goes with it"
+    (Some "quit")
+    (walked (
+        [ key ConsoleKey.Spacebar ]
+        @ ([ 's'; 'a'; 'v' ] |> List.map letter)
+        @ [ key ConsoleKey.Escape; letter '7' ]
+    ))
+
+report
+    "and rubbing a line back to nothing leaves the prompt as well"
+    (Some "quit")
+    (walked
+        [ key ConsoleKey.Spacebar
+          letter 'x'
+          key ConsoleKey.Backspace
+          key ConsoleKey.Backspace
+          letter '7' ])
+
+report
+    "a row that writes the beginning of a line hands the keyboard over with it"
+    (Some "join wsad")
+    (walked (
+        [ letter '2' ]
+        @ ([ 'w'; 's'; 'a'; 'd' ] |> List.map letter)
+        @ [ key ConsoleKey.Enter ]
+    ))
+
 report
     "backing out of a list opened by mistake comes back to the one it was opened from"
     (Some "quit")
