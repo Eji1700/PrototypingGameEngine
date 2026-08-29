@@ -43,16 +43,20 @@ module Screens =
     /// any line the last drawing used and this one does not is blanked, so nothing is left behind.
     /// A screen identical to the one already there is not written again. Answers with what is now
     /// on the terminal, to be passed back in next time - after `cleared`, that is `nothing`.
+    /// How many columns there are to draw into. A redirected console has no window to ask about, so
+    /// it is given the width anything written for a terminal is written to fit.
+    let across () =
+        try
+            max 20 (System.Console.WindowWidth - 1)
+        with _ ->
+            80
+
     let redrawn (before: Drawn) (text: string) =
         if before.Text = text then
             before
         else
 
-        let width =
-            try
-                max 20 (System.Console.WindowWidth - 1)
-            with _ ->
-                80
+        let width = across ()
 
         let lines = text.Replace("\r\n", "\n").Split '\n'
 
@@ -95,6 +99,30 @@ module Screens =
 
         waiting ()
 
+    /// How many lines there are to draw into, or no limit at all where there is no window to ask
+    /// about - which is every redirected console, and nothing reading one is looking at edges.
+    let room () =
+        try
+            max 8 (System.Console.WindowHeight - 1)
+        with _ ->
+            System.Int32.MaxValue
+
+    /// A body trimmed to what is left after everything that must be drawn.
+    ///
+    /// The rows, the note and the prompt are how somebody gets off a screen, so they are never what
+    /// gets cut; a board is the part that is as long as it likes. What is cut says so, because a
+    /// board that quietly stopped early would be a board somebody read the wrong answer off.
+    let fitting room rest (says: string -> string) (body: string list) =
+        let spare = room - rest
+
+        if List.length body <= spare || spare < 3 then
+            body
+        else
+            let kept = List.truncate (spare - 1) body
+
+            kept
+            @ [ says $"  ... {List.length body - List.length kept} more lines, and this screen is taller than the window" ]
+
     /// A screen to steer with the arrows - unless input is coming from somewhere that has no keys to
     /// press, in which case the screen is printed once and a line is read.
     ///
@@ -103,37 +131,50 @@ module Screens =
     /// painted throws it away: what a rich board is made of is escapes rather than markup, and the
     /// second pass eats them. A menu has nothing drawn for it and passes "".
     let askingOver (says: string -> string) said (above: string) screen at =
-        let drawn showing index =
-            (if above = "" then "" else above + System.Environment.NewLine)
-            + says (Keys.draw index showing)
+        let lines (text: string) =
+            text.Replace("\r\n", "\n").Split '\n' |> Array.toList
 
-        let rec steer standing =
-            let showing, index = Keys.facing standing
-            cleared ()
-            printf "%s" (drawn showing (Some index))
+        let frame standing index =
+            let showing, _ = Keys.facing standing
 
-            if said <> "" then printfn "%s" (says said)
+            let tail =
+                [ yield! lines (says (Keys.draw (across ()) index showing))
 
-            // Whose the keyboard is, said where somebody is about to press a key. A mode with no
-            // sign of itself is a mode people press keys into and wonder at.
-            if Keys.typing standing then
-                printf "> %s_" standing.Buffer
-            else
-                printf "%s" (says "  (space to type a line)")
-                printf "%s> " System.Environment.NewLine
+                  if said <> "" then yield! lines (says said)
+
+                  // Whose the keyboard is, said where somebody is about to press a key. A mode with
+                  // no sign of itself is a mode people press keys into and wonder at.
+                  if Keys.typing standing then
+                      yield $"> {standing.Buffer}_"
+                  elif steering () then
+                      yield says "  (space to type a line)"
+                      yield "> "
+                  else
+                      yield "> " ]
+
+            let body = if above = "" then [] else lines above
+
+            String.concat System.Environment.NewLine (fitting (room ()) (List.length tail) says body @ tail)
+
+        let rec steer drawn standing =
+            let _, index = Keys.facing standing
+
+            // Drawn over rather than cleared and written again. Clearing first and then writing more
+            // lines than the window holds is what made a tall screen arrive in pieces: the terminal
+            // scrolled what had just been cleared, and the eye caught the halves.
+            let drawn = redrawn drawn (frame standing (Some index))
 
             match Keys.answer (Keys.pressed (Keys.typing standing) (System.Console.ReadKey true)) standing with
-            | Keys.Steering next -> steer next
-            | Keys.Answered line -> Some line, Keys.started standing
+            | Keys.Steering next -> steer drawn next
+            | Keys.Answered line -> Some line, Keys.path standing
 
         if steering () then
-            steer (Keys.standing screen at)
+            // Cleared once, and drawn over from then on. The first frame has whatever was on the
+            // terminal before it under it; every frame after is written over the last.
+            cleared ()
+            steer nothing (Keys.standing screen at)
         else
-            printf "%s" (drawn screen None)
-
-            if said <> "" then printfn "%s" (says said)
-
-            printf "> "
+            printf "%s" (frame (Keys.standing screen at) None)
 
             match System.Console.ReadLine() with
             | null -> None, at

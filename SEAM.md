@@ -29,6 +29,7 @@ asked for two fields is the answer worth keeping.
 | 2026-08-24 | **EndTimes** | `Playable.Aside`; and `Menu.Choice.Working` |
 | 2026-08-24 | **EndTimes** | `Playable.Steering` |
 | 2026-08-24 | **EndTimes** | `Margins.Showing`; `Command.Showing`; `Screens.askingOver` |
+| 2026-08-27 | **EndTimes** | `Keys.path` for `Keys.started`; `Keys.draw` in columns |
 
 ## What each one was for
 
@@ -121,6 +122,29 @@ the table has no idea what screens a game has or what they are called.
 view drew it** - handing an already-painted board back to `Says` throws it away, because what a
 rich board is made of is escapes rather than markup and the second pass eats them. Menus have
 nothing drawn for them and go through `asking`, which is the same function passing "".
+
+**EndTimes — `Keys.path`, 2026-08-27.** Not the seam either, and no member moved: this is a bug in
+how the table remembered where somebody was standing, found by a game with lists two deep.
+
+A place used to be a row on the *first* screen. Walk into a list a row opens, take something on it,
+and the answer handed back was the outermost row - so the next frame put whoever took it back at the
+top of the first list. For a list you take one thing off and leave, that reads as finishing. For a
+list of things to tick it is unusable: EndTimes builds a summoner off a catalogue of nine, and every
+tick threw the player out of the catalogue. A place is now the way down to it - which row of the
+first screen, which row of the screen that opens, and so on - and `standing` walks that path down
+whatever screens the game built this time. It has to be a path rather than the screens themselves,
+because a game builds its screens afresh every time it is asked and the ones somebody walked down
+are stale by the moment they are wanted again. Where the screens no longer go that deep, it stops
+where they do.
+
+`Keys.draw` learned columns in the same breath, and takes the width to draw into. A row with
+something to say beside it is a line of prose and keeps its own line; a screen of nothing but names
+is a list of names, and a list of names is read in columns, down one and then down the next. A
+dozen short rows drawn one to a line is a dozen lines of a window that had a board to show.
+
+`Conforms` grew with it: the contract now walks every row *anywhere* under a steered screen rather
+than the first list only, and accepts any line the game reads rather than only a move - a row that
+opens one of the game's own screens is still a row standing for something somebody could have typed.
 
 ## What the four quiet games did instead
 

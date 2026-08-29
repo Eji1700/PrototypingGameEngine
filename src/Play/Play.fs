@@ -91,8 +91,6 @@ let rec private loop rings sitters said at solo =
         let says = Solo.painting Keyboard solo |> Option.defaultValue id
         let board = Solo.board Keyboard solo |> Option.defaultValue ""
 
-        Screens.cleared ()
-
         // The board goes above the rows, and goes up *as its view drew it*: it has been painted
         // once already, and painting it again would throw that away rather than add to it.
         match Screens.askingOver says (String.concat Environment.NewLine said) board screen at with
@@ -254,7 +252,7 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
             (opened + pulse.Every(Model.state (Solo.model solo)))
             solo
     else
-        loop rings sitters said 0 solo
+        loop rings sitters said [] solo
 
 // Annotated because `Playable` and `View` both carry a field called `Rules`, and with the two of
 // them now in different assemblies it is the view's - a string - that a bare `game.Rules` finds.
@@ -343,9 +341,9 @@ let rec private settling settled at said =
         match Options.choose line with
         | Error problem -> settling settled at problem
         | Ok Options.Done -> settled
-        | Ok(Options.Opening Options.Audio) -> settling (listening settled 0 "") at ""
-        | Ok(Options.Opening Options.Video) -> settling (watching settled 0 "") at ""
-        | Ok(Options.Opening Options.Game) -> settling (playing settled 0 "") at ""
+        | Ok(Options.Opening Options.Audio) -> settling (listening settled [] "") at ""
+        | Ok(Options.Opening Options.Video) -> settling (watching settled [] "") at ""
+        | Ok(Options.Opening Options.Game) -> settling (playing settled [] "") at ""
         | Ok step ->
             match wayOut settled step (fun settled said -> settling settled at said) with
             | Some again -> again
@@ -553,22 +551,22 @@ let rec private welcome settled behind at said =
         Screens.held ()
         again ()
     | Ok(Menu.Looking chosen) -> welcome { settled with View = chosen } behind at ""
-    | Ok Menu.Options -> welcome (settling settled 0 "") behind at ""
+    | Ok Menu.Options -> welcome (settling settled [] "") behind at ""
     | Ok Menu.Continuing ->
-        match taking settled 0 "" with
+        match taking settled [] "" with
         | Some opening -> opening
         | None -> again ()
     | Ok Menu.Working ->
         match game.Aside with
         | None -> again ()
         | Some aside ->
-            match working settled aside 0 "" with
+            match working settled aside [] "" with
             | Some opening -> opening
             | None -> again ()
     | Ok(Menu.Sitting(sitters, asked)) ->
         let word = Reach.minted ()
 
-        match sitting settled word sitters (asked |> Option.defaultValue (Reach.locked word)) 0 "" with
+        match sitting settled word sitters (asked |> Option.defaultValue (Reach.locked word)) [] "" with
         | Some opening -> opening
         | None -> again ()
     | Ok chosen ->
@@ -597,7 +595,7 @@ let private play settled sitters stamp model =
 
     match game.Pulse with
     | Some pulse -> racing settled.Rings sitters said pulse solo |> ignore
-    | None -> loop settled.Rings sitters said 0 solo |> ignore
+    | None -> loop settled.Rings sitters said [] solo |> ignore
 
     0
 
@@ -710,7 +708,7 @@ let rec private making (ways: Playable<'Move, 'State, 'Notice> list) (game: Play
                   View = plain
                   Rings = Settings.bell settings }
 
-            match welcome settled behind 0 said with
+            match welcome settled behind [] said with
             | Play(settled, model, sitters, stamp) -> Some(play settled sitters stamp model)
             | Done code -> Some code
             | Back -> None }

@@ -58,5 +58,5 @@ let main argv =
     | [] ->
         match Games.all with
         | [ only ] -> Play.alone only []
-        | _ -> choosing 0
+        | _ -> choosing []
     | words -> picked words ||> Play.alone

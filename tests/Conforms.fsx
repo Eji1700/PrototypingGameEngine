@@ -485,6 +485,19 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
     // nothing can be picked that could not have been typed, and a game driven by the arrow keys
     // writes the same record as one driven by hand. Checked at every state the suite's lines walk
     // through, since a game may offer rows at one phase and none at another.
+    //
+    // Every row *anywhere* under the screen, walking into the lists a row opens: taking one of those
+    // leaves whoever took it standing where they were, so a list two deep is somewhere a player
+    // lives rather than somewhere they pass through, and it is held to the same bargain.
+    let rec everyRow (screen: Keys.Screen) =
+        [ for row in screen.Rows do
+              yield screen, row
+
+              match row.Pick with
+              | Keys.Opens under -> yield! everyRow under
+              | Keys.Sends _
+              | Keys.Types _ -> () ]
+
     report
         "and nothing can be picked at the board that could not have been typed"
         []
@@ -503,8 +516,9 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                       if List.isEmpty screen.Rows then
                           yield $"{where}: a screen offered to be steered with no rows on it"
 
-                      for row in screen.Rows do
-                          yield! blank $"{where}: a row with nothing on it" row.Says
+                      for under, row in everyRow screen do
+                          yield! blank $"{where}: a row with nothing on it, under '{under.Title}'" row.Says
+                          yield! blank $"{where}: a list opened from '{row.Says}' with no title" under.Title
 
                           let lines =
                               [ match row.Pick with
@@ -517,10 +531,13 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                                 | None -> () ]
 
                           for line in lines do
+                              // Any line the game reads, not only a move: a row that opens one of the
+                              // game's own screens, or asks it a question, is still a row standing for
+                              // something somebody could have typed - which is the whole of the bargain.
                               match Playable.read game line with
-                              | Ok(Send _) -> ()
-                              | Ok _ -> yield $"{where}: '{row.Says}' picks '{line}', which is not a move"
-                              | Error problem -> yield $"{where}: '{row.Says}' picks '{line}', which does not read: {problem}"
+                              | Ok _ -> ()
+                              | Error problem ->
+                                  yield $"{where}: '{under.Title}' / '{row.Says}' picks '{line}', which does not read: {problem}"
 
                       // Escape backs out of the outermost screen by sending this, so it has to read
                       // as well - a board somebody cannot get out of is worse than one with no rows.

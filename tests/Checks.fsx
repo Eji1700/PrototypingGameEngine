@@ -36,9 +36,17 @@ let report name expected actual =
 
         let wanted, got = lines (box expected), lines (box actual)
 
-        // One line against one line reads better whole than as a difference between them.
+        // One line against one line reads better whole than as a difference between them. An empty
+        // list has no line at all, and saying so is the whole of what a check written against `[]`
+        // that found exactly one thing wrong is trying to tell somebody - reaching for its head is
+        // how that check used to crash the suite instead of reporting itself.
+        let only lines =
+            match lines with
+            | [] -> "(nothing at all)"
+            | line :: _ -> shortened line
+
         if List.length wanted <= 1 && List.length got <= 1 then
-            printfn "FAIL %s: expected %s, got %s" name (shortened (List.head wanted)) (shortened (List.head got))
+            printfn "FAIL %s: expected %s, got %s" name (only wanted) (only got)
         else
             printfn "FAIL %s" name
             printfn "     lines: %d expected, %d got" (List.length wanted) (List.length got)

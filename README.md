@@ -2387,8 +2387,31 @@ to**. Every line rebuilds the screen from the state it left behind, and a mark t
 the top each time would make walking one row through its choices impossible — press right, the line
 goes, the screen comes back, and the mark is still on the row you were walking.
 
+That place is a **path** — which row of the first screen, which row of the screen that one opens, and
+so on — rather than a row on the first screen alone. It has to be a path rather than the screens
+themselves, because a game builds its screens afresh every time it is asked and the ones somebody
+walked down are stale by the moment they are wanted again; `Keys.standing` walks the path down
+whatever came back this time, and stops early where the screens no longer go that deep. Keeping only
+the first row is what this used to do, and it made a list one deep somewhere you pass through rather
+than somewhere you live: take anything off it and you were dropped back out at the top. A list of
+things to *tick* was unusable — every tick threw you off the list.
+
+**A screen of bare names is drawn in columns.** A row with something to say beside it is a line of
+prose and keeps its own line; a screen of nothing but names is a list of names, read down one column
+and then down the next, so that walking off the foot of one arrives at the head of the following one
+— which is what up and down already do, and there is nothing that walks sideways between columns. A
+dozen short rows drawn one to a line is a dozen lines of a window that had a board to show.
+
 A console reading piped lines has no arrow to press, so it takes the other branch and is exactly the
 loop it always was. Every script that drives a game by feeding it lines is untouched.
+
+**A board is as long as it likes and a window is not.** Clearing the terminal and then writing more
+lines than it holds is what made a tall screen arrive in pieces - the terminal scrolled what had
+just been cleared, and the eye caught the halves. So a steered screen is *drawn over* rather than
+cleared and written again, the way a board on a clock always was; and `Screens.fitting` trims the
+board to what is left after the rows, the note and the prompt, which are how somebody gets off the
+screen and are therefore never what gets cut. What was cut says so, because a board that quietly
+stopped early would be a board somebody read the wrong answer off.
 
 ## Tests
 

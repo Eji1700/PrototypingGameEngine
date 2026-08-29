@@ -303,7 +303,7 @@ let private offering = drawnBy redIsTeal "rich"
 report
     "the colour screen shows what it is offering"
     true
-    (offering.Says(Keys.draw None (Options.video [ "plain"; "rich" ] "rich" redIsTeal))
+    (offering.Says(Keys.draw 100 None (Options.video [ "plain"; "rich" ] "rich" redIsTeal))
      |> inked 45)
 
 finish ()

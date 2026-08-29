@@ -67,7 +67,38 @@ module Keys =
     [<Literal>]
     let private Marker = "->"
 
-    let draw at (screen: Screen) =
+    /// The gap between one column of rows and the next; the fewest rows worth making a column out
+    /// of, because three columns of two is a shape rather than a list; and the most columns there
+    /// is any point in, since a list read left to right as well as down stops being read at all.
+    [<Literal>]
+    let private Gutter = 3
+
+    [<Literal>]
+    let private Fewest = 4
+
+    [<Literal>]
+    let private Most = 3
+
+    /// How many rows go side by side.
+    ///
+    /// One, unless every row on the screen is a bare name. A row with something to say about it is a
+    /// line of prose and belongs on a line of its own; a screen of nothing but names is a list of
+    /// names, and a list of names is read in columns. A screen with a dozen short rows on it,
+    /// drawn one to a line, is a dozen lines of a window that had something else to show.
+    let private columns room (screen: Screen) wide =
+        if screen.Rows |> List.exists (fun row -> row.Does <> "") then
+            1
+        else
+            let fitting = max 1 ((room - 2) / (wide + Gutter))
+            let worth = max 1 (List.length screen.Rows / Fewest)
+            List.min [ fitting; worth; Most ]
+
+    /// A screen, with the row at `at` marked. `room` is how wide it may be drawn.
+    ///
+    /// The rows go down a column and then down the next, never across, so that walking off the foot
+    /// of one column arrives at the head of the following one - which is what up and down do, and
+    /// there is nothing that walks sideways between them.
+    let draw room at (screen: Screen) =
         let column =
             match screen.Rows |> List.map (fun row -> String.length row.Says) with
             | [] -> 0
@@ -79,6 +110,26 @@ module Keys =
 
             (sprintf "  %s %s  %s  %s" mark digit (row.Says.PadRight column) row.Does).TrimEnd()
 
+        // What one row takes with nothing said beside it: two spaces, the mark, a space, the digit,
+        // two more, and the name padded out.
+        let wide = column + 7
+
+        let laid =
+            match columns room screen wide with
+            | 1 -> screen.Rows |> List.mapi row
+            | across ->
+                let deep = (List.length screen.Rows + across - 1) / across
+
+                [ for down in 0 .. deep - 1 ->
+                      [ for over in 0 .. across - 1 do
+                            let index = over * deep + down
+
+                            match List.tryItem index screen.Rows with
+                            | Some here -> yield (row index here).PadRight wide
+                            | None -> () ]
+                      |> String.concat (String.replicate Gutter " ")
+                      |> fun line -> line.TrimEnd() ]
+
         let indented lines =
             match lines with
             | [] -> []
@@ -88,7 +139,7 @@ module Keys =
             Environment.NewLine
             ([ ""; $"=== {screen.Title} ==="; "" ]
              @ indented screen.Prose
-             @ (screen.Rows |> List.mapi row)
+             @ laid
              @ [ "" ]
              @ indented screen.Note)
 
@@ -164,14 +215,43 @@ module Keys =
             Typing: bool
         }
 
-    let standing screen at =
-        { Stack = [ (screen, at) ]
+    /// Where somebody is standing, as the way down to it: which row of the first screen, then which
+    /// row of the screen that one opens, and so on.
+    ///
+    /// A place is kept this way rather than as the screens themselves because a game builds its
+    /// screens afresh every time it is asked for them - the ones somebody walked down are stale by
+    /// the moment they are wanted again. A path is walked down whatever was handed back this time,
+    /// and stops early where the screens no longer go that deep.
+    let rec private descend (screen: Screen) path =
+        let here at = [ (screen, at) ]
+
+        match path with
+        | [] -> here 0
+        | at :: below ->
+            let at = if at >= 0 && at < List.length screen.Rows then at else 0
+
+            match List.tryItem at screen.Rows, below with
+            | Some row, (_ :: _) ->
+                match row.Pick with
+                | Opens under -> descend under below @ here at
+                | Sends _
+                | Types _ -> here at
+            | Some _, [] -> here at
+            | None, _ -> here 0
+
+    let standing screen path =
+        { Stack = descend screen path
           Buffer = ""
           Typing = false }
 
     let facing standing = List.head standing.Stack
 
-    let started standing = List.last standing.Stack |> snd
+    /// The way back to where somebody is, outermost first - what `standing` is handed to put them
+    /// back there. Answering a line used to give back only the row of the *first* screen, so taking
+    /// anything on a list two deep dropped whoever took it back out to the top of the first one:
+    /// a list of things to tick was a list you were thrown off every time you ticked one.
+    let path standing =
+        standing.Stack |> List.rev |> List.map snd
 
     let typing standing = standing.Typing
 

@@ -433,7 +433,7 @@ report
 report
     "and the menu says the machine is on offer"
     true
-    ((Keys.draw None (Menu.screen playing plain false)).Contains "vs <skill>...")
+    ((Keys.draw 100 None (Menu.screen playing plain false)).Contains "vs <skill>...")
 
 
 report
@@ -709,7 +709,7 @@ let private walkingAt at screen keys =
 
     next (Keys.standing screen at) keys
 
-let private walking screen keys = walkingAt 0 screen keys
+let private walking screen keys = walkingAt [] screen keys
 
 let private walked keys = walking front keys
 
@@ -807,6 +807,43 @@ report
         @ ([ 'w'; 's'; 'a'; 'd' ] |> List.map letter)
         @ [ key ConsoleKey.Enter ]
     ))
+
+// A board is as long as it likes and a window is not. Clearing the terminal and then writing more
+// lines than it holds is what made a tall screen arrive in pieces - the terminal scrolled what had
+// just been cleared, and the eye caught the halves. What must never be cut is the way off the
+// screen: the rows, the note and the prompt.
+let private plainly (text: string) = text
+
+report
+    "a board taller than the window is cut to what is left after the rows and the prompt"
+    ([ for at in 1..15 -> $"board {at}" ])
+    (Screens.fitting 24 8 plainly [ for at in 1..40 -> $"board {at}" ]
+     |> List.truncate 15)
+
+report
+    "and what is drawn fits in the room there is"
+    16
+    (Screens.fitting 24 8 plainly [ for at in 1..40 -> $"board {at}" ] |> List.length)
+
+report
+    "and what was cut says so"
+    true
+    (Screens.fitting 24 8 plainly [ for at in 1..40 -> $"board {at}" ]
+     |> List.last
+     |> fun said -> said.Contains "more lines" && said.Contains "25")
+
+report "and the whole of it is drawn where it fits" [ "one"; "two" ] (Screens.fitting 24 8 plainly [ "one"; "two" ])
+
+report
+    "and nothing is cut where there is no window to cut it to"
+    40
+    (Screens.fitting System.Int32.MaxValue 8 plainly [ for at in 1..40 -> $"board {at}" ]
+     |> List.length)
+
+report
+    "and a window with no room left at all is left alone rather than cut to nothing"
+    40
+    (Screens.fitting 9 8 plainly [ for at in 1..40 -> $"board {at}" ] |> List.length)
 
 report
     "backing out of a list opened by mistake comes back to the one it was opened from"
@@ -945,8 +982,7 @@ report
 
 let private colours = settings standard
 
-[<Literal>]
-let private FirstSlot = 1
+let private FirstSlot = [ 1 ]
 
 let private walkedRight times palette =
     List.replicate times (key ConsoleKey.RightArrow)
@@ -990,22 +1026,110 @@ report
 report "right walks the top row on to the next way of drawing" (Some "view rich") (walking colours [ key ConsoleKey.RightArrow ])
 
 
-report
-    "and the cursor comes back where it was left, however deep it went"
-    3
-    (let rec next standing keys =
+let private wandered screen keys =
+    let rec next standing keys =
         match keys with
-        | [] -> Keys.started standing
+        | [] -> Keys.path standing
         | key :: rest ->
             match Keys.answer (Keys.pressed (Keys.typing standing) key) standing with
             | Keys.Steering standing -> next standing rest
-            | Keys.Answered _ -> Keys.started standing
+            | Keys.Answered _ -> Keys.path standing
 
-     next
-         (Keys.standing colours 0)
-         [ key ConsoleKey.DownArrow
-           key ConsoleKey.DownArrow
-           key ConsoleKey.DownArrow
-           key ConsoleKey.RightArrow ])
+    next (Keys.standing screen []) keys
+
+report
+    "and the cursor comes back where it was left, however deep it went"
+    [ 3 ]
+    (wandered
+        colours
+        [ key ConsoleKey.DownArrow
+          key ConsoleKey.DownArrow
+          key ConsoleKey.DownArrow
+          key ConsoleKey.RightArrow ])
+
+
+// --- staying where you are when a row is taken --------------------------------------------------
+//
+// A place is a path down through the screens, not a row on the first of them. Answering a line used
+// to hand back only that first row, so taking anything on a list one deep put whoever took it back
+// out at the top: a list of things to tick was a list you were thrown off every time you ticked one.
+
+let private ticking: Keys.Screen =
+    let thing at =
+        Keys.sends (Keys.nth at) $"thing {at}" "" $"take {at}"
+
+    { Title = "Everything there is"
+      Prose = []
+      Rows = [ for at in 0..11 -> thing at ]
+      Note = []
+      Backs = None }
+
+let private outer: Keys.Screen =
+    { Title = "The first screen"
+      Prose = []
+      Rows =
+        [ Keys.sends (Some '1') "Something" "taken here and now" "one"
+          Keys.opens (Some '2') "A list" "everything there is" ticking ]
+      Note = []
+      Backs = None }
+
+report
+    "taking a row on a list one deep leaves you standing on that row of that list"
+    [ 1; 2 ]
+    (wandered
+        outer
+        [ key ConsoleKey.DownArrow // onto 'A list'
+          key ConsoleKey.Enter // into it
+          key ConsoleKey.DownArrow
+          key ConsoleKey.DownArrow // onto its third row
+          key ConsoleKey.Enter ]) // and take it
+
+report
+    "and standing there again is standing on the same row of the same list"
+    (Some "thing 2", "Everything there is")
+    (let standing = Keys.standing outer [ 1; 2 ]
+     let showing, at = Keys.facing standing
+     showing.Rows |> List.tryItem at |> Option.map (fun row -> row.Says), showing.Title)
+
+report
+    "a path deeper than the screens now go stops where they do rather than throwing"
+    (0, "The first screen")
+    (let standing = Keys.standing outer [ 0; 4; 4 ]
+     let showing, at = Keys.facing standing
+     at, showing.Title)
+
+report "and a row that is no longer there is the first one, not a crash" 0 (Keys.standing outer [ 99 ] |> Keys.facing |> snd)
+
+
+// --- a screen of bare names, drawn in columns ---------------------------------------------------
+
+/// The most rows any one line of a drawn screen carries.
+let private abreast room screen =
+    (Keys.draw room (Some 0) screen).Split '\n'
+    |> Array.map (fun line ->
+        line.Split([| "thing " |], StringSplitOptions.None)
+        |> Array.length
+        |> fun pieces -> pieces - 1)
+    |> Array.fold max 0
+
+report "a screen whose rows have nothing to say about them is drawn in columns" 3 (abreast 100 ticking)
+
+report
+    "and every one of its rows is drawn, wherever it was put"
+    [ for at in 0..11 -> $"thing {at}" ]
+    (let drawn = Keys.draw 100 (Some 0) ticking
+
+     [ for at in 0..11 do
+           if drawn.Contains $"thing {at}" then yield $"thing {at}" ])
+
+report "and a window with no room for two columns is given one" 1 (abreast 20 ticking)
+
+/// The same list of names, with a word said about each. As many rows and as short, so the only
+/// thing between it and columns is the rule.
+let private spoken: Keys.Screen =
+    { ticking with
+        Rows = ticking.Rows |> List.map (fun row -> { row with Does = "and what it does" }) }
+
+report "and a screen with anything said beside a row stays one to a line" 1 (abreast 100 spoken)
 
 finish ()
