@@ -1,6 +1,6 @@
 namespace Prototyping.Cascade
 
-open System
+open Prototyping.Common
 
 type Way =
     | North
@@ -16,8 +16,6 @@ type Facing =
     | RightDown
     | DownLeft
     | LeftUp
-
-type Cell = { Row: int; Column: int }
 
 /// A shape the board is watched for: a whole row, a whole column, or two cells by two named by the
 /// one at its top left. All a new one has to say is which cells it stands over - everything that
@@ -72,13 +70,13 @@ module Board =
     [<Literal>]
     let Height = 16
 
-    let rows =
-        [ for row in 1..Height -> [ for column in 1..Width -> { Row = row; Column = column } ] ]
+    let grid = { Width = Width; Height = Height }
 
-    let all = List.concat rows
+    let rows = Grid.rows grid
 
-    let holds cell =
-        cell.Row >= 1 && cell.Row <= Height && cell.Column >= 1 && cell.Column <= Width
+    let all = Grid.all grid
+
+    let holds = Grid.holds grid
 
     /// The next cell that way. It may be off the board, and the caller is the one that cares - an
     /// arm pointing off the edge reaches nothing, which is all being an edge means here.
@@ -89,24 +87,11 @@ module Board =
         | West -> { cell with Column = cell.Column - 1 }
         | East -> { cell with Column = cell.Column + 1 }
 
-    [<Literal>]
-    let private First = 'a'
+    let letters = Grid.letters grid
 
-    let letters = String(Array.init Width (fun column -> char (int First + column)))
+    let name = Grid.name
 
-    let name cell =
-        $"{char (int First + cell.Column - 1)}{cell.Row}"
-
-    let read (word: string) =
-        match List.ofSeq (word.ToLowerInvariant()) with
-        | letter :: (_ :: _ as digits) when Char.IsAsciiLetterLower letter && digits |> List.forall Char.IsAsciiDigit ->
-            match Int32.TryParse(String(Array.ofList digits)) with
-            | true, row ->
-                Some
-                    { Row = row
-                      Column = int letter - int First + 1 }
-            | _ -> None
-        | _ -> None
+    let read = Grid.read
 
 module Shape =
 

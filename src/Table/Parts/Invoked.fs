@@ -10,10 +10,11 @@ module Invoked =
         | null -> "Proto"
         | path -> Path.GetFileNameWithoutExtension path
 
-    // Which ties a project's file name to the assembly it builds: `Proto.fsproj` has to produce
-    // `Proto`, and `Turncoats.fsproj` `Turncoats`, or a clone stops recognising itself and starts
-    // telling people to type a name that is not on disk yet. Renaming a project means renaming
-    // both, or setting `AssemblyName` to match.
+    // Whether this is being run from its own source directory, told by `<ourName>.fsproj` being
+    // there. That ties a project's file name to the assembly it builds: `Proto.fsproj` has to
+    // produce `Proto`, and `Turncoats.fsproj` `Turncoats`, or a clone stops recognising itself and
+    // starts telling people to type a name that is not on disk yet. Renaming a project means
+    // renaming both, or setting `AssemblyName` to match.
     let private inOurProject () =
         try
             File.Exists(Path.Combine(Directory.GetCurrentDirectory(), $"{ourName}.fsproj"))

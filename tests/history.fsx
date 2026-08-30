@@ -12,7 +12,7 @@ let private start () =
     Playing.start 2 42UL |> Result.toOption |> Option.get
 
 let private held model =
-    (Game.active (Playing.game model)).Bag |> Pile.toColors |> List.head
+    (Game.active (Playing.game model)).Bag |> Pile.toColours |> List.head
 
 let private nextMove model =
     match Playing.session model with
@@ -111,10 +111,22 @@ report "a game read back from its file is the same game" (Playing.session walked
 
 report "state for state" (states walked) (states fromFile)
 
+// Read as a person would read the file rather than through the reader that already took it: past
+// the comments and the two lines that say what was dealt, every line is one the prompt takes.
+let private preamble (line: string) =
+    line.StartsWith "format " || line.StartsWith "deal "
+
 report
     "every line of a record is either a comment or a move a player could type"
-    true
-    (Transcript.read playing written |> Result.isOk)
+    []
+    (written.Split '\n'
+     |> List.ofArray
+     |> List.map (fun line -> line.Trim())
+     |> List.filter (fun line -> line <> "" && not (line.StartsWith "#") && not (preamble line))
+     |> List.filter (fun line ->
+         match Playable.read playing line with
+         | Ok(Send _) -> false
+         | _ -> true))
 
 
 report "and says who was in each seat" seating read.Sitters
@@ -146,6 +158,28 @@ report
      | Ok _ -> false)
 
 
+// The green faction was black, and written 'k', when the earliest records were played. Nothing
+// writes either now, and a record is meant to replay for good.
+let private readsAs line =
+    match Playable.read playing line with
+    | Ok(Send msg) -> Words.command msg
+    | _ -> line
+
+report
+    "a record that says 'k' or 'black' for green still reads"
+    [ "march g 3 2 1"; "recruit g 5" ]
+    ([ "march k 3 2 1"; "recruit black 5" ] |> List.map readsAs)
+
+let private earliest =
+    System.IO.Path.Combine(__SOURCE_DIRECTORY__, "..", "logs", "2026-08-03-193909-turncoats-2p-seed639214079490240407.log")
+
+report
+    "and the record that marches a 'k' plays back whole"
+    (Ok true)
+    (Transcript.read playing (System.IO.File.ReadAllText earliest)
+     |> Result.bind (fun read -> Playing.replay read.Players read.Seed read.Moves |> Result.map Playing.isOver))
+
+
 let private filed = Transcript.path "2026-08-12-120000" walked.Journal
 
 report "a record is filed under the stamp it was saved with" (Some "2026-08-12-120000") (Transcript.stampOf filed 2 42UL)
@@ -153,7 +187,10 @@ report "a record is filed under the stamp it was saved with" (Some "2026-08-12-1
 report "and one nobody can show is this game's is left alone" None (Transcript.stampOf "logs/somebody-renamed-this.log" 2 42UL)
 
 
-let private stamp = "test-" + string (Journal.seed walked.Journal)
+// Saving writes a real record into logs/, the folder CI replays on every run. So it is stamped as
+// the program stamps its own - the game's name in the middle, as a record the house would offer -
+// at a moment no real game was played, and taken away again whatever happens in between.
+let private stamp = Transcript.stamping playing.Name (System.DateTime(2000, 1, 1))
 
 let private filedAt = Transcript.path stamp walked.Journal
 
@@ -161,21 +198,25 @@ let private savedTo journal =
     Transcript.save playing stamp seating journal |> ignore
     System.IO.File.ReadAllText filedAt
 
-savedTo (playOn 3 (start ())).Journal |> ignore
+try
+    savedTo (playOn 3 (start ())).Journal |> ignore
 
-report "a record saved again is the whole game and not two of them" written (savedTo walked.Journal)
+    report "a record saved again is the whole game and not two of them" written (savedTo walked.Journal)
 
-report "and nothing is left lying beside it" false (System.IO.File.Exists(filedAt + ".writing"))
+    report "and nothing is left lying beside it" false (System.IO.File.Exists(filedAt + ".writing"))
 
-System.IO.File.AppendAllText(filedAt, "#   10  turn")
+    System.IO.File.AppendAllText(filedAt, "#   10  turn")
 
-report "a record torn off mid-save is written out whole the next time" written (savedTo walked.Journal)
+    report "a record torn off mid-save is written out whole the next time" written (savedTo walked.Journal)
 
-System.IO.File.WriteAllText(filedAt, "deal 2 42" + System.Environment.NewLine + "negotiate")
+    System.IO.File.WriteAllText(filedAt, "deal 2 42" + System.Environment.NewLine + "negotiate")
 
-report "and a file under this name that is some other game is not added to" written (savedTo walked.Journal)
+    report "and a file under this name that is some other game is not added to" written (savedTo walked.Journal)
+finally
+    for path in [ filedAt; filedAt + ".writing" ] do
+        if System.IO.File.Exists path then System.IO.File.Delete path
 
-System.IO.File.Delete filedAt
+report "and the record the checks wrote is taken away again" false (System.IO.File.Exists filedAt)
 
 
 // === The shape of the file itself ===

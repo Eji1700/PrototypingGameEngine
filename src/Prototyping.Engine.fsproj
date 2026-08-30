@@ -6,8 +6,6 @@
        error rather than a house rule nothing checks. -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <WarningLevel>5</WarningLevel>
     <AssemblyName>Prototyping.Engine</AssemblyName>
     <RootNamespace>Prototyping</RootNamespace>
 
@@ -17,9 +15,11 @@
 
   <ItemGroup Label="Common - generic, knows nothing of any game">
     <Compile Include="Common/Result.fs" />
-    <Compile Include="Common/Cascade.fs" />
+    <Compile Include="Common/Tiebreak.fs" />
     <Compile Include="Common/Random.fs" />
     <Compile Include="Common/Counting.fs" />
+    <Compile Include="Common/Grid.fs" />
+    <Compile Include="Common/Notch.fs" />
   </ItemGroup>
 
   <ItemGroup Label="Engine - how a game is played">

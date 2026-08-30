@@ -9,16 +9,13 @@ namespace Prototyping.Warband
 /// a test with no clock and no screen anywhere near it.
 module Battle =
 
-    /// A single blow at a hex, with a warder standing in front of it if one is touching. Hands back
-    /// the squad it left behind and what to say about it.
-    let private lands side (from: Hex, kind, shot) (target: Hex) power (foe: Squad) =
+    /// A single blow at a unit, with a warder standing in front of it if one is touching. Hands
+    /// back the squad it left behind and what to say about it.
+    let private lands side (from: Hex, kind, shot) (target: Hex, standing: Standing) power (foe: Squad) =
         let at, took, guarded =
             match Squad.warder target foe with
             | Some(where, warder) -> where, warder.Kind, true
-            | None ->
-                match Squad.at target foe with
-                | Some unit -> target, unit.Kind, false
-                | None -> target, kind, false
+            | None -> target, standing.Kind, false
 
         let foe, left = Squad.hurt at power foe
 
@@ -53,7 +50,7 @@ module Battle =
             else
                 match aimed shot foe with
                 | None -> foe, told
-                | Some(target, _) ->
+                | Some target ->
                     let foe, said = lands side (from, kind, shot) target power foe
                     swing (left - 1) foe (told @ said)
 
@@ -67,12 +64,20 @@ module Battle =
         | None -> play, []
         | Some unit ->
 
+        let blows shot power times =
+            let foe = Session.other side
+
+            let after, told =
+                swinging side (hex, unit.Kind, shot) power times (Session.squadOf foe play)
+
+            Session.withSquad foe after play, told
+
         match Kinds.stance hex.Rank unit.Kind with
         | Idles -> play, [ Idled(side, hex, unit.Kind) ]
 
-        // Before anything else about a blow: whether it gets there at all. At the hex of ground the
-        // lines are dealt at every reach on the roster is enough and this never fires, which is the
-        // point - the ground is a dial that starts turned all the way down.
+        // `Session.order` leaves a unit that cannot reach out of the round, so at a table this
+        // never fires. It stays as the guard, so that a blow which cannot reach the other line
+        // lands nowhere whatever handed it the turn - a round built by hand in a test included.
         | Strikes(_, _, reach)
         | Shoots(_, _, reach) when reach < play.Engaged -> play, [ Unreached(side, hex, unit.Kind, reach) ]
 
@@ -83,19 +88,8 @@ module Battle =
                 let mine, by, left = Squad.mend where power mine
                 Session.withSquad side mine play, [ Tended(side, hex, where, hurt.Kind, by, left) ]
 
-        | Strikes(power, times, _)
-        | Shoots(power, times, _) ->
-            let shot =
-                match Kinds.stance hex.Rank unit.Kind with
-                | Shoots _ -> true
-                | _ -> false
-
-            let foe = Session.other side
-
-            let after, told =
-                swinging side (hex, unit.Kind, shot) power times (Session.squadOf foe play)
-
-            Session.withSquad foe after play, told
+        | Strikes(power, times, _) -> blows false power times
+        | Shoots(power, times, _) -> blows true power times
 
 
     /// Whether the field is settled: a squad with nobody left up has broken.

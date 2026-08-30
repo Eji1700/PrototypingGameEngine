@@ -29,7 +29,6 @@ module Turn =
         let squad = Session.squadOf side play
 
         match Squad.at hex squad with
-        | _ when Squad.full squad -> None, [ Refused(SquadFull side) ]
         | Some standing -> None, [ Refused(HexTaken(side, hex, standing.Kind)) ]
         | None when Squad.manyOf kind squad >= Squad.Alike -> None, [ Refused(TooAlike(side, kind)) ]
         | None ->
@@ -65,6 +64,12 @@ module Turn =
 
         | Fighting _, Resign -> None, [ Refused NoGivingUp ]
 
+        // A muster names no seat, so this places it for whichever squad is mustering and cannot
+        // tell who typed it. At one keyboard that is right. At a hosted table only the lobby knows
+        // which console spoke, and it enforces turns only at a game without a `Pulse` - so until
+        // it does at a pulsed game that still has turns, the other squad's console can muster
+        // here, and its 'resign' above walks away the squad whose turn it is. `warband.fsx` pins
+        // both, so that closing the gap in the lobby is noticed here.
         | Mustering side, Muster(kind, hex) -> mustering side kind hex play
         | Fighting _, Muster _ -> None, [ Refused NotMustering ]
 
@@ -89,15 +94,58 @@ module Turn =
 
         | _, Running wanted ->
             let on = wanted |> Option.defaultValue (not play.Running)
+            let joined = not (Session.isMustering play)
 
             if on = play.Running then
                 None, []
             else
-                Some { play with Running = on }, [ Happened(if on then Started else Halted) ]
+                Some { play with Running = on }, [ Happened(if on then Started joined else Halted joined) ]
+
+    /// What a move left to be heard, read off what it said. Every move that is taken sets it, so
+    /// a sound is the move's own and no other's, and a move that says nothing leaves the board
+    /// quiet by construction. One at most: a blow that settles the battle is heard as the ending.
+    let private sounding told =
+        let happened test =
+            told
+            |> List.exists (function
+                | Happened happening -> test happening
+                | Refused _ -> false)
+
+        [ if
+              happened (function
+                  | GameEnded(Walked _) -> true
+                  | _ -> false)
+          then
+              Abandoned
+          elif
+              happened (function
+                  | GameEnded _ -> true
+                  | _ -> false)
+          then
+              Settled
+          elif happened ((=) Joined) then
+              Formed
+          elif
+              happened (function
+                  | Struck _ -> true
+                  | _ -> false)
+          then
+              Blow
+          elif
+              happened (function
+                  | Mustered _ -> true
+                  | _ -> false)
+          then
+              Waited ]
 
     /// One counter for the whole game rather than one for the muster and another for the battle:
     /// what the history writes beside an entry, and what says two positions are not the same one.
     let asked move play =
         match played move play with
-        | Some play, told -> Some { play with Turn = play.Turn + 1 }, told
+        | Some play, told ->
+            Some
+                { play with
+                    Turn = play.Turn + 1
+                    Sounding = sounding told },
+            told
         | None, told -> None, told

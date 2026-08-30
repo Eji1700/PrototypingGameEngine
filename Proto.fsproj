@@ -1,10 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <WarningLevel>5</WarningLevel>
   </PropertyGroup>
 
   <ItemGroup Label="The only file in the program that names more than one game">

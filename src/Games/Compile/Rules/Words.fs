@@ -1,13 +1,11 @@
 namespace Prototyping.Compile
 
+open Prototyping.Common
 open Prototyping.Engine
 
 module Words =
 
     let player seat = $"Player {PlayerId.value seat}"
-
-    let seated yours seat =
-        player seat + (if yours then " (you)" else "")
 
     let protocol = Protocol.name
 
@@ -15,29 +13,21 @@ module Words =
 
     let line (n: int) = $"line {n}"
 
+    let private cards = Counting.a "card" "cards"
+
+    let private times = Counting.several "time" "times"
+
     /// One of these lines, for a list somebody is choosing from.
     let lines =
         function
         | [] -> "no line at all"
-        | [ only ] -> line only
-        | many ->
-            let said = many |> List.map line
-
-            String.concat ", " (List.truncate (List.length said - 1) said)
-            + " or "
-            + List.last said
+        | some -> some |> List.map line |> Counting.listed "or"
 
     /// All of these lines, for a list of what is happening to every one of them.
     let everyLine =
         function
         | [] -> "no line at all"
-        | [ only ] -> line only
-        | many ->
-            let said = many |> List.map line
-
-            String.concat ", " (List.truncate (List.length said - 1) said)
-            + " and "
-            + List.last said
+        | some -> some |> List.map line |> Counting.listed "and"
 
     let placed card =
         match card.Face with
@@ -90,14 +80,7 @@ module Words =
         let worth =
             match selector.Worth with
             | [] -> ""
-            | [ only ] -> $" worth {only}"
-            | many ->
-                let said = many |> List.map string
-
-                " worth "
-                + String.concat ", " (List.truncate (List.length said - 1) said)
-                + " or "
-                + List.last said
+            | values -> " worth " + Counting.listed "or" (values |> List.map string)
 
         let where =
             match selector.Where with
@@ -112,8 +95,7 @@ module Words =
 
     let rec printing =
         function
-        | Draw(Just 1) -> "draw a card"
-        | Draw(Just n) -> $"draw {n} cards"
+        | Draw(Just n) -> $"draw {cards n}"
         | Draw WorthOfChosen -> "draw cards equal to that card's value"
         | Draw(HowManyPlus n) -> $"draw that many cards plus {n}"
         | Draw(PerCards(each, _)) -> $"draw a card for every {each} cards in this line"
@@ -124,7 +106,7 @@ module Words =
         | Shift(selector, ThisLine) -> $"shift {pointing selector} to this line"
         | Shift(selector, ToOrFromHere) -> $"shift {pointing selector} either to or from this line"
         | Shift(selector, _) -> $"shift {pointing selector} to another line"
-        | Refreshing' -> "refresh"
+        | RefreshHand -> "refresh"
         | Give -> "give a card from your hand to your opponent"
         | TakeAtRandom -> "take a card at random from your opponent's hand"
         | StopTheirCompile -> "your opponent cannot compile next turn"
@@ -138,9 +120,10 @@ module Words =
         | OneOrMore inner -> (printing inner) + ", one or more times"
         | UnderThis FaceDown -> "play the top card of your deck face down under this card"
         | UnderThis FaceUp -> "play the top card of your deck face up under this card"
-        | Times(Just n, inner) -> $"{printing inner}, {n} times over"
+        | Times(Just n, inner) -> $"{printing inner}, {times n} over"
         | Times(PerCards(each, _), inner) -> $"{printing inner}, once for every {each} cards in this line"
-        | Times(_, inner) -> $"{printing inner}, once for each"
+        | Times(HowManyPlus n, inner) -> $"{printing inner}, as many times as that plus {n}"
+        | Times(WorthOfChosen, inner) -> $"{printing inner}, as many times as that card's value"
         | FromDeck(face, where) ->
             let way =
                 match face with
@@ -185,6 +168,13 @@ module Words =
             + (rest |> List.map printing |> String.concat ", then ")
         | Either(first, second) -> $"either {printing first} or {printing second}"
         | Opposing inner -> $"your opponent: {printing inner}"
+
+    /// A command with its line still to be chosen: the same words, less "in this line".
+    let wherever =
+        function
+        | PlayFromHand(face, _) -> printing (PlayFromHand(face, AnyLine))
+        | FromDeck(face, _) -> printing (FromDeck(face, AnyLine))
+        | command -> printing command
 
     let ongoing =
         function
@@ -281,10 +271,8 @@ module Words =
             match played.Face with
             | FaceUp -> $"{player who} plays {card played.Card} to {line where}."
             | FaceDown -> $"{player who} plays {card played.Card} face down to {line where}, for {Placed.FaceDownValue}."
-        | Refreshed(who, put, took) ->
-            match put, took with
-            | 0, took -> $"{player who} refreshes on an empty hand and draws {took}."
-            | put, took -> $"{player who} refreshes: {put} put down, {took} drawn."
+        | Refreshed(who, 0, took) -> $"{player who} refreshes on an empty hand and draws {cards took}."
+        | Refreshed(who, put, took) -> $"{player who} refreshes: {cards put} put down, {took} drawn."
         | Compiled(who, compiling, where) ->
             $"{player who} compiles {protocol compiling} on {line where}. Everything in that line goes."
         | CompiledAgain(who, compiling, where) ->
@@ -301,16 +289,20 @@ module Words =
         | Discarded(who, gone) -> $"{player who} discards {card gone}."
         | Gave(who, given) -> $"{player who} gives {card given} away."
         | TookAtRandom(who, taken) -> $"{player who} takes {card taken} at random from the other hand."
+        // Off the deck face down, neither player has seen it - so it is named to neither.
         | PlayedFromDeck(who, played, where) ->
-            $"{player who} plays {card played.Card} off the top of their own deck to {line where}."
+            match played.Face with
+            | FaceUp -> $"{player who} plays {card played.Card} off the top of their own deck to {line where}."
+            | FaceDown ->
+                $"{player who} plays a card off the top of their own deck face down to {line where}, for {Placed.FaceDownValue}."
         | Returned(who, back, where) -> $"{card back.Card} goes back to {player who}'s hand from {line where}."
         | Shifted(who, moved, from, into) -> $"{player who} shifts {card moved.Card} from {line from} to {line into}."
-        | Drew(who, count) -> if count = 1 then $"{player who} draws a card." else $"{player who} draws {count}."
+        | Drew(who, 0) -> $"{player who} draws nothing."
+        | Drew(who, count) -> $"{player who} draws {cards count}."
         | Fizzled(_, saying) -> $"{card saying} finds nothing to do."
         | Asked(who, saying) -> $"{card saying} asks {player who} to choose."
         | OverTheLimit(who, over) ->
-            let many = if over = 1 then "a card" else $"{over} cards"
-            $"{player who} is holding more than {Deck.HandSize}, so the check cache phase asks them to put {many} down."
+            $"{player who} is holding more than {Deck.HandSize}, so the check cache phase asks them to put {cards over} down."
         | Declined who -> $"{player who} says no, so nothing waiting on that happens."
         | StoppedCompiling who -> $"{player who} cannot compile when their turn next begins."
         | Showed(who, shown) -> $"{player who} shows {card shown} and puts it back."
@@ -382,10 +374,16 @@ module Words =
         | Placing(who, placed, where, from) ->
             let coming =
                 match from with
-                | Some was -> $"from {line was}"
-                | None -> "from hand"
+                | FromHand -> "from hand"
+                | OffTheDeck -> "off the top of their deck"
+                | FromLine was -> $"from {line was}"
 
-            $"{player who}'s {card placed.Card} lands on {line where}, {coming}."
+            let what =
+                match from, placed.Face with
+                | OffTheDeck, FaceDown -> "next card"
+                | _ -> card placed.Card
+
+            $"{player who}'s {what} lands on {line where}, {coming}."
         | Turning(who, placed, where) -> $"{player who}'s {card placed.Card} on {line where} is turned over."
         | Escaping wiped -> $"anything in {everyLine wiped} that can get out of a compile does it now."
         | Compiling [ only ] -> $"{line only} compiles."

@@ -7,9 +7,11 @@ type Move =
     | Whisper of who: Power option * text: string
     | Resign
 
+// An order written or taken back carries the stage it was written in, because what another power
+// may be told of it turns on that and a notice is read with nothing else to hand.
 type Happening =
-    | Wrote of Power * ProvinceId * Instruction
-    | Erased of Power * ProvinceId
+    | Wrote of Power * ProvinceId * Instruction * during: Stage
+    | Erased of Power * ProvinceId * during: Stage
     | Ready of Power
     | Passed of Passing
     | Opened of Stage * year: int
@@ -35,17 +37,6 @@ module Turn =
         | power :: _ -> Some power
         | [] -> None
 
-    let private written power play =
-        play.Written
-        |> Map.toList
-        |> List.filter (fun (province, says) ->
-            match says with
-            | Builds _ -> Position.ownerOf province play.Board = Some power
-            | _ ->
-                Position.at province play.Board |> Option.map (fun piece -> piece.Power) = Some power
-                || play.Beaten
-                   |> List.exists (fun beaten -> beaten.From = province && beaten.Piece.Power = power))
-
     let private checking power play (order: Order) =
         match play.Stage with
         | Moving _ -> Orders.forMovement play.Board power order
@@ -58,29 +49,25 @@ module Turn =
 
         | Building -> Orders.forWinter play.Board power (Session.owed power play.Board) order
 
-    let private roomForMore power play (says: Instruction) =
+    // Whether a winter has room for one more build or removal. What is already written at this
+    // province does not count, since the new order replaces it: a build written again is still the
+    // one build, as a move written again is still the one move.
+    let private roomForMore power play at (says: Instruction) =
         let owing = Session.owed power play.Board
-        let mine = written power play
+
+        let others =
+            Session.writtenBy power play |> List.filter (fst >> (<>) at) |> List.map snd
 
         match says with
         | Builds _ ->
             let already =
-                mine
-                |> List.filter (fun (_, says) ->
-                    match says with
+                others
+                |> List.filter (function
                     | Builds _ -> true
                     | _ -> false)
 
-            already |> List.length < owing
-        | Disbands when play.Stage = Building ->
-            let already =
-                mine
-                |> List.filter (fun (_, says) ->
-                    match says with
-                    | Disbands -> true
-                    | _ -> false)
-
-            already |> List.length < -owing
+            List.length already < owing
+        | Disbands when play.Stage = Building -> List.length (others |> List.filter ((=) Disbands)) < -owing
         | _ -> true
 
     let private toldOf session passings =
@@ -108,16 +95,15 @@ module Turn =
             Some session, Happened(WalkedAway power) :: toldOf session passings
 
         | Take at ->
-            match Map.tryFind at play.Written with
+            match Session.writtenBy power play |> List.tryFind (fst >> (=) at) with
             | None -> None, [ Refused(NothingWritten at) ]
-            | Some _ when written power play |> List.exists (fst >> (=) at) |> not -> None, [ Refused(NothingWritten at) ]
             | Some _ ->
                 Some(
                     InPlay
                         { play with
                             Written = Map.remove at play.Written }
                 ),
-                [ Happened(Erased(power, at)) ]
+                [ Happened(Erased(power, at, play.Stage)) ]
 
         | Commit ->
             if Set.contains power play.Sealed then
@@ -129,7 +115,7 @@ module Turn =
         | Give(at, says) ->
             match checking power play { At = at; Says = says } with
             | Error fault -> None, [ Refused(Rejected(at, fault)) ]
-            | Ok settled when not (roomForMore power play settled) ->
+            | Ok settled when not (roomForMore power play at settled) ->
                 None, [ Refused(ThatIsEnough(power, Session.owed power play.Board)) ]
             | Ok settled ->
                 Some(
@@ -137,4 +123,4 @@ module Turn =
                         { play with
                             Written = Map.add at settled play.Written }
                 ),
-                [ Happened(Wrote(power, at, settled)) ]
+                [ Happened(Wrote(power, at, settled, play.Stage)) ]

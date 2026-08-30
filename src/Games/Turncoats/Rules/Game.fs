@@ -28,12 +28,9 @@ module Game =
         { game with
             Table = Table.withActive player game.Table }
 
-
     let ruleOver regionId game = Ruling.over regionId game.Position
 
     let weighRule regionId game = Ruling.weighing regionId game.Position
-
-    let landRulings game = Ruling.landRulings game.Position
 
     let standings game = Ruling.standings game.Position
 

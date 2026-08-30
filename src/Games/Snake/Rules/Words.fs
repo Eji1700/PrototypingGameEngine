@@ -11,9 +11,6 @@ module Words =
     let player seat =
         $"Snake {System.Char.ToUpperInvariant(letter seat)}"
 
-    let seated yours seat =
-        player seat + (if yours then " (you)" else "")
-
     let direction =
         function
         | North -> "north"
@@ -47,16 +44,19 @@ module Words =
         | NobodyMoving -> "nothing is left moving"
 
     let scored play over =
-        let count seat =
+        let tally seat =
             let snake = Session.snakeAt seat play
-            $"{player seat} at {segments (Snake.length snake)}, having eaten {eaten snake.Eaten}"
+            $"at {segments (Snake.length snake)}, having eaten {eaten snake.Eaten}"
 
         match over, play.Seats with
         | NobodyMoving, [ seat ] ->
-            let snake = Session.snakeAt seat play
-            let how = snake.Fate |> Option.map fate |> Option.defaultValue "stopped"
-            $"{player seat} {how}, at {segments (Snake.length snake)} and {eaten snake.Eaten} eaten"
-        | LastMoving seat, _ -> $"{ending over} - {count seat}"
+            let how =
+                (Session.snakeAt seat play).Fate
+                |> Option.map fate
+                |> Option.defaultValue "stopped"
+
+            $"{player seat} {how}, {tally seat}"
+        | LastMoving seat, _ -> $"{ending over}, {tally seat}"
         | NobodyMoving, _ -> ending over
 
     let event =
@@ -64,7 +64,7 @@ module Words =
         | Went(who, way) -> $"{player who} goes {direction way}."
         | Ate(who, pieces, grown) -> $"{player who} eats - {eaten pieces} now, and {segments grown} once it has grown."
         | Turned(who, way) -> $"{player who} turns {direction way}."
-        | Wound notch -> $"The clock is wound to {notch} of {Session.Fastest}."
+        | Wound notch -> $"The clock is wound to {notch} of {Notch.Fastest}."
         | Stopped(who, how) -> $"{player who} {fate how}."
         | GameEnded over -> $"The game is over: {ending over}."
 
@@ -74,9 +74,11 @@ module Words =
             $"A snake cannot turn back into its own neck, and {direction way} is where this one's neck is. The other three are open."
         | HasStopped who -> $"{player who} has stopped. Nothing steers it now."
         | NoSuchSnake who -> $"There is no {player who} at this table."
-        | NoSuchSpeed said ->
-            $"Speed {said}? The clock winds from {Session.Slowest} to {Session.Fastest}, or say 'faster' and 'slower' - which is what + and - do."
-        | NotThisPace why -> $"Not in this way of playing - {why}."
+        | NoSuchSpeed said -> Notch.unknown said
+        | NotThisPace Clock ->
+            "Not in this way of playing - a direction is a turn of the head here, and the beat is what moves anybody."
+        | NotThisPace Turns ->
+            "Not in this way of playing - this way of playing takes a step when you say a direction, and waits for you in between."
 
     let command =
         Msg.written (function
@@ -84,9 +86,7 @@ module Words =
             | Onward
             | Beat -> "go"
             | Steer(seat, way) -> $"{letter seat} {direction way}"
-            | Faster -> "faster"
-            | Slower -> "slower"
-            | Speed notch -> $"speed {notch}"
+            | Wind winding -> Notch.written winding
             | Resign -> "resign")
 
     let said =

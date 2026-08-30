@@ -3,7 +3,6 @@ namespace Prototyping.TicTacToe
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.TicTacToe
 
 module Offer =
 
@@ -11,13 +10,11 @@ module Offer =
     [<Literal>]
     let Seats = 2
 
-    let private asked = Counting.several "player" "players"
-
     let private deal players _ =
         if players = Seats then
             Ok Session.dealt
         else
-            Error $"{asked players}? Noughts and crosses takes {Seats}."
+            Error $"{Commands.players players}? Noughts and crosses takes {Seats}."
 
 
     let private faults =
@@ -34,11 +31,6 @@ module Offer =
 
           if List.distinct lines |> List.length <> List.length lines then
               yield "the same winning line written down twice" ]
-
-
-    let machine rival = Machines.choosing Rival.plays rival
-
-    let private skill name = Rival.byName name |> Result.toOption
 
 
     let private scenes: Readers.Scenes<Move, Session, Notice> =
@@ -80,21 +72,13 @@ module Offer =
           Slots = Ink.slots
           Skills = Rival.all |> List.map (fun skill -> skill.Name, skill.Describe)
 
-          Seating =
-            fun seed sitting _ ->
-                Rival.seating seed (sitting |> List.map (Option.bind skill))
-                |> List.map (fun (seat, rival) ->
-                    seat,
-                    { Skill = rival.Skill.Name
-                      Plays = machine rival })
+          Seating = Playable.seating Rival.byName Rival.seating (fun rival -> rival.Skill.Name) Rival.plays
 
           Pulse = None
 
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell

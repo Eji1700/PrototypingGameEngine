@@ -18,9 +18,12 @@ module Squares =
     [<Literal>]
     let Side = 3
 
-    let all = [ 1 .. Side * Side ]
+    [<Literal>]
+    let Count = Side * Side
 
-    let holds square = square >= 1 && square <= Side * Side
+    let all = [ 1..Count ]
+
+    let holds square = square >= 1 && square <= Count
 
     let rowOf square = (square - 1) / Side + 1
 

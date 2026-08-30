@@ -3,16 +3,16 @@ namespace Prototyping.Turncoats
 open Prototyping.Engine
 
 type Move =
-    | Recruit of color: StoneColor * into: RegionId
-    | Battle of color: StoneColor * target: RegionId * driven: Casualties
-    | March of color: StoneColor * from: RegionId * into: RegionId * count: int
+    | Recruit of colour: StoneColour * into: RegionId
+    | Battle of colour: StoneColour * target: RegionId * driven: Casualties
+    | March of colour: StoneColour * from: RegionId * into: RegionId * count: int
     | Negotiate
-    | Settle of handBack: StoneColor
+    | Settle of handBack: StoneColour
     | Resign
 
 type Phase =
     | AwaitingAction
-    | AwaitingReturn of drawn: StoneColor
+    | AwaitingReturn of drawn: StoneColour
 
 type Play =
     { Game: Game
@@ -108,12 +108,12 @@ module Turn =
 
     let private carry move (play: Play) =
         match move with
-        | Recruit(color, into) -> Actions.recruit color into play.Game |> Result.map (thenEndTurn false play)
-        | Battle(color, target, driven) ->
-            Actions.battle color target driven play.Game
+        | Recruit(colour, into) -> Actions.recruit colour into play.Game |> Result.map (thenEndTurn false play)
+        | Battle(colour, target, driven) ->
+            Actions.battle colour target driven play.Game
             |> Result.map (thenEndTurn false play)
-        | March(color, from, into, count) ->
-            Actions.march color from into count play.Game
+        | March(colour, from, into, count) ->
+            Actions.march colour from into count play.Game
             |> Result.map (thenEndTurn false play)
         | Negotiate ->
             Actions.negotiate play.Game
@@ -123,7 +123,7 @@ module Turn =
                         Game = game
                         Phase = AwaitingReturn drawn },
                 [ event ])
-        | Settle color -> Actions.settle color play.Game |> Result.map (thenEndTurn true play)
+        | Settle colour -> Actions.settle colour play.Game |> Result.map (thenEndTurn true play)
         | Resign -> Ok(finish Abandoned play, [ GameEnded Abandoned ])
 
     let private attempt move (play: Play) =

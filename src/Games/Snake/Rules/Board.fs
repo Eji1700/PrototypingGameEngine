@@ -1,6 +1,6 @@
 namespace Prototyping.Snake
 
-type Cell = { Row: int; Column: int }
+open Prototyping.Common
 
 type Direction =
     | North
@@ -27,13 +27,13 @@ module Board =
     [<Literal>]
     let Height = 14
 
-    let holds cell =
-        cell.Row >= 1 && cell.Row <= Height && cell.Column >= 1 && cell.Column <= Width
+    let grid = { Width = Width; Height = Height }
 
-    let rows =
-        [ for row in 1..Height -> [ for column in 1..Width -> { Row = row; Column = column } ] ]
+    let holds = Grid.holds grid
 
-    let all = List.concat rows
+    let rows = Grid.rows grid
+
+    let all = Grid.all grid
 
     let along direction cell =
         match direction with

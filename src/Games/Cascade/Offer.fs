@@ -3,20 +3,17 @@ namespace Prototyping.Cascade
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Cascade
 
 module Offer =
 
     [<Literal>]
     let Seats = 1
 
-    let private asked = Counting.several "player" "players"
-
     let private deal players seed =
         if players = Seats then
             Ok(Session.dealt seed)
         else
-            Error $"{asked players}? Cascade seats one - whoever is touching the board."
+            Error $"{Commands.players players}? Cascade seats one - whoever is touching the board."
 
 
     /// How long until the next beat: one quarter turn, at whatever notch the board is wound to. The
@@ -29,8 +26,9 @@ module Offer =
     /// show, so a frame arriving a few milliseconds late cannot skip one of the three - a terminal
     /// polls for keypresses on its own clock and nothing lines a frame up exactly with the third of
     /// a beat it was asked for. Drawing the same picture twice costs nothing, since a screen
-    /// identical to the one already there is not written again. None at all while the board is at
-    /// rest: nothing is moving to be caught half way.
+    /// identical to the one already there is not written again. None at all once the board has
+    /// nothing left to show - a board at rest still asks for them while a shape is lit or the
+    /// strike is running down it, since those are drawn a frame at a time too.
     let private frames session =
         if Session.settling (Session.play session) then Render.Pictures * 2 else 0
 
@@ -61,25 +59,22 @@ module Offer =
         | System.ConsoleKey.RightArrow
         | System.ConsoleKey.D -> Some "right"
         | System.ConsoleKey.Spacebar -> Some "press"
-        | System.ConsoleKey.OemPlus
-        | System.ConsoleKey.Add -> Some "faster"
-        | System.ConsoleKey.OemMinus
-        | System.ConsoleKey.Subtract -> Some "slower"
-        | _ -> None
+        | _ -> Commands.winding key
 
 
     let private faults =
         [ if Board.Width < Shape.Side || Board.Height < Shape.Side then
               yield $"a board {Board.Width} by {Board.Height}, too small to lay a {Shape.Side} by {Shape.Side} square on"
 
-          if Board.Width > String.length Board.letters then
-              yield $"{Board.Width} columns, where the letters they are named by run out at {String.length Board.letters}"
+          yield! Grid.faults Board.grid
 
-          if List.length Board.all <> Board.Width * Board.Height then
-              yield $"{List.length Board.all} cells on a board of {Board.Width} by {Board.Height}"
+          // The steps of wear are counted in the rules and drawn in `Ink`, a glyph and a slot
+          // apiece, and nothing but this holds the three counts together.
+          if List.length Ink.steps <> Session.Steps then
+              yield $"{List.length Ink.steps} ways of drawing wear, where the rules count {Session.Steps} steps of it"
 
-          if Board.all |> List.exists (fun cell -> Board.read (Board.name cell) <> Some cell) then
-              yield "a cell whose name does not read back as the cell it was drawn on"
+          if List.length Ink.worn <> Session.Steps then
+              yield $"{List.length Ink.worn} slots for wear, where the rules count {Session.Steps} steps of it"
 
           for facing in Facing.all do
               let arms = Facing.arms facing
@@ -145,10 +140,10 @@ module Offer =
           if Session.Touches < 1 then
               yield $"a board worth {Session.Touches} touches, which is not a board"
 
-          if Session.quarter Session.Fastest < 1 then
-              yield $"a fastest notch of {Session.quarter Session.Fastest}ms, which is no time at all"
+          if Session.quarter Notch.Fastest < 1 then
+              yield $"a fastest notch of {Session.quarter Notch.Fastest}ms, which is no time at all"
 
-          if Session.quarter Session.Slowest <= Session.quarter Session.Fastest then
+          if Session.quarter Notch.Slowest <= Session.quarter Notch.Fastest then
               yield "a slowest notch that is not slower than the fastest one"
 
           // The rules decide which occasions strike the board and the table decides which sounds are
@@ -204,12 +199,11 @@ module Offer =
                 { Every = every
                   Beat = Beat
                   Frames = frames
-                  Pressed = pressed }
+                  Pressed = pressed
+                  Free = fun _ -> true }
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell

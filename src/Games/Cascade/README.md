@@ -154,7 +154,7 @@ is resting on. Naming a cell outright still works and is often quicker across a 
 both go through the same move: a key here stands for a line the game already reads, so nothing
 can be pressed that could not have been typed.
 
-The hand is marked on the **edges** of the board rather than in it â the row down the side, the
+The hand is marked on the **edges** of the board rather than in it — the row down the side, the
 column in capitals across the top:
 
 ```
@@ -164,8 +164,8 @@ column in capitals across the top:
  > 6 └└└┌┌┘┐┐┌└┌┘┌┘┘┐
 ```
 
-Every cell is one character wide and every one of them already says something â which way it
-faces and how worn it is â so a cursor drawn *in* the grid would be a cell that had stopped
+Every cell is one character wide and every one of them already says something — which way it
+faces and how worn it is — so a cursor drawn *in* the grid would be a cell that had stopped
 saying it. Marking the edges costs nothing and is legible in `plain`, which has no colour to
 fall back on. A browser, which can ring a cell without taking anything away from it, is told
 where the hand is instead and draws an outline.
@@ -173,7 +173,7 @@ where the hand is instead and draws an outline.
 Because the space bar presses, it is `h` that holds the clock here rather than space.
 
 Moving the hand is an ordinary move: it is in the record, it undoes, and a board taken up from a
-record comes back with the hand where it was left. It says nothing in the log, though â a line
+record comes back with the hand where it was left. It says nothing in the log, though — a line
 every time somebody nudged the cursor a square would bury what the board was actually doing.
 
 ## Commands
@@ -181,13 +181,11 @@ every time somebody nudged the cursor a square would bury what the board was act
 
 | | |
 | --- | --- |
-| arrows, `wasd` | move the hand about the board |
-| space, `press` | set the cell the hand is on turning |
+| arrows, `wasd` | move the hand a cell about the board; the keys send `up`, `down`, `left`, `right` |
+| space, `press` | set the cell the hand is on turning; the space bar sends `press` |
 | `f7` | set that cell turning, wherever the hand is |
 | `why f7` | what it would reach when it lands, and whether anything is reaching back |
 | `faster`, `slower`, `speed 7` | how long a quarter turn is given to take, from 900ms down to 100ms |
-| `up`, `down`, `left`, `right` | move the hand a cell (the arrows and `wasd` send these) |
-| `press` | set the cell the hand is on turning (the space bar sends this) |
 | `sound`, `mute` | whether this board is heard as well as read |
 | `log` | whether what the game has been saying is drawn under the board |
 | `undo`, `redo` | walk the cascade back and forward, a wave at a time |
@@ -208,8 +206,8 @@ and every other game got them for free and does nothing with them.
   the record; a *frame* is a redrawing and nothing else, and the only thing that differs from one
   to the next is `Margins.Phase`, running from 0 at a beat towards 1 before the next one. Nothing
   a frame draws can reach the timeline, the record or the rules. `Pulse.Frames` is how a game
-  asks for them, from where it stands — this one asks for six while something is turning and
-  none at all while nothing is.
+  asks for them, from where it stands — this one asks for six while it is still showing something,
+  a cell turning, a shape lit or the strike running down the board, and none at all once nothing is.
 - **A field.** `Walled` puts a wall round every cell, which is right for nine squares and
   unreadable at two hundred and fifty-six. A `Field` is a glyph a cell, with a legend across the
   top and labels down the side, and each cell carries a **mood** — a bare word saying what it is

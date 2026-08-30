@@ -499,7 +499,7 @@ and *then* asks for `rich` gets the ones they set.
 The green faction was called **Black** and written `K` earlier on, and records written
 then say so. `Parse` still reads `black` and `k`, though nothing writes them any more,
 because a record is meant to replay for good - the game in
-[logs/2026-08-03-193909](logs/2026-08-03-193909-2p-seed639214079490240407.log) has a
+[logs/2026-08-03-193909](logs/2026-08-03-193909-turncoats-2p-seed639214079490240407.log) has a
 `march k 3 2 1` in it and still plays back exactly as it did.
 
 Adding to the game means adding an endpoint here and answering it in every view.
@@ -1963,7 +1963,10 @@ every `dotnet run` line in this README is.
 | File | Role |
 | --- | --- |
 | [Result.fs](src/Common/Result.fs) | The `result` computation expression used to chain an action's checks |
-| [Cascade.fs](src/Common/Cascade.fs) | Settling a contest by measures applied in order, shared by ruling and winning. It is older than the game of the same name and has nothing to do with it |
+| [Counting.fs](src/Common/Counting.fs) | A count and the word that agrees with it, so "1 turn" and "3 turns" are never built by hand |
+| [Tiebreak.fs](src/Common/Tiebreak.fs) | Settling a contest by measures applied in order, shared by ruling and winning |
+| [Grid.fs](src/Common/Grid.fs) | A board of rows and columns with lettered cells - `f7` - shared by Life, Snake and Cascade |
+| [Notch.fs](src/Common/Notch.fs) | A clock's nine notches and what winding one does, shared by the three games on a clock |
 | [Random.fs](src/Common/Random.fs) | An immutable SplitMix64 generator, passed along as a value |
 
 **`src/Engine`** — what every turn-based game wants and none of them should write again.
@@ -2486,7 +2489,7 @@ pwsh tools/wire.ps1                   # a hosted table with two consoles at it, 
 pwsh tools/wire.ps1 -Game tictactoe
 ```
 
-And [publish.ps1](#one-file), which builds the program into one file and then plays it.
+And [publish.ps1](#one-file-each), which builds the program into one file and then plays it.
 
 `wire.ps1` is in CI; `smoke.ps1` is not, because it wants a Chromium-based browser and the
 runner may not have one. `wire.ps1` wants nothing but dotnet, and it is there because a

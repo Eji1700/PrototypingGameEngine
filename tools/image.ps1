@@ -10,16 +10,13 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
-if (-not $Tag) { $Tag = "proto-$($Game.ToLowerInvariant())" }
+. (Join-Path $PSScriptRoot "Driving.ps1")
 
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
+if (-not $Tag) { $Tag = "proto-$($Game.ToLowerInvariant())" }
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     "No docker on this machine, so there is nothing to build and nothing to check."
-    "The Dockerfile is still there to read; it has not been built by anybody yet."
+    "The Dockerfile is still there to read, and CI builds it for every game on every push."
     exit 1
 }
 
@@ -58,9 +55,11 @@ try {
 
     $keeping = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 
-    function Fetch($where) {
+    function Fetch($where, $form) {
         try {
-            $answer = Invoke-WebRequest -Uri $where -UseBasicParsing -WebSession $keeping -TimeoutSec 30
+            $answer =
+                if ($form) { Invoke-WebRequest -Uri $where -Method Post -Body $form -UseBasicParsing -WebSession $keeping -TimeoutSec 30 }
+                else { Invoke-WebRequest -Uri $where -UseBasicParsing -WebSession $keeping -TimeoutSec 30 }
             @{ Code = [int]$answer.StatusCode; Said = [string]$answer.Content }
         }
         catch {
@@ -81,11 +80,24 @@ try {
     Report "the image comes up and answers" ($front.Code -ne 0) "nothing answered on $Port after a minute"
     if ($front.Code -eq 0) { throw "there is nothing to check" }
 
+    # Run bare, the image opens a house with a word at its door - as the README says it does - and
+    # says the word in its log, which is where whoever ran it would read it from. Said once at the
+    # front door; the session keeps the cookie it is handed for everything after.
+    $log = (docker logs $container) -join "`n"
+    $word = [regex]::Match($log, 'The word at the door is ([a-z0-9-]+)\.').Groups[1].Value
+    Report "it opens with a word at its door, and says the word in its log" ($word -ne "") "the log read '$($log.Trim())'"
+    Report "and turns away a browser that has not said it" ($front.Code -eq 401) "it answered $($front.Code)"
+
+    $front = Fetch "http://localhost:$Port/?code=$word"
+
     Report "and serves its front page through the forwarded port" ($front.Code -eq 200) "it answered $($front.Code)"
-    Report "which offers a way to open a table" ($front.Said -match '/open\?players=') "the page carried no way to open one"
+    Report "which offers a way to open a table" ($front.Said -match 'action="/open"') "the page carried no way to open one"
     Report "and says which game the house is of" ($front.Said -match '<h1>') "there was no heading on it"
 
-    $opened = Fetch "http://localhost:$Port/open?players=2"
+    # The size is read off the page's own buttons rather than written here: a house of Life seats
+    # one and a house of Diplomacy seven, and a count the game does not take is refused at the door.
+    $seats = [regex]::Match($front.Said, 'name="players" value="(\d+)"').Groups[1].Value
+    $opened = Fetch "http://localhost:$Port/open" @{ players = $seats }
 
     Report "a table can be opened at it" ($opened.Code -eq 200) "opening answered $($opened.Code)"
     Report "and the browser is sent to a board of its own" ($opened.Said -match 'id="screen"') "what came back was not a board page"
@@ -99,8 +111,7 @@ try {
     $who = (docker exec $container id -un) -join ""
     Report "and it is not running as root" ($who.Trim() -ne "root" -and $who.Trim() -ne "") "it is running as '$($who.Trim())'"
 
-    ""
-    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    Finish "check"
 }
 finally {
     if ($Keep) {

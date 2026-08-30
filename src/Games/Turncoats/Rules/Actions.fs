@@ -4,7 +4,7 @@ open Prototyping.Common
 
 type Casualties =
     | AsManyAsAllowed
-    | These of StoneColor list
+    | These of StoneColour list
 
 module Actions =
 
@@ -18,47 +18,46 @@ module Actions =
             do! require (not (RegionKind.isIsolated (Board.region regionId).Kind)) (StandsApart regionId)
         }
 
-    let private takeFromBag color game =
+    let private takeFromBag colour game =
         let player = Game.active game
 
-        match Pile.tryTake color 1 player.Bag with
-        | None -> Error(NotInBag(player.Id, color))
+        match Pile.tryTake colour 1 player.Bag with
+        | None -> Error(NotInBag(player.Id, colour))
         | Some bag -> Ok(Game.withActive { player with Bag = bag } game)
 
-    let private placeFromBag color regionId game =
-        takeFromBag color game
+    let private placeFromBag colour regionId game =
+        takeFromBag colour game
         |> Result.map (fun game ->
             { game with
-                Position = Position.add color 1 regionId game.Position })
+                Position = Position.add colour 1 regionId game.Position })
 
-    let private takeStones colors regionId game =
-        colors
+    let private takeStones colours regionId game =
+        colours
         |> List.fold
-            (fun outcome color ->
+            (fun outcome colour ->
                 outcome
                 |> Result.bind (fun pile ->
-                    match Pile.tryTake color 1 pile with
+                    match Pile.tryTake colour 1 pile with
                     | Some pile -> Ok pile
-                    | None -> Error(NotStandingThere(regionId, color))))
+                    | None -> Error(NotStandingThere(regionId, colour))))
             (Ok(Game.stones regionId game))
 
 
-    let recruit color into game =
+    let recruit colour into game =
         result {
             let player = Game.active game
             do! openRegion into
-            let! game = placeFromBag color into game
-            return game, Recruited(player.Id, color, into)
+            let! game = placeFromBag colour into game
+            return game, Recruited(player.Id, colour, into)
         }
 
 
-    let private losingStones color regionId game =
-        Game.stones regionId game
-        |> Pile.toCounts
-        |> List.filter (fun (other, _) -> other <> color)
+    /// What a battle fought in `colour` may drive out of what stands there: every stone of another.
+    let losingStones colour standing =
+        Pile.toCounts standing |> List.filter (fun (other, _) -> other <> colour)
 
-    let private resolveCasualties color regionId allowed game =
-        let losing = losingStones color regionId game
+    let private resolveCasualties colour regionId allowed game =
+        let losing = losingStones colour (Game.stones regionId game)
         let available = losing |> List.sumBy snd
 
         match losing with
@@ -66,60 +65,60 @@ module Actions =
         | [ (only, _) ] -> Ok(List.replicate allowed only)
         | _ -> Error(MustChooseCasualties(regionId, Pile.ofCounts losing, allowed))
 
-    let battle color target casualties game =
+    let battle colour target casualties game =
         result {
             let player = Game.active game
             do! contestedRegion target
-            let matching = Pile.count color (Game.stones target game)
-            let available = losingStones color target game |> List.sumBy snd
+            let matching = Pile.count colour (Game.stones target game)
+            let available = losingStones colour (Game.stones target game) |> List.sumBy snd
 
-            do! require (matching >= 1) (NothingToBattleWith(target, color))
-            do! require (available >= 1) (NothingToDriveOut(target, color))
+            do! require (matching >= 1) (NothingToBattleWith(target, colour))
+            do! require (available >= 1) (NothingToDriveOut(target, colour))
 
             let! driven =
                 match casualties with
                 | These named -> Ok named
-                | AsManyAsAllowed -> resolveCasualties color target matching game
+                | AsManyAsAllowed -> resolveCasualties colour target matching game
 
             do! require (not (List.isEmpty driven)) BattleMustDriveOutSomething
-            do! require (driven |> List.forall (fun other -> other <> color)) (CannotDriveOutOwnColour color)
-            do! require (List.length driven <= matching) (MoreDrivenThanAllowed(target, color, matching))
+            do! require (driven |> List.forall (fun other -> other <> colour)) (CannotDriveOutOwnColour colour)
+            do! require (List.length driven <= matching) (MoreDrivenThanAllowed(target, colour, matching))
 
             let! held = takeStones driven target game
-            let! game = placeFromBag color Board.axe game
-            let spoils = Pile.ofColors driven
+            let! game = placeFromBag colour Board.axe game
+            let spoils = Pile.ofColours driven
 
             let game =
                 { game with
                     Position = Position.withStones target held game.Position
                     Reserve = Pile.merge spoils game.Reserve }
 
-            return game, Battled(player.Id, color, target, spoils)
+            return game, Battled(player.Id, colour, target, spoils)
         }
 
 
-    let march color from into count game =
+    let march colour from into count game =
         result {
             let player = Game.active game
             do! contestedRegion from
             do! openRegion into
             do! require (count >= 1) MarchNeedsAStone
 
-            let available = Pile.count color (Game.stones from game)
-            do! require (available >= 1) (NothingToMarch(from, color))
-            do! require (available >= count) (NotEnoughToMarch(from, color, available, count))
+            let available = Pile.count colour (Game.stones from game)
+            do! require (available >= 1) (NothingToMarch(from, colour))
+            do! require (available >= count) (NotEnoughToMarch(from, colour, available, count))
             do! require (Board.areAdjacent from into) (NotAdjacent(from, into))
 
-            let! game = placeFromBag color Board.flag game
+            let! game = placeFromBag colour Board.flag game
 
             let game =
                 { game with
                     Position =
                         game.Position
-                        |> Position.remove color count from
-                        |> Position.add color count into }
+                        |> Position.remove colour count from
+                        |> Position.add colour count into }
 
-            return game, Marched(player.Id, color, from, into, count)
+            return game, Marched(player.Id, colour, from, into, count)
         }
 
 
@@ -131,27 +130,27 @@ module Actions =
 
             match drawn with
             | None -> return! Error ReserveEmpty
-            | Some(color, reserve) ->
+            | Some(colour, reserve) ->
                 let game =
                     { game with
                         Rng = rng
                         Reserve = reserve }
                     |> Game.withActive
                         { player with
-                            Bag = Pile.add color 1 player.Bag }
+                            Bag = Pile.add colour 1 player.Bag }
 
-                return game, color, Drew(player.Id, color)
+                return game, colour, Drew(player.Id, colour)
         }
 
-    let settle color game =
+    let settle colour game =
         let player = Game.active game
 
-        match Pile.tryTake color 1 player.Bag with
-        | None -> Error(NotInBag(player.Id, color))
+        match Pile.tryTake colour 1 player.Bag with
+        | None -> Error(NotInBag(player.Id, colour))
         | Some bag ->
             let game =
                 { game with
-                    Reserve = Pile.add color 1 game.Reserve }
+                    Reserve = Pile.add colour 1 game.Reserve }
                 |> Game.withActive { player with Bag = bag }
 
-            Ok(game, HandedBack(player.Id, color))
+            Ok(game, HandedBack(player.Id, colour))

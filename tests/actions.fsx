@@ -15,10 +15,10 @@ let waste = at 6
 report "the map hangs together" [] Board.problems
 
 let private game stocked =
-    gameOf [ 8, stocked ] [ [ Red, 1; Blue, 1; Green, 1 ]; [ (Red, 1) ] ]
+    gameOf [ (8, stocked) ] [ [ Red, 1; Blue, 1; Green, 1 ]; [ (Red, 1) ] ]
 
 let private refuses name expected outcome =
-    report name (Error expected) (outcome |> Result.mapError id |> Result.map (fun _ -> ()))
+    report name (Error expected) (outcome |> Result.map ignore)
 
 let private stonesIn regionId outcome =
     outcome
@@ -30,27 +30,27 @@ let private bagOf outcome =
 
 report
     "recruit puts the stone on the map"
-    (Ok [ Red, 1 ])
+    (Ok [ (Red, 1) ])
     (Actions.recruit Red emberfall (game [])
      |> stonesIn emberfall
      |> Result.map (List.filter (fst >> (=) Red)))
 
 refuses "recruit cannot enter the dead region" (DeadGround waste) (Actions.recruit Red waste (game []))
 
-report "recruit may enter the Flag" (Ok [ Red, 1 ]) (Actions.recruit Red flag (game []) |> stonesIn flag)
+report "recruit may enter the Flag" (Ok [ (Red, 1) ]) (Actions.recruit Red flag (game []) |> stonesIn flag)
 
 
 let blueVsGreen = game [ Blue, 1; Green, 1 ]
 
 report
     "an unnamed battle drives out all it may"
-    (Ok [ Blue, 1 ])
+    (Ok [ (Blue, 1) ])
     (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen
      |> stonesIn crossroads)
 
 report
     "the battling stone goes to the Axe"
-    (Ok [ Blue, 1 ])
+    (Ok [ (Blue, 1) ])
     (Actions.battle Blue crossroads AsManyAsAllowed blueVsGreen |> stonesIn axe)
 
 report
@@ -67,7 +67,7 @@ refuses
 refuses
     "nothing of another colour to drive out"
     (NothingToDriveOut(crossroads, Blue))
-    (Actions.battle Blue crossroads AsManyAsAllowed (game [ Blue, 2 ]))
+    (Actions.battle Blue crossroads AsManyAsAllowed (game [ (Blue, 2) ]))
 
 refuses "a battle must drive out something" BattleMustDriveOutSomething (Actions.battle Blue crossroads (These []) blueVsGreen)
 
@@ -95,17 +95,20 @@ report
 refuses "a battle cannot target the Axe" (StandsApart axe) (Actions.battle Blue axe AsManyAsAllowed blueVsGreen)
 
 
-let twoBlue = game [ Blue, 2 ]
+let twoBlue = game [ (Blue, 2) ]
 
 report "marching empties the source" (Ok []) (Actions.march Blue crossroads emberfall 2 twoBlue |> stonesIn crossroads)
 
 report
     "marching fills the destination"
     (Ok [ Red, 2; Blue, 2 ])
-    (Actions.march Blue crossroads emberfall 2 (gameOf [ 8, [ Blue, 2 ]; 5, [ Red, 2 ] ] [ [ (Blue, 1) ]; [ (Red, 1) ] ])
+    (Actions.march Blue crossroads emberfall 2 (gameOf [ 8, [ (Blue, 2) ]; 5, [ (Red, 2) ] ] [ [ (Blue, 1) ]; [ (Red, 1) ] ])
      |> stonesIn emberfall)
 
-report "the marching stone goes to the Flag" (Ok [ Blue, 1 ]) (Actions.march Blue crossroads emberfall 1 twoBlue |> stonesIn flag)
+report
+    "the marching stone goes to the Flag"
+    (Ok [ (Blue, 1) ])
+    (Actions.march Blue crossroads emberfall 1 twoBlue |> stonesIn flag)
 
 refuses "nothing of that colour to march" (NothingToMarch(crossroads, Red)) (Actions.march Red crossroads emberfall 1 twoBlue)
 
@@ -159,7 +162,7 @@ let private conserved name outcome =
     report name (Ok 63) (outcome |> Result.map (fun (game, _) -> Pile.total (Game.allStones game)))
 
 let private held game =
-    (Game.active game).Bag |> Pile.toColors |> List.head
+    (Game.active game).Bag |> Pile.toColours |> List.head
 
 report "a fresh deal has all 63 stones" 63 (Pile.total (Game.allStones dealt))
 
@@ -173,7 +176,7 @@ conserved
         emberfall
         2
         { dealt with
-            Position = Position.withStones crossroads (Pile.ofCounts [ Blue, 2 ]) dealt.Position })
+            Position = Position.withStones crossroads (Pile.ofCounts [ (Blue, 2) ]) dealt.Position })
 
 conserved
     "battling conserves the stones"

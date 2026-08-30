@@ -1,10 +1,6 @@
 #load "Noughts.fsx"
 #load "Conforms.fsx"
 
-open System
-open System.Net
-open System.Text.RegularExpressions
-open System.Xml
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.TicTacToe
@@ -21,7 +17,6 @@ let private played squares =
 
 let private standing model = Model.state model
 
-let private mentions (needle: string) (text: string) = text.Contains needle
 
 
 report "the board hangs together" [] noughts.Faults
@@ -146,21 +141,7 @@ report
     ))
 
 
-let private reads typed =
-    match Playable.read noughts typed with
-    | Ok(Send msg) -> Ok(Words.command msg)
-    | Ok Help -> Ok "help"
-    | Ok(Notes wanted) -> Ok $"notes {wanted}"
-    | Ok(Listing wanted) -> Ok $"commands {wanted}"
-    | Ok(Logging wanted) -> Ok(sprintf "log %A" wanted)
-    | Ok(Hushing hushed) -> Ok $"sound {hushed}"
-    | Ok(Looking name) -> Ok $"view {name}"
-    | Ok(Asking question) -> Ok $"asking {question}"
-    | Ok Recount -> Ok "history"
-    | Ok Keep -> Ok "save"
-    | Ok Leave -> Ok "quit"
-    | Ok Nothing -> Ok "nothing"
-    | Error problem -> Error problem
+let private reads typed = Conforms.readsAs noughts typed
 
 report "'undo' is not this game's business" (Ok "undo") (reads "undo")
 
@@ -252,9 +233,6 @@ for seat in [ Seat.at 1; Seat.at 2 ] do
 
 let private views = noughts.Views standard
 
-let private seen text =
-    let uncoloured = Regex.Replace(text, "\\[[0-9;]*m", "")
-    Regex.Replace(uncoloured, "<[^>]*>", "")
 
 report "there are three of them" [ "plain"; "rich"; "html" ] (views |> List.map (fun view -> view.Name))
 
@@ -305,37 +283,12 @@ for view in views do
 
 let private page = Page.page noughts.Page standard
 
-let private fragments =
+// The board part-way through a game, which the contract never reaches; the rest of what a page
+// is sent is held for every game in `Conforms`.
+Conforms.patched
     [ "board", Page.Screen, asPage.Board Margins.all (Seat.at 1) walked
       "board with the notes off", Page.Screen, asPage.Board Margins.none (Seat.at 1) walked
-      "waiting", Page.Screen, asPage.Waiting arriving
-      "a line the game said", Page.Told, asPage.Says "It is O's turn."
-      "the record", Page.Told, asPage.History (Seat.at 1) walked
-      "the rules", Page.Told, asPage.Rules ]
-
-let private read (markup: string) =
-    let document = XmlDocument()
-    use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
-    document.Load reader
-    document
-
-let private parses (markup: string) =
-    try
-        read markup |> ignore
-        true
-    with _ ->
-        false
-
-for name, _, markup in fragments do
-    report $"the {name} is well-formed markup" true (parses markup)
-
-report "and so is the page itself" true (parses page)
-
-for name, slot, markup in fragments do
-    report
-        $"the {name} is one element, carrying the id it will be patched by"
-        slot
-        ((read markup).DocumentElement.GetAttribute "id")
+      "the record", Page.Told, asPage.History (Seat.at 1) walked ]
 
 
 let private crossesAreTeal =
@@ -360,37 +313,18 @@ report
     (asPage.Board Margins.all (Seat.at 1) walked)
     ((Playable.plainest InABrowser crossesAreTeal noughts).Board Margins.all (Seat.at 1) walked)
 
-let private posted (markup: string) =
-    Regex.Matches(WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
-    |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
-    |> List.ofSeq
-
-let private buttons = posted (asPage.Board Margins.all (Seat.at 1) walked)
+let private buttons = Conforms.posted (asPage.Board Margins.all (Seat.at 1) walked)
 
 report "the board has a button for every square nobody has taken" [ "4"; "5"; "6"; "7"; "8"; "9" ] buttons
-
-report
-    "and every one of them types a line the game's own parser takes"
-    []
-    (buttons
-     |> List.filter (fun line ->
-         match reads line with
-         | Ok "nothing"
-         | Error _ -> true
-         | Ok _ -> false))
 
 report "a square already taken is not a button" [] (buttons |> List.filter (fun line -> [ "1"; "2"; "3" ] |> List.contains line))
 
 
-let rec private controls scene =
-    match scene with
-    | Does(caption, line, _) -> [ caption, line ]
-    | Block(_, body)
-    | Stack body
-    | Beside body
-    | Tile(_, _, body) -> body |> List.collect controls
-    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect controls)
-    | _ -> []
+let private controls scene =
+    Conforms.everywhere scene
+    |> List.choose (function
+        | Does(caption, line, _) -> Some(caption, line)
+        | _ -> None)
 
 let private described = controls (Render.board Margins.all (Seat.at 1) walked)
 
@@ -406,15 +340,11 @@ report
      |> List.forall (fun (caption, _) -> plain.Board Margins.all (Seat.at 1) walked |> mentions caption))
 
 
-let rec private notes scene =
-    match scene with
-    | Note text -> [ text ]
-    | Block(_, body)
-    | Stack body
-    | Beside body
-    | Tile(_, _, body) -> body |> List.collect notes
-    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect notes)
-    | _ -> []
+let private notes scene =
+    Conforms.everywhere scene
+    |> List.choose (function
+        | Note text -> Some text
+        | _ -> None)
 
 report
     "the notes the game explains its board with"
@@ -489,6 +419,8 @@ report
 
 // === The seam every game fills in ===
 
-Conforms.against noughts 2 [ "5"; "1"; "9"; "3" ]
+// 'resign' first, so the game the contract draws is one ended on its first turn - which is where a
+// turn count built by hand reads wrong, and where nothing else looks.
+Conforms.against noughts 2 [ "resign"; "5"; "1"; "9"; "3" ]
 
 finish ()

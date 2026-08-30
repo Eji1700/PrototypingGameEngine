@@ -3,18 +3,15 @@ namespace Prototyping.Snake
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Snake
 
 module Offer =
 
-
-    let private asked = Counting.several "player" "players"
 
     let private deal pace players seed =
         if players >= Session.Fewest && players <= Session.Most then
             Ok(Session.dealt pace players seed)
         else
-            Error $"{asked players}? Snake takes {Session.Fewest} to {Session.Most}, a snake each."
+            Error $"{Commands.players players}? Snake takes {Session.Fewest} to {Session.Most}, a snake each."
 
 
     [<Literal>]
@@ -63,16 +60,14 @@ module Offer =
         | System.ConsoleKey.NumPad4 -> turning "d" "west"
         | System.ConsoleKey.NumPad5 -> turning "d" "south"
         | System.ConsoleKey.NumPad6 -> turning "d" "east"
-        | System.ConsoleKey.OemPlus
-        | System.ConsoleKey.Add -> Some "faster"
-        | System.ConsoleKey.OemMinus
-        | System.ConsoleKey.Subtract -> Some "slower"
-        | _ -> None
+        | _ -> Commands.winding key
 
 
     let private faults =
         [ if Board.Width < 2 * Snake.Length + 2 || Board.Height < Session.Most then
               yield $"a board {Board.Width} by {Board.Height}, too small to lay {Session.Most} snakes of {Snake.Length} out on"
+
+          yield! Grid.faults Board.grid
 
           for players in Session.Fewest .. Session.Most do
               let dealt = Session.play (Session.dealt Turns players 0UL)
@@ -107,11 +102,6 @@ module Offer =
 
               if dealt.Food |> Option.forall Board.holds |> not then
                   yield $"a table of {players} dealt with its food off the board" ]
-
-
-    let machine rival = Machines.choosing Rival.plays rival
-
-    let private skill name = Rival.byName name |> Result.toOption
 
 
     let private scenes pace : Readers.Scenes<Move, Session, Notice> =
@@ -161,17 +151,9 @@ module Offer =
             | Turns -> Rival.all |> List.map (fun skill -> skill.Name, skill.Describe)
 
           Seating =
-            fun seed sitting state ->
-                match pace with
-                | Clock -> []
-                | Turns ->
-                    ignore state
-
-                    Rival.seating seed (sitting |> List.map (Option.bind skill))
-                    |> List.map (fun (seat, rival) ->
-                        seat,
-                        { Skill = rival.Skill.Name
-                          Plays = machine rival })
+            match pace with
+            | Clock -> fun _ _ _ -> []
+            | Turns -> Playable.seating Rival.byName Rival.seating (fun rival -> rival.Skill.Name) Rival.plays
 
           Pulse =
             match pace with
@@ -185,12 +167,13 @@ module Offer =
                       // nothing for a frame to catch.
                       Frames = fun _ -> 0
 
-                      Pressed = pressed }
+                      Pressed = pressed
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
+                      // A steer is not a turn: the beat moves the snakes, and any console may speak.
+                      Free = fun _ -> true }
+
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell pace

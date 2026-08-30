@@ -18,6 +18,15 @@ type Pulse<'Move, 'State> =
         Frames: 'State -> int
 
         Pressed: ConsoleKeyInfo -> string option
+
+        /// Whether, where the game stands, the clock frees every seat to speak. True where the
+        /// beat is what moves the game and any console's line is a steer - Snake on the clock,
+        /// Life, Cascade - and false while a clocked game is still taking turns, as Warband does
+        /// through its muster. A table over a network used to hold the turn only at a game with
+        /// no pulse, so a hosted Warband let either console muster into the other squad and
+        /// resign for it. Where this says false the lobby takes a move from whoever is to play
+        /// and from nobody else, as it does at a game of turns.
+        Free: 'State -> bool
     }
 
 module Pulse =
@@ -103,12 +112,25 @@ type Playable<'Move, 'State, 'Notice> =
 
         Resign: 'Move option
 
+        /// What is wrong with the game as described, if anything: a board that does not add up, a
+        /// slot named twice, a card with nothing printed on it. The table refuses to open a game
+        /// that has any and says them, so a mistake in a description is met at the menu rather
+        /// than at the first move to trip on it. Empty for a game that has looked itself over and
+        /// found nothing.
         Faults: string list
 
+        /// What the game draws in colour, each under a key the table can be asked to colour -
+        /// 'blue teal' at the Video page - with a standard shade and the words the page says it by.
         Slots: Slot list
 
+        /// The ways the machine can play this game, by name and in a sentence each, for the menu
+        /// and the command line to offer. Empty for a game only people can play.
         Skills: (string * string) list
 
+        /// The machines at the table. Given the seed the game was dealt from, which skill each seat
+        /// was asked to be played by - `None` for a person - and the state as dealt, answers which
+        /// seats a machine plays and what plays them. `Playable.seating` builds it from the parts a
+        /// game with machines already has.
         Seating: uint64 -> string option list -> 'State -> (PlayerId * Seated<'Move, 'State>) list
 
         Pulse: Pulse<'Move, 'State> option
@@ -131,8 +153,13 @@ type Playable<'Move, 'State, 'Notice> =
         /// board and read a line.
         Steering: string -> Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Screen option
 
+        /// What a browser is sent besides the board: the page's title, the game's own stylesheet,
+        /// the keys it binds, and the placeholder in the prompt.
         Page: Shell
 
+        /// Every way this game can be drawn, in the palette given - at least one for a terminal
+        /// and one for a browser, which `Conforms` holds every game to. `Readers.views` makes the
+        /// three from a game's scenes.
         Views: Palette -> View<'Move, 'State, 'Notice> list
     }
 
@@ -146,6 +173,22 @@ module Playable =
     let plays state seated =
         Machines.playing state seated.Plays
         |> Option.map (fun (move, next) -> move, { seated with Plays = next })
+
+    /// A game's `Seating`, from what a game with machines already has: its skills by name, how it
+    /// seats them, what each is called and what it plays. Six games used to write the dozen lines
+    /// between those and the seam for themselves, identically.
+    let seating
+        (byName: string -> Result<'Skill, string>)
+        (seated: uint64 -> 'Skill option list -> 'State -> (PlayerId * 'Rival) list)
+        (nameOf: 'Rival -> string)
+        (plays: 'State -> 'Rival -> ('Move * 'Rival) option)
+        =
+        fun seed (sitting: string option list) state ->
+            seated seed (sitting |> List.map (Option.bind (byName >> Result.toOption))) state
+            |> List.map (fun (seat, rival) ->
+                seat,
+                { Skill = nameOf rival
+                  Plays = Machines.choosing plays rival })
 
     let roster game rivals =
         match rivals with
@@ -174,6 +217,9 @@ module Playable =
         | Some view -> Ok view
         | None -> Error $"'{name}' is not a way of showing the game here. There is {namesFor shown game}."
 
+    /// The first view of a kind, which is the plainest, since a game lists its plainest first.
+    /// `List.head` is safe here where `byName` beside it answers with a `Result`: `Conforms` holds
+    /// every game to a view of each kind, so a game with none never reaches a table.
     let plainest shown palette game = offered shown palette game |> List.head
 
     let opening shown settings game =

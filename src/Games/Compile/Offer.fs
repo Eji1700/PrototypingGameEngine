@@ -3,26 +3,30 @@ namespace Prototyping.Compile
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Compile
 
 module Offer =
 
-
-    let private asked = Counting.several "player" "players"
 
     let private deal control players seed =
         if players = Session.Seats then
             Ok(Session.dealt control seed)
         else
-            Error $"{asked players}? Compile takes {Session.Seats}, sitting opposite each other."
+            Error $"{Commands.players players}? Compile takes {Session.Seats}, sitting opposite each other."
 
+
+    let private protocols = Counting.several "protocol" "protocols"
+    let private cards = Counting.several "card" "cards"
+    let private lines = Counting.several "line" "lines"
+    let private picks = Counting.several "pick" "picks"
+    let private lanes = Counting.several "lane" "lanes"
+    let private times = Counting.several "time" "times"
 
     let private faults =
         [ if List.distinct Protocol.all |> List.length <> List.length Protocol.all then
               yield "the same protocol listed twice"
 
           if List.length Protocol.all < Draft.Picks then
-              yield $"{List.length Protocol.all} protocols, where a draft of {Draft.Picks} needs at least that many"
+              yield $"{protocols (List.length Protocol.all)}, where a draft of {Draft.Picks} needs at least that many"
 
           if List.distinct Card.values |> List.length <> List.length Card.values then
               yield "the same number printed on two of a protocol's cards"
@@ -30,10 +34,14 @@ module Offer =
           for protocol in Protocol.all do
               if List.length (Card.inProtocol protocol) <> Card.PerProtocol then
                   yield
-                      $"{Protocol.name protocol} with {List.length (Card.inProtocol protocol)} cards, where every protocol has {Card.PerProtocol}"
+                      $"{Protocol.name protocol} with {cards (List.length (Card.inProtocol protocol))}, where every protocol has {Card.PerProtocol}"
 
           if Lines.Count <> Protocol.Each then
-              yield $"{Lines.Count} lines for {Protocol.Each} protocols, where each protocol wants a line of its own"
+              yield $"{lines Lines.Count} for {protocols Protocol.Each}, where each protocol wants a line of its own"
+
+          if Deck.Size <> Protocol.Each * Card.PerProtocol then
+              yield
+                  $"a deck of {Deck.Size}, where {protocols Protocol.Each} of {cards Card.PerProtocol} make {Protocol.Each * Card.PerProtocol}"
 
           if Deck.HandSize > Deck.Size then
               yield $"an opening hand of {Deck.HandSize} out of a deck of {Deck.Size}"
@@ -55,25 +63,34 @@ module Offer =
                   yield
                       $"a line compiled at {Stack.ToCompile}, which the whole of {Protocol.name protocol} at {whole} could not reach"
 
+          if List.length Draft.order <> Draft.Picks then
+              yield $"a draft that goes {picks (List.length Draft.order)}, where the draft is {Draft.Picks}"
+
           if List.length Draft.order <> Protocol.Each * Session.Seats then
               yield
-                  $"a draft of {List.length Draft.order} picks, where {Session.Seats} players taking {Protocol.Each} each makes {Protocol.Each * Session.Seats}"
+                  $"a draft of {picks (List.length Draft.order)}, where {Commands.players Session.Seats} taking {Protocol.Each} each makes {Protocol.Each * Session.Seats}"
 
           for seat in Session.seats do
               if Draft.picksBy seat <> Protocol.Each then
-                  yield $"{Words.player seat} picking {Draft.picksBy seat} times in a draft where each takes {Protocol.Each}"
+                  yield $"{Words.player seat} picking {times (Draft.picksBy seat)} in a draft where each takes {Protocol.Each}"
 
           if Draft.order |> List.exists (fun seat -> not (List.contains seat Session.seats)) then
               yield "a draft pick belonging to a seat nobody is in"
 
           if Field.LanesForControl > Lines.Count then
-              yield $"a control component taken by leading {Field.LanesForControl} of {Lines.Count} lanes, which nobody could do"
+              yield $"a control component taken by leading {Field.LanesForControl} of {lanes Lines.Count}, which nobody could do"
 
           if Field.LanesForControl < 1 then
-              yield $"a control component taken by leading {Field.LanesForControl} lanes, which everybody has always done"
+              yield $"a control component taken by leading {lanes Field.LanesForControl}, which everybody has always done"
 
           if List.length (Protocol.orders [ 1 .. Protocol.Each ]) < 2 then
-              yield $"{Protocol.Each} protocols, which cannot be put in a different order than they are in"
+              yield $"{protocols Protocol.Each}, which cannot be put in a different order than they are in"
+
+          for card in Printed.unwritten do
+              yield $"{Card.name card} with nothing printed on it"
+
+          for card in Printed.twice do
+              yield $"{Card.name card} printed twice over"
 
           for card in Protocol.all |> List.collect Card.inProtocol do
               let text = Printed.on card
@@ -91,7 +108,7 @@ module Offer =
 
               let rec faulty =
                   function
-                  | Draw(Just n) when n < 1 -> Some $"draws {n} cards"
+                  | Draw(Just n) when n < 1 -> Some $"draws {cards n}"
                   | Opposing(Opposing _) -> Some "hands a command to the other player twice over"
                   | Opposing inner -> faulty inner
                   | _ -> None
@@ -104,11 +121,6 @@ module Offer =
 
               if text.Top |> List.exists (fun rule -> List.contains rule text.Bottom) then
                   yield $"{Card.name card} carries one rule in both its top and its bottom box" ]
-
-
-    let machine rival = Machines.choosing Rival.plays rival
-
-    let private skill name = Rival.byName name |> Result.toOption
 
 
     let private scenes: Readers.Scenes<Move, Session, Notice> =
@@ -154,21 +166,13 @@ module Offer =
           Slots = Ink.slots
           Skills = Rival.all |> List.map (fun skill -> skill.Name, skill.Describe)
 
-          Seating =
-            fun seed sitting _ ->
-                Rival.seating seed (sitting |> List.map (Option.bind skill))
-                |> List.map (fun (seat, rival) ->
-                    seat,
-                    { Skill = rival.Skill.Name
-                      Plays = machine rival })
+          Seating = Playable.seating Rival.byName Rival.seating (fun rival -> rival.Skill.Name) Rival.plays
 
           Pulse = None
 
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell

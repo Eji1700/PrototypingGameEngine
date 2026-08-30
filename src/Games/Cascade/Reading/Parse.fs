@@ -1,18 +1,17 @@
 namespace Prototyping.Cascade
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Cascade
 
 module Parse =
 
+    // A cell off the board reads as a cell all the same, and it is the rules that refuse it - so
+    // the refusal is written down, as Life's is, rather than lost at the prompt.
     let private cell (word: string) =
         match Board.read word with
-        | Some cell when Board.holds cell -> Ok cell
-        | Some _
-        | None ->
-            Error
-                $"'{word}' is not a cell. They are named by column and row - 'f7' is column f, row 7, and they run to {Board.letters[Board.Width - 1]}{Board.Height}."
+        | Some cell -> Ok cell
+        | None -> Error(Grid.unnamed Board.grid word)
 
     let private touching word =
         cell word |> Result.map (fun cell -> Send(Make(Touch cell)))
@@ -34,15 +33,7 @@ module Parse =
         | [ "touch" ] -> Ok(Send(Make Press))
         | [ "beat" ]
         | [ "tick" ] -> Ok(Send(Make Beat))
-        | [ "faster" ]
-        | [ "quicker" ]
-        | [ "+" ] -> Ok(Send(Make Faster))
-        | [ "slower" ]
-        | [ "-" ] -> Ok(Send(Make Slower))
-        | [ "speed"; notch ] ->
-            match Commands.tryInt notch with
-            | Some notch -> Ok(Send(Make(Speed notch)))
-            | None -> Error $"'{notch}' is not a speed. They run from {Session.Slowest} to {Session.Fastest}."
+        | Notch.Winds winding -> winding |> Result.map (fun winding -> Send(Make(Wind winding)))
         | [ "touch"; c ]
         | [ "t"; c ] -> touching c
         | [ "why"; c ]

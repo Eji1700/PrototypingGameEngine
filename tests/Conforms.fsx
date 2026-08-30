@@ -1,22 +1,24 @@
-/// The contract a `Playable` fills in, held to for whichever game the suite above has loaded.
-///
-/// It answers a question seven games in one repository could not otherwise be asked. About four
-/// fifths of this program is not about any of them, and until this file existed every check on
-/// that four fifths - the views, the record, the timeline, the reading of a typed line - went
-/// through Turncoats, because `Whole.fsx` is Turncoats. A claim of being generic cannot be tested
-/// by one game any more than it can be tested by the game it was extracted from.
-///
-/// This is not a suite and does not run on its own: a per-game harness loads the engine, the table
-/// and one game, and that game's suite then loads this and says
-///
-///     Conforms.against <game> <seats> [ "a line"; "another" ]
-///
-/// The lines are typed commands to play from the deal, in order. A line the rules refuse is a
-/// perfectly good line to pass: a refusal is a thing the seam has to carry, and everything below
-/// holds for it exactly as it does for a move that lands.
+// The contract a `Playable` fills in, held to for whichever game the suite above has loaded.
+//
+// It answers a question eight games in one repository could not otherwise be asked. About four
+// fifths of this program is not about any of them, and until this file existed every check on
+// that four fifths - the views, the record, the timeline, the reading of a typed line - went
+// through Turncoats, because `Whole.fsx` is Turncoats. A claim of being generic cannot be tested
+// by one game any more than it can be tested by the game it was extracted from.
+//
+// This is not a suite and does not run on its own: a per-game harness loads the engine, the table
+// and one game, and that game's suite then loads this and says
+//
+//     Conforms.against <game> <seats> [ "a line"; "another" ]
+//
+// The lines are typed commands to play from the deal, in order. A line the rules refuse is a
+// perfectly good line to pass: a refusal is a thing the seam has to carry, and everything below
+// holds for it exactly as it does for a move that lands.
 
 open System
+open System.Net
 open System.Text.RegularExpressions
+open System.Xml
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Net
@@ -24,47 +26,105 @@ open Checks
 
 
 /// One seed for every game, so a failure here is the same failure tomorrow.
+[<Literal>]
 let private Seed = 42UL
 
-/// A drawing with the colour taken back out, so that what is read below is what a player reads.
-/// The escape is built rather than spelt, to keep a character nothing shows out of this file.
-let private uncoloured text =
-    Regex.Replace(text, string (char 27) + @"\[[0-9;]*m", "")
 
-/// A one standing against a plural, which is the shape every counting bug here has had. The nouns
-/// are named rather than matched as "any word ending in s", since "1 this" is not a count. It is
-/// the same list `counting.fsx` holds the counters themselves to, applied instead to whatever a
-/// game actually drew; a game that starts counting something new belongs in both.
-let private counted =
-    [ "cells"
-      "turns"
-      "touches"
-      "waves"
-      "generations"
-      "segments"
-      "steps"
-      "pieces"
-      "squares"
-      "rows"
-      "columns"
-      "moves"
-      "players"
-      "seats"
-      "stones"
-      "cards"
-      "lines"
-      "units"
-      "builds"
-      "games"
-      "tables"
-      "centres"
-      "protocols"
-      "hexes"
-      "rounds"
-      "blows" ]
+// --- what the suites share -----------------------------------------------------------------------
+//
+// Read by the checks below and by the suites' own, for the states of a game only its suite can
+// reach. They are here rather than in `Checks.fsx` because they read the table's own types, which
+// `Checks.fsx` is loaded before; and here rather than in each suite because six suites carried a
+// copy apiece and the seventh had none.
 
-let private disagrees (text: string) =
-    Regex.IsMatch(text, @"\b1 (" + String.concat "|" counted + @")\b")
+/// A fragment of a page, read as the markup it is. Throws on anything not well-formed.
+let private read (markup: string) =
+    let document = XmlDocument()
+    use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
+    document.Load reader
+    document
+
+let parses (markup: string) =
+    try
+        read markup |> ignore
+        true
+    with _ ->
+        false
+
+/// The id a fragment carries, which is the one the page patches it in by - and nothing at all for
+/// markup that does not parse.
+let patchedBy (markup: string) =
+    try
+        (read markup).DocumentElement.GetAttribute "id"
+    with _ ->
+        ""
+
+/// Fragments a suite drew from states the contract never reaches, held to the two things every
+/// fragment is held to: it parses, and it is one element carrying the id the page patches it by.
+let patched (fragments: (string * string * string) list) =
+    for name, _, markup in fragments do
+        report $"the {name} is well-formed markup" true (parses markup)
+
+    for name, slot, markup in fragments do
+        report $"the {name} is one element, carrying the id it will be patched by" slot (patchedBy markup)
+
+let private posting = Regex(@"@post\('/say\?line=([^']*)'\)", RegexOptions.Compiled)
+
+/// The lines a page's buttons post, in the order the buttons are drawn.
+let posted (markup: string) =
+    posting.Matches(WebUtility.HtmlDecode markup)
+    |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
+    |> List.ofSeq
+
+/// Every scene under this one, itself first, walking into whatever holds scenes. Matched case by
+/// case rather than with a wildcard, so a new kind of scene that holds others is a warning here
+/// rather than a walker that silently stops short of it.
+let rec everywhere (scene: Scene) : Scene list =
+    scene
+    :: (match scene with
+        | Block(_, body)
+        | Stack body
+        | Beside body
+        | Tile(_, _, body)
+        | Patch(_, _, body) -> body |> List.collect everywhere
+        | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect everywhere)
+        | Blank
+        | Heading _
+        | Say _
+        | Note _
+        | Written _
+        | Aligned _
+        | Big _
+        | Does _
+        | Field _ -> [])
+
+/// A typed line as the line that would have made it, for a check on what a word means. A `Command`
+/// is not something two of which may be compared - it carries a move, and nothing about a game says
+/// a move can be - so it is read back as what a person would have typed to get it.
+let readsAs (game: Playable<'Move, 'State, 'Notice>) typed =
+    let switch word showing =
+        match showing with
+        | Some true -> $"{word} on"
+        | Some false -> $"{word} off"
+        | None -> word
+
+    match Playable.read game typed with
+    | Ok(Send msg) -> Ok(game.Write msg)
+    | Ok Help -> Ok "help"
+    | Ok(Notes showing) -> Ok(switch "notes" showing)
+    | Ok(Listing showing) -> Ok(switch "commands" showing)
+    | Ok(Logging showing) -> Ok(switch "log" showing)
+    | Ok(Hushing(Some true)) -> Ok "mute"
+    | Ok(Hushing(Some false)) -> Ok "unmute"
+    | Ok(Hushing None) -> Ok "sound"
+    | Ok(Looking name) -> Ok $"view {name}"
+    | Ok(Showing screen) -> Ok $"showing {screen}"
+    | Ok(Asking question) -> Ok $"asking {question}"
+    | Ok Recount -> Ok "history"
+    | Ok Keep -> Ok "save"
+    | Ok Leave -> Ok "quit"
+    | Ok Nothing -> Ok "nothing"
+    | Error problem -> Error problem
 
 
 /// What a position looks like from outside, without asking a game for an equality it never
@@ -152,7 +212,7 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
               | Error _ -> () ]
 
     match dealAt seats with
-    | Error problem -> report $"a table of {seats} is dealt" "" problem
+    | Error problem -> report $"a table of {seats} is dealt" [] [ problem ]
     | Ok dealt ->
 
     let places =
@@ -234,6 +294,10 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
 
     let made = Timeline.movesMade played.Timeline
 
+    // Said outright, because the two checks after it compare a position with itself when nothing
+    // landed, and a suite whose every line was refused would pass them without a word.
+    report "at least one of the lines the suite plays lands" true (made > 0)
+
     report
         "taking the last move back and making it again leaves the game where it stood"
         (fingerprint game plain played)
@@ -259,6 +323,30 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
         (0, made)
         (let past = Update.update game.Rules Undo wound
          Timeline.movesMade past.Timeline, Timeline.movesTakenBack past.Timeline)
+
+
+    // --- giving up ---------------------------------------------------------------------------------
+
+    // 'resign' is the table's word, and it is played here for every game that has one whatever
+    // the suite's lines do: a game ended on its first turn is where a turn count built by hand
+    // reads wrong - "Game over after 1 turns" - and nothing else looks there.
+    let resigned =
+        game.Resign
+        |> Option.map (fun move -> Update.update game.Rules (Make move) dealt)
+
+    match resigned with
+    | None -> ()
+    | Some resigned ->
+        report
+            "'resign' reads as the move the game says giving up is, and the deal takes it"
+            []
+            [ match Playable.read game "resign" with
+              | Ok(Send(Make _)) -> ()
+              | Ok _ -> yield "'resign' reads as something that is not a move"
+              | Error problem -> yield $"'resign': {problem}"
+
+              if Timeline.movesMade resigned.Timeline <> 1 then
+                  yield "resigning at the deal was refused" ]
 
 
     // --- the record --------------------------------------------------------------------------------
@@ -301,7 +389,21 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
     // --- how it is drawn ---------------------------------------------------------------------------------
 
     let states =
-        [ "the deal", dealt; "the game as played", played; "wound back", wound ]
+        [ "the deal", dealt
+          "the game as played", played
+          "wound back", wound
+          for resigned in Option.toList resigned do
+              "resigned on the first turn", resigned ]
+
+    // A table still filling up, as one is: the reader in the first seat and everybody else still
+    // to come, so what is drawn names every seat rather than nobody.
+    let arriving =
+        places
+        |> List.mapi (fun index seat ->
+            { Player = seat
+              Expected = index > 0
+              Away = false
+              Yours = index = 0 })
 
     for shown, what in [ AtATerminal, "at a terminal"; InABrowser, "in a browser" ] do
         let views = Playable.offered shown palette game
@@ -341,9 +443,20 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                   if keep view.Rules = "" then yield $"{view.Name} states no rules"
 
                   if keep (view.Says "something worth reading") = "" then
-                      yield $"{view.Name} passes a line on as nothing"
+                      yield $"{view.Name} passes a line on as nothing" ]
 
-                  keep (view.Waiting []) |> ignore ]
+        report
+            $"and draws a table still filling up with every seat named, {what}"
+            []
+            [ for view in views do
+                  let waiting = seen (keep (view.Waiting arriving))
+
+                  if waiting = "" then
+                      yield $"{view.Name} draws a table still filling up as nothing"
+
+                  for seat in places do
+                      if not (waiting.Contains(game.Seat seat)) then
+                          yield $"{view.Name} draws the table filling up without {game.Seat seat} at it" ]
 
 
     // --- the machines it offers ----------------------------------------------------------------------------
@@ -401,6 +514,21 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                       | Ok(Send _) -> ()
                       | Ok _ -> yield $"{key} presses '{line}', which is not a move"
                       | Error problem -> yield $"{key} presses '{line}', which does not read: {problem}" ]
+
+        // Asked before every move a lobby takes, so it has to answer at every state a table could
+        // stand at - a pulse that threw here would stop the table.
+        report
+            "and says at every state whether the clock has freed every seat to speak"
+            []
+            [ for where, model in states do
+                  match
+                      (try
+                          Ok(pulse.Free(Model.state model))
+                       with problem ->
+                           Error problem.Message)
+                  with
+                  | Ok _ -> ()
+                  | Error why -> yield $"{where}: {why}" ]
 
 
     // --- the section of the menu the game owns, if it has one ------------------------------------------------
@@ -549,6 +677,45 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                           | Error problem -> yield $"{where}: backing out sends '{line}', which does not read: {problem}" ]
 
 
+    // --- the settings pages -------------------------------------------------------------------------------------
+
+    // Every row on a settings page answers to a digit and 0 is the way out of every page, so a page
+    // that numbered two rows alike, or handed a row the 0, has a key that does the wrong thing -
+    // which the Video page did at a game with six colours to settle, and again at eight. Held for
+    // the pages a game's own colours, views and ways give their shape to, and the front page that
+    // opens them.
+    let drawnAs =
+        Playable.offered AtATerminal palette game |> List.map (fun view -> view.Name)
+
+    let pages =
+        [ Options.screen 1
+          Options.audio true
+          Options.video drawnAs plain.Name palette
+          Options.game [ (game.Name, game.Blurb) ] game.Name ]
+
+    report
+        "no two rows on any settings page answer to the same digit, and 0 is only ever the way out"
+        []
+        [ for page in pages do
+              let numbered =
+                  page.Rows
+                  |> List.choose (fun row -> row.Digit |> Option.map (fun digit -> digit, row))
+
+              for digit, rows in numbered |> List.groupBy fst do
+                  if List.length rows > 1 then
+                      let says = rows |> List.map (fun (_, row) -> row.Says) |> String.concat " and "
+                      yield $"{page.Title}: '{digit}' answers for {says}"
+
+              for digit, row in numbered do
+                  match digit, row.Pick with
+                  | '0', Keys.Sends line when Some line = page.Backs -> ()
+                  | '0', _ -> yield $"{page.Title}: 0 would pick '{row.Says}' rather than leave"
+                  | _ -> ()
+
+              if not (numbered |> List.exists (fun (digit, _) -> digit = '0')) then
+                  yield $"{page.Title}: no row answers to 0, so there is no leaving it by number" ]
+
+
     // --- the page a browser reads ------------------------------------------------------------------------------
 
     report
@@ -560,6 +727,57 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
           for key, does in game.Page.Keys do
               if key = "" || does = "" then
                   yield $"a key on the page that says '{key}' and does '{does}'" ]
+
+    report "and the page itself is well-formed markup" true (parses (Page.page game.Page palette))
+
+    // Everything a page is sent after that is a fragment patched into it by id - the board or the
+    // waiting screen into one place, and what the game says, its record, its rules and its answers
+    // into another - so a fragment that does not parse, or carries the wrong id, is a page that has
+    // stopped moving. Held for every view offered in a browser, at every state and every seat.
+    let fragments =
+        [ for view in Playable.offered InABrowser palette game do
+              for where, model in states do
+                  for seat in places do
+                      let who = $"seat {PlayerId.value seat}"
+
+                      yield $"{view.Name}: the board at {where}, for {who}", Page.Screen, view.Board Margins.all seat model
+
+                      yield
+                          $"{view.Name}: the board with the boxes off at {where}, for {who}",
+                          Page.Screen,
+                          view.Board Margins.none seat model
+
+                      yield $"{view.Name}: the history of {where}, for {who}", Page.Told, view.History seat model
+                      yield $"{view.Name}: the answer to 'help' at {where}, for {who}", Page.Told, view.Answer seat "help" model
+
+              yield $"{view.Name}: a table still filling up", Page.Screen, view.Waiting arriving
+              yield $"{view.Name}: a line the game said", Page.Told, view.Says "something worth reading"
+              yield $"{view.Name}: the rules", Page.Told, view.Rules ]
+
+    report
+        "and every fragment it is sent is well-formed markup - one element, carrying the id it is patched by"
+        []
+        [ for name, slot, markup in fragments do
+              if not (parses markup) then
+                  yield $"{name} is not well-formed"
+              elif patchedBy markup <> slot then
+                  yield $"{name} carries the id '{patchedBy markup}' where the page patches '{slot}'" ]
+
+    // A button posts a line, and the line has to be one the game reads - a move, a question the
+    // board answers, or a word of the table's - or it is a button that does nothing when pressed.
+    // An empty line is the same button.
+    report
+        "and every button on the board posts a line the game reads"
+        []
+        [ for view in Playable.offered InABrowser palette game do
+              for where, model in states do
+                  for seat in places do
+                      for line in List.distinct (posted (view.Board Margins.all seat model)) do
+                          match Playable.read game line with
+                          | Ok Nothing -> yield $"{view.Name} at {where} has a button that posts an empty line"
+                          | Ok _ -> ()
+                          | Error problem ->
+                              yield $"{view.Name} at {where} has a button posting '{line}', which does not read: {problem}" ]
 
 
     // --- the same table, with the players at different keyboards --------------------------------------------------
@@ -575,13 +793,13 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
         |> List.filter (fun post -> post.To = console)
         |> List.choose (fun post ->
             match post.Say with
-            | Told text
-            | Screen text
-            | TurnedAway text
-            | GotUp text -> Some text
-            | Seated(seat, _) -> Some $"seated at {seat}"
-            | Nudged
-            | Rang _ -> None)
+            | ToPlayer.Told text
+            | ToPlayer.Screen text
+            | ToPlayer.TurnedAway text
+            | ToPlayer.GotUp text -> Some text
+            | ToPlayer.Seated(seat, _) -> Some $"seated at {seat}"
+            | ToPlayer.Nudged
+            | ToPlayer.Rang _ -> None)
         |> String.concat "\n"
 
     let sits place lobby =
@@ -590,7 +808,7 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
     let filled =
         [ 1..seats ]
         |> List.fold
-            (fun (lobby, said) place -> sits place lobby ||> (fun lobby posts -> lobby, said @ [ place, posts ]))
+            (fun (lobby, said) place -> sits place lobby ||> (fun lobby posts -> lobby, said @ [ (place, posts) ]))
             (Lobby.opened game dealt [], [])
 
     let lobby, seating = filled
@@ -603,13 +821,29 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                   yield $"the console that arrived {place} was told: {heard (named place) posts}" ]
 
     report
-        "and the one after the last is turned away in words rather than dropped"
+        "and the one after the last is turned away in words, rather than dropped or seated"
         []
         [ let _, posts = sits (seats + 1) lobby
-          let said = heard (named (seats + 1)) posts
+          let ours = posts |> List.filter (fun post -> post.To = named (seats + 1))
 
-          if said = "" then
-              yield "a console arriving at a full table was told nothing at all" ]
+          let turnedAway =
+              ours
+              |> List.choose (fun post ->
+                  match post.Say with
+                  | ToPlayer.TurnedAway why -> Some why
+                  | _ -> None)
+
+          match turnedAway with
+          | [] -> yield "a console arriving at a full table was not turned away"
+          | whys ->
+              for why in whys do
+                  if why = "" then
+                      yield "a console arriving at a full table was turned away without a word"
+
+          for post in ours do
+              match post.Say with
+              | ToPlayer.Seated(seat, _) -> yield $"a console arriving at a full table was given seat {seat}"
+              | _ -> () ]
 
     report
         "a full table draws every console a board"
@@ -622,7 +856,7 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                   |> List.filter (fun post -> post.To = named place)
                   |> List.choose (fun post ->
                       match post.Say with
-                      | Screen text -> Some text
+                      | ToPlayer.Screen text -> Some text
                       | _ -> None)
 
               if drawn |> List.forall (fun text -> text = "") then

@@ -29,7 +29,8 @@ module Commands =
 
     // Split on the byte order mark as well as on spaces: a saved record or a settings file written
     // by another program can open with one, and it would otherwise glue itself to the first word.
-    let private ByteOrderMark = char 0xFEFF
+    [<Literal>]
+    let private ByteOrderMark = '﻿'
 
     let words (text: string) =
         text.Split([| ' '; '\t'; ByteOrderMark |], StringSplitOptions.RemoveEmptyEntries)
@@ -48,14 +49,50 @@ module Commands =
         | true, value -> Ok value
         | _ -> Error $"'{text}' is not a seed."
 
-    let private players = Counting.several "player" "players"
+    let players = Counting.several "player" "players"
 
-    let tryPlayerCount (fewest, most) text =
+    /// A table of `count`, or why the game will not deal one - the one sentence for a count the
+    /// game does not take, whether it was typed as a number or as a word a seat.
+    let tryPlayers (fewest, most) count =
+        if count >= fewest && count <= most then Ok count
+        elif fewest = most then Error $"{players count}? The game takes {fewest}."
+        else Error $"{players count}? The game takes {fewest} to {most}."
+
+    let tryPlayerCount seats text =
         match tryInt text with
-        | Some n when n >= fewest && n <= most -> Ok n
-        | Some n when fewest = most -> Error $"{players n}? The game takes {fewest}."
-        | Some n -> Error $"{players n}? The game takes {fewest} to {most}."
+        | Some n -> tryPlayers seats n
         | None -> Error $"'{text}' is not a number of players."
+
+    /// The words every game answers to at the prompt, described once. Every game used to describe
+    /// them in its own commands box, and the descriptions had drifted - `quit` was said three
+    /// ways - so a game lists its own moves and then these. `restart` and `resign` are beside the
+    /// list rather than in it: a game says where they go, and not every game has the second.
+    let verbs =
+        [ "undo, redo", "walk the game back and forward"
+          "history", "the record so far"
+          "notes", "hide the writing that explains the board"
+          "commands", "hide this box"
+          "log", "hide what the game has been saying"
+          "sound, mute", "whether this table is heard as well as read"
+          "view <name>", "draw the board another way"
+          "save", "write the record now"
+          "help", "every command, at length"
+          "quit", "leave; the record is written, and 'replay' takes the game up again" ]
+
+    let restart =
+        "restart", "deal a fresh game to the same players; 'restart 42' deals that one"
+
+    let resign = "resign", "give the game up, but write it down"
+
+    /// The two keys that wind a clock, as the lines they stand for - so + and - mean the same at
+    /// every board that has a speed. For a game's `Pressed` to fall back on.
+    let winding (key: ConsoleKeyInfo) =
+        match key.Key with
+        | ConsoleKey.OemPlus
+        | ConsoleKey.Add -> Some "faster"
+        | ConsoleKey.OemMinus
+        | ConsoleKey.Subtract -> Some "slower"
+        | _ -> None
 
     let private seed text = trySeed text |> Result.map Some
 

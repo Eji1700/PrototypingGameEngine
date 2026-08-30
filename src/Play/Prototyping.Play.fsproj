@@ -4,8 +4,6 @@
        ties a keyboard, a menu, a record and a wire together. This is what a game references. -->
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <WarningLevel>5</WarningLevel>
     <AssemblyName>Prototyping.Play</AssemblyName>
     <RootNamespace>Prototyping</RootNamespace>
 

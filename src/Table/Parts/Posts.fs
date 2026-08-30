@@ -1,7 +1,5 @@
 namespace Prototyping.Table
 
-open Prototyping.Engine
-
 /// What a table can be heard doing, named for what happened rather than for what it sounds like -
 /// the same bargain a `Tone` makes about colour, so a table is free to make them however it can.
 ///
@@ -43,6 +41,9 @@ module Sound =
         all |> List.tryFind (fun sound -> word sound = said)
 
 
+/// Qualified, because three of these are words the table uses elsewhere: a `Told` is also what the
+/// engine calls a notice, a `Screen` is also a menu, and a `Seated` is also a machine at a seat.
+[<RequireQualifiedAccess>]
 type ToPlayer =
     | Seated of seat: int * token: string
     | Screen of text: string

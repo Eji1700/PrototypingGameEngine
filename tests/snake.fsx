@@ -2,16 +2,13 @@
 #load "Conforms.fsx"
 
 open System
-open System.Net
-open System.Text.RegularExpressions
-open System.Xml
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Snake
 open Checks
 open Slither
 
-let private mentions (needle: string) (text: string) = text.Contains needle
 
 let private seat n = Seat.at n
 
@@ -179,10 +176,28 @@ let private following = laid [ (1, [ at 5 5; at 5 6; at 6 6; at 6 5 ], West) ] s
 
 report "a snake may move into the square its own tail is leaving" None (snakeOf 1 (played turning [ Go South ] following)).Fate
 
+/// The first snake with that much growth owed, which is what keeps its tail where it is.
+let private growing n model =
+    let put session =
+        match session with
+        | InPlay play ->
+            InPlay
+                { play with
+                    Snakes =
+                        play.Snakes
+                        |> Map.add
+                            (seat 1)
+                            { Session.snakeAt (seat 1) play with
+                                Growing = n } }
+        | finished -> finished
+
+    { model with
+        Timeline = Timeline.ofDeal (put (standing model)) }
+
 report
     "but not while it is growing, because the tail is staying where it is"
     (Some HitItself)
-    (snakeOf 1 (played turning [ Go South ] (feeding (at 6 5) following))).Fate
+    (snakeOf 1 (played turning [ Go South ] (growing 1 following))).Fate
 
 
 let private four = dealt turning 4
@@ -224,6 +239,12 @@ report
     true
     (Render.heading (seat 1) (standing wall) |> mentions "ran into the wall")
 
+report
+    "and says once how it fared, in words that agree"
+    true
+    (Render.heading (seat 1) (standing wall)
+     |> mentions "Snake A ran into the wall, at 3 segments, having eaten nothing yet")
+
 let private two = dealt turning 2
 
 let private lastOne = played turning [ Resign ] two
@@ -234,6 +255,12 @@ report
     (Session.ending (standing lastOne))
 
 report "and the game is over" true (turning.Over(standing lastOne))
+
+report
+    "which the screen says naming the winner once"
+    true
+    (Render.heading (seat 1) (standing lastOne)
+     |> mentions "Snake B is the last one moving, at 3 segments, having eaten nothing yet")
 
 report
     "a move asked for after it is over is answered by the engine, not by the game"
@@ -371,6 +398,27 @@ report "and the segment arrives the beat after" 4 (Snake.length (snakeOf 1 (beat
 
 report "and there is a fresh piece somewhere else" true ((play (beaten 1 feasting)).Food |> Option.forall Board.holds)
 
+// The eater's tail leaves on the beat it eats, as every tail that was going to move does; the
+// growth arrives the beat after. So the square that tail is leaving is open to another head.
+let private overtaking =
+    laid
+        [ (1, [ at 8 5; at 8 4; at 8 3 ], East)
+          (2, [ at 9 3; at 10 3; at 11 3 ], North) ]
+        pair
+    |> feeding (at 8 6)
+
+report
+    "a snake may take the square the eater's tail is leaving, since the growth arrives the beat after the food"
+    ([ None; None ], 1)
+    ([ (snakeOf 1 (beaten 1 overtaking)).Fate
+       (snakeOf 2 (beaten 1 overtaking)).Fate ],
+     (snakeOf 1 (beaten 1 overtaking)).Eaten)
+
+report
+    "and the beat after, the eater is a segment longer and its tail stays put"
+    (4, at 8 4)
+    (Snake.length (snakeOf 1 (beaten 2 overtaking)), List.last (snakeOf 1 (beaten 2 overtaking)).Body)
+
 
 report
     "a step is refused at a table that keeps its own time"
@@ -387,6 +435,34 @@ report
 report "giving up on a clock stops every snake" true (racing.Over(standing (played racing [ Resign ] pair)))
 
 report "and at a game of turns it stops only yours" false (turning.Over(standing (played turning [ Resign ] four)))
+
+// 1.16 in the review, the half of it that is this game's: `Playable.Resign` is a move with no seat
+// in it, so on the clock a 'resign' is the whole table's - at one keyboard the four hands are one
+// console anyway. A resign that stopped one snake and left the others racing needs the seam to
+// say who said it, and this pins what happens until it does.
+report
+    "and at a table of four on the clock, one 'resign' is everybody's, because the seam's resign carries no seat"
+    true
+    (racing.Over(standing (played racing [ Resign ] (dealt racing 4))))
+
+// The other half of `Pulse.Free`: on the clock the beat moves the snakes and a line is a steer, so a
+// hosted table takes one from any console, whichever seat the rules call active.
+report
+    "and at a hosted table on the clock a steer is taken from any console, since a line is not a turn"
+    false
+    (let lobby, _ =
+        Prototyping.Net.Lobby.opened snake (dealt racing 2) []
+        |> Prototyping.Net.Lobby.join "one" "tok-one" None plain
+
+     let lobby, _ = lobby |> Prototyping.Net.Lobby.join "two" "tok-two" None plain
+
+     lobby
+     |> Prototyping.Net.Lobby.said "two" "b north"
+     |> snd
+     |> List.exists (fun post ->
+         match post.Say with
+         | ToPlayer.Told text -> text.Contains "'s turn."
+         | _ -> false))
 
 
 let private pulse = snake.Pulse |> Option.get
@@ -407,40 +483,46 @@ report "a fresh game opens in the middle of the range" 5 (play ticking).Speed
 
 report "which is about a fifth of a second" true (beat ticking > 200.0 && beat ticking < 240.0)
 
-report "winding it up shortens the beat" true (beat (wound [ Faster ]) < beat ticking)
+report "winding it up shortens the beat" true (beat (wound [ Wind Winding.Faster ]) < beat ticking)
 
-report "and down lengthens it" true (beat (wound [ Slower ]) > beat ticking)
+report "and down lengthens it" true (beat (wound [ Wind Winding.Slower ]) > beat ticking)
 
-report "a notch can be asked for outright" 9 (play (wound [ Speed 9 ])).Speed
+report "a notch can be asked for outright" 9 (play (wound [ Wind(Winding.Speed 9) ])).Speed
 
-report "and the quickest is quick" true (beat (wound [ Speed 9 ]) < 100.0)
+report "and the quickest is quick" true (beat (wound [ Wind(Winding.Speed 9) ]) < 100.0)
 
-report "and the slowest is not" true (beat (wound [ Speed 1 ]) > 350.0)
+report "and the slowest is not" true (beat (wound [ Wind(Winding.Speed 1) ]) > 350.0)
 
 report
     "a speed nobody has is refused, and says what there is"
     true
-    (toldBy snake (wound [ Speed 12 ])
+    (toldBy snake (wound [ Wind(Winding.Speed 12) ])
      |> List.exists (mentions "The clock winds from 1 to 9"))
 
 
-report "asking for the speed it is already at changes nothing" (standing ticking) (standing (wound [ Speed 5 ]))
+report "asking for the speed it is already at changes nothing" (standing ticking) (standing (wound [ Wind(Winding.Speed 5) ]))
 
-report "and says nothing" [] (toldBy snake (wound [ Speed 5 ]))
+report "and says nothing" [] (toldBy snake (wound [ Wind(Winding.Speed 5) ]))
 
-report "nor does winding past the end of the range" (standing (wound [ Speed 9 ])) (standing (wound [ Speed 9; Faster ]))
+report
+    "nor does winding past the end of the range"
+    (standing (wound [ Wind(Winding.Speed 9) ]))
+    (standing (wound [ Wind(Winding.Speed 9); Wind Winding.Faster ]))
 
 report
     "the eating quickens it too, on top of the notch"
     true
-    (beat (wound [ Speed 5 ]) > beat (feeding (Board.along East (headOf 1 ticking)) (wound [ Speed 5 ]) |> beaten 1))
+    (beat (wound [ Wind(Winding.Speed 5) ]) > beat (
+        feeding (Board.along East (headOf 1 ticking)) (wound [ Wind(Winding.Speed 5) ])
+        |> beaten 1
+    ))
 
-report "but never past the floor" true (beat (wound [ Speed 9 ]) >= 50.0)
+report "but never past the floor" true (beat (wound [ Wind(Winding.Speed 9) ]) >= 50.0)
 
 report
     "and winding the clock is a move like any other, so it can be taken back"
     5
-    (play (Update.update racing Undo (wound [ Speed 9 ]))).Speed
+    (play (Update.update racing Undo (wound [ Wind(Winding.Speed 9) ]))).Speed
 
 let private fed pieces =
     let put session =
@@ -469,21 +551,7 @@ report
 let private keyed key =
     pulse.Pressed(ConsoleKeyInfo(' ', key, false, false, false))
 
-let private reads (game: Playable<_, _, _>) typed =
-    match Playable.read game typed with
-    | Ok(Send msg) -> Ok(Words.command msg)
-    | Ok Help -> Ok "help"
-    | Ok(Notes wanted) -> Ok $"notes {wanted}"
-    | Ok(Listing wanted) -> Ok $"commands {wanted}"
-    | Ok(Logging wanted) -> Ok(sprintf "log %A" wanted)
-    | Ok(Hushing hushed) -> Ok $"sound {hushed}"
-    | Ok(Looking name) -> Ok $"view {name}"
-    | Ok(Asking question) -> Ok $"asking {question}"
-    | Ok Recount -> Ok "history"
-    | Ok Keep -> Ok "save"
-    | Ok Leave -> Ok "quit"
-    | Ok Nothing -> Ok "nothing"
-    | Error problem -> Error problem
+let private reads (game: Playable<_, _, _>) typed = Conforms.readsAs game typed
 
 report "the arrows turn the first snake" (Some "a north") (keyed ConsoleKey.UpArrow)
 
@@ -675,9 +743,6 @@ report
 
 let private views = snake.Views standard
 
-let private seen text =
-    let uncoloured = Regex.Replace(text, string (char 27) + @"?\[[0-9;]*m", "")
-    Regex.Replace(uncoloured, "<[^>]*>", "")
 
 report "there are three of them" [ "plain"; "rich"; "html" ] (views |> List.map (fun view -> view.Name))
 
@@ -722,39 +787,14 @@ for view in views do
 
 let private page = Page.page snake.Page standard
 
-let private fragments =
+// The states the contract never reaches - two snakes a beat in, a board that has ended, a square
+// asked about; the rest of what a page is sent is held for every game in `Conforms`.
+Conforms.patched
     [ "board", Page.Screen, asPage.Board Margins.all (seat 1) (beaten 1 pair)
       "board with the notes off", Page.Screen, asPage.Board Margins.none (seat 1) pair
       "a board that has ended", Page.Screen, asPage.Board Margins.all (seat 1) (beaten 1 meeting)
-      "waiting", Page.Screen, asPage.Waiting arriving
-      "a line the game said", Page.Told, asPage.Says "Snake A turns north."
       "the record", Page.Told, asPage.History (seat 1) walked
-      "an answer", Page.Told, asPage.Answer (seat 1) "north" ticking
-      "the rules", Page.Told, asPage.Rules ]
-
-let private read (markup: string) =
-    let document = XmlDocument()
-    use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
-    document.Load reader
-    document
-
-let private parses (markup: string) =
-    try
-        read markup |> ignore
-        true
-    with _ ->
-        false
-
-for name, _, markup in fragments do
-    report $"the {name} is well-formed markup" true (parses markup)
-
-report "and so is the page itself" true (parses page)
-
-for name, slot, markup in fragments do
-    report
-        $"the {name} is one element, carrying the id it will be patched by"
-        slot
-        ((read markup).DocumentElement.GetAttribute "id")
+      "an answer", Page.Told, asPage.Answer (seat 1) "north" ticking ]
 
 let private inTeal =
     Palette.set "a" "teal" standard |> Result.toOption |> Option.get
@@ -803,12 +843,7 @@ report
      |> List.choose keyed
      |> List.sort)
 
-let private posted (markup: string) =
-    Regex.Matches(WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
-    |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
-    |> List.ofSeq
-
-let private buttons = posted (asPage.Board Margins.all (seat 1) pair)
+let private buttons = Conforms.posted (asPage.Board Margins.all (seat 1) pair)
 
 report
     "the board offers a button for each way to turn your own snake, two for the clock, and one to deal another"
@@ -818,31 +853,17 @@ report
 report
     "and the second player's board offers theirs"
     [ "b north"; "b west"; "b east"; "b south"; "slower"; "faster"; "restart" ]
-    (posted (asPage.Board Margins.all (seat 2) pair))
+    (Conforms.posted (asPage.Board Margins.all (seat 2) pair))
 
 
 report "and the one that is the engine's word is read like anybody's" (Ok "restart") (reads snake "restart")
 
-report
-    "and every one of them types a line the program takes"
-    []
-    (buttons
-     |> List.filter (fun line ->
-         match reads snake line with
-         | Ok "nothing"
-         | Error _ -> true
-         | Ok _ -> false))
 
-
-let rec private controls scene =
-    match scene with
-    | Does(caption, line, _) -> [ (caption, line) ]
-    | Block(_, body)
-    | Stack body
-    | Beside body
-    | Tile(_, _, body) -> body |> List.collect controls
-    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect controls)
-    | _ -> []
+let private controls scene =
+    Conforms.everywhere scene
+    |> List.choose (function
+        | Does(caption, line, _) -> Some(caption, line)
+        | _ -> None)
 
 let private described = controls (Render.board Margins.all (seat 1) pair)
 
@@ -850,15 +871,11 @@ report "every control types the line it is captioned with" [] (described |> List
 
 report "and the page's buttons are exactly the controls the game described" (described |> List.map snd) buttons
 
-let rec private notes scene =
-    match scene with
-    | Note text -> [ text ]
-    | Block(_, body)
-    | Stack body
-    | Beside body
-    | Tile(_, _, body) -> body |> List.collect notes
-    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect notes)
-    | _ -> []
+let private notes scene =
+    Conforms.everywhere scene
+    |> List.choose (function
+        | Note text -> Some text
+        | _ -> None)
 
 report
     "the notes the game explains its board with"

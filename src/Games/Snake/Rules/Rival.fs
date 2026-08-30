@@ -91,9 +91,9 @@ module Rival =
                 let best = rated |> List.map snd |> List.max
                 rated |> List.filter (fun (_, worth) -> worth = best) |> List.map fst
 
-        let picked, rng = Rng.intBelow (List.length wanted) rng
+        let picked, rng = Rng.pick wanted rng
 
-        Some(Go wanted[picked], { rival with Rng = rng })
+        Some(Go picked, { rival with Rng = rng })
 
 
     let easy =
@@ -116,11 +116,9 @@ module Rival =
 
     let all = [ easy; medium; hard ]
 
-    let names = Machines.named (fun skill -> skill.Name) all
-
     let byName name =
         Machines.byName (fun skill -> skill.Name) all name
 
-    let seating (seed: uint64) sitting =
+    let seating (seed: uint64) sitting _ =
         Machines.seating [ for place in 1 .. Session.Most -> Seat.at place ] seed sitting
         |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

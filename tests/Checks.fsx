@@ -1,3 +1,6 @@
+open System
+open System.Text.RegularExpressions
+
 let mutable failures = 0
 
 [<Literal>]
@@ -65,4 +68,90 @@ let finish () =
     elif failures = 1 then printfn "1 check failed"
     else printfn "%d checks failed" failures
 
-    exit failures
+    // One or nought rather than the count: on Linux the status is masked to eight bits, so a suite
+    // with exactly 256 failures would exit 0 and be called green.
+    exit (if failures = 0 then 0 else 1)
+
+
+// --- reading what a game drew ------------------------------------------------------------------
+//
+// Every suite reads drawings, and eight of them used to carry their own copy of these - spelt five
+// different ways in the case of `uncoloured`, one of which stripped nothing at all.
+
+let mentions (needle: string) (text: string) = text.Contains needle
+
+/// The colour a terminal drawing carries, as the escapes that carry it. Spelt as a code rather
+/// than the character itself, to keep a character nothing shows out of this file; built once,
+/// since the sweeps below run it over everything a game drew.
+let private colouring = Regex(@"\u001b\[[0-9;]*m", RegexOptions.Compiled)
+
+/// A drawing with the colour taken back out, so that what is read is what a player reads.
+let uncoloured (text: string) = colouring.Replace(text, "")
+
+let private tags = Regex("<[^>]*>", RegexOptions.Compiled)
+
+/// A drawing as its words alone - no colour and no markup - so a check reads the same thing off a
+/// terminal's board and a page's.
+let seen (text: string) = tags.Replace(uncoloured text, "")
+
+/// Every run of whitespace as one space, for a check that reads across a line break.
+let flat (text: string) =
+    text.Split([| ' '; '\t'; '\r'; '\n' |], StringSplitOptions.RemoveEmptyEntries)
+    |> String.concat " "
+
+
+// --- a one against a plural ---------------------------------------------------------------------
+
+/// The nouns the games count. Named rather than matched as "any word ending in s", since "1 this"
+/// and "1 has" are neither of them a count. `counting.fsx` holds the counters themselves to this
+/// list and `Conforms.fsx` everything a game drew, so a game that starts counting something new
+/// belongs here and in `counting.fsx` both.
+let counted =
+    [ "cells"
+      "turns"
+      "touches"
+      "waves"
+      "generations"
+      "segments"
+      "steps"
+      "pieces"
+      "squares"
+      "rows"
+      "columns"
+      "moves"
+      "players"
+      "seats"
+      "stones"
+      "cards"
+      "lines"
+      "units"
+      "builds"
+      "games"
+      "tables"
+      "centres"
+      "protocols"
+      "hexes"
+      "rounds"
+      "blows"
+      "ways"
+      "picks"
+      "lanes"
+      "times"
+      "provinces"
+      "seas"
+      "coasts" ]
+
+/// A one standing against a plural, which is the shape every counting bug here has had - three
+/// shapes of it. "1 cells" outright; "1 whole rows or columns", with a word between the one and the
+/// noun; and "1 cell are alive", where it is the verb that disagrees rather than the noun. The word
+/// between may not end in s, because "Player 1 draws cards" is a player and a verb, not a count.
+let private disagreeing =
+    Regex(
+        @"\b1 (\w*[^s\W] )?("
+        + String.concat "|" counted
+        + @")\b"
+        + @"|\b1 \w+ (are|were|have)\b",
+        RegexOptions.Compiled
+    )
+
+let disagrees (text: string) = disagreeing.IsMatch text

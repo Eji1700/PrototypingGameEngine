@@ -6,33 +6,41 @@ open Prototyping.Engine
 type World =
     {
         Cells: Cells
+
+        /// The generation after this one, kept beside it. A board is asked whether it has settled
+        /// far more often than it moves - every drawing asks - and with the answer already here
+        /// that is a comparison rather than a step of the rule.
+        Next: Cells
+
         Behind: Cells list
         Generation: int
-        /// Whether the rule is running of its own accord. The clock beats either way; a world that
-        /// is not running answers a beat with nothing, which the engine leaves out of the record.
         Running: bool
-        /// How fast it is wanted, from 1 to 9. What a notch is worth in time is `Offer`'s.
         Speed: int
         Rng: Rng
     }
+
+/// Where the rule has got to with a board. One answer, read by the heading in a few words and
+/// by the box beside the board in a sentence, so the two cannot disagree.
+[<RequireQualifiedAccess>]
+type Condition =
+    | Empty
+    | Settled
+    | Beating
+    | Going
 
 module World =
 
     [<Literal>]
     let Density = 30
 
-    [<Literal>]
-    let Slowest = 1
-
-    [<Literal>]
-    let Fastest = 9
-
-    [<Literal>]
-    let Ordinary = 5
+    let private holding cells world =
+        { world with
+            Cells = cells
+            Next = Torus.step cells }
 
     let dealt seed =
         let cells, rng =
-            Grid.all
+            Torus.all
             |> List.fold
                 (fun (cells, rng) cell ->
                     let roll, rng = Rng.intBelow 100 rng
@@ -40,12 +48,13 @@ module World =
                 (Set.empty, Rng.ofSeed seed)
 
         { Cells = cells
+          Next = Torus.step cells
           Behind = []
           Generation = 0
           // Dealt running, because a soup nobody has asked to see is a soup that has done
           // nothing. Stopping it is a keypress.
           Running = true
-          Speed = Ordinary
+          Speed = Notch.Ordinary
           Rng = rng }
 
     let living world = Set.count world.Cells
@@ -54,7 +63,7 @@ module World =
 
     let isEmpty world = Set.isEmpty world.Cells
 
-    let settled world = Grid.step world.Cells = world.Cells
+    let settled world = world.Next = world.Cells
 
     // A pattern that flips between two states: the generation before last is where it stands now.
     // `Behind` keeps only two, which is enough for this and not enough for longer periods.
@@ -62,6 +71,27 @@ module World =
         match world.Behind with
         | _ :: before :: _ -> before = world.Cells
         | _ -> false
+
+    let condition world =
+        if isEmpty world then Condition.Empty
+        elif settled world then Condition.Settled
+        elif beating world then Condition.Beating
+        else Condition.Going
+
+    /// The board as somebody drew it. What was behind it no longer leads up to it, so a board
+    /// just drawn on knows nothing about beating.
+    let drawn cells world =
+        { holding cells world with Behind = [] }
+
+    /// One generation on, or nothing where the rule has nothing more to do.
+    let onwards world =
+        if settled world then
+            None
+        else
+            Some
+                { holding world.Next world with
+                    Behind = (world.Cells :: world.Behind) |> List.truncate 2
+                    Generation = world.Generation + 1 }
 
 
     let seat = Seat.at 1

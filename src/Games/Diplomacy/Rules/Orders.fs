@@ -34,9 +34,6 @@ type Fault =
 
 module Orders =
 
-    let at (order: Order) = order.At
-
-
     let private couldBeCarried from into =
         from <> into && Atlas.terrainOf from = Coastal && Atlas.terrainOf into = Coastal
 

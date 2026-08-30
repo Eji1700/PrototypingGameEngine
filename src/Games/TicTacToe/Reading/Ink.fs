@@ -1,7 +1,6 @@
 namespace Prototyping.TicTacToe
 
 open Prototyping.Table
-open Prototyping.TicTacToe
 
 module Ink =
 
@@ -19,8 +18,6 @@ module Ink =
     let slots = [ slot Cross Palette.crimson; slot Nought Palette.azure ]
 
     let ink palette mark = Palette.inkOf (key mark) palette
-
-    let hidden _ = Palette.ink Palette.slate
 
     let marking =
         { Patterns = [ @"(?<named>\b(?:Crosses|Noughts)\b)"; @"(?<mark>\b[XO]\b)" ]

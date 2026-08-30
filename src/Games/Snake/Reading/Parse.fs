@@ -1,8 +1,8 @@
 namespace Prototyping.Snake
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Snake
 
 module Parse =
 
@@ -58,15 +58,7 @@ module Parse =
         | [ "go" ]
         | [ "beat" ]
         | [ "tick" ] -> Ok(Send(Make Beat))
-        | [ "faster" ]
-        | [ "quicker" ]
-        | [ "+" ] -> Ok(Send(Make Faster))
-        | [ "slower" ]
-        | [ "-" ] -> Ok(Send(Make Slower))
-        | [ "speed"; notch ] ->
-            match Commands.tryInt notch with
-            | Some notch -> Ok(Send(Make(Speed notch)))
-            | None -> Error $"'{notch}' is not a speed. They run from {Session.Slowest} to {Session.Fastest}."
+        | Notch.Winds winding -> winding |> Result.map (fun winding -> Send(Make(Wind winding)))
         | [ word ] ->
             match direction word with
             | Some way -> Ok(Send(Make(Steer(Seat.at 1, way))))

@@ -1,8 +1,8 @@
 namespace Prototyping.Snake
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Snake
 
 module Ink =
 

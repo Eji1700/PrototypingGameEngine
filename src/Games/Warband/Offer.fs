@@ -18,31 +18,35 @@ module Offer =
     let private every (_: Play) = System.TimeSpan.FromMilliseconds 600.0
 
     /// A key stands for a line the game already reads, so nothing can be pressed that could not
-    /// have been typed.
+    /// have been typed. Space is left to the table, whose hold it is - as at Life.
     let private pressed (key: System.ConsoleKeyInfo) =
         match key.Key with
-        | System.ConsoleKey.Spacebar
         | System.ConsoleKey.P -> Some "run"
         | System.ConsoleKey.OemPeriod -> Some "step"
         | _ -> None
-
-    let private asked = Counting.several "player" "players"
 
     let private deal players _ =
         if players = Seats then
             Ok Session.dealt
         else
-            Error $"{asked players}? A warband is two squads, so it takes {Seats}."
+            Error $"{Commands.players players}? A warband is two squads, so it takes {Seats}."
 
 
-    /// What the board is sounding, read off where the game stands rather than out of what it said -
-    /// which is what makes a battle taken up from a record sound like the one it was saved from. A
-    /// blow is a tap because there are thirty of them; the muster rings for whoever is waited on.
-    let private rings play =
-        match play.Stage with
-        | Mustering _ -> [ Ready ]
-        | Fighting _ -> [ Tap ]
-        | Ended _ -> [ Fanfare ]
+    /// What each of the board's occasions is heard as. A blow is a tap because there are thirty of
+    /// them; the muster rings for whoever is waited on, and the tenth placement chimes for the
+    /// lines being formed. A battle settled is the rare thing and takes the fanfare, and walking
+    /// away from the muster is an ending of the other kind.
+    let private rung =
+        function
+        | Waited -> Ready
+        | Formed -> Chime
+        | Blow -> Tap
+        | Settled -> Fanfare
+        | Abandoned -> Knell
+
+    /// Read off where the game stands rather than out of what it said, which is what makes a
+    /// battle taken up from a record sound like the one it was saved from.
+    let private rings play = play.Sounding |> List.map rung
 
 
     /// What the game checks about itself before it will open at all. Most of it is about the
@@ -154,11 +158,6 @@ module Offer =
                       yield $"a machine's plan with more than {Words.units Squad.Alike} of one kind in it" ]
 
 
-    let machine rival = Machines.choosing Rival.plays rival
-
-    let private skill name = Rival.byName name |> Result.toOption
-
-
     let private scenes: Readers.Scenes<Move, Play, Notice> =
         { Board = Render.board
           History = Render.history
@@ -203,13 +202,7 @@ module Offer =
 
           Skills = Rival.all |> List.map (fun skill -> skill.Name, skill.Describe)
 
-          Seating =
-            fun seed sitting _ ->
-                Rival.seating seed (sitting |> List.map (Option.bind skill))
-                |> List.map (fun (seat, rival) ->
-                    seat,
-                    { Skill = rival.Skill.Name
-                      Plays = machine rival })
+          Seating = Playable.seating Rival.byName Rival.seating (fun rival -> rival.Skill.Name) Rival.plays
 
           Pulse =
             Some
@@ -220,12 +213,13 @@ module Offer =
                   // worth drawing.
                   Frames = fun _ -> 0
 
-                  Pressed = pressed }
+                  Pressed = pressed
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
+                  // The muster is played in turns, and only the battle after it runs on the beat.
+                  Free = fun play -> not (Session.isMustering play) }
+
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell

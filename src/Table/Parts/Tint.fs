@@ -12,8 +12,10 @@ type Marking =
 
 module Tint =
 
+    /// What a heading is drawn in, wherever one is drawn: the ones found in plain text, and the
+    /// rules and panel titles a rich screen draws for itself.
     [<Literal>]
-    let private HeadingInk = "bold"
+    let HeadingInk = "bold"
 
     let wrap style (text: string) = $"[{style}]{text}[/]"
 
@@ -59,6 +61,9 @@ module Tint =
 
     // Rendered far wider than any terminal, because this is painting a line of text rather than
     // laying out a screen: Spectre would otherwise wrap it to a width nothing here has asked for.
+    // Markup Spectre cannot parse comes back as the text was rather than taking the screen down:
+    // the text is escaped before the patterns run, so the only markup here is what a game's own
+    // `Paint` wrote, and a bracket out of place in that should cost the colour and no more.
     let painter marking =
         let markup = markup marking
 

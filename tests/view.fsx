@@ -18,7 +18,7 @@ let private seen text =
     Regex.Replace(uncoloured text, "<[^>]*>", "")
 
 let private spellings (player: Player) =
-    let stones = player.Bag |> Pile.toColors |> List.map (Words.glyph >> string)
+    let stones = player.Bag |> Pile.toColours |> List.map (Words.glyph >> string)
 
     [ String.concat " " stones; String.concat "" stones; Words.counted player.Bag ]
 
@@ -50,7 +50,7 @@ let private drawn = dealt |> Playing.update (Make Negotiate)
 
 let private drewColor =
     match Playing.session drawn with
-    | InPlay { Phase = AwaitingReturn color } -> Words.color color
+    | InPlay { Phase = AwaitingReturn colour } -> Words.colour colour
     | _ -> failwith "the negotiation did not leave a stone to hand back"
 
 for view in views do
@@ -133,23 +133,54 @@ let private arriving =
 for view in views do
     let screen = unwrapped (view.Waiting arriving)
 
-    report $"the {view.Name} view says what it is waiting for" true (screen |> mentions Render.Filling.title)
+    report $"the {view.Name} view says what it is waiting for" true (screen |> mentions Scene.Filling.title)
 
     for seat in arriving do
         report
             $"and the {view.Name} view says where {Words.player seat.Player} stands, in the words every view uses"
             true
-            (screen |> mentions (Render.Filling.standing seat))
+            (screen |> mentions (Scene.Filling.standing seat))
 
     report
         $"and the {view.Name} view says how many are still to come"
         true
-        (screen |> mentions (Render.Filling.stillToCome arriving))
+        (screen |> mentions (Scene.Filling.stillToCome arriving))
 
     report
         $"and the {view.Name} view marks the seat belonging to whoever is reading"
         true
-        (screen |> mentions (Words.seated true arriving.Head.Player))
+        (screen |> mentions (Render.seated true arriving.Head.Player))
+
+
+// Every seat taken and one console dropped: nobody is expected, and nought is where a count
+// built by hand reads wrong.
+let private allHere =
+    arriving |> List.map (fun seat -> { seat with Expected = false })
+
+for view in views do
+    let screen = unwrapped (view.Waiting allHere)
+
+    report
+        $"and with every seat taken the {view.Name} view says so, rather than counting to nought"
+        true
+        (screen |> mentions (Scene.Filling.stillToCome allHere)
+         && not (screen |> mentions "0 more"))
+
+
+let private givenUp = dealt |> Playing.update (Make Resign)
+
+report
+    "a game given up on the first turn is headed in words that agree"
+    true
+    (Render.heading seats[0] givenUp |> mentions "after 1 turn -")
+
+for view in views do
+    let drawn = unwrapped (view.Board Margins.all seats[0].Id givenUp)
+
+    report
+        $"and the {view.Name} view draws that heading"
+        true
+        (drawn |> mentions "after 1 turn -" && not (drawn |> mentions "1 turns"))
 
 
 let private rich = drawnBy standard "rich"
@@ -305,5 +336,51 @@ report
     true
     (offering.Says(Keys.draw 100 None (Options.video [ "plain"; "rich" ] "rich" redIsTeal))
      |> inked 45)
+
+
+// No game here draws a grid with nothing in it, but the next one may; every reader draws it as
+// nothing rather than throwing at the first empty board.
+let private survives draw =
+    try
+        draw () |> ignore
+        true
+    with _ ->
+        false
+
+report
+    "a grid with no rows in it is drawn by every reader rather than thrown at"
+    [ true; true; true ]
+    (let empty = Walled(3, [])
+
+     [ survives (fun () -> Readers.Plain.screen empty)
+       survives (fun () -> Readers.Panels.screen (fun _ text -> text) 80 standard empty)
+       survives (fun () -> Readers.Pages.screen empty) ])
+
+report "and in plain text it is nothing at all" "" (Readers.Plain.screen (Walled(3, [])))
+
+
+// The two painters a rich view is drawn with each compile a regex when they are built. A game's
+// `Views` is `Readers.views scenes` and no more, so they are built once for the game rather than
+// once for every palette a table asks for - and a table asks every time somebody sits down. A
+// pattern that will not compile shows where that happens: at the game, before any palette asks.
+let private scenes: Readers.Scenes<unit, unit, unit> =
+    { Board = (fun _ _ _ -> Blank)
+      History = (fun _ _ -> Blank)
+      Answer = (fun _ _ _ -> Blank)
+      Rules = Blank
+      Waiting = (fun _ -> Blank)
+      Marking =
+        { Patterns = [ "(?<unclosed" ]
+          Paint = fun _ found -> found.Value }
+      Width = 80 }
+
+report
+    "a game's painters are built when its views are, not again for every palette that asks"
+    true
+    (try
+        Readers.views scenes |> ignore
+        false
+     with :? System.ArgumentException ->
+         true)
 
 finish ()

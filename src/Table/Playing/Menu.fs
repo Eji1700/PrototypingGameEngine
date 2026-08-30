@@ -32,7 +32,7 @@ module Menu =
           Rows =
             [ for players in game.Fewest .. game.Most ->
                   Keys.sends
-                      (Some(char (int '0' + players)))
+                      (Keys.nth (players - 1))
                       (Counting.several "player" "players" players)
                       ""
                       $"seats {Seating.line (Seating.here players)}" ]
@@ -160,7 +160,7 @@ module Menu =
 
             Keys.sends
                 (Keys.nth at)
-                (record.Written.ToString "d MMM HH:mm")
+                (record.Written.ToString "d MMM yyyy HH:mm")
                 (sprintf "%-10s%-12s%s%s" seats moves record.Named said)
                 $"replay {record.Named}"
 
@@ -179,7 +179,9 @@ module Menu =
                   "strength it was playing them - and it goes on being written to the same file." ]
           Rows = records |> List.mapi row
           Note =
-            [ "The most recently put down is first. 'undo' walks a game you take up backwards"
+            [ (match records with
+               | [] -> "'undo' walks a game you take up backwards"
+               | _ -> "The most recently put down is first. 'undo' walks a game you take up backwards")
               "through every state it really passed through, so this is how a game is reviewed as"
               "well as how it is carried on."
               ""
@@ -201,9 +203,7 @@ module Menu =
                 |> List.tryFindIndex (fun name -> name = showing.Name)
                 |> Option.defaultValue 0
 
-            let count = List.length names
-
-            $"view {names[((at + step) % count + count) % count]}"
+            $"view {names[Keys.wrapped (List.length names) at step]}"
 
         let drawn =
             Keys.sends None "How it is drawn" $"now {showing.Name} - {showing.Describe}" (looking 1)
@@ -289,17 +289,15 @@ module Menu =
                 (fun found name ->
                     found
                     |> Result.bind (fun found ->
-                        match Seating.byName skills name with
-                        | Ok(Machine skill) -> Ok(found @ [ skill ])
-                        | Ok _
-                        | Error _ -> Error $"'{name}' is not a way for the machine to play. There is {Seating.names skills}."))
+                        Seating.machineByName skills name |> Result.map (fun skill -> found @ [ skill ])))
                 (Ok [])
             |> Result.bind (fun found ->
-                match List.length found with
-                | 0 -> Error $"Say 'vs <skill>', for one or more of {machines}."
-                | many when many + 1 > game.Most ->
-                    Error $"That is a table of {many + 1}. The game takes {game.Fewest} to {game.Most}."
-                | many -> Ok(Seating.after (many + 1) found))
+                match found with
+                | [] when List.isEmpty skills -> Error "This game has no machine to play it."
+                | [] -> Error $"Say 'vs <skill>', for one or more of {machines}."
+                | found ->
+                    Commands.tryPlayers range (List.length found + 1)
+                    |> Result.map (fun players -> Seating.after players found))
 
         let counted players seed =
             result {
@@ -368,10 +366,10 @@ module Menu =
             | "players", [ players; seed ] ->
                 counted players seed
                 |> Result.map (fun (players, seed) -> Deal(Seating.here players, Some seed))
-            | players, [] ->
+            | players, [] when digits players ->
                 Commands.tryPlayerCount range players
                 |> Result.map (fun n -> Deal(Seating.here n, None))
-            | players, [ seed ] ->
+            | players, [ seed ] when digits players ->
                 counted players seed
                 |> Result.map (fun (players, seed) -> Deal(Seating.here players, Some seed))
             | word, _ -> Error $"I don't know how to '{word}'. Say how many are playing, or quit."

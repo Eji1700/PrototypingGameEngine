@@ -19,112 +19,159 @@ type Launch =
     | House of reach: Reach * filling: bool
 
 
+/// What the six commands say about the options they share, said once - so `play --help` and
+/// `host --help` cannot describe --seed two ways, and the two that deliberately differ stand out.
+module private Usage =
+
+    [<Literal>]
+    let Players = "how many are playing"
+
+    [<Literal>]
+    let Seed = "deal from this seed rather than from the clock, for the same game again"
+
+    [<Literal>]
+    let Rival =
+        "let the machine play the next seat; may be given more than once - see the list below"
+
+    [<Literal>]
+    let From =
+        "take up this saved game instead of dealing one, against the players it names"
+
+    [<Literal>]
+    let View = "how the board is drawn - see the list below"
+
+    [<Literal>]
+    let Colour =
+        "what to draw something in, as 'blue=teal'; may be given more than once"
+
+    [<Literal>]
+    let Port = "listen on this port rather than the usual one"
+
+    [<Literal>]
+    let Code = "the word players say at the door, rather than one made up here"
+
+    [<Literal>]
+    let Open = "no word at the door: whoever can reach the address may sit down"
+
+    [<Literal>]
+    let Cert = "hold this certificate and speak https; a .pfx file"
+
+    [<Literal>]
+    let CertPassword = "the password that certificate is locked with"
+
+    [<Literal>]
+    let Behind =
+        "https is ended by a tunnel or proxy in front of this, which forwards to it"
+
+    [<Literal>]
+    let At = "the address to tell players, when it is not this machine's own name"
+
 type PlayArgs =
-    | [<MainCommand>] Players of players: int
-    | [<AltCommandLine("-s")>] Seed of seed: uint64
+    | [<MainCommand; Unique>] Players of players: int
+    | [<AltCommandLine("-s"); Unique>] Seed of seed: uint64
     | [<AltCommandLine("-r")>] Rival of skill: string
-    | [<AltCommandLine("-f")>] From of path: string
-    | View of name: string
+    | [<AltCommandLine("-f"); Unique>] From of path: string
+    | [<Unique>] View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Players _ -> "how many are playing"
-            | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
-            | Rival _ -> "let the machine play the next seat; may be given more than once - see the list below"
-            | From _ -> "take up this saved game instead of dealing one, against the players it names"
-            | View _ -> "how the board is drawn - see the list below"
-            | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
+            | Players _ -> Usage.Players
+            | Seed _ -> Usage.Seed
+            | Rival _ -> Usage.Rival
+            | From _ -> Usage.From
+            | View _ -> Usage.View
+            | Colour _ -> Usage.Colour
 
 type ServeArgs =
-    | [<MainCommand>] Players of players: int
-    | [<AltCommandLine("-s")>] Seed of seed: uint64
+    | [<MainCommand; Unique>] Players of players: int
+    | [<AltCommandLine("-s"); Unique>] Seed of seed: uint64
     | [<AltCommandLine("-r")>] Rival of skill: string
-    | [<AltCommandLine("-f")>] From of path: string
+    | [<AltCommandLine("-f"); Unique>] From of path: string
     | [<AltCommandLine("--color")>] Colour of slot: string
-    | [<AltCommandLine("-p")>] Port of port: int
-    | Code of code: string
-    | Open
-    | Cert of certificate: string
-    | [<CustomCommandLine("--cert-password")>] CertPassword of password: string
-    | Behind
-    | At of address: string
+    | [<AltCommandLine("-p"); Unique>] Port of port: int
+    | [<Unique>] Code of code: string
+    | [<Unique>] Open
+    | [<Unique>] Cert of certificate: string
+    | [<CustomCommandLine("--cert-password"); Unique>] CertPassword of password: string
+    | [<Unique>] Behind
+    | [<Unique>] At of address: string
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Players _ -> "how many are playing"
-            | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
-            | Rival _ -> "let the machine play the next seat; may be given more than once - see the list below"
-            | From _ -> "take up this saved game instead of dealing one, against the players it names"
-            | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
-            | Port _ -> "listen on this port rather than the usual one"
-            | Code _ -> "the word players say at the door, rather than one made up here"
-            | Open -> "no word at the door: whoever can reach the address may sit down"
-            | Cert _ -> "hold this certificate and speak https; a .pfx file"
-            | CertPassword _ -> "the password that certificate is locked with"
-            | Behind -> "https is ended by a tunnel or proxy in front of this, which forwards to it"
-            | At _ -> "the address to tell players, when it is not this machine's own name"
+            | Players _ -> Usage.Players
+            | Seed _ -> Usage.Seed
+            | Rival _ -> Usage.Rival
+            | From _ -> Usage.From
+            | Colour _ -> Usage.Colour
+            | Port _ -> Usage.Port
+            | Code _ -> Usage.Code
+            | Open -> Usage.Open
+            | Cert _ -> Usage.Cert
+            | CertPassword _ -> Usage.CertPassword
+            | Behind -> Usage.Behind
+            | At _ -> Usage.At
 
 type HostArgs =
-    | [<MainCommand>] Players of players: int
-    | [<AltCommandLine("-s")>] Seed of seed: uint64
-    | [<AltCommandLine("-f")>] From of path: string
-    | View of name: string
+    | [<MainCommand; Unique>] Players of players: int
+    | [<AltCommandLine("-s"); Unique>] Seed of seed: uint64
+    | [<AltCommandLine("-f"); Unique>] From of path: string
+    | [<Unique>] View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
-    | [<AltCommandLine("-p")>] Port of port: int
-    | Code of code: string
-    | Open
-    | Cert of certificate: string
-    | [<CustomCommandLine("--cert-password")>] CertPassword of password: string
-    | Behind
-    | At of address: string
+    | [<AltCommandLine("-p"); Unique>] Port of port: int
+    | [<Unique>] Code of code: string
+    | [<Unique>] Open
+    | [<Unique>] Cert of certificate: string
+    | [<CustomCommandLine("--cert-password"); Unique>] CertPassword of password: string
+    | [<Unique>] Behind
+    | [<Unique>] At of address: string
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Players _ -> "how many are playing"
-            | Seed _ -> "deal from this seed rather than from the clock, for the same game again"
-            | From _ -> "take up this saved game instead of dealing one, against the players it names"
+            | Players _ -> Usage.Players
+            | Seed _ -> Usage.Seed
+            | From _ -> Usage.From
             | View _ -> "how your own board is drawn, if a seat here is yours - see the list below"
-            | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
-            | Port _ -> "listen on this port rather than the usual one"
-            | Code _ -> "the word players say at the door, rather than one made up here"
-            | Open -> "no word at the door: whoever can reach the address may sit down"
-            | Cert _ -> "hold this certificate and speak https; a .pfx file"
-            | CertPassword _ -> "the password that certificate is locked with"
-            | Behind -> "https is ended by a tunnel or proxy in front of this, which forwards to it"
-            | At _ -> "the address to tell players, when it is not this machine's own name"
+            | Colour _ -> Usage.Colour
+            | Port _ -> Usage.Port
+            | Code _ -> Usage.Code
+            | Open -> Usage.Open
+            | Cert _ -> Usage.Cert
+            | CertPassword _ -> Usage.CertPassword
+            | Behind -> Usage.Behind
+            | At _ -> Usage.At
 
 type HouseArgs =
-    | [<AltCommandLine("-p")>] Port of port: int
-    | Code of code: string
-    | Open
-    | Cert of certificate: string
-    | [<CustomCommandLine("--cert-password")>] CertPassword of password: string
-    | Behind
-    | At of address: string
-    | Fill
+    | [<AltCommandLine("-p"); Unique>] Port of port: int
+    | [<Unique>] Code of code: string
+    | [<Unique>] Open
+    | [<Unique>] Cert of certificate: string
+    | [<CustomCommandLine("--cert-password"); Unique>] CertPassword of password: string
+    | [<Unique>] Behind
+    | [<Unique>] At of address: string
+    | [<Unique>] Fill
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Port _ -> "listen on this port rather than the usual one"
-            | Code _ -> "the word players say at the door, rather than one made up here"
+            | Port _ -> Usage.Port
+            | Code _ -> Usage.Code
             | Open -> "no word at the door: whoever can reach the address may open a table"
-            | Cert _ -> "hold this certificate and speak https; a .pfx file"
-            | CertPassword _ -> "the password that certificate is locked with"
-            | Behind -> "https is ended by a tunnel or proxy in front of this, which forwards to it"
-            | At _ -> "the address to tell players, when it is not this machine's own name"
+            | Cert _ -> Usage.Cert
+            | CertPassword _ -> Usage.CertPassword
+            | Behind -> Usage.Behind
+            | At _ -> Usage.At
             | Fill -> "take up the games in logs/ on the way up, so a restart is a pause rather than a loss"
 
 type JoinArgs =
     | [<MainCommand; ExactlyOnce>] Address of address: string
-    | [<AltCommandLine("-t")>] Token of token: string
-    | Code of code: string
-    | [<CustomCommandLine("--table")>] AtTable of name: string
-    | View of name: string
+    | [<AltCommandLine("-t"); Unique>] Token of token: string
+    | [<Unique>] Code of code: string
+    | [<CustomCommandLine("--table"); Unique>] AtTable of name: string
+    | [<Unique>] View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
 
     interface IArgParserTemplate with
@@ -134,20 +181,20 @@ type JoinArgs =
             | Token _ -> "come back to the seat this token claimed, after dropping off"
             | Code _ -> "the word at that table's door, if it has one"
             | AtTable _ -> "which table, at a house that is holding several; one table needs no name"
-            | View _ -> "how the board is drawn - see the list below"
-            | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
+            | View _ -> Usage.View
+            | Colour _ -> Usage.Colour
 
 type ReplayArgs =
     | [<MainCommand; ExactlyOnce>] Path of path: string
-    | View of name: string
+    | [<Unique>] View of name: string
     | [<AltCommandLine("--color")>] Colour of slot: string
 
     interface IArgParserTemplate with
         member this.Usage =
             match this with
             | Path _ -> "the saved game to take up again"
-            | View _ -> "how the board is drawn - see the list below"
-            | Colour _ -> "what to draw something in, as 'blue=teal'; may be given more than once"
+            | View _ -> Usage.View
+            | Colour _ -> Usage.Colour
 
 type Argument =
     | [<CliPrefix(CliPrefix.None); First>] Play of ParseResults<PlayArgs>
@@ -361,20 +408,13 @@ module Launch =
     let private ourWord = lazy (Reach.minted ())
 
     let private skills game names =
-        let known = game.Skills |> List.map fst
-        let offered = known |> String.concat ", "
-
         names
         |> List.fold
-            (fun found (name: string) ->
+            (fun found name ->
                 found
                 |> Result.bind (fun found ->
-                    let wanted = name.ToLowerInvariant()
-
-                    if List.contains wanted known then
-                        Ok(found @ [ wanted ])
-                    else
-                        Error $"'{name}' is not a way for the machine to play. There is {offered}."))
+                    Seating.machineByName game.Skills name
+                    |> Result.map (fun skill -> found @ [ skill ])))
             (Ok [])
 
     let private facing game players names =
@@ -389,12 +429,12 @@ module Launch =
             else
                 Ok rivals)
 
+    /// The view the game was left set to, read once per launch: what --view and --colour change is
+    /// changed from here.
     let private settled game =
-        Playable.opening AtATerminal (fst (Settings.load ())) game
+        Playable.opening AtATerminal (fst (Settings.load ())) game |> fst
 
-    let private painted game given =
-        let kept = (fst (settled game)).Palette
-
+    let private painted (kept: View<_, _, _>) given =
         given
         |> List.fold
             (fun palette (given: string) ->
@@ -403,17 +443,17 @@ module Launch =
                     match given.Split '=' with
                     | [| slot; colour |] -> Palette.set (slot.ToLowerInvariant()) (colour.ToLowerInvariant()) palette
                     | _ -> Error $"'{given}' is not a colour for something. Say it as 'blue=teal'."))
-            (Ok kept)
+            (Ok kept.Palette)
 
-    let private reading game colours name =
-        painted game colours
+    let private reading game kept colours name =
+        painted kept colours
         |> Result.bind (fun palette ->
             match name with
             | Some name -> Playable.byName AtATerminal palette game name
-            | None -> Ok(Playable.recoloured palette game (fst (settled game))))
+            | None -> Ok(Playable.recoloured palette game kept))
 
     let private counted game players =
-        Commands.tryPlayerCount (Playable.seats game) (string (players |> Option.defaultValue game.Fewest))
+        Commands.tryPlayers (Playable.seats game) (players |> Option.defaultValue game.Fewest)
 
     let private opening game players seed rivals from =
         match from with
@@ -425,7 +465,7 @@ module Launch =
             with
             | [] -> Ok(Start.Saved path)
             | also ->
-                let said = String.Join(" and ", also)
+                let said = Counting.listed "and" also
                 Error $"--from takes up a saved game, which already says {said}. Say one or the other."
         | None ->
             result {
@@ -463,7 +503,7 @@ module Launch =
         let port = port |> Option.defaultValue Reach.DefaultPort
 
         result {
-            do! require (port >= 1 && port <= 65535) $"{port} is not a port. They run from 1 to 65535."
+            let! port = Reach.port port
             let! doorway = doorway
             let! wrapping = wrapping
             let! address = address
@@ -476,10 +516,12 @@ module Launch =
         }
 
     let private opened game (taken: ParseResults<Argument>) =
+        let kept = settled game
+
         result {
             match taken.GetAllResults() |> List.tryHead with
             | Some(Play args) ->
-                let! view = reading game (args.GetResults PlayArgs.Colour) (args.TryGetResult PlayArgs.View)
+                let! view = reading game kept (args.GetResults PlayArgs.Colour) (args.TryGetResult PlayArgs.View)
 
                 let! start =
                     opening
@@ -491,7 +533,7 @@ module Launch =
 
                 return Launch.Play start, view
             | Some(Serve args) ->
-                let! palette = painted game (args.GetResults ServeArgs.Colour)
+                let! palette = painted kept (args.GetResults ServeArgs.Colour)
 
                 let! start =
                     opening
@@ -513,7 +555,7 @@ module Launch =
 
                 return Launch.Serve(start, reach), Playable.plainest InABrowser palette game
             | Some(Host args) ->
-                let! view = reading game (args.GetResults HostArgs.Colour) (args.TryGetResult HostArgs.View)
+                let! view = reading game kept (args.GetResults HostArgs.Colour) (args.TryGetResult HostArgs.View)
 
                 let! start =
                     opening
@@ -548,7 +590,7 @@ module Launch =
                 return
                     Launch.House(reach, args.Contains HouseArgs.Fill), Playable.plainest InABrowser (Playable.standard game) game
             | Some(Join args) ->
-                let! view = reading game (args.GetResults JoinArgs.Colour) (args.TryGetResult JoinArgs.View)
+                let! view = reading game kept (args.GetResults JoinArgs.Colour) (args.TryGetResult JoinArgs.View)
 
                 return
                     Launch.Join(
@@ -559,26 +601,32 @@ module Launch =
                     ),
                     view
             | Some(Replay args) ->
-                let! view = reading game (args.GetResults ReplayArgs.Colour) (args.TryGetResult ReplayArgs.View)
+                let! view = reading game kept (args.GetResults ReplayArgs.Colour) (args.TryGetResult ReplayArgs.View)
                 return Launch.Play(Start.Saved(args.GetResult ReplayArgs.Path)), view
             | None -> return! Error "That does not say what to open. Say 'play', 'serve', 'host', 'house', 'join' or 'replay'."
         }
 
     // A line copied off the screen may still have `dotnet run --` on the front of it, which is how the
-    // program says its own name from a source directory. Dropping those leaves the arguments.
+    // program says its own name from a source directory. Those three words come off the front and
+    // from nowhere else: a word at a door or a house's table may be called `run`.
     let taken game (given: string seq) =
         let words =
-            given
-            |> Seq.filter (fun word -> word <> "dotnet" && word <> "run" && word <> "--")
-            |> Array.ofSeq
+            match List.ofSeq given with
+            | "dotnet" :: "run" :: "--" :: rest -> rest
+            | words -> words
+            |> Array.ofList
 
+        // Only what the parser refuses is a line typed wrong; anything else that goes wrong in here
+        // is a fault in the program, and is left to say so.
         try
             match opened game ((parserFor game).ParseCommandLine(words, raiseOnUsage = true)) with
             | Ok(launch, view) -> Opening(launch, view)
             | Error problem -> Wrong problem
-        with
-        | :? ArguParseException as problem when problem.ErrorCode = ErrorCode.HelpText -> Printed(problem.Message.Trim())
-        | problem -> Wrong(problem.Message.Trim())
+        with :? ArguParseException as problem ->
+            if problem.ErrorCode = ErrorCode.HelpText then
+                Printed(problem.Message.Trim())
+            else
+                Wrong(problem.Message.Trim())
 
     let read game given =
         match taken game given with

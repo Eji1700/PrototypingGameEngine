@@ -26,11 +26,13 @@ faction
 
 faction "the Flag and the Axe are not land" [ Green ] [ 1, [ (Green, 2) ]; 14, [ (Red, 4) ]; 13, [ (Red, 4) ] ]
 
-faction "no land ruled at all, the Axe decides" [ Blue ] [ 14, [ (Blue, 1) ] ]
+faction "no land ruled at all, the Axe decides" [ Blue ] [ (14, [ (Blue, 1) ]) ]
 
 
-type Result =
-    | WonBy of StoneColor * seat: int
+// The game's own `Verdict` names the winner by id; this one names the seat, which is what a check
+// can read and what a reader of a failure wants to see.
+type BySeat =
+    | WonBy of StoneColour * seat: int
     | DrawnBecause of DrawReason
 
 let private seated verdict =

@@ -2,7 +2,6 @@ namespace Prototyping.Compile
 
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Compile
 
 module Ink =
 

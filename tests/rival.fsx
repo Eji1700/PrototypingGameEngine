@@ -9,11 +9,11 @@ open Whole
 
 
 let private machinesAt (skills: Skill list) seed model =
-    Rival.seating seed (skills |> List.map Some) (Playing.game model)
+    Rival.seating seed (skills |> List.map Some) (Playing.session model)
     |> List.map (fun (playerId, rival) ->
         playerId,
         { Skill = rival.Skill.Name
-          Plays = Offer.machine rival })
+          Plays = Machines.choosing Rival.taking rival })
 
 let private playedOut skills seed =
     match Playing.start (List.length skills) seed with
@@ -162,6 +162,55 @@ report
 report "which is true of the middle skill as well" (chooses Rival.medium posedGame) (chooses Rival.medium behindItsBack)
 
 
+// Looking a reply ahead, the machine takes the next player to hold every stone it cannot see -
+// here one Red stone, the whole of what is out of sight. A lone Red stone stands at Nightfen and
+// the machine has one Red to recruit, with three empty regions to put it in. Two of them border
+// Nightfen, so a Red stone in the other's bag could march the pair together and cost a region;
+// Dunmoor's neighbours are held by lone Green stones, so a Red stone marched into any of them
+// takes it. A guess one stone short holds no Red at all, fears no reply, and picks among the
+// three by lot. Land alone is weighed, so nothing else tells the three apart.
+let private farsighted =
+    { Rival.hard with
+        Name = "farsighted"
+        Weighs =
+            { Land = 10
+              Nudge = 0
+              Axe = 0
+              Flag = 0
+              Held = 0
+              Spare = 0 } }
+
+let private loneStone: Play =
+    { Game =
+        { gameOf
+              [ 1, [ (Red, 1) ]
+                3, [ (Blue, 3) ]
+                5, [ (Blue, 3) ]
+                7, [ (Blue, 3) ]
+                8, [ (Blue, 3) ]
+                9, [ (Green, 1) ]
+                10, [ (Green, 1) ]
+                11, [ (Green, 1) ] ]
+              [ [ (Red, 1) ]; [ (Red, 1) ] ] with
+            Reserve = Pile.empty }
+      Phase = AwaitingAction
+      Negotiations = 0
+      Turn = 1 }
+
+let private dunmoor = Board.tryId 12 |> Option.get
+
+report
+    "looking a move ahead, the machine takes the next player to hold every stone it cannot see"
+    (List.replicate 6 (Some(Recruit(Red, dunmoor))))
+    ([ 1UL .. 6UL ]
+     |> List.map (fun seed ->
+         Rival.plays
+             loneStone
+             { Skill = farsighted
+               Rng = Rng.ofSeed seed }
+         |> Option.map fst))
+
+
 let private wonBy skills seed =
     let played = playedOut skills seed
     let seats = Game.players (Playing.game played) |> List.map (fun player -> player.Id)
@@ -248,7 +297,7 @@ report
 let private dealt = Playing.start 3 42UL |> Result.toOption |> Option.get
 
 let private seated sitting =
-    Rival.seating 42UL sitting (Playing.game dealt)
+    Rival.seating 42UL sitting (Playing.session dealt)
     |> List.map (fun (playerId, rival) -> PlayerId.value playerId, rival.Skill.Name)
 
 report
@@ -264,7 +313,7 @@ report "and none at all is a table of nothing but people" [] (seated [])
 
 
 let private generators sitting =
-    Rival.seating 42UL sitting (Playing.game dealt)
+    Rival.seating 42UL sitting (Playing.session dealt)
     |> List.map (fun (_, rival) -> rival.Rng)
 
 report

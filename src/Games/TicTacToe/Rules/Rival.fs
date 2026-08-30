@@ -53,9 +53,7 @@ module Rival =
 
                     if alpha >= beta then best else walk rest alpha beta best
 
-            match Board.free play.Board with
-            | [] -> 0
-            | free -> walk free alpha beta (if mine then Worst else Best)
+            walk (Board.free play.Board) alpha beta (if mine then Worst else Best)
 
     let plays session rival =
         match session with
@@ -102,16 +100,14 @@ module Rival =
     let hard =
         { Name = "hard"
           Describe = "plays the game out to the end before moving, so it cannot be beaten"
-          Depth = Squares.Side * Squares.Side
+          Depth = Squares.Count
           Slips = 0 }
 
     let all = [ easy; medium; hard ]
 
-    let names = Machines.named (fun skill -> skill.Name) all
-
     let byName name =
         Machines.byName (fun skill -> skill.Name) all name
 
-    let seating (seed: uint64) sitting =
+    let seating (seed: uint64) sitting _ =
         Machines.seating (Mark.all |> List.map Session.seatOf) seed sitting
         |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

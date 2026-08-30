@@ -12,7 +12,11 @@ type Kept =
 [<NoComparison; NoEquality>]
 type Settings =
     private
-        { Drawn: string option
+        {
+          // The same name as `Kept.Drawn` above, and F# gives an un-annotated `{ Drawn = ... }`
+          // to whichever record was declared last - so every site that builds either says which.
+          Drawn: string option
+
           Bell: bool option
           Games: (string * Kept) list }
 
@@ -100,9 +104,10 @@ module Settings =
         [ "# What this program was left set to, and picks up again next time."
           "#"
           "# Every line here is one you could type at the screen it belongs to: 'view <name>'"
-          "# and 'bell on' are what the settings pages take, and '<what> <colour>' is what the"
-          "# Video page takes. So there is nothing in this file that cannot be said at a"
-          "# screen, and nothing at a screen that cannot be written here."
+          "# and 'bell on' are what the settings pages take, '<what> <colour>' is what the Video"
+          "# page takes and 'plays <name>' what the Game page takes. So there is nothing in this"
+          "# file that cannot be said at a screen, and nothing at a screen that cannot be written"
+          "# here."
           "#"
           "# A name in square brackets opens one game's own settings. Anything above the first"
           "# of them is said about every game at once."
@@ -132,8 +137,10 @@ module Settings =
              @ [ "" ])
 
     let read (text: string) =
+        // A file written by another program can open with a byte order mark; left in, it is the
+        // first letter of the first line, and 'view rich' or '[compile]' is no longer read as itself.
         let meaningful =
-            text.Split '\n'
+            text.TrimStart('\uFEFF').Split '\n'
             |> Array.map (fun line ->
                 match line.IndexOf '#' with
                 | -1 -> line.Trim()
@@ -187,7 +194,7 @@ module Settings =
         let settings, _, problems = meaningful |> List.fold folding (none, None, [])
         settings, problems
 
-    let source = Path.Combine(Directory.GetCurrentDirectory(), "settings.txt")
+    let private source = Path.Combine(Directory.GetCurrentDirectory(), "settings.txt")
 
     let load () =
         try

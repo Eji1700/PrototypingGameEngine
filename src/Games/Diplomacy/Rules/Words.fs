@@ -5,12 +5,14 @@ open Prototyping.Engine
 
 module Words =
 
+    let private province = Atlas.nameOf
 
-    let province id = Atlas.nameOf id
+    let private code = Atlas.code
 
-    let code id = Atlas.code id
-
-    let spot (location: Location) = Piece.whereabouts location
+    let spot (location: Location) =
+        match location.Coast with
+        | Some coast -> $"{code location.At}/{Coast.code coast}"
+        | None -> code location.At
 
     let place (location: Location) =
         match location.Coast with
@@ -87,6 +89,7 @@ module Words =
         | Stood -> "stands"
         | Helped -> "support given"
         | Interrupted -> "support cut"
+        | Unmatched -> "nothing to support"
         | Carried -> "convoy holds"
         | NoRoute -> "no way across"
         | Swamped -> "convoy broken"
@@ -197,24 +200,33 @@ module Words =
         | TalkingToYourself -> "You are the one power you cannot send word to."
 
 
-    let power seat =
+    let player seat =
         Power.atSeat seat |> Option.map Power.name |> Option.defaultValue "nobody"
 
-    let player = power
 
-    let seated yours seat =
-        player seat + (if yours then " (you)" else "")
+    // Press is the one line here in a player's own words, so it is closed for them only when they
+    // left it open.
+    let private closed (text: string) =
+        if text.EndsWith '.' || text.EndsWith '!' || text.EndsWith '?' then text else text + "."
 
+    /// What another power is told of an order it may not read. In a spring or an autumn the
+    /// province is the unit's own and says nothing new; in a winter it is the whole of the order -
+    /// which centre is built in, which unit is given up - and is kept back.
+    let veiled stage at =
+        match stage with
+        | Building -> "an order"
+        | Moving _
+        | Falling _ -> $"an order for {province at}"
 
     let happening =
         function
-        | Wrote(who, at, says) -> $"{Power.name who}: {order at says}."
-        | Erased(who, at) -> $"{Power.name who} takes back the order for {province at}."
+        | Wrote(who, at, says, _) -> $"{Power.name who}: {order at says}."
+        | Erased(who, at, _) -> $"{Power.name who} takes back the order for {province at}."
         | Ready who -> $"{Power.name who} is finished."
         | Passed was -> passing was
         | Opened(stage, year) -> $"{phase stage year}. {asking stage}"
-        | Whispered(from, None, text) -> $"{Power.name from} to the table: {text}"
-        | Whispered(from, Some heard, text) -> $"{Power.name from} to {Power.name heard}: {text}"
+        | Whispered(from, None, text) -> $"{Power.name from} to the table: {closed text}"
+        | Whispered(from, Some heard, text) -> $"{Power.name from} to {Power.name heard}: {closed text}"
         | WalkedAway who -> $"{Power.name who} walks away. Its units stand where they are."
         | GameEnded finish -> $"The game is over: {ending finish}."
 
@@ -227,7 +239,8 @@ module Words =
         let reader = Power.atSeat seat
 
         match notice with
-        | Happened(Wrote(who, at, says)) when Some who <> reader -> $"{Power.name who} writes an order for {province at}."
+        | Happened(Wrote(who, at, _, stage)) when Some who <> reader -> $"{Power.name who} writes {veiled stage at}."
+        | Happened(Erased(who, at, stage)) when Some who <> reader -> $"{Power.name who} takes back {veiled stage at}."
         | Happened(Whispered(from, Some heard, _)) when Some from <> reader && Some heard <> reader ->
             $"{Power.name from} sends word to {Power.name heard}."
         | notice -> said notice

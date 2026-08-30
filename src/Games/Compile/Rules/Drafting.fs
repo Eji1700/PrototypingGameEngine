@@ -6,7 +6,8 @@ module Draft =
 
     let order = [ Seat.at 1; Seat.at 2; Seat.at 2; Seat.at 1; Seat.at 1; Seat.at 2 ]
 
-    let Picks = List.length order
+    [<Literal>]
+    let Picks = 6
 
     let picking made = order |> List.tryItem made
 

@@ -3,35 +3,27 @@ namespace Prototyping.Diplomacy
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Diplomacy
 
 module Offer =
 
 
     let Seats = Power.Count
 
-    let private asked = Counting.several "player" "players"
-
     let private deal players _ =
         if players = Seats then
             Ok Session.dealt
         else
             Error
-                $"{asked players}? Diplomacy takes {Seats}, one for each power - give the seats nobody is in to the machine with --rival."
+                $"{Commands.players players}? Diplomacy takes {Seats}, one for each power - give the seats nobody is in to the machine with --rival."
 
 
     let private faults = Atlas.problems @ Position.problems
 
 
-    let machine rival = Machines.choosing Rival.plays rival
-
-    let private skill name = Rival.byName name |> Result.toOption
-
-
     let private scenes: Readers.Scenes<Move, Session, Notice> =
         { Board = Render.board
           History = Render.history
-          Answer = fun _ asked model -> Render.answer asked model
+          Answer = Render.answer
           Rules = Render.rules
           Waiting = Render.waiting
           Marking = Ink.marking
@@ -67,21 +59,13 @@ module Offer =
           Slots = Ink.slots
           Skills = Rival.all |> List.map (fun skill -> skill.Name, skill.Describe)
 
-          Seating =
-            fun seed sitting _ ->
-                Rival.seating seed (sitting |> List.map (Option.bind skill))
-                |> List.map (fun (seat, rival) ->
-                    seat,
-                    { Skill = rival.Skill.Name
-                      Plays = machine rival })
+          Seating = Playable.seating Rival.byName Rival.seating (fun rival -> rival.Skill.Name) Rival.plays
 
           Pulse = None
 
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell

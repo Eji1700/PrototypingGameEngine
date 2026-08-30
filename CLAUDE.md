@@ -51,7 +51,7 @@ are projects of their own — `src/Table/Prototyping.Table.fsproj`, `src/Net/Pro
 nothing else; keep it that way. Each game is its own project under `src/Games/<Name>/`, referencing
 `Prototyping.Play`, split into `Rules/` (how it is played) and `Reading/` (how it is read), with
 `Offer.fs` as the seam that hands a `Playable` to the table. A new game is registered in
-`src/Games.fs` and added to `PrototypingGameEngine.slnx`.
+`src/Games.fs`, referenced from `Proto.fsproj` and added to `PrototypingGameEngine.slnx`.
 
 **Start a new game from `templates/game`** rather than by copying one — it generates the whole
 shape, already playing and already passing `Conforms.against`, and its README lists the three

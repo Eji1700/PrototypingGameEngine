@@ -2,9 +2,8 @@
 #load "Conforms.fsx"
 
 open System
-open System.Net
 open System.Text.RegularExpressions
-open System.Xml
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Cascade
@@ -15,7 +14,6 @@ let private rules = cascade.Rules
 
 let private at (name: string) = Board.read name |> Option.get
 
-let private mentions (needle: string) (text: string) = text.Contains needle
 
 /// The legend across the top of the board, which is the column letters with the one the hand is
 /// resting in put into capitals - so it is looked for without regard to case.
@@ -24,33 +22,7 @@ let private hasLegend (text: string) =
 
 /// A command as the line that would have made it. A `Command` is not something two of which may
 /// be compared - it carries a move, and nothing about a game says a move can be.
-let private reads typed =
-    match Playable.read cascade typed with
-    | Ok(Send msg) -> Ok(Words.command msg)
-    | Ok Help -> Ok "help"
-    | Ok(Notes wanted) -> Ok $"notes {wanted}"
-    | Ok(Listing wanted) -> Ok $"commands {wanted}"
-    | Ok(Logging wanted) ->
-        Ok(
-            match wanted with
-            | Some true -> "log on"
-            | Some false -> "log off"
-            | None -> "log"
-        )
-    | Ok(Hushing hushed) ->
-        Ok(
-            match hushed with
-            | Some true -> "mute"
-            | Some false -> "unmute"
-            | None -> "sound"
-        )
-    | Ok(Looking name) -> Ok $"view {name}"
-    | Ok(Asking question) -> Ok $"asking {question}"
-    | Ok Recount -> Ok "history"
-    | Ok Keep -> Ok "save"
-    | Ok Leave -> Ok "quit"
-    | Ok Nothing -> Ok "nothing"
-    | Error problem -> Error problem
+let private reads typed = Conforms.readsAs cascade typed
 
 let private sends move = Ok(Words.command (Make move))
 
@@ -288,22 +260,22 @@ report
 
 report "a beat over a board with nothing turning takes nothing and says nothing" (None, []) (Turn.asked Beat uniform)
 
-report "the notch a board is dealt on is the half second the rules are written in" 500 (Session.quarter Session.Ordinary)
+report "the notch a board is dealt on is the half second the rules are written in" 500 (Session.quarter Notch.Ordinary)
 
-report "the fastest notch is a tenth of that" 100 (Session.quarter Session.Fastest)
+report "the fastest notch is a tenth of that" 100 (Session.quarter Notch.Fastest)
 
-report "winding it up says what a quarter turn now takes" [ Happened(Wound 6) ] (told Faster uniform)
+report "winding it up says what a quarter turn now takes" [ Happened(Wound 6) ] (told (Wind Winding.Faster) uniform)
 
 report
     "and winding past the end does nothing at all"
     (None, [])
     (Turn.asked
-        Faster
+        (Wind Winding.Faster)
         (InPlay
             { Session.play uniform with
-                Speed = Session.Fastest }))
+                Speed = Notch.Fastest }))
 
-report "a speed the notches do not run to is refused" [ Refused(NoSuchSpeed 12) ] (told (Speed 12) uniform)
+report "a speed the notches do not run to is refused" [ Refused(NoSuchSpeed 12) ] (told (Wind(Winding.Speed 12)) uniform)
 
 report
     "a cascade that will not stop is stopped"
@@ -364,7 +336,8 @@ report
 report
     "and a game replays off its record exactly"
     true
-    (let game = played [ Touch(at "a1"); Beat; Beat; Faster; Touch(at "p16") ]
+    (let game =
+        played [ Touch(at "a1"); Beat; Beat; Wind Winding.Faster; Touch(at "p16") ]
 
      match Update.replay rules 1 0UL (Journal.moves game.Journal) with
      | Ok again -> Model.state again = Model.state game
@@ -430,15 +403,15 @@ report
        Point South
        Point East
        Point West
-       Faster
-       Slower
-       Speed 3
+       Wind Winding.Faster
+       Wind Winding.Slower
+       Wind(Winding.Speed 3)
        Touch(at "c3")
        Press ]
      |> List.collect (fun move -> cascade.Rings(asked move rested)))
 
 report
-    "and so does a beat, which carries the board''s own flashing along and says nothing itself"
+    "and so does a beat, which carries the board's own flashing along and says nothing itself"
     []
     (cascade.Rings(asked Beat rested))
 
@@ -468,8 +441,6 @@ report
 
 // === How it is drawn ===
 
-let private seen (text: string) =
-    Regex.Replace(text, @"\x1b\[[0-9;]*m", "")
 
 let private rich =
     cascade.Views standard |> List.find (fun view -> view.Name = "rich")
@@ -570,38 +541,15 @@ let private model session =
 let private paged margins session =
     asPage.Board margins (Seat.at 1) (model session)
 
-let private fragments =
+// The states the contract never reaches - a board at rest, one with a cascade running, a cell asked
+// about, a record with a beat in it; the rest of what a page is sent is held for every game in
+// `Conforms`.
+Conforms.patched
     [ "board", Page.Screen, paged Margins.all uniform
       "board with a cascade running", Page.Screen, paged Margins.all turning
       "board with the notes off", Page.Screen, paged Margins.none uniform
-      "a line the game said", Page.Told, asPage.Says "a1 begins turning."
       "the record", Page.Told, asPage.History (Seat.at 1) (played [ Touch(at "a1"); Beat ])
-      "an answer", Page.Told, asPage.Answer (Seat.at 1) "a1" (model uniform)
-      "the rules", Page.Told, asPage.Rules ]
-
-let private read (markup: string) =
-    let document = XmlDocument()
-    use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
-    document.Load reader
-    document
-
-let private parses (markup: string) =
-    try
-        read markup |> ignore
-        true
-    with _ ->
-        false
-
-for name, _, markup in fragments do
-    report $"the {name} is well-formed markup" true (parses markup)
-
-report "and so is the page itself" true (parses page)
-
-for name, slot, markup in fragments do
-    report
-        $"the {name} is one element, carrying the id it will be patched by"
-        slot
-        ((read markup).DocumentElement.GetAttribute "id")
+      "an answer", Page.Told, asPage.Answer (Seat.at 1) "a1" (model uniform) ]
 
 report "the page carries a stylesheet that knows how to turn a cell" true (page |> mentions "@keyframes turning")
 
@@ -610,7 +558,7 @@ report "and one that runs a light along a shape" true (page |> mentions "@keyfra
 report
     "and a notch for every speed the game has"
     true
-    ([ Session.Slowest .. Session.Fastest ]
+    ([ Notch.Slowest .. Notch.Fastest ]
      |> List.forall (fun n -> page |> mentions $".speck.pace-{n} "))
 
 report "and it stops moving for a reader who asked for that" true (page |> mentions "prefers-reduced-motion")
@@ -623,7 +571,7 @@ report
 report
     "and the notch it is turning at, so winding the clock winds the animation"
     true
-    (paged Margins.all turning |> mentions $"pace-{Session.Ordinary}")
+    (paged Margins.all turning |> mentions $"pace-{Notch.Ordinary}")
 
 report "a board at rest carries no turning cell at all" false (paged Margins.all uniform |> mentions "speck turning")
 
@@ -636,12 +584,8 @@ report
      let drawn = paged Margins.all lit
      drawn |> mentions "lit-0" && drawn |> mentions "speck lit")
 
-let private posted (markup: string) =
-    Regex.Matches(WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
-    |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
-    |> List.ofSeq
 
-let private buttons = posted (paged Margins.all uniform)
+let private buttons = Conforms.posted (paged Margins.all uniform)
 
 report
     "the board offers buttons for the hand, a touch, a question, the clock, the two boxes and another deal"
@@ -739,13 +683,18 @@ report "and so is one said the long way" (sends (Touch(at "f7"))) (reads "touch 
 
 report "a question about a cell is a question" (Ok "asking f7") (reads "why f7")
 
-report "the clock is wound by name" (sends Faster) (reads "faster")
+report "the clock is wound by name" (sends (Wind Winding.Faster)) (reads "faster")
 
-report "and by sign" (sends Slower) (reads "-")
+report "and by sign" (sends (Wind Winding.Slower)) (reads "-")
 
-report "a notch is said outright" (sends (Speed 7)) (reads "speed 7")
+report "a notch is said outright" (sends (Wind(Winding.Speed 7))) (reads "speed 7")
 
 report "a word that is not a cell is turned away" true (Result.isError (reads "zz"))
+
+report
+    "a cell off the board is a move, so the rules refuse it and the refusal is written down"
+    (Ok "a17", 1)
+    (reads "a17", Journal.length (played [ Touch(at "a17") ]).Journal)
 
 report
     "every move the game has is written as a line the game reads back"
@@ -757,9 +706,9 @@ report
        Point West
        Press
        Beat
-       Faster
-       Slower
-       Speed 7
+       Wind Winding.Faster
+       Wind Winding.Slower
+       Wind(Winding.Speed 7)
        Resign ]
      |> List.map (fun move -> move, Words.command (Make move))
      |> List.filter (fun (move, line) -> reads line <> Ok(Words.command (Make move))))
@@ -920,13 +869,13 @@ report
         posts
         |> List.filter (fun post ->
             match post.Say with
-            | Rang _ -> true
+            | ToPlayer.Rang _ -> true
             | _ -> false)
         |> List.length
 
-     let touched, _, _ = Solo.said "stamp" "keyboard" "a1" sitting
-     let muted, _, _ = Solo.said "stamp" "keyboard" "mute" touched
-     let back, _, _ = Solo.said "stamp" "keyboard" "sound" muted
+     let touched, _, _ = Solo.said (fun () -> "stamp") "keyboard" "a1" sitting
+     let muted, _, _ = Solo.said (fun () -> "stamp") "keyboard" "mute" touched
+     let back, _, _ = Solo.said (fun () -> "stamp") "keyboard" "sound" muted
      rangs touched, rangs muted, rangs back)
 
 report
@@ -963,7 +912,6 @@ let private banded phase model =
 
 report "a board that has just been struck says so" true (Session.play rung).Struck.IsSome
 
-report "and it is struck for exactly what a terminal would ring its one bell for" [] cascade.Faults
 
 report
     "the band shows on the row labels, which is what a reader with no colour has"
@@ -1017,11 +965,11 @@ report
         posts
         |> List.filter (fun post ->
             match post.Say with
-            | Rang _ -> true
+            | ToPlayer.Rang _ -> true
             | _ -> false)
         |> List.length
 
-     let touched, _, _ = Solo.said "stamp" "keyboard" "a1" sitting
+     let touched, _, _ = Solo.said (fun () -> "stamp") "keyboard" "a1" sitting
 
      let rec beating count table =
          if count = 0 then
@@ -1031,32 +979,110 @@ report
              beating (count - 1) next
 
      let settled = beating 40 touched
-     let elsewhere, _, _ = Solo.said "stamp" "keyboard" "c3" settled
+     let elsewhere, _, _ = Solo.said (fun () -> "stamp") "keyboard" "c3" settled
 
      rangs (Solo.beaten touched),
      rangs (Solo.beaten settled),
-     rangs (Solo.said "stamp" "keyboard" "up" settled),
-     rangs (Solo.said "stamp" "keyboard" "a1" elsewhere))
+     rangs (Solo.said (fun () -> "stamp") "keyboard" "up" settled),
+     rangs (Solo.said (fun () -> "stamp") "keyboard" "a1" elsewhere))
 
 report
     "a table beaten over a cascade draws everybody watching, and rings"
     (1, 1)
-    (let touched, _, _ = Solo.said "stamp" "keyboard" "a1" sitting
+    (let touched, _, _ = Solo.said (fun () -> "stamp") "keyboard" "a1" sitting
      let _, posts, _ = Solo.beaten touched
 
      posts
      |> List.filter (fun post ->
          match post.Say with
-         | Screen _ -> true
+         | ToPlayer.Screen _ -> true
          | _ -> false)
      |> List.length,
      posts
      |> List.filter (fun post ->
          match post.Say with
-         | Rang _ -> true
+         | ToPlayer.Rang _ -> true
          | _ -> false)
      |> List.length)
 
+
+// === What the history calls a beat ===
+
+let private labelled moves =
+    moves
+    |> List.fold (fun m move -> Update.update rules (Make move) m) (model uniform)
+    |> fun m -> Journal.entries m.Journal |> List.map (fun entry -> entry.Turn)
+
+report
+    "the beats of a cascade carry the touch's own number, and the touch after it the next"
+    ([ 1; 1; 1 ], 2)
+    (let turns =
+        labelled ([ Touch(at "a1") ] @ List.replicate 30 Beat @ [ Touch(at "p16") ])
+
+     List.take 3 turns, List.last turns)
+
+
+// === How far the light goes ===
+//
+// A lit shape is drawn a frame at a time for the beats it lingers, and the light along it has to
+// reach the far end before the shape goes dark - at a terminal, which draws it from the state,
+// as much as on a page, which runs it by stylesheet.
+
+let private lit scene =
+    Conforms.everywhere scene
+    |> List.collect (function
+        | Field(_, rows) ->
+            rows
+            |> List.mapi (fun index (_, specks) -> index + 1, specks)
+            |> List.collect (fun (row, specks) ->
+                specks
+                |> List.filter (fun speck -> List.contains "lit" speck.Mood)
+                |> List.map (fun _ -> row))
+        | _ -> [])
+
+let private column = toRest 0 (uniform |> asked (Touch(at "a1")))
+
+let private litRows =
+    [ for beat in 0..2 do
+          let showing = wave beat column
+
+          for phase in [ 0.0; 0.34; 0.67 ] do
+              yield! lit (Render.board (Margins.through phase Margins.none) (Seat.at 1) (model showing)) ]
+    |> List.distinct
+    |> List.sort
+
+report "the light along a lit column starts at its top" true (List.contains 1 litRows)
+
+report "and reaches its bottom before it goes out" true (List.contains Board.Height litRows)
+
+
+// === What the colours say they are for ===
+
+report
+    "the slot that says it colours the cells the game names is the one the marking paints them with"
+    true
+    (let named =
+        Ink.slots
+        |> List.find (fun slot -> slot.Draws.Contains "named in what the game says")
+
+     let found = Regex.Match("a1", List.head Ink.marking.Patterns)
+     Ink.marking.Paint standard found = Tint.wrap (Palette.inkOf named.Key standard) "a1")
+
+report
+    "the steps of wear are counted the same in the rules, the glyphs and the slots"
+    (Session.Steps, Session.Steps)
+    (List.length Ink.steps, List.length Ink.worn)
+
+report
+    "the page winds the clock with = and _ as well, as the other clocked boards do"
+    true
+    (let keys = cascade.Page.Keys |> List.map fst
+     List.contains "=" keys && List.contains "_" keys)
+
+report
+    "the box of what to type next goes with the commands margin, as it does at the other clocked boards"
+    false
+    (drawn Margins.none uniform |> mentions Render.Blocks.onwards)
 
 
 // === The seam every game fills in ===

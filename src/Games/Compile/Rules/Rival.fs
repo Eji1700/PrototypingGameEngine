@@ -3,33 +3,33 @@ namespace Prototyping.Compile
 open Prototyping.Common
 open Prototyping.Engine
 
-type Skill = { Name: string; Describe: string }
+/// What a seat does with the board before it moves: counts what a play is worth, reads what the
+/// cards say, or plays the move out and looks at what is left. Each skill keeps what the one
+/// below it does, and the lowest does none of them.
+type Skill =
+    { Name: string
+      Describe: string
+      Counts: bool
+      Reads: bool
+      Looks: bool }
 
 type Rival = { Skill: Skill; Rng: Rng }
 
 module Rival =
-
-    let private pick items rng =
-        let n, rng = Rng.intBelow (List.length items) rng
-        List.item n items, rng
-
-    let private shuffled items rng =
-        let rec draw taken left rng =
-            match left with
-            | [] -> List.rev taken, rng
-            | _ ->
-                let one, rng = pick left rng
-                draw (one :: taken) (left |> List.filter ((<>) one)) rng
-
-        draw [] items rng
 
     let private best score items rng =
         match items with
         | [] -> None, rng
         | items ->
             let top = items |> List.map score |> List.max
-            let chosen, rng = pick (items |> List.filter (fun item -> score item = top)) rng
+            let chosen, rng = Rng.pick (items |> List.filter (fun item -> score item = top)) rng
             Some chosen, rng
+
+    // A question with nothing on offer is not one the machine can answer.
+    let private among offered rng =
+        match offered with
+        | [] -> None
+        | offered -> Some(Rng.pick offered rng)
 
 
     let private worthPlaying seat session (card, line, face) =
@@ -74,7 +74,7 @@ module Rival =
         | Return selector -> against selector -2 4
         | Flip selector -> against selector 1 2
         | Shift(selector, _) -> against selector 1 1
-        | Refreshing' -> 2
+        | RefreshHand -> 2
         | FromDeck _ -> 2
         | UnderThis _ -> 2
         | PlayFromHand _ -> 4
@@ -219,11 +219,11 @@ module Rival =
         | None, _ -> None
 
     let plays session rival =
-        let reads = rival.Skill.Name <> "easy" && rival.Skill.Name <> "medium"
-        let looks = rival.Skill.Name = "deep"
+        let reads = rival.Skill.Reads
+        let looks = rival.Skill.Looks
 
         let counting score =
-            if rival.Skill.Name = "easy" then (fun _ -> 0) else score
+            if rival.Skill.Counts then score else (fun _ -> 0)
 
         let readingPlay seat (card, line, face) =
             if not reads || face = FaceDown then
@@ -247,22 +247,22 @@ module Rival =
                 |> Option.map (fun target -> Choose(TheCard(Target.card target)), { rival with Rng = rng })
             | ALine(_, offered)
             | ALineFor(_, offered) ->
-                let line, rng = pick offered rival.Rng
-                Some(Choose(TheLine line), { rival with Rng = rng })
+                among offered rival.Rng
+                |> Option.map (fun (line, rng) -> Choose(TheLine line), { rival with Rng = rng })
             | AnOrder(_, offered) ->
-                let order, rng = pick offered rival.Rng
-                Some(Arrange order, { rival with Rng = rng })
+                among offered rival.Rng
+                |> Option.map (fun (order, rng) -> Arrange order, { rival with Rng = rng })
             | Whether inner ->
-                if rival.Skill.Name = "easy" then
-                    let said, rng = pick [ Yes; No ] rival.Rng
+                if not rival.Skill.Counts then
+                    let said, rng = Rng.pick [ Yes; No ] rival.Rng
                     Some(Choose said, { rival with Rng = rng })
                 elif reads && weighing inner <= 0 then
                     Some(Choose No, rival)
                 else
                     Some(Choose Yes, rival)
             | OneOf(first, second) ->
-                if rival.Skill.Name = "easy" then
-                    let said, rng = pick [ TheFirst; TheSecond ] rival.Rng
+                if not rival.Skill.Counts then
+                    let said, rng = Rng.pick [ TheFirst; TheSecond ] rival.Rng
                     Some(Choose said, { rival with Rng = rng })
                 elif reads && weighing second > weighing first then
                     Some(Choose TheSecond, rival)
@@ -289,7 +289,7 @@ module Rival =
             if List.length drafted <> Protocol.Each then
                 None
             else
-                let order, rng = shuffled drafted rival.Rng
+                let order, rng = Rng.shuffle drafted rival.Rng
                 Some(Arrange order, { rival with Rng = rng })
 
         | Playing ->
@@ -322,28 +322,38 @@ module Rival =
 
     let easy =
         { Name = "easy"
-          Describe = "drafts, arranges and plays at random - a seat filled, not an opponent" }
+          Describe = "drafts, arranges and plays at random - a seat filled, not an opponent"
+          Counts = false
+          Reads = false
+          Looks = false }
 
     let medium =
         { Name = "medium"
           Describe =
-            "counts: drafts the richest protocols, plays for the line nearest compiling, and will not spend a five as a two" }
+            "counts: drafts the richest protocols, plays for the line nearest compiling, and will not spend a five as a two"
+          Counts = true
+          Reads = false
+          Looks = false }
 
     let hard =
         { Name = "hard"
-          Describe = "counts, and reads the cards - it plays for what a card says as well as for what it is worth" }
+          Describe = "counts, and reads the cards - it plays for what a card says as well as for what it is worth"
+          Counts = true
+          Reads = true
+          Looks = false }
 
     let deep =
         { Name = "deep"
-          Describe = "plays every move out on a copy of the game and keeps the one that leaves the best board" }
+          Describe = "plays every move out on a copy of the game and keeps the one that leaves the best board"
+          Counts = true
+          Reads = true
+          Looks = true }
 
     let all = [ easy; medium; hard; deep ]
-
-    let names = Machines.named (fun skill -> skill.Name) all
 
     let byName name =
         Machines.byName (fun skill -> skill.Name) all name
 
-    let seating (seed: uint64) sitting =
+    let seating (seed: uint64) sitting _ =
         Machines.seating Session.seats seed sitting
         |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

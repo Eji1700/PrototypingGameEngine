@@ -1,5 +1,6 @@
 namespace Prototyping.Snake
 
+open Prototyping.Common
 open Prototyping.Engine
 
 type Move =
@@ -7,9 +8,7 @@ type Move =
     | Onward
     | Steer of seat: PlayerId * way: Direction
     | Beat
-    | Faster
-    | Slower
-    | Speed of notch: int
+    | Wind of Winding
     | Resign
 
 type Happening =
@@ -25,7 +24,9 @@ type Refusal =
     | HasStopped of PlayerId
     | NoSuchSnake of PlayerId
     | NoSuchSpeed of said: int
-    | NotThisPace of said: string
+
+    /// A move the other way of playing takes and this one does not, with which way this is.
+    | NotThisPace of Pace
 
 type Notice =
     | Happened of Happening
@@ -60,7 +61,7 @@ module Turn =
         if not (Board.holds target) then
             Wall
         else
-            match into seat target (eating || snake.Growing > 0) play with
+            match into seat target (snake.Growing > 0) play with
             | Some other -> Into other
             | None -> if eating then Food else Clear
 
@@ -123,31 +124,29 @@ module Turn =
             |> List.tryFind (fun (_, target) -> play.Food = Some target)
             |> Option.map fst
 
-        let growing seat =
-            let snake = Session.snakeAt seat play
-            snake.Growing > 0 || eater = Some seat
-
+        // Every square somebody is standing on as the beat begins, and whose it is. A living
+        // snake's last cell is not among them unless it is growing: by the time any head arrives
+        // the tail has stepped out of it - and that holds for the one about to eat as well, since
+        // its growth arrives the beat after the food does.
         let standing =
             Session.snakes play
             |> List.collect (fun (seat, snake) ->
-                if Snake.isAlive snake && not (growing seat) then Snake.behind snake else snake.Body)
-            |> Set.ofList
+                let body =
+                    if Snake.isAlive snake && snake.Growing = 0 then Snake.behind snake else snake.Body
+
+                body |> List.map (fun cell -> cell, seat))
+            |> Map.ofList
 
         let fate seat target =
             if not (Board.holds target) then
                 Some HitWall
-            elif Set.contains target standing then
-                Session.snakes play
-                |> List.tryPick (fun (other, snake) ->
-                    let body =
-                        if Snake.isAlive snake && not (growing other) then Snake.behind snake else snake.Body
-
-                    if List.contains target body then Some other else None)
-                |> Option.map (fun other -> if other = seat then HitItself else HitAnother other)
-                |> Option.orElse (Some HitItself)
             else
-                headed
-                |> List.tryPick (fun (other, theirs) -> if other <> seat && theirs = target then Some(HitAnother other) else None)
+                match Map.tryFind target standing with
+                | Some other -> Some(if other = seat then HitItself else HitAnother other)
+                | None ->
+                    headed
+                    |> List.tryPick (fun (other, theirs) ->
+                        if other <> seat && theirs = target then Some(HitAnother other) else None)
 
         let stopping =
             headed
@@ -197,6 +196,10 @@ module Turn =
         match session, move with
         | Finished _, _ -> None, []
 
+        // Everybody's, because `Playable.Resign` is a move with no seat in it: on the clock nobody
+        // is to play, so there is no seat to read it off. At one keyboard the four hands are one
+        // console anyway; a 'resign' that stopped one snake and left the others racing needs the
+        // seam to say who said it.
         | InPlay play, Resign when play.Pace = Clock ->
             let stopping = Session.living play
 
@@ -224,8 +227,7 @@ module Turn =
             | None -> Some(InPlay(Session.onwards stopped)), told
 
 
-        | InPlay play, (Go _ | Onward) when play.Pace = Clock ->
-            None, [ Refused(NotThisPace "a direction is a turn of the head here, and the beat is what moves anybody") ]
+        | InPlay play, (Go _ | Onward) when play.Pace = Clock -> None, [ Refused(NotThisPace Clock) ]
 
         | InPlay play, Onward -> taking play.ToPlay (Session.snakeAt play.ToPlay play).Facing play
 
@@ -234,26 +236,15 @@ module Turn =
         | InPlay play, Go direction -> taking play.ToPlay direction play
 
 
-        | InPlay play, (Steer _ | Beat | Faster | Slower | Speed _) when play.Pace = Turns ->
-            None,
-            [ Refused(NotThisPace "this way of playing takes a step when you say a direction, and waits for you in between") ]
+        | InPlay play, (Steer _ | Beat | Wind _) when play.Pace = Turns -> None, [ Refused(NotThisPace Turns) ]
 
 
-        | InPlay play, Speed notch when notch < Session.Slowest || notch > Session.Fastest -> None, [ Refused(NoSuchSpeed notch) ]
+        | InPlay _, Wind(Winding.Speed notch) when not (Notch.holds notch) -> None, [ Refused(NoSuchSpeed notch) ]
 
-        | InPlay play, Speed notch when notch = play.Speed -> None, []
-        | InPlay play, Faster when play.Speed = Session.Fastest -> None, []
-        | InPlay play, Slower when play.Speed = Session.Slowest -> None, []
-
-        | InPlay play, (Faster | Slower | Speed _ as winding) ->
-            let notch =
-                match winding with
-                | Faster -> play.Speed + 1
-                | Slower -> play.Speed - 1
-                | Speed notch -> notch
-                | _ -> play.Speed
-
-            Some(InPlay { play with Speed = notch }), [ Happened(Wound notch) ]
+        | InPlay play, Wind winding ->
+            match Notch.wound winding play.Speed with
+            | None -> None, []
+            | Some notch -> Some(InPlay { play with Speed = notch }), [ Happened(Wound notch) ]
 
         | InPlay play, Beat ->
             let played, told = beating play

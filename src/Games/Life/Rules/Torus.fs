@@ -1,12 +1,10 @@
 namespace Prototyping.Life
 
-open System
-
-type Cell = { Row: int; Column: int }
+open Prototyping.Common
 
 type Cells = Set<Cell>
 
-module Grid =
+module Torus =
 
     [<Literal>]
     let Width = 26
@@ -14,32 +12,19 @@ module Grid =
     [<Literal>]
     let Height = 16
 
-    let holds cell =
-        cell.Row >= 1 && cell.Row <= Height && cell.Column >= 1 && cell.Column <= Width
+    let grid = { Width = Width; Height = Height }
 
-    let rows =
-        [ for row in 1..Height -> [ for column in 1..Width -> { Row = row; Column = column } ] ]
+    let holds = Grid.holds grid
 
-    let all = List.concat rows
+    let rows = Grid.rows grid
 
+    let all = Grid.all grid
 
-    let private First = 'a'
+    let letters = Grid.letters grid
 
-    let letters = String(Array.init Width (fun column -> char (int First + column)))
+    let name = Grid.name
 
-    let name cell =
-        $"{char (int First + cell.Column - 1)}{cell.Row}"
-
-    let read (word: string) =
-        match List.ofSeq (word.ToLowerInvariant()) with
-        | letter :: (_ :: _ as digits) when Char.IsAsciiLetterLower letter && digits |> List.forall Char.IsAsciiDigit ->
-            match Int32.TryParse(String(Array.ofList digits)) with
-            | true, row ->
-                Some
-                    { Row = row
-                      Column = int letter - int First + 1 }
-            | _ -> None
-        | _ -> None
+    let read = Grid.read
 
 
     // The grid wraps, so the edges join and a glider walks off one side and back in the other.

@@ -2,15 +2,17 @@ namespace Prototyping.Diplomacy
 
 open Prototyping.Engine
 open Prototyping.Table
+// After the table and the engine, so that a Play's fields are found on it and not on a Journal's.
 open Prototyping.Diplomacy
 
 module Render =
+
+    let seated = Scene.seated Words.player
 
     module Blocks =
         let powers = "The powers"
         let orders = "Your orders"
         let board = "The board"
-        let sea = "At sea"
         let last = "Last time round"
         let commands = "Commands"
         let log = "Log"
@@ -38,7 +40,7 @@ module Render =
             match Session.awaited play with
             | power :: _ ->
                 let seat = Power.seatOf power
-                $"{Words.phase play.Stage play.Year} - {Words.seated (seat = beholder) seat} to write"
+                $"{Words.phase play.Stage play.Year} - {seated (seat = beholder) seat} to write"
             | [] -> Words.phase play.Stage play.Year
 
     let private powers beholder session =
@@ -60,7 +62,7 @@ module Render =
                 else "still writing"
 
             [ Scene.cell Tone.Yours (if Some power = acting && not (Session.isOver session) then ">" else "")
-              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key power)) (Words.seated yours seat)
+              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key power)) (seated yours seat)
               Scene.cell Tone.Quiet (Words.centresOf centres)
               Scene.cell Tone.Quiet (Words.unitsOf units)
               Scene.cell Tone.Quiet standing ])
@@ -81,7 +83,7 @@ module Render =
         | TheBalkans -> "The Balkans"
         | TurkeyAnd -> "Turkey"
         | Africa -> "Africa"
-        | Waters -> Blocks.sea
+        | Waters -> "open water"
 
 
     // A province drawn across several hexes should carry its unit and its ownership letter in only one
@@ -158,26 +160,15 @@ module Render =
         Tile(Some(Words.piece piece), Tone.Slot(Ink.key piece.Power), contents)
 
     let private chores margins beholder play =
-        let power = Power.atSeat beholder
+        match Power.atSeat beholder with
+        | None -> Blank
+        | Some power ->
 
-        let written =
-            play.Written
-            |> Map.toList
-            |> List.filter (fun (province, says) ->
-                match says with
-                | Builds _ -> Position.ownerOf province play.Board = power
-                | _ ->
-                    (Position.at province play.Board |> Option.map (fun piece -> piece.Power)) = power
-                    || play.Beaten
-                       |> List.exists (fun beaten -> beaten.From = province && Some beaten.Piece.Power = power))
+        let written = Session.writtenBy power play
 
         let orderFor province =
             written
             |> List.tryPick (fun (other, says) -> if other = province then Some says else None)
-
-        match power with
-        | None -> Blank
-        | Some power ->
 
         let mine = Position.unitsOf power play.Board
 
@@ -242,7 +233,7 @@ module Render =
                                 Tone.Quiet
                                 (match orderFor beaten.From with
                                  | Some says -> Words.saying says
-                                 | None -> $"beaten out of {Words.province beaten.From}") ])
+                                 | None -> $"beaten out of {Atlas.nameOf beaten.From}") ])
                   )
                   laid waiting
                   Does("commit", "commit", Tone.Yours) ]
@@ -306,7 +297,7 @@ module Render =
               for piece in was.Scattered -> Scene.cell Tone.Quiet $"{Words.piece piece} is disbanded"
               for piece in was.Built -> Scene.cell Tone.Quiet $"{Words.named piece} is raised"
               for piece in was.Removed -> Scene.cell Tone.Quiet $"{Words.piece piece} is given up"
-              for centre, owner, _ in was.Changed -> Scene.cell Tone.Quiet $"{Words.province centre} to {Power.name owner}" ]
+              for centre, owner, _ in was.Changed -> Scene.cell Tone.Quiet $"{Atlas.nameOf centre} to {Power.name owner}" ]
 
         Stack
             [ Scene.quietly (Words.phase was.Was was.Year)
@@ -330,16 +321,9 @@ module Render =
           "build a vie, disband vie", "in a winter"
           "press france ...", "a word to one power, and to nobody else"
           "borders vie, where vie", "what a piece there can reach, and what is there"
-          "undo, redo", "walk the game back and forward"
-          "history", "the record so far"
-          "notes", "hide the writing that explains the board"
-          "commands", "hide this box"
-          "log", "hide what the game has been saying"
-          "view <name>", "draw the board another way"
-          "save", "write the record now"
-          "help", "every command, at length"
-          "resign", "walk away; your units stand and are worn down"
-          "quit", "leave; the game is written down and 'replay' takes it up again" ]
+          "orders", "what you have written this phase"
+          "resign", "walk away; your units stand and are worn down" ]
+        @ Commands.verbs
 
     let commands = Scene.verbs verbs
 
@@ -403,20 +387,25 @@ module Render =
               Scene.logged margins Blocks.log (Scene.log (wordsFor beholder) model) ]
 
 
-    let private askedFor beholder current (entry: Entry<Move, Notice>) =
+    // Another power's line of the open phase is kept back the way its notice is. The turn says which
+    // lines those are, and the phase open now is the one they were written in.
+    let private askedFor beholder play (entry: Entry<Move, Notice>) =
+        let theirs = entry.Actor <> beholder && entry.Turn = play.Turn
+
         match entry.Asked with
         | Make(Whisper(Some heard, _)) when entry.Actor <> beholder && Power.seatOf heard <> beholder ->
             $"press {Power.key heard} ..."
-        | Make(Give(at, _)) when entry.Actor <> beholder && entry.Turn = current -> $"an order for {Atlas.code at}"
+        | Make(Give(at, _)) when theirs -> Words.veiled play.Stage at
+        | Make(Take _) when theirs && play.Stage = Building -> "cancel ..."
         | msg -> Words.command msg
 
     let history beholder (model: Model<Move, Session, Notice>) =
-        let current = Session.turn (Model.state model)
+        let play = Session.play (Model.state model)
 
         let entry (entry: Entry<Move, Notice>) =
             [ Scene.cell Tone.Quiet $"{entry.Ordinal}  turn {entry.Turn}"
               Scene.cell (Tone.Slot(Ink.key (Power.atSeat entry.Actor |> Option.defaultValue Austria))) (Words.player entry.Actor)
-              Scene.cell Tone.Plainly (askedFor beholder current entry)
+              Scene.cell Tone.Plainly (askedFor beholder play entry)
               Scene.cell Tone.Quiet (entry.Told |> List.map (wordsFor beholder) |> String.concat " ") ]
 
         Journal.entries model.Journal
@@ -424,7 +413,7 @@ module Render =
         |> Scene.record (heading beholder (Model.state model))
 
 
-    let answer (asked: string) (model: Model<Move, Session, Notice>) =
+    let answer beholder (asked: string) (model: Model<Move, Session, Notice>) =
         let play = Session.play (Model.state model)
 
         let named word =
@@ -447,7 +436,7 @@ module Render =
 
             written
                 (Atlas.nameOf province)
-                [ $"{Atlas.code province} - {Words.province province}"
+                [ $"{Atlas.code province} - {Atlas.nameOf province}"
                   (match Atlas.terrainOf province with
                    | Inland -> "Landlocked: no fleet ever stands here."
                    | Coastal -> "A coast: an army or a fleet may stand here."
@@ -467,11 +456,11 @@ module Render =
         let standing province =
             written
                 (Atlas.nameOf province)
-                [ $"{Atlas.code province} - {Words.province province}, in {regionName (Atlas.regionOf province)}."
+                [ $"{Atlas.code province} - {Atlas.nameOf province}, in {regionName (Atlas.regionOf province)}."
                   ""
                   (match Position.at province play.Board with
-                   | Some piece -> $"{Words.named piece} stands in {Words.province province}."
-                   | None -> $"Nothing stands in {Words.province province}.")
+                   | Some piece -> $"{Words.named piece} stands in {Atlas.nameOf province}."
+                   | None -> $"Nothing stands in {Atlas.nameOf province}.")
                   ""
                   (match Atlas.centreOf province, Position.ownerOf province play.Board with
                    | NotACentre, _ -> "It is not a supply centre."
@@ -486,7 +475,19 @@ module Render =
                 Blocks.board
                 [ why
                   ""
-                  "Ask 'borders vie' for what a piece in Vienna could reach, or 'where vie' for what is standing there." ]
+                  "Ask 'borders vie' for what a piece in Vienna could reach, 'where vie' for what is standing there, or 'orders' for what you have written." ]
+
+        let orders () =
+            match Power.atSeat beholder with
+            | None -> lost "You are not one of the powers."
+            | Some power ->
+                written
+                    Blocks.orders
+                    [ match Session.writtenBy power play with
+                      | [] -> $"Nothing written for {Words.phase play.Stage play.Year} yet."
+                      | mine ->
+                          for at, says in mine do
+                              Words.order at says ]
 
         match Commands.lowered asked with
         | [ "borders"; word ] ->
@@ -497,12 +498,13 @@ module Render =
             match named word with
             | Ok province -> standing province
             | Error why -> lost why
+        | [ "orders" ] -> orders ()
         | _ -> lost "That is not a question this game knows."
 
     let rules = Scene.rules help
 
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     let private sheet =

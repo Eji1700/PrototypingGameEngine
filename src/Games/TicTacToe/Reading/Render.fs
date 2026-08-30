@@ -2,9 +2,10 @@ namespace Prototyping.TicTacToe
 
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.TicTacToe
 
 module Render =
+
+    let seated = Scene.seated Words.player
 
     module Blocks =
         let board = "The board"
@@ -24,7 +25,7 @@ module Render =
         match session with
         | InPlay play ->
             let yours = Session.seatOf play.ToPlay = beholder
-            $"Turn {play.Turn} - {Words.seated yours (Session.seatOf play.ToPlay)} to play"
+            $"Turn {play.Turn} - {seated yours (Session.seatOf play.ToPlay)} to play"
         | Finished(_, ending) -> $"The game is over: {Words.ending ending}"
 
 
@@ -52,23 +53,13 @@ module Render =
             let held = Board.held mark board |> List.length
 
             [ Scene.cell Tone.Yours (if seat = acting && not (Session.isOver session) then "->" else "")
-              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key mark)) (Words.seated yours seat)
-              Scene.cell Tone.Quiet $"{held} of {Squares.Side * Squares.Side}" ])
+              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key mark)) (seated yours seat)
+              Scene.cell Tone.Quiet $"{held} of {Squares.Count}" ])
         |> Aligned
 
 
     let private verbs =
-        [ "5", "take square 5 (or 'place 5')"
-          "undo, redo", "walk the game back and forward"
-          "history", "the record so far"
-          "notes", "hide the writing that explains the board"
-          "commands", "hide this box"
-          "log", "hide what the game has been saying"
-          "view <name>", "draw the board another way"
-          "save", "write the record now"
-          "help", "every command, at length"
-          "resign", "give the game up, but write it down"
-          "quit", "leave; the game is written down and 'replay' takes it up again" ]
+        [ "5", "take square 5 (or 'place 5')"; Commands.resign ] @ Commands.verbs
 
     let commands = Scene.verbs verbs
 
@@ -115,12 +106,12 @@ module Render =
     let nothingToExplain =
         "There is nothing here that needs working out: the board is nine squares in plain sight, and three in a row wins."
 
-    let answer = Block("The board", [ Scene.says nothingToExplain ])
+    let answer = Block(Blocks.board, [ Scene.says nothingToExplain ])
 
     let rules = Scene.rules help
 
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     let private sheet =

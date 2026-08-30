@@ -21,3 +21,11 @@ module Counting =
     /// "a stone", "3 stones" - where one of a thing is worth naming rather than counting.
     let a one many count =
         if abs count = 1 then $"a {one}" else several one many count
+
+    /// Several things in one breath: "a", "a or b", "a, b or c". The word between the last two is
+    /// the caller's, since "and" and "or" are both wanted.
+    let listed joining (items: string list) =
+        match List.rev items with
+        | [] -> ""
+        | [ only ] -> only
+        | last :: rest -> String.concat ", " (List.rev rest) + $" {joining} " + last

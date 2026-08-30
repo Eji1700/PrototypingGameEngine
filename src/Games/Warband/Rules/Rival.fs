@@ -56,12 +56,8 @@ module Rival =
     let private planning rival =
         match rival.Plan with
         | [] ->
-            let picked, rng = Rng.intBelow (List.length plans) rival.Rng
-
-            plans[picked],
-            { rival with
-                Rng = rng
-                Plan = plans[picked] }
+            let plan, rng = Rng.pick plans rival.Rng
+            plan, { rival with Rng = rng; Plan = plan }
         | plan -> plan, rival
 
     let plays play rival =
@@ -82,9 +78,9 @@ module Rival =
                 | [], _
                 | _, [] -> None
                 | kinds, hexes ->
-                    let picked, rng = Rng.intBelow (List.length kinds) rival.Rng
-                    let where, rng = Rng.intBelow (List.length hexes) rng
-                    Some(Muster(kinds[picked], hexes[where]), { rival with Rng = rng })
+                    let picked, rng = Rng.pick kinds rival.Rng
+                    let where, rng = Rng.pick hexes rng
+                    Some(Muster(picked, where), { rival with Rng = rng })
 
         | Fighting _
         | Ended _ -> None
@@ -102,11 +98,9 @@ module Rival =
 
     let all = [ raw; steady ]
 
-    let names = Machines.named (fun skill -> skill.Name) all
-
     let byName name =
         Machines.byName (fun skill -> skill.Name) all name
 
-    let seating (seed: uint64) sitting =
+    let seating (seed: uint64) sitting _ =
         Machines.seating (Session.places |> List.map Seat.at) seed sitting
         |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng; Plan = [] })

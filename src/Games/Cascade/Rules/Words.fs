@@ -48,9 +48,6 @@ module Words =
 
     let player (_: PlayerId) = "The hand"
 
-    let seated yours playerId =
-        player playerId + (if yours then " (you)" else "")
-
     let private settling (run: Run) =
         let whole =
             match run.Made with
@@ -77,22 +74,16 @@ module Words =
         | StillTurning 1 -> "A cell is still turning. Nothing may be touched until the board comes to rest."
         | StillTurning turning -> $"{turning} cells are still turning. Nothing may be touched until the board comes to rest."
         | NoneLeft -> $"No touches left. A board is worth {Session.Touches} - 'restart' deals another."
-        | NoSuchCell said ->
-            $"There is no cell {cell said}. The columns run a to {Board.letters[Board.Width - 1]} and the rows 1 to {Board.Height}."
-        | NoSuchSpeed said -> $"A speed of {said}? The notches run from {Session.Slowest} to {Session.Fastest}."
+        | NoSuchCell said -> $"There is no cell {cell said}. {Grid.span Board.grid}"
+        | NoSuchSpeed said -> Notch.unknown said
 
     let command =
         Msg.written (function
             | Touch where -> cell where
-            | Point North -> "up"
-            | Point East -> "right"
-            | Point South -> "down"
-            | Point West -> "left"
+            | Point where -> way where
             | Press -> "press"
             | Beat -> "beat"
-            | Faster -> "faster"
-            | Slower -> "slower"
-            | Speed notch -> $"speed {notch}"
+            | Wind winding -> Notch.written winding
             | Resign -> "resign")
 
     let said =

@@ -31,7 +31,7 @@ module Turn =
             let ending = Abandoned play.ToPlay
             Some(Finished(play, ending)), [ Happened(GameEnded ending) ]
 
-        | InPlay play, Place square when not (Squares.holds square) -> None, [ Refused(NoSuchSquare square) ]
+        | InPlay _, Place square when not (Squares.holds square) -> None, [ Refused(NoSuchSquare square) ]
 
         | InPlay play, Place square ->
             match Board.at square play.Board with

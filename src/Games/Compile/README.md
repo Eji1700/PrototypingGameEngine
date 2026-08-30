@@ -82,7 +82,7 @@ exactly what a cover cannot silence**, which is a sentence the tests hold the ga
 fire-3` draws the same three boxes, and is still the place to read a card that is nowhere near
 the table.
 
-**A line the parser cannot place is answered rather than refused.** Which of the three sets of
+**A lone word the parser cannot place is answered rather than refused.** Which of the three sets of
 verbs above was wanted is a fact about where the game stands, and the parser is handed a line and
 nothing else - so a stray word used to come back *"that is not a protocol"*, which is true on the
 first six moves and beside the point for the rest of the game. It asks the game instead, and the
@@ -390,8 +390,8 @@ discards 1 card"* halts the search on them, so the board `deep` scores is one on
 discarded — the best half of the card goes unpaid. Paying for it with `hard`'s estimate at exactly
 that boundary is a natural idea and about fifteen lines; it was written, measured over eight hundred
 deals, and moved the record by six games. On a posed board it did not change so much as which card
-was chosen. So it is not in the tree, and the measurement is [in the
-comment](Rules/Rival.fs) where the next person to have the idea will find it.
+was chosen. So it is not in the tree, and this paragraph is where the next person to have the idea
+will find the measurement.
 
 It keeps `medium`'s arithmetic as a tie-break. Two moves that leave the same board are still not
 equal: one of them may have spent a five to get there.
@@ -444,8 +444,9 @@ crossed - so that the day something makes cards appear from nowhere, one of them
 
 ## The files
 
-Fourteen, in the shape every game here has: `Rules` is how it is played and contains no English
-and nothing from the table layer; `Reading` is how it is read.
+Sixteen, and the four-line `Program.fs` that is every game's door, in the shape every game here
+has: `Rules` is how it is played and contains no English and nothing from the table layer;
+`Reading` is how it is read.
 
 | File | Role |
 | --- | --- |
@@ -466,7 +467,7 @@ and nothing from the table layer; `Reading` is how it is read.
 | [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), which `Readers` then draws three ways |
 | [Offer.fs](Offer.fs) | Both seams filled in - **twice**, out of one function: the game, and the game with the control component |
 
-**There used to be a fifteenth file**, and its going is worth a line. `Cards.js` was the ninety
+**There used to be one file more**, and its going is worth a line. `Cards.js` was the ninety
 cards as they are really printed - not F#, not built, and the source everything in
 [Printed.fs](Rules/Printed.fs) was transcribed from. It stayed while it was the only copy of cards
 that had not been typed in yet, and it went in the commit that took the count to ninety. Two copies

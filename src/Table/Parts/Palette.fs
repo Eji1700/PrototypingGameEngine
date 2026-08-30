@@ -14,11 +14,12 @@ type Slot =
       Shows: string
       Standard: Shade }
 
+/// The reader's own colour sits in `Shades` under its own key beside the game's slots, so that the
+/// one colour every game shares is looked up, set and written down the same way as the rest.
 [<NoComparison>]
 type Palette =
     private
-        { Own: Shade
-          Shades: Map<string, Shade>
+        { Shades: Map<string, Shade>
           Offered: Slot list }
 
 module Palette =
@@ -107,28 +108,31 @@ module Palette =
             let read = String.concat " " said
             wrong $"'{read}' is not '<name> #rrggbb', or 'no <name>'."
 
-    let private asked (text: string) =
-        text.Split '\n' |> Array.fold folding (catalogue, [])
+    /// The colours a file's lines leave standing, and what was wrong with any line that left
+    /// nothing. A file that takes every colour away is a file that changed nothing, since a board
+    /// has to have something to be drawn in.
+    let fromText (text: string) =
+        // A file written by another program can open with a byte order mark, which would
+        // otherwise be the first letter of the first name.
+        let shades, problems =
+            text.TrimStart('\uFEFF').Split '\n' |> Array.fold folding (catalogue, [])
+
+        if List.isEmpty shades then
+            catalogue, problems @ [ "That leaves no colours at all, so the usual ones stand." ]
+        else
+            shades, problems
 
     let private files =
         [ "colours.txt"; "colors.txt" ]
         |> List.map (fun name -> Path.Combine(Directory.GetCurrentDirectory(), name))
-
-    let source = List.head files
 
     let private loaded =
         lazy
             (try
                 match files |> List.tryFind File.Exists with
                 | Some path ->
-                    let shades, problems = asked (File.ReadAllText path)
-
-                    if List.isEmpty shades then
-                        catalogue,
-                        problems
-                        @ [ $"{Path.GetFileName path} leaves no colours at all, so the usual ones stand." ]
-                    else
-                        shades, problems |> List.map (fun said -> $"{Path.GetFileName path}: {said}")
+                    let shades, problems = fromText (File.ReadAllText path)
+                    shades, problems |> List.map (fun said -> $"{Path.GetFileName path}: {said}")
                 | None -> catalogue, []
              with problem ->
                  catalogue, [ $"The colours file could not be read: {problem.Message}" ])
@@ -138,7 +142,7 @@ module Palette =
     let complaints = snd loaded.Value
 
     [<Literal>]
-    let Yours = "yours"
+    let private Yours = "yours"
 
     let private ownSlot =
         { Key = Yours
@@ -147,8 +151,10 @@ module Palette =
           Standard = gold }
 
     let standard slots =
-        { Own = ownSlot.Standard
-          Shades = slots |> List.map (fun slot -> slot.Key, slot.Standard) |> Map.ofList
+        { Shades =
+            slots @ [ ownSlot ]
+            |> List.map (fun slot -> slot.Key, slot.Standard)
+            |> Map.ofList
           Offered = slots }
 
     let slots palette = palette.Offered @ [ ownSlot ]
@@ -157,15 +163,14 @@ module Palette =
 
     let paint (shade: Shade) = "#" + shade.Color.ToHex()
 
-    let own palette = palette.Own
-
     let shadeOf key palette =
         palette.Shades |> Map.tryFind key |> Option.defaultValue slate
 
+    let own palette = shadeOf Yours palette
+
     let inkOf key palette = ink (shadeOf key palette)
 
-    let inSlot (slot: Slot) palette =
-        if slot.Key = Yours then palette.Own else shadeOf slot.Key palette
+    let inSlot (slot: Slot) palette = shadeOf slot.Key palette
 
     let reset palette = standard palette.Offered
 
@@ -174,30 +179,26 @@ module Palette =
     let private keysOf palette =
         slots palette |> List.map (fun slot -> slot.Key) |> String.concat ", "
 
-    let private withShade key shade palette =
-        if key = Yours then
-            { palette with Own = shade }
-        else
-            { palette with
-                Shades = palette.Shades |> Map.add key shade }
-
     let set (key: string) (colour: string) palette =
         match slots palette |> List.tryFind (fun candidate -> candidate.Key = key) with
         | None -> Error $"There is nothing called '{key}' to colour. There is {keysOf palette}."
         | Some slot ->
             match shades |> List.tryFind (fun shade -> shade.Name = colour) with
             | None -> Error $"'{colour}' is not a colour I have. There is {names}."
-            | Some shade -> Ok(withShade slot.Key shade palette)
-
-
-    let private nameOf key palette =
-        if key = Yours then palette.Own.Name else (shadeOf key palette).Name
+            | Some shade ->
+                Ok
+                    { palette with
+                        Shades = Map.add slot.Key shade palette.Shades }
 
     let write palette =
         slots palette
-        |> List.map (fun slot -> $"{slot.Key}={nameOf slot.Key palette}")
+        |> List.map (fun slot -> $"{slot.Key}={(inSlot slot palette).Name}")
         |> String.concat " "
 
+    /// A palette as it comes off the wire - the query string a page's colour form sends, or a
+    /// cookie an earlier version of this program wrote. A word not known here leaves that slot
+    /// standard rather than turning the reader away, since nobody at that end is at a prompt to
+    /// read a refusal; the same words typed at the Video page are refused in full.
     let read slots (text: string) =
         text.Split([| ' ' |], StringSplitOptions.RemoveEmptyEntries)
         |> Array.fold

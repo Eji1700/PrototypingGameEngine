@@ -1,6 +1,7 @@
 param(
     [string[]]$Only = @(),
-    [int]$AtOnce = [Environment]::ProcessorCount
+    [int]$AtOnce = [Environment]::ProcessorCount,
+    [int]$Minutes = 15
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,13 +43,13 @@ try {
 
             $p = Start-Process -PassThru -NoNewWindow -WorkingDirectory $root -FilePath "dotnet" `
                 -ArgumentList @("fsi", "tests/$name.fsx") `
-                -RedirectStandardOutput "$out\$name.out" -RedirectStandardError "$out\$name.err"
+                -RedirectStandardOutput (Join-Path $out "$name.out") -RedirectStandardError (Join-Path $out "$name.err")
 
             # Touching Handle is what makes ExitCode readable later: without it PowerShell never
             # opens one, and the exit code of a process started this way comes back empty.
             $null = $p.Handle
 
-            $entry = [pscustomobject]@{ Name = $name; Process = $p; Clock = [Diagnostics.Stopwatch]::StartNew(); Seconds = 0 }
+            $entry = [pscustomobject]@{ Name = $name; Process = $p; Clock = [Diagnostics.Stopwatch]::StartNew(); Seconds = 0; TimedOut = $false }
             $running.Add($entry) | Out-Null
             $started.Add($entry) | Out-Null
         }
@@ -56,6 +57,14 @@ try {
         Start-Sleep -Milliseconds 100
 
         foreach ($r in @($running)) {
+            # A suite that hangs - a turn that never passes at a machine, say - is killed and counted
+            # as failed, and says so, rather than holding the whole run until the job times out
+            # with nothing to say about which one it was.
+            if (-not $r.Process.HasExited -and $r.Clock.Elapsed.TotalMinutes -gt $Minutes) {
+                try { $r.Process.Kill() } catch {}
+                $r.TimedOut = $true
+            }
+
             if ($r.Process.HasExited) {
                 $r.Clock.Stop()
                 $r.Seconds = [math]::Round($r.Clock.Elapsed.TotalSeconds, 1)
@@ -66,24 +75,24 @@ try {
 
     $done = foreach ($name in $scripts) {
         $r = $started | Where-Object { $_.Name -eq $name }
-        [pscustomobject]@{ Name = $name; Code = $r.Process.ExitCode; Seconds = $r.Seconds }
+        [pscustomobject]@{ Name = $name; Code = $(if ($r.TimedOut) { -1 } else { $r.Process.ExitCode }); Seconds = $r.Seconds; TimedOut = $r.TimedOut }
     }
 
     foreach ($r in $done) {
         ""
         "=== $($r.Name) ==="
-        Get-Content "$out\$($r.Name).out" -ErrorAction SilentlyContinue
-        Get-Content "$out\$($r.Name).err" -ErrorAction SilentlyContinue
+        Get-Content (Join-Path $out "$($r.Name).out") -ErrorAction SilentlyContinue
+        Get-Content (Join-Path $out "$($r.Name).err") -ErrorAction SilentlyContinue
     }
 
     $whole.Stop()
     $failed = @($done | Where-Object { $_.Code -ne 0 })
 
     ""
-    $ran = if ($done.Count -eq 1) { "1 script" } else { "$($done.Count) scripts" }
+    $ran = if (@($done).Count -eq 1) { "1 script" } else { "$(@($done).Count) scripts" }
     "--- $ran in $([math]::Round($whole.Elapsed.TotalSeconds, 1))s ---"
     foreach ($r in $done | Sort-Object Seconds -Descending) {
-        "{0}  {1,-11} {2,5}s" -f $(if ($r.Code -eq 0) { "ok  " } else { "FAIL" }), $r.Name, $r.Seconds
+        "{0}  {1,-11} {2,5}s{3}" -f $(if ($r.Code -eq 0) { "ok  " } else { "FAIL" }), $r.Name, $r.Seconds, $(if ($r.TimedOut) { "  (killed after $Minutes minutes)" } else { "" })
     }
 
     ""

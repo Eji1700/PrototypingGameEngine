@@ -15,14 +15,12 @@ module Position =
     let withStones regionId pile (Position piles) =
         Position(piles |> Map.add regionId pile)
 
-    let add color n regionId position =
-        position |> withStones regionId (Pile.add color n (stones regionId position))
+    let add colour n regionId position =
+        position |> withStones regionId (Pile.add colour n (stones regionId position))
 
-    let remove color n regionId position =
-        position |> withStones regionId (Pile.remove color n (stones regionId position))
-
-    let all position =
-        Board.regions |> List.map (fun region -> region, stones region.Id position)
+    let remove colour n regionId position =
+        position
+        |> withStones regionId (Pile.remove colour n (stones regionId position))
 
     let total position =
         Board.ids

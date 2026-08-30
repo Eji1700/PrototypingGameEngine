@@ -5,6 +5,8 @@ open Prototyping.Table
 
 module Render =
 
+    let seated = Scene.seated Words.player
+
     module Blocks =
         let row = "The row"
         let players = "Players"
@@ -20,7 +22,7 @@ module Render =
         match round with
         | InPlay play ->
             let yours = Seat.at play.ToPlay = beholder
-            $"Turn {play.Turn} - {Words.seated yours (Seat.at play.ToPlay)} to play"
+            $"Turn {play.Turn} - {seated yours (Seat.at play.ToPlay)} to play"
         | Finished(_, ending) -> $"The game is over: {Words.ending ending}"
 
 
@@ -37,22 +39,12 @@ module Render =
               let yours = seat = beholder
 
               [ Scene.cell Tone.Yours (if seat = acting && not (Round.isOver round) then "->" else "")
-                Scene.cell (if yours then Tone.Yours else Tone.Plainly) (Words.seated yours seat) ] ]
+                Scene.cell (if yours then Tone.Yours else Tone.Plainly) (seated yours seat) ] ]
         |> Aligned
 
 
     let private verbs =
-        [ "2", "take two of them (or 'take 2')"
-          "undo, redo", "walk the game back and forward"
-          "history", "the record so far"
-          "notes", "hide the writing that explains the row"
-          "commands", "hide this box"
-          "log", "hide what the game has been saying"
-          "view <name>", "draw the row another way"
-          "save", "write the record now"
-          "help", "every command, at length"
-          "resign", "give the game up, but write it down"
-          "quit", "leave; the game is written down and 'replay' takes it up again" ]
+        [ "2", "take two of them (or 'take 2')"; Commands.resign ] @ Commands.verbs
 
     let commands = Scene.verbs verbs
 
@@ -105,7 +97,7 @@ module Render =
 
     let rules = Scene.rules help
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     let private sheet =
@@ -117,4 +109,4 @@ module Render =
         { Title = "MyGame"
           Sheet = sheet
           Placeholder = $"how many to take - 1 to {Row.Most}, or 'help'"
-          Keys = [ "1", "take 1"; "2", "take 2"; "3", "take 3" ] }
+          Keys = [ for n in 1 .. Row.Most -> string n, $"take {n}" ] }

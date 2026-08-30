@@ -1,13 +1,13 @@
 namespace Prototyping.Turncoats
 
 open System
-open System.Text
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Turncoats
 
 module Render =
+
+    let seated = Scene.seated Words.player
 
 
     let private step = 11
@@ -30,7 +30,7 @@ module Render =
     let regionTitle room (region: Region) =
         let titled name =
             match region.Kind with
-            | Home color -> sprintf "[%2d] %s (%c)" (Words.number region.Id) name (Words.glyph color)
+            | Home colour -> sprintf "[%2d] %s (%c)" (Words.number region.Id) name (Words.glyph colour)
             | Wild
             | Special
             | Dead -> sprintf "[%2d] %s" (Words.number region.Id) name
@@ -47,7 +47,7 @@ module Render =
     let standingIn wall game (region: Region) =
         let ruler =
             match Game.ruleOver region.Id game with
-            | RuledBy color -> $">{Words.glyph color}"
+            | RuledBy colour -> $">{Words.glyph colour}"
             | Contested tied -> "=" + (tied |> List.map (Words.glyph >> string) |> String.concat "")
             | Unclaimed -> ""
 
@@ -176,6 +176,13 @@ module Render =
         let supply =
             "Every bag but your own is closed, and so is the reserve, so those are counted rather than read. But every stone is somewhere: whatever is neither on the map nor in your bag is out of sight, and its colours are exact. Where it is, is what you cannot know."
 
+        // The page's own, for the controls it draws under a region and no terminal does.
+        let recruiting =
+            "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is."
+
+        let acting =
+            "Where a region holds stones there is a second row: '×R' battles with a Red one and drives out all it may, and 'R→8' marches a Red one into 8."
+
     module Blocks =
         let map = "The map"
         let apart = "Standing apart"
@@ -187,6 +194,8 @@ module Render =
         let log = "Log"
         let record = "The record"
         let rules = "How the game goes"
+        let thisTurn = "This turn"
+        let table = "The table"
         let region regionId = $"Region {Words.number regionId}"
 
     module Supply =
@@ -194,57 +203,26 @@ module Render =
         let inReserve = "in reserve"
         let outOfSight = "out of sight"
 
-    module Filling =
-        let title = "Waiting for the table to fill"
+    let private verbs =
+        [ "r b 5", "recruit a Blue stone into 5"
+          "n", "negotiate for a stone"
+          "b r 8", "battle in 8 with a Red one"
+          "return g", "hand a Green one back"
+          "m g 8 5 2", "march 2 Green from 8 into 5"
+          "rule 8", "show why 8 is ruled as it is"
+          Commands.restart
+          "players 3", $"deal a fresh game to three; the game takes {Table.MinPlayers} to {Table.MaxPlayers}"
+          Commands.resign ]
+        @ Commands.verbs
 
-        let standing (seat: Waiting) =
-            if seat.Expected then "still to arrive"
-            elif seat.Away then "here, but their console has dropped"
-            else "here"
-
-        let stillToCome (seats: Waiting list) =
-            let expected = seats |> List.filter (fun seat -> seat.Expected) |> List.length
-            $"{expected} more to come. The game begins once every seat is taken."
-
-    let wrap room (text: string) =
-        let put (lines, line) word =
-            if line = "" then lines, word
-            elif String.length line + 1 + String.length word <= room then lines, line + " " + word
-            else lines @ [ line ], word
-
-        let lines, last = text.Split ' ' |> Array.fold put ([], "")
-        lines @ [ last ]
-
-    let nothingYet = "Nothing has happened yet."
-
-    let commands =
-        [ ("r b 5", "recruit a Blue stone into 5"), ("n", "negotiate for a stone")
-          ("b r 8", "battle in 8 with a Red one"), ("return g", "hand a Green one back")
-          ("m g 8 5 2", "march 2 Green from 8 into 5"), ("undo, redo", "walk the game back")
-          ("rule 8", "show why 8 is ruled as it is"), ("history", "the record so far")
-          ("notes", "hide every note"), ("commands", "hide this box")
-          ("log", "hide what has been said"), ("view <name>", "draw the board another way")
-          ("save", "write the record now"), ("help", "every command, at length")
-          ("quit", "leave; 'replay' takes the game up again"), ("", "") ]
-        // Two to a line, and an odd one out takes the line to itself rather than padding out a
-        // second column that has nothing in it.
-        |> List.map (fun ((typed, does), (alsoTyped, alsoDoes)) ->
-            if alsoTyped = "" then
-                sprintf "  %-13s%s" typed does
-            else
-                sprintf "  %-13s%-30s%-12s%s" typed does alsoTyped alsoDoes)
+    let commands = (Scene.verbs verbs).Split '\n' |> List.ofArray
 
     let private playerLine active beholder (playerId, bag) =
         let marker = if playerId = active then "->" else "  "
-        let name = Words.seated (playerId = beholder) playerId
+        let name = seated (playerId = beholder) playerId
         sprintf "  %s %-15s bag: %s" marker name (Words.sight bag)
 
-    let private section (sb: StringBuilder) (title: string) lines =
-        sb.AppendLine(title) |> ignore
-        lines |> List.iter (fun line -> sb.AppendLine(line: string) |> ignore)
-        sb.AppendLine() |> ignore
-
-    let private steps describeLabel describeCandidate (steps: Cascade.Step<'L, 'T> list) =
+    let private steps describeLabel describeCandidate (steps: Tiebreak.Step<'L, 'T> list) =
         steps
         |> List.map (fun step ->
             let standing =
@@ -266,37 +244,37 @@ module Render =
         let verdict =
             match survivors with
             | [] -> "  The region holds no stones, so no colour rules it."
-            | [ color ] -> $"  {Words.color color} rules the region."
-            | tied -> $"  {Words.colors tied} are level after every tie-breaker, so the region is tied and has no ruler."
+            | [ colour ] -> $"  {Words.colour colour} rules the region."
+            | tied -> $"  {Words.colours tied} are level after every tie-breaker, so the region is tied and has no ruler."
 
         let heading =
             $"{Words.region regionId} holds {Words.pile (Game.stones regionId game)}."
 
-        String.concat Environment.NewLine (heading :: steps Words.rulingMeasure Words.color trace @ [ verdict ])
+        String.concat Environment.NewLine (heading :: steps Words.rulingMeasure Words.colour trace @ [ verdict ])
 
+    // The verdict is read off the same two cascades the working is written from, so what is
+    // shown settling it and what settled it cannot come apart.
     let result game =
         let factions, factionTrace = Outcome.weighFactions game
 
         let factionVerdict =
             match factions with
-            | [ color ] -> [ $"  {Words.color color} carries the board." ]
-            | tied -> [ $"  {Words.colors tied} are level after every tie-breaker, so the game is a draw." ]
+            | [ colour ] -> $"  {Words.colour colour} carries the board."
+            | tied -> $"  {Words.colours tied} are level after every tie-breaker, so the game is a draw."
 
         let players =
             match factions with
-            | [ winning ] when Game.allBagsEmpty game ->
+            | [ _ ] when Game.allBagsEmpty game ->
                 [ ""
                   "THE WINNING PLAYER"
                   "  Every player has played out their bag, so nobody wins." ]
             | [ winning ] ->
-                let _, trace = Outcome.weighPlayers winning game
+                let survivors, trace = Outcome.weighPlayers winning game
 
                 let verdict =
-                    match Outcome.verdict game with
-                    | Won(_, playerId) -> $"  {Words.player playerId} wins."
-                    | Drawn(NoPlayerSeparated _) -> "  No player could be told apart, so nobody wins."
-                    | Drawn(EveryBagPlayedOut _) -> "  Every player has played out their bag, so nobody wins."
-                    | Drawn(NoFactionSeparated _) -> "  No faction carried the board."
+                    match survivors with
+                    | [ player ] -> $"  {Words.player player.Id} wins."
+                    | _ -> "  No player could be told apart, so nobody wins."
 
                 [ ""; "THE WINNING PLAYER" ]
                 @ steps Words.playerMeasure (fun (p: Player) -> Words.player p.Id) trace
@@ -304,19 +282,19 @@ module Render =
             | _ -> []
 
         [ "THE WINNING FACTION" ]
-        @ steps Words.factionMeasure Words.color factionTrace
-        @ factionVerdict
+        @ steps Words.factionMeasure Words.colour factionTrace
+        @ [ factionVerdict ]
         @ players
 
     let heading (beholder: Player) model =
         let active = Game.active (Playing.game model)
 
         match Playing.session model with
-        | Finished over -> $"Game over after {over.Turn} turns - {Words.ending over.Ending}"
+        | Finished over -> $"Game over after {Words.turns over.Turn} - {Words.ending over.Ending}"
         | InPlay { Phase = AwaitingReturn drawn
                    Turn = turn } ->
             let stone =
-                if active.Id = beholder.Id then $"a {Words.color drawn} stone" else "a stone"
+                if active.Id = beholder.Id then $"a {Words.colour drawn} stone" else "a stone"
 
             $"Turn {turn} - {Words.player active.Id} drew {stone} and must hand one back"
         | InPlay { Turn = turn } -> $"Turn {turn} - {Words.player active.Id} to play"
@@ -335,125 +313,112 @@ module Render =
             :: (entry.Told |> List.map (fun notice -> String.replicate 26 " " + told notice))
 
         match Journal.entries model.Journal with
-        | [] -> nothingYet
+        | [] -> Scene.NothingYet
         | entries -> String.concat Environment.NewLine ((entries |> List.collect entry) @ [ ""; "  " + recordStanding model ])
 
     let model (margins: Margins) (beholder: Player) model =
-        let notes = margins.Notes
-        let sb = StringBuilder()
         let game = Playing.game model
         let active = Game.active game
+        let over = Playing.isOver model
 
         let seen =
-            if Playing.isOver model then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
+            if over then Knowledge.laidBare beholder game else Knowledge.seenBy beholder game
 
         let told = wording beholder model
 
         let noted note =
-            if notes then "" :: (wrap (mapWidth - 6) note |> List.map (fun line -> "  " + line)) else []
+            if margins.Notes then
+                "" :: (Scene.wrap (mapWidth - 6) note |> List.map (fun line -> "  " + line))
+            else
+                []
 
-        let notedWhileHidden note =
-            if Playing.isOver model then [] else noted note
-
-        sb.AppendLine().AppendLine($"=== {heading beholder model} ===").AppendLine()
-        |> ignore
-
-        let block sb name lines =
-            section sb ((name: string).ToUpperInvariant()) lines
-
-        block sb Blocks.map (mapLines game @ noted Notes.map)
-
-        block sb Blocks.apart (apartLines game Board.apartRegions @ noted Notes.apart)
+        let block (name: string) lines =
+            name.ToUpperInvariant() :: (lines @ [ "" ])
 
         let run =
             match Playing.session model with
             | InPlay play -> [ "  " + negotiationRun play game ]
             | Finished _ -> []
 
-        block sb Blocks.players ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
-
         let standing = Game.landStanding game
 
         let ruled =
-            StoneColor.all
-            |> List.map (fun color -> $"{Words.color color} {Map.find color standing.Ruled}")
+            StoneColour.all
+            |> List.map (fun colour -> $"{Words.colour colour} {Map.find colour standing.Ruled}")
             |> String.concat "   "
-
-        block
-            sb
-            Blocks.landRuled
-            ([ $"  {ruled}   {Words.tied} {standing.Tied}   {Words.unclaimed} {standing.Unclaimed}" ]
-             @ noted Notes.landRuled)
 
         let supplied label what = sprintf "  %-13s %s" (label + ":") what
 
-        block
-            sb
-            Blocks.supply
-            ([ supplied Supply.onTheBoard (Words.tally (Position.total seen.Position))
-               supplied Supply.inReserve (Words.sight seen.Reserve)
-               supplied Supply.outOfSight (Words.tally seen.Unseen) ]
-             @ notedWhileHidden Notes.supply)
+        [ yield ""
+          yield $"=== {heading beholder model} ==="
+          yield ""
+          yield! block Blocks.map (mapLines game @ noted Notes.map)
+          yield! block Blocks.apart (apartLines game Board.apartRegions @ noted Notes.apart)
+          yield! block Blocks.players ((seen.Bags |> List.map (playerLine active.Id seen.Beholder)) @ run)
 
-        match Playing.session model with
-        | InPlay _ -> ()
-        | Finished _ -> block sb Blocks.result (result game)
+          yield!
+              block
+                  Blocks.landRuled
+                  ([ $"  {ruled}   {Words.tied} {standing.Tied}   {Words.unclaimed} {standing.Vacant}" ]
+                   @ noted Notes.landRuled)
 
-        if margins.Commands then
-            block sb Blocks.commands (commands @ [ ""; "  " + shorthand ])
+          yield!
+              block
+                  Blocks.supply
+                  ([ supplied Supply.onTheBoard (Words.tally (Position.total seen.Position))
+                     supplied Supply.inReserve (Words.sight seen.Reserve)
+                     supplied Supply.outOfSight (Words.tally seen.Unseen) ]
+                   @ (if over then [] else noted Notes.supply))
 
-        if margins.Logged then
-            block sb Blocks.log (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}"))
+          if over then yield! block Blocks.result (result game)
 
-        sb.ToString()
+          if margins.Commands then
+              yield! block Blocks.commands (commands @ [ ""; "  " + shorthand ])
+
+          if margins.Logged then
+              yield! block Blocks.log (model.Log |> List.rev |> List.map (fun notice -> $"  {told notice}")) ]
+        |> List.map (fun line -> line + Environment.NewLine)
+        |> String.concat ""
 
     let waiting (seats: Waiting list) =
         let standing (seat: Waiting) =
-            sprintf "    %-15s %s" (Words.seated seat.Yours seat.Player) (Filling.standing seat)
+            sprintf "    %-15s %s" (seated seat.Yours seat.Player) (Scene.Filling.standing seat)
 
         String.concat
             Environment.NewLine
-            ([ ""; $"=== {Filling.title} ==="; "" ]
+            ([ ""; $"=== {Scene.Filling.title} ==="; "" ]
              @ (seats |> List.map standing)
-             @ [ ""; "  " + Filling.stillToCome seats; "" ])
+             @ [ ""; "  " + Scene.Filling.stillToCome seats; "" ])
 
+    // The four actions at length, then the same box the board shows: one list of what can be
+    // typed, so that help and the board cannot drift apart.
     let help =
         String.concat
             Environment.NewLine
-            [ "Each turn, take one of the four actions:"
-              "  recruit <colour> <region>              place a stone from your bag on the map (alias: r)"
-              "  battle <colour> <region> [colours...]  place a stone in the Axe, then drive that many"
-              "                                         stones of other colours out of the region (alias: b)"
-              "                                         name no colours to drive out all you may"
-              "  march <colour> <from> <to> [count]     place a stone in the Flag, then move matching"
-              "                                         stones into a bordering region (alias: m)"
-              "  negotiate                              draw a stone from the reserve (alias: n)"
-              "    then: return <colour>                hand a stone back - one always must go back,"
-              "                                         and it may be the one just drawn"
-              ""
-              "A battle needs a stone of its colour in the region and something else to drive"
-              "out, and must drive out at least one. A march needs stones of its colour to move."
-              "The game ends once every player has negotiated in a row. An empty-handed player"
-              "has their turn skipped, and that counts as a negotiation."
-              ""
-              "Walking the game:"
-              "  undo                      take the last move back, whoever made it"
-              "  redo                      make again the move last taken back"
-              "  history                   the whole record of the game so far"
-              "  save                      write the record out now, without waiting"
-              ""
-              "Undo goes back in time rather than rolling again: a negotiation taken back"
-              "and made again draws the same stone. Both are written into the record, so a"
-              "saved game replays exactly as it was played, doubling back and all."
-              ""
-              "Other commands:"
-              "  rule <region>             show the working behind who rules a region"
-              "  notes [on|off]            show or hide the writing that explains the board"
-              "  commands [on|off]         show or hide the box listing what can be typed"
-              "  restart [seed]            deal a fresh game to the same players"
-              $"  players <n> [seed]        deal a fresh game to n players ({Table.MinPlayers}-{Table.MaxPlayers})"
-              "  help                      show this list"
-              "  quit                      leave, saving the record on the way out"
-              ""
-              "Colours: r/red, b/blue, g/green. Regions are numbered by the board above."
-              "Battle and march cannot target the dead region, the Flag or the Axe." ]
+            ([ "Each turn, take one of the four actions:"
+               "  recruit <colour> <region>              place a stone from your bag into any region"
+               "                                         but the dead one (alias: r)"
+               "  battle <colour> <region> [colours...]  place a stone in the Axe, then drive that many"
+               "                                         stones of other colours out of the region (alias: b)"
+               "                                         name no colours to drive out all you may"
+               "  march <colour> <from> <to> [count]     place a stone in the Flag, then move matching"
+               "                                         stones into a bordering region (alias: m)"
+               "  negotiate                              draw a stone from the reserve (alias: n)"
+               "    then: return <colour>                hand a stone back - one always must go back,"
+               "                                         and it may be the one just drawn"
+               ""
+               "A battle needs a stone of its colour in the region and something else to drive"
+               "out, and must drive out at least one. A march needs stones of its colour to move."
+               "The game ends once every player has negotiated in a row. An empty-handed player"
+               "has their turn skipped, and that counts as a negotiation."
+               ""
+               "Undo goes back in time rather than rolling again: a negotiation taken back"
+               "and made again draws the same stone. Both are written into the record, so a"
+               "saved game replays exactly as it was played, doubling back and all."
+               ""
+               "COMMANDS" ]
+             @ commands
+             @ [ ""
+                 "Colours: r/red, b/blue, g/green - and k/black, which the earliest records wrote"
+                 "for green. Regions are numbered by the board above. Battle and march cannot"
+                 "target the dead region, the Flag or the Axe." ])

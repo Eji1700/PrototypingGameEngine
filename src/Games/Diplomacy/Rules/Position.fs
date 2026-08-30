@@ -1,5 +1,7 @@
 namespace Prototyping.Diplomacy
 
+open Prototyping.Common
+
 type Piece =
     { Power: Power
       Kind: Kind
@@ -8,18 +10,6 @@ type Piece =
 type Position =
     { Units: Map<ProvinceId, Piece>
       Owners: Map<ProvinceId, Power> }
-
-module Piece =
-
-    let whereabouts (location: Location) =
-        match location.Coast with
-        | Some coast -> $"{Atlas.code location.At}/{Coast.code coast}"
-        | None -> Atlas.code location.At
-
-    let written piece =
-        $"{Kind.letter piece.Kind} {whereabouts piece.Where}"
-
-    let reach piece = Atlas.reach piece.Kind piece.Where
 
 module Position =
 
@@ -60,20 +50,13 @@ module Position =
         Power.all |> List.filter (fun power -> not (isOut power position))
 
 
-    let private place piece position =
+    let add piece position =
         { position with
             Units = Map.add piece.Where.At piece position.Units }
 
-    let private lift province position =
+    let remove province position =
         { position with
             Units = Map.remove province position.Units }
-
-    let remove province position = lift province position
-
-    let add piece position = place piece position
-
-    let march piece into position =
-        position |> lift piece.Where.At |> place { piece with Where = into }
 
     let harvest position =
         let taken =
@@ -135,11 +118,15 @@ module Position =
             |> List.collect (fun power -> Atlas.homesOf power |> List.map (fun home -> home, power))
             |> Map.ofList }
 
+    let private units = Counting.several "unit" "units"
+
+    let private centres = Counting.several "centre" "centres"
+
     let problems =
         let pieces = allUnits dealt
 
         [ if List.length pieces <> 22 then
-              yield $"{List.length pieces} units at the opening, where there are 22"
+              yield $"{units (List.length pieces)} at the opening, where there are 22"
 
           for piece in pieces do
               if Atlas.centreOf piece.Where.At <> Home piece.Power then
@@ -154,7 +141,7 @@ module Position =
                   yield $"a fleet opens at {Atlas.nameOf piece.Where.At} without saying which coast"
 
           for power in Power.all do
-              let centres, units = counts power dealt
+              let held, standing = counts power dealt
 
-              if centres <> units then
-                  yield $"{Power.name power} opens with {units} units and {centres} centres" ]
+              if held <> standing then
+                  yield $"{Power.name power} opens with {units standing} and {centres held}" ]

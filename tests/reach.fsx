@@ -1,8 +1,8 @@
-#load "Harness.fsx"
+#load "Checks.fsx"
 #load "../src/Table/Parts/Reach.fs"
 
 open Prototyping.Table
-open Harness
+open Checks
 
 
 let private word = Reach.minted ()
@@ -157,6 +157,43 @@ report
     true
     (match reached "  " with
      | Error problem -> problem.Contains "is not an address I can reach"
+     | Ok _ -> false)
+
+
+let private readBack reach =
+    Reach.read (List.ofArray ((Reach.line reach).Split ' '))
+
+report "a reach written as a line is read back as the same reach" (Ok behind) (readBack behind)
+
+report "and so is one open to anybody, in the clear" (Ok Reach.ajar) (readBack Reach.ajar)
+
+report
+    "one holding a certificate names the file"
+    (Ok
+        { Reach.ajar with
+            Wrapping = Kept("s.pfx", None) })
+    (readBack
+        { Reach.ajar with
+            Wrapping = Kept("s.pfx", None) })
+
+// The line goes on a screen and into a prompt, and a password belongs on neither. A reach with one
+// only ever comes from the command line, which never passes through the menu.
+report
+    "but leaves the certificate's password off, so it is never put on a screen"
+    (Ok
+        { Reach.ajar with
+            Wrapping = Kept("s.pfx", None) })
+    (readBack
+        { Reach.ajar with
+            Wrapping = Kept("s.pfx", Some "hunter two") })
+
+report
+    "a word that is not about how far a table reaches is refused, saying what the words are"
+    true
+    (match Reach.read [ "port:5000"; "sideways" ] with
+     | Error problem ->
+         problem.Contains "'sideways' is not something to say about how far a table reaches"
+         && problem.Contains Reach.says
      | Ok _ -> false)
 
 finish ()

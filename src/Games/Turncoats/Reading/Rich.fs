@@ -5,6 +5,7 @@ open Spectre.Console
 open Spectre.Console.Rendering
 open Prototyping.Engine
 open Prototyping.Table
+// After Spectre and the table, so that a Region and a Sight are this game's and not theirs.
 open Prototyping.Turncoats
 
 module Rich =
@@ -47,16 +48,16 @@ module Rich =
 
     let private noted palette room (text: string) =
         markup ""
-        :: (Render.wrap room text
+        :: (Scene.wrap room text
             |> List.map (fun line -> markup (Tint.wrap (Ink.hidden palette) (esc line))))
 
 
     let private laid palette pile =
-        match Pile.toColors pile with
+        match Pile.toColours pile with
         | [] -> Tint.wrap (Ink.hidden palette) "-"
-        | colors ->
-            colors
-            |> List.map (fun color -> Tint.wrap (Ink.ink palette color) (string (Words.glyph color)))
+        | colours ->
+            colours
+            |> List.map (fun colour -> Tint.wrap (Ink.ink palette colour) (string (Words.glyph colour)))
             |> String.concat " "
 
     let private counted palette pile =
@@ -64,7 +65,7 @@ module Rich =
         | [] -> Tint.wrap (Ink.hidden palette) "-"
         | counts ->
             counts
-            |> List.map (fun (color, n) -> Tint.wrap (Ink.ink palette color) $"{Words.glyph color}x{n}")
+            |> List.map (fun (colour, n) -> Tint.wrap (Ink.ink palette colour) $"{Words.glyph colour}x{n}")
             |> String.concat "  "
 
     let private unnamed palette n =
@@ -83,7 +84,7 @@ module Rich =
         let border =
             match region.Kind, Game.ruleOver region.Id game with
             | Dead, _ -> Color.Grey23
-            | _, RuledBy color -> Ink.color palette color
+            | _, RuledBy colour -> Ink.colour palette colour
             | _, (Contested _ | Unclaimed) -> Color.Grey37
 
         let panel =
@@ -155,7 +156,7 @@ module Rich =
             let marker = if playerId = active then Tint.wrap (Tint.yours palette) "->" else " "
 
             let yours = playerId = seen.Beholder
-            let named = Words.seated yours playerId
+            let named = Render.seated yours playerId
             let name = if yours then Tint.wrap (Tint.yours palette) named else named
 
             table.AddRow(markup marker, markup name, markup (sighted palette bag)) |> ignore
@@ -194,8 +195,9 @@ module Rich =
         let breakdown = BreakdownChart()
         breakdown.Width <- breakdownAcross
 
-        for color, n in Pile.toCounts seen.Unseen do
-            breakdown.AddItem(Words.color color, float n, Ink.color palette color) |> ignore
+        for colour, n in Pile.toCounts seen.Unseen do
+            breakdown.AddItem(Words.colour colour, float n, Ink.colour palette colour)
+            |> ignore
 
         rows [ table :> IRenderable; markup ""; breakdown :> IRenderable ]
 
@@ -205,18 +207,18 @@ module Rich =
         let bars = BarChart()
         bars.Width <- width - 6
 
-        for color in StoneColor.all do
-            bars.AddItem(Words.color color, float (Map.find color standing.Ruled), Ink.color palette color)
+        for colour in StoneColour.all do
+            bars.AddItem(Words.colour colour, float (Map.find colour standing.Ruled), Ink.colour palette colour)
             |> ignore
 
         bars.AddItem(Words.tied, float standing.Tied, Color.Grey37) |> ignore
-        bars.AddItem(Words.unclaimed, float standing.Unclaimed, Color.Grey23) |> ignore
+        bars.AddItem(Words.unclaimed, float standing.Vacant, Color.Grey23) |> ignore
         bars :> IRenderable
 
 
     let private log palette told (model: Model) =
         match model.Log with
-        | [] -> markup (Tint.wrap (Ink.hidden palette) Render.nothingYet)
+        | [] -> markup (Tint.wrap (Ink.hidden palette) Scene.NothingYet)
         | notices ->
             notices
             |> List.rev
@@ -294,7 +296,7 @@ module Rich =
         let told = Render.wording beholder model
 
         match Journal.entries model.Journal with
-        | [] -> Tint.renderAt width (panel Render.Blocks.record (markup (Tint.wrap (Ink.hidden palette) Render.nothingYet)))
+        | [] -> Tint.renderAt width (panel Render.Blocks.record (markup (Tint.wrap (Ink.hidden palette) Scene.NothingYet)))
         | entries ->
 
         let table = Table()
@@ -345,15 +347,15 @@ module Rich =
         table.AddColumn(TableColumn "") |> ignore
 
         for seat in seats do
-            let named = Words.seated seat.Yours seat.Player
+            let named = Render.seated seat.Yours seat.Player
             let who = if seat.Yours then Tint.wrap (Tint.yours palette) named else named
 
             let ink =
                 if seat.Expected || seat.Away then Ink.hidden palette else Tint.yours palette
 
-            table.AddRow(markup who, markup (Tint.wrap ink (esc (Render.Filling.standing seat))))
+            table.AddRow(markup who, markup (Tint.wrap ink (esc (Scene.Filling.standing seat))))
             |> ignore
 
-        let footer = Tint.wrap (Ink.hidden palette) (esc (Render.Filling.stillToCome seats))
+        let footer = Tint.wrap (Ink.hidden palette) (esc (Scene.Filling.stillToCome seats))
 
-        Tint.renderAt width (panel Render.Filling.title (rows [ table :> IRenderable; markup ""; markup footer ]))
+        Tint.renderAt width (panel Scene.Filling.title (rows [ table :> IRenderable; markup ""; markup footer ]))

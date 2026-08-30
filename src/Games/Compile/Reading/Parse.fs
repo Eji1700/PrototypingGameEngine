@@ -2,6 +2,7 @@ namespace Prototyping.Compile
 
 open Prototyping.Engine
 open Prototyping.Table
+// After the table, so that this game's Play is the one found and not the command line's.
 open Prototyping.Compile
 
 module Parse =

@@ -8,30 +8,30 @@ type Ending =
     | Abandoned
 
 type Event =
-    | Recruited of player: PlayerId * color: StoneColor * into: RegionId
-    | Battled of player: PlayerId * color: StoneColor * target: RegionId * driven: Pile
-    | Marched of player: PlayerId * color: StoneColor * from: RegionId * into: RegionId * count: int
-    | Drew of player: PlayerId * color: StoneColor
-    | HandedBack of player: PlayerId * color: StoneColor
+    | Recruited of player: PlayerId * colour: StoneColour * into: RegionId
+    | Battled of player: PlayerId * colour: StoneColour * target: RegionId * driven: Pile
+    | Marched of player: PlayerId * colour: StoneColour * from: RegionId * into: RegionId * count: int
+    | Drew of player: PlayerId * colour: StoneColour
+    | HandedBack of player: PlayerId * colour: StoneColour
     | TurnSkipped of player: PlayerId
     | GameEnded of Ending
 
 type Rejection =
-    | NotInBag of player: PlayerId * color: StoneColor
+    | NotInBag of player: PlayerId * colour: StoneColour
     | DeadGround of RegionId
     | StandsApart of RegionId
-    | NothingToBattleWith of RegionId * StoneColor
-    | NothingToDriveOut of RegionId * StoneColor
+    | NothingToBattleWith of RegionId * StoneColour
+    | NothingToDriveOut of RegionId * StoneColour
     | BattleMustDriveOutSomething
-    | CannotDriveOutOwnColour of StoneColor
-    | MoreDrivenThanAllowed of RegionId * color: StoneColor * allowed: int
+    | CannotDriveOutOwnColour of StoneColour
+    | MoreDrivenThanAllowed of RegionId * colour: StoneColour * allowed: int
     | MustChooseCasualties of RegionId * available: Pile * allowed: int
-    | NotStandingThere of RegionId * StoneColor
-    | NothingToMarch of RegionId * StoneColor
-    | NotEnoughToMarch of RegionId * color: StoneColor * held: int * wanted: int
+    | NotStandingThere of RegionId * StoneColour
+    | NothingToMarch of RegionId * StoneColour
+    | NotEnoughToMarch of RegionId * colour: StoneColour * held: int * wanted: int
     | MarchNeedsAStone
     | NotAdjacent of from: RegionId * into: RegionId
     | ReserveEmpty
     | EmptyHandedCannotNegotiate of PlayerId
-    | MustSettleFirst of drawn: StoneColor
+    | MustSettleFirst of drawn: StoneColour
     | NothingToSettle

@@ -1,6 +1,6 @@
 # Noughts and crosses
 
-Nine squares, three in a row, and nothing hidden. The second of the three games here, and the
+Nine squares, three in a row, and nothing hidden. The second of the games here, and the
 engine it runs on is [one directory up](../../../README.md).
 
 **It is not a feature.** It exists because about four fifths of this program was extracted on
@@ -36,7 +36,7 @@ Crosses go first. Every command that is not about squares - `undo`, `redo`, `his
 | `5` | take square 5 |
 | `place 5` (`mark`, `p`) | the same, the long way round |
 
-Squares are numbered the way a keypad is: 1 to 9, left to right and top to bottom, so the
+Squares are numbered the way a telephone keypad is: 1 to 9, left to right and top to bottom, so the
 number a player types is the square they are looking at.
 
 ```
@@ -57,7 +57,8 @@ digits would be a record nobody could skim.
 - Two players, and exactly two. Seat one plays the crosses, because the crosses go first.
 - Three in a row wins: along a row, down a column, or corner to corner.
 - A full board with no such line is a draw.
-- `resign` gives the game up, and writes it down.
+- `resign` gives the game up, and writes it down. It is whoever is to play that walks away: at one
+  keyboard that is whoever typed it, and over a wire the table lets a line in from no other seat.
 
 Nothing is dealt, nothing is shuffled, and nothing is hidden - both players are looking at the
 whole game, which is the only kind of game this is. So there is no `Knowledge` here, no seed

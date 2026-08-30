@@ -1,10 +1,14 @@
 namespace Prototyping.Compile
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Compile
 
 module Render =
+
+    let seated = Scene.seated Words.player
+
+    let private picks = Counting.several "pick" "picks"
 
     module Blocks =
         let draft = "The draft"
@@ -72,7 +76,7 @@ module Render =
     let heading beholder session =
         let seat = Session.active session
         let yours = seat = beholder
-        let who = Words.seated yours seat
+        let who = seated yours seat
 
         match Session.asking session, session.Stage with
         | Some asked, _ -> $"Turn {session.Turn} - {whoAsks asked.Because} is waiting on {who}"
@@ -103,16 +107,6 @@ module Render =
             )
 
 
-    let private orders protocols =
-        let rec walk items =
-            match items with
-            | [] -> [ [] ]
-            | _ ->
-                items
-                |> List.collect (fun one -> walk (items |> List.filter ((<>) one)) |> List.map (fun rest -> one :: rest))
-
-        walk protocols
-
     let private arranging beholder session =
         let side = Session.side beholder session
 
@@ -125,7 +119,7 @@ module Render =
         else
             Walled(
                 26,
-                orders side.Drafted
+                Protocol.orders side.Drafted
                 |> List.chunkBySize 2
                 |> List.map (fun row ->
                     Scene.squared (
@@ -235,7 +229,7 @@ module Render =
             let yours = seat = beholder
 
             [ Scene.cell Tone.Yours (if seat = acting && not (Session.isOver session) then "->" else "")
-              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (Words.seated yours seat)
+              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (seated yours seat)
 
               if dealt then
                   Scene.cell
@@ -304,29 +298,7 @@ module Render =
                     | Show _ -> "pick a card to reveal"
                     | PlayFromHand _ -> "pick a card to play"
                     | Give -> "pick a card to give away"
-                    | Draw _
-                    | Refreshing'
-                    | FromDeck _
-                    | TakeAtRandom
-                    | StopTheirCompile
-                    | RevealTheirHand
-                    | Swap
-                    | Reveal
-                    | UnderThis _
-                    | Times _
-                    | OneOrMore _
-                    | May _
-                    | Every _
-                    | InAChosenLine _
-                    | InAChosenLineOf _
-                    | InEachOtherLine _
-                    | InEachLineHolding _
-                    | IfYouDo _
-                    | IfCovering _
-                    | Rearrange _
-                    | TakeTheirTop
-                    | Either _
-                    | Opposing _ -> "pick a card"
+                    | _ -> "pick a card"
 
                 let choices =
                     targets
@@ -391,7 +363,7 @@ module Render =
                             [ if yours then Does("here", $"choose line {line}", Tone.Plainly) else Scene.quietly "" ]
                         ))
 
-                $"say which line to {Words.printing command} in", choices
+                $"say which line to {Words.wherever command} in", choices
 
             | Whether inner ->
                 let choices =
@@ -438,16 +410,8 @@ module Render =
           "what fire-3", "read what a card says, whether or not it is anywhere near the table"
           "peek", "read your own cards lying face down ('peek all' for every one you know)"
           "pile", "what the game still has to do, in the order it will do it"
-          "undo, redo", "walk the game back and forward"
-          "history", "the record so far"
-          "notes", "hide the writing that explains the board"
-          "commands", "hide this box"
-          "log", "hide what the game has been saying"
-          "view <name>", "draw the field another way"
-          "save", "write the record now"
-          "help", "every command, at length"
-          "resign", "give the game up, but write it down"
-          "quit", "leave; the game is written down and 'replay' takes it up again" ]
+          Commands.resign ]
+        @ Commands.verbs
 
     let commands = Scene.verbs verbs
 
@@ -481,8 +445,6 @@ module Render =
               "COMMANDS"
               commands ]
 
-
-    let wording = Told.inWords Words.said Words.command
 
     let private heardBy seat =
         Told.inWords (Words.saidTo seat) Words.command
@@ -679,7 +641,7 @@ module Render =
                       $"It is your pick. Say one of these to take it: {names}."
                   else
                       $"It is {Words.player (Session.active session)}'s pick, out of these: {names}."
-                  $"{Draft.Picks - Session.picksMade session} of the {Draft.Picks} picks are still to come."
+                  $"{picks (Draft.Picks - Session.picksMade session)} of the {Draft.Picks} still to come."
                   Notes.draft ]
             | None, Arranging ->
                 let anOrder = side.Drafted |> List.map Protocol.key |> String.concat " "
@@ -697,7 +659,7 @@ module Render =
     let rules = Scene.rules help
 
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     let private sheet =

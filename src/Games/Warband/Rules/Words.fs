@@ -23,9 +23,6 @@ module Words =
 
     let side place = player (Seat.at place)
 
-    let seated yours playerId =
-        player playerId + (if yours then " (you)" else "")
-
     let hex = Formation.name
 
     let kind = Kinds.name
@@ -111,14 +108,15 @@ module Words =
             $"{unitAt place kind' hex'} can do nothing from the {rank hex'.Rank} rank, and stands there."
         | Unreached(place, hex', kind', reach) ->
             $"{unitAt place kind' hex'} reaches {hexes reach} and the other line is further off than that, so nothing of it lands."
-        | Started -> "The battle runs on."
-        | Halted -> "The battle is stopped. 'step' takes it a blow at a time."
+        | Started true -> "The battle runs on."
+        | Started false -> "The battle will run on its own once both squads are mustered."
+        | Halted true -> "The battle is stopped. 'step' takes it a blow at a time."
+        | Halted false -> "The battle will stand stopped once both squads are mustered, and 'step' will take it a blow at a time."
         | GameEnded e -> $"The game is over: {ending e}."
 
     let rejection =
         function
         | HexTaken(_, hex', kind') -> $"There is a {kind kind'} on {hex hex'} already. One unit to a hex."
-        | SquadFull place -> $"{side place} has its five. There is nothing left to muster."
         | TooAlike(_, kind') ->
             let alike = Counting.several (kind kind') (Kinds.plural kind') Squad.Alike
             $"{alike} is as many of one kind as a squad may take. There is {Kinds.names}."
@@ -126,8 +124,10 @@ module Words =
         | NoBattleYet -> "There is no battle yet. Both squads have to be mustered first."
         | NoGivingUp ->
             "There is nothing left to give up - the battle was settled the moment it was joined, and all that is left is to watch it out. 'undo' walks back to the muster."
+        // Said back as it was said, sign and all: a count reads as its size, and "3 hexes" is not
+        // what somebody who typed -3 asked for.
         | NoSuchGround said ->
-            $"{hexes said} of ground? The lines are drawn up somewhere from {Session.Closest} hex apart - touching - to {hexes Session.Furthest}."
+            $"Ground of {said}? The lines are drawn up somewhere from {Session.Closest} hex apart - touching - to {hexes Session.Furthest}."
         | GroundIsSet ->
             "The lines are formed, and the ground between them is not moving now. 'undo' walks back into the muster if you would rather they stood somewhere else."
 
@@ -167,5 +167,4 @@ module Words =
         | Happened(Mustered(place, _, _)) when theirs place -> placed place
         | Refused(HexTaken(place, _, _)) when theirs place -> turnedDown place
         | Refused(TooAlike(place, _)) when theirs place -> turnedDown place
-        | Refused(SquadFull place) when theirs place -> turnedDown place
         | _ -> said notice

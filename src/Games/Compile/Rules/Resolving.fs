@@ -18,6 +18,40 @@ module Resolving =
     [<Literal>]
     let private Runaway = 500
 
+    // `Done` is how much the command just carried out actually did, and `Chose` is what it
+    // picked. Both are read by whatever comes after: `IfYouDo` gates on `Done`, `Times`
+    // can count from it, and a selector can ask for the card that was chosen.
+    let private nothingDone session = { session with Done = 0; Chose = None }
+    let private doneIt session = { session with Done = 1 }
+
+    // A command handed to the other player is carried out by them, as if it were their card.
+    let private acting command (source: Source) =
+        match command with
+        | Opposing _ -> Session.other source.Owner
+        | _ -> source.Owner
+
+    let private fizzling actor (source: Source) session =
+        nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+
+    let private asking actor (source: Source) wanting session =
+        { session with
+            Pile =
+                Ask
+                    { Chooser = actor
+                      Because = ACardSaying source
+                      Wanting = wanting }
+                :: session.Pile },
+        [ Happened(Asked(actor, source.Saying)) ]
+
+    /// A command as said by a card lying at this seat and line.
+    let private saidBy seat card line command =
+        Run(
+            command,
+            { Owner = seat
+              Saying = card
+              Line = line }
+        )
+
 
     /// Every card on the table the selector names. The clauses read as one long "and": a
     /// selector is written by adding conditions to `Select.any`, so an unset field means the
@@ -93,7 +127,7 @@ module Resolving =
 
         match command with
         | Draw _
-        | Refreshing'
+        | RefreshHand
         | IfYouDo _
         | IfCovering _
         | FromDeck _
@@ -151,21 +185,14 @@ module Resolving =
         let interrupting =
             match Stack.uncovered (Side.stack line (Session.side seat session)) with
             | Some under when Placed.isFaceUp under ->
-                (Printed.on under.Card).WhenCovered
-                |> List.map (fun command ->
-                    Run(
-                        command,
-                        { Owner = seat
-                          Saying = under.Card
-                          Line = line }
-                    ))
+                (Printed.on under.Card).WhenCovered |> List.map (saidBy seat under.Card line)
             | _ -> []
 
         { session with
             Pile = interrupting @ (Placing(seat, placed, line, from) :: session.Pile) }
 
     let private moving seat placed from line session =
-        laying seat placed line (Some from) session, [ Happened(Shifted(seat, placed, from, line)) ]
+        laying seat placed line (FromLine from) session, [ Happened(Shifted(seat, placed, from, line)) ]
 
     let private discarded seat card session =
         { session with
@@ -183,14 +210,7 @@ module Resolving =
         // speaks from the face it is being turned off.
         | Flip _, OnTable(seat, line, placed) ->
             let interrupting =
-                (Printed.on placed.Card).WhenFlipped
-                |> List.map (fun command ->
-                    Run(
-                        command,
-                        { Owner = seat
-                          Saying = placed.Card
-                          Line = line }
-                    ))
+                (Printed.on placed.Card).WhenFlipped |> List.map (saidBy seat placed.Card line)
 
             { session with
                 Pile = interrupting @ (Turning(seat, placed, line) :: session.Pile) },
@@ -216,7 +236,7 @@ module Resolving =
                             { side with
                                 Hand = side.Hand |> List.filter ((<>) card) }) }
 
-            laying seat placed source.Line None session, []
+            laying seat placed source.Line FromHand session, []
 
         | Give, InHand(seat, card) ->
             let them = Session.other seat
@@ -273,16 +293,7 @@ module Resolving =
 
 
     let rec private resolve command (source: Source) session =
-        let actor =
-            match command with
-            | Opposing _ -> Session.other source.Owner
-            | _ -> source.Owner
-
-        // `Done` is how much the command just carried out actually did, and `Chose` is what it
-        // picked. Both are read by whatever comes after: `IfYouDo` gates on `Done`, `Times`
-        // can count from it, and a selector can ask for the card that was chosen.
-        let nothingDone session = { session with Done = 0; Chose = None }
-        let doneIt session = { session with Done = 1 }
+        let actor = acting command source
 
         let counting =
             function
@@ -302,32 +313,16 @@ module Resolving =
                 Pile = Run(first, source) :: Gate(rest, source) :: session.Pile },
             []
 
-        | InAChosenLine inner ->
-            { session with
-                Pile =
-                    Ask
-                        { Chooser = actor
-                          Because = ACardSaying source
-                          Wanting = ALineFor(inner, Lines.all) }
-                    :: session.Pile },
-            [ Happened(Asked(actor, source.Saying)) ]
+        | InAChosenLine inner -> asking actor source (ALineFor(inner, Lines.all)) session
 
         | PlayFromHand(face, where) when where <> ThisLine ->
             match layable actor face where source session with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | [ only ] ->
                 { session with
                     Pile = Run(PlayFromHand(face, ThisLine), { source with Line = only }) :: session.Pile },
                 []
-            | many ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = ALineFor(PlayFromHand(face, ThisLine), many) }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+            | many -> asking actor source (ALineFor(PlayFromHand(face, ThisLine), many)) session
 
         | InAChosenLineOf(atLeast, inner) ->
             let deep =
@@ -336,20 +331,12 @@ module Resolving =
                 |> List.filter (fun line -> List.length (Side.stack line (Session.side actor session)) >= atLeast)
 
             match deep with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | [ only ] ->
                 { session with
                     Pile = Run(inner, { source with Line = only }) :: session.Pile },
                 []
-            | many ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = ALineFor(inner, many) }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+            | many -> asking actor source (ALineFor(inner, many)) session
 
         | InEachLineHolding inner ->
             let holding =
@@ -357,7 +344,7 @@ module Resolving =
                 |> List.filter (fun line -> Side.stack line (Session.side actor session) |> List.isEmpty |> not)
 
             match holding with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | lines ->
                 { session with
                     Pile =
@@ -373,7 +360,7 @@ module Resolving =
 
         | Times(wanted, inner) ->
             match counting wanted with
-            | n when n <= 0 -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | n when n <= 0 -> fizzling actor source session
             | n ->
                 { session with
                     Pile = List.replicate n (Run(inner, source)) @ session.Pile },
@@ -385,7 +372,7 @@ module Resolving =
             let taken, side, rng = Side.drawnFrom (Session.side actor session) session.Rng
 
             match taken with
-            | None -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | None -> fizzling actor source session
             | Some card ->
                 let placed = Placed.laid face card
 
@@ -412,14 +399,16 @@ module Resolving =
 
         | Every inner ->
             match targets actor inner source session with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | many ->
+                // Whatever one target pushes on the pile goes ahead of what the last one pushed,
+                // so they are taken back to front: the first target found is the first reached.
                 let session, said =
-                    many
-                    |> List.fold
-                        (fun (session, said) target ->
+                    List.foldBack
+                        (fun target (session, said) ->
                             let session, more = carriedOut source inner target session
-                            session, said @ more)
+                            session, more @ said)
+                        many
                         (session, [])
 
                 doneIt session, said
@@ -429,19 +418,11 @@ module Resolving =
             | [] when
                 (match inner with
                  | Draw _
-                 | Refreshing' -> false
+                 | RefreshHand -> false
                  | _ -> true)
                 ->
-                nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
-            | _ ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = Whether inner }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+                fizzling actor source session
+            | _ -> asking actor source (Whether inner) session
 
         | IfCovering rest ->
             let stack = Side.stack source.Line (Session.side actor session)
@@ -457,7 +438,7 @@ module Resolving =
                     Pile = (rest |> List.map (fun command -> Run(command, source))) @ session.Pile },
                 []
             else
-                nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+                fizzling actor source session
 
         // A choice is only put to a player if both halves could actually do something; if only
         // one could, that one just happens. Drawing and refreshing always can.
@@ -465,22 +446,14 @@ module Resolving =
             let live inner =
                 match inner with
                 | Draw _
-                | Refreshing' -> true
+                | RefreshHand -> true
                 | _ -> targets actor inner source session |> List.isEmpty |> not
 
             match live first, live second with
-            | false, false -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | false, false -> fizzling actor source session
             | true, false -> resolve first source session
             | false, true -> resolve second source session
-            | true, true ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = OneOf(first, second) }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+            | true, true -> asking actor source (OneOf(first, second)) session
 
         | Draw wanted ->
             let count = counting wanted
@@ -494,44 +467,41 @@ module Resolving =
             [ Happened(Drew(actor, drew)) ]
 
         | FromDeck(face, where) ->
-            let taken, side, rng = Side.drawnFrom (Session.side actor session) session.Rng
+            match where with
+            | ThisLine
+            | ToOrFromHere ->
+                let taken, side, rng = Side.drawnFrom (Session.side actor session) session.Rng
 
-            match taken with
-            | None -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
-            | Some card ->
-                let session =
-                    { session with
-                        Field = session.Field |> Field.withSide actor side
-                        Rng = rng
-                        Done = 1 }
+                match taken with
+                | None -> fizzling actor source session
+                | Some card ->
+                    let session =
+                        doneIt
+                            { session with
+                                Field = session.Field |> Field.withSide actor side
+                                Rng = rng }
 
-                let placed = Placed.laid face card
+                    laying actor (Placed.laid face card) source.Line OffTheDeck session, []
 
-                match where with
-                | ThisLine
-                | ToOrFromHere ->
-                    laying actor placed source.Line None session, [ Happened(PlayedFromDeck(actor, placed, source.Line)) ]
-                | AnyLine
-                | OtherLines ->
+            // The line is asked for first and the card drawn after, into that line: a card
+            // nobody has seen the face of is then never named by the question.
+            | AnyLine
+            | OtherLines ->
+                if Side.drained (Session.side actor session) then
+                    fizzling actor source session
+                else
                     let offered =
                         match where with
                         | OtherLines -> Lines.all |> List.filter ((<>) source.Line)
                         | _ -> Lines.all
 
-                    { session with
-                        Pile =
-                            Ask
-                                { Chooser = actor
-                                  Because = ACardSaying source
-                                  Wanting = ALine(OnTable(actor, source.Line, placed), offered) }
-                            :: session.Pile },
-                    [ Happened(Asked(actor, source.Saying)) ]
+                    asking actor source (ALineFor(FromDeck(face, ThisLine), offered)) session
 
         | TakeAtRandom ->
             let them = Session.other actor
 
             match (Session.side them session).Hand with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | hand ->
                 let which, rng = Rng.intBelow (List.length hand) session.Rng
                 let card = List.item which hand
@@ -553,7 +523,7 @@ module Resolving =
             let them = Session.other actor
 
             match (Session.side them session).Hand with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | hand -> doneIt session, [ Happened(ShowedHand(them, hand)) ]
 
         | TakeTheirTop ->
@@ -583,16 +553,8 @@ module Resolving =
                 |> List.filter (fun each -> List.zip each order |> List.filter (fun (a, b) -> a <> b) |> List.length = 2)
 
             match swapped with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
-            | offered ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = AnOrder(actor, offered) }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
+            | offered -> asking actor source (AnOrder(actor, offered)) session
 
         | Rearrange whose ->
             let side =
@@ -602,16 +564,8 @@ module Resolving =
                 | Anyone -> actor
 
             match Protocol.orders (Session.side side session).Order with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
-            | offered ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = AnOrder(side, offered) }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
+            | offered -> asking actor source (AnOrder(side, offered)) session
 
         | StopTheirCompile ->
             doneIt
@@ -619,14 +573,15 @@ module Resolving =
                     NoCompile = Some(Session.other actor) },
             [ Happened(StoppedCompiling(Session.other actor)) ]
 
-        | Refreshing' ->
-            let side, rng = Side.refreshed (Session.side actor session) session.Rng
+        | RefreshHand ->
+            let before = Session.side actor session
+            let after, rng = Side.refreshed before session.Rng
 
             doneIt
                 { session with
-                    Field = session.Field |> Field.withSide actor side
+                    Field = session.Field |> Field.withSide actor after
                     Rng = rng },
-            [ Happened(Refreshed(actor, 0, List.length side.Hand)) ]
+            [ Happened(Refreshed(actor, List.length before.Hand, List.length after.Hand)) ]
 
         | Discard
         | Give
@@ -638,7 +593,7 @@ module Resolving =
         | PlayFromHand _
         | Shift _ ->
             match targets actor command source session with
-            | [] -> nothingDone session, [ Happened(Fizzled(actor, source.Saying)) ]
+            | [] -> fizzling actor source session
             | [ only ] ->
                 let session, said = carriedOut source command only session
 
@@ -646,15 +601,7 @@ module Resolving =
                     { session with
                         Chose = Some(Target.card only) },
                 said
-            | many ->
-                { session with
-                    Pile =
-                        Ask
-                            { Chooser = actor
-                              Because = ACardSaying source
-                              Wanting = ACard(command, many) }
-                        :: session.Pile },
-                [ Happened(Asked(actor, source.Saying)) ]
+            | many -> asking actor source (ACard(command, many)) session
 
 
     let private taking seat session =
@@ -747,13 +694,7 @@ module Resolving =
                 (Printed.on placed.Card).After
                 |> List.filter (fst >> (=) trigger)
                 |> List.collect snd
-                |> List.map (fun command ->
-                    Run(
-                        command,
-                        { Owner = seat
-                          Saying = placed.Card
-                          Line = line }
-                    ))))
+                |> List.map (saidBy seat placed.Card line)))
 
     let private heard actor said session =
         let happened =
@@ -794,15 +735,7 @@ module Resolving =
         Lines.all
         |> List.collect (fun line ->
             match Stack.uncovered (Side.stack line side) with
-            | Some placed when Placed.isFaceUp placed ->
-                box (Printed.on placed.Card)
-                |> List.map (fun command ->
-                    Run(
-                        command,
-                        { Owner = seat
-                          Saying = placed.Card
-                          Line = line }
-                    ))
+            | Some placed when Placed.isFaceUp placed -> box (Printed.on placed.Card) |> List.map (saidBy seat placed.Card line)
             | _ -> [])
 
     let private beginning session =
@@ -831,7 +764,7 @@ module Resolving =
             Lines.all
             |> List.collect (fun line ->
                 match Stack.uncovered (Side.stack line (Field.side seat field)) with
-                | Some placed when Placed.isFaceUp placed -> [ seat, line, placed.Card ]
+                | Some placed when Placed.isFaceUp placed -> [ (seat, line, placed.Card) ]
                 | _ -> []))
 
     /// Cards showing face up and uncovered that were not showing last time round. `Revealed`
@@ -858,22 +791,21 @@ module Resolving =
         else
 
         // Newly uncovered cards speak before anything already on the pile, so a card revealed
-        // by the work in hand gets its say before the rest of that work carries on.
-        match lookAgain session with
-        | (_ :: _) as fresh, session ->
+        // by the work in hand gets its say before the rest of that work carries on. A gate is
+        // the one thing read first: it answers for the command it was pushed under, and a card
+        // that command uncovered would otherwise leave a tally of its own in `Done`.
+        let fresh, session =
+            match session.Pile with
+            | Gate _ :: _ -> [], session
+            | _ -> lookAgain session
+
+        match fresh with
+        | _ :: _ ->
             let pushed =
                 fresh
                 |> List.sortBy (fun (seat, line, _) -> PlayerId.value seat, line)
                 |> List.filter (fun (_, line, _) -> not (Field.silenced line session.Field))
-                |> List.collect (fun (seat, line, card) ->
-                    (Printed.on card).Shown
-                    |> List.map (fun command ->
-                        Run(
-                            command,
-                            { Owner = seat
-                              Saying = card
-                              Line = line }
-                        )))
+                |> List.collect (fun (seat, line, card) -> (Printed.on card).Shown |> List.map (saidBy seat card line))
 
             walk
                 (fuel - 1)
@@ -881,7 +813,7 @@ module Resolving =
                     Pile = pushed @ session.Pile }
                 told
 
-        | [], session ->
+        | [] ->
 
         match session.Pile with
         | [] -> session, told
@@ -892,14 +824,9 @@ module Resolving =
         | Run(command, source) :: rest ->
             let session, said = resolve command source { session with Pile = rest }
 
-            let actor =
-                match command with
-                | Opposing _ -> Session.other source.Owner
-                | _ -> source.Owner
-
             let session =
                 { session with
-                    Pile = heard actor said session @ session.Pile }
+                    Pile = heard (acting command source) said session @ session.Pile }
 
             walk (fuel - 1) session (told @ said)
 
@@ -919,17 +846,24 @@ module Resolving =
         | Placing(seat, placed, line, from) :: rest ->
             let lifted side =
                 match from with
-                | Some was ->
+                | FromLine was ->
                     { side with
                         Stacks = side.Stacks |> Map.add was (Side.stack was side |> List.filter ((<>) placed)) }
-                | None -> side
+                | FromHand
+                | OffTheDeck -> side
+
+            let said =
+                match from with
+                | FromHand -> [ Happened(Played(seat, placed, line)) ]
+                | OffTheDeck -> [ Happened(PlayedFromDeck(seat, placed, line)) ]
+                | FromLine _ -> []
 
             walk
                 (fuel - 1)
                 { session with
                     Pile = rest
                     Field = session.Field |> Field.update seat (lifted >> Side.played placed line) }
-                (told @ [ if from.IsNone then Happened(Played(seat, placed, line)) ])
+                (told @ said)
 
         | Turning(seat, placed, line) :: rest ->
             let stack = Side.stack line (Session.side seat session)
@@ -968,14 +902,7 @@ module Resolving =
                         Side.stack line (Field.side seat session.Field)
                         |> List.filter Placed.isFaceUp
                         |> List.collect (fun placed ->
-                            (Printed.on placed.Card).WhenCompiled
-                            |> List.map (fun command ->
-                                Run(
-                                    command,
-                                    { Owner = seat
-                                      Saying = placed.Card
-                                      Line = line }
-                                )))))
+                            (Printed.on placed.Card).WhenCompiled |> List.map (saidBy seat placed.Card line))))
 
             walk (fuel - 1) { session with Pile = saying @ rest } told
 
@@ -1095,8 +1022,15 @@ module Resolving =
             session, []
 
 
-    let private carryOn session said =
-        let session, told = settle session said
+    // An answer carries a command out just as `walk` does, so what it did is listened for the
+    // same way before the walk goes on.
+    let private carryOn actor session said =
+        let session, told =
+            settle
+                { session with
+                    Pile = heard actor said session @ session.Pile }
+                said
+
         Some session, told
 
     let private without session =
@@ -1122,6 +1056,7 @@ module Resolving =
                     | None, OnTable _ -> without session, []
 
                 carryOn
+                    question.Chooser
                     { session with
                         Done = 1
                         Chose = Some(Target.card target) }
@@ -1132,9 +1067,9 @@ module Resolving =
             | None -> None, [ Refused(NotOnOffer question.Wanting) ]
             | Some source ->
                 let session, said = resolve inner source (without session)
-                carryOn session said
+                carryOn (acting inner source) session said
 
-        | Whether _, No -> carryOn { without session with Done = 0 } [ Happened(Declined question.Chooser) ]
+        | Whether _, No -> carryOn question.Chooser { without session with Done = 0 } [ Happened(Declined question.Chooser) ]
 
         | OneOf(first, _), TheFirst
         | OneOf(_, first), TheSecond ->
@@ -1142,11 +1077,11 @@ module Resolving =
             | None -> None, [ Refused(NotOnOffer question.Wanting) ]
             | Some source ->
                 let session, said = resolve first source (without session)
-                carryOn session said
+                carryOn (acting first source) session said
 
         | ALine(OnTable(seat, from, placed), offered), TheLine line when List.contains line offered ->
             let session, said = moving seat placed from line (without session)
-            carryOn session said
+            carryOn seat session said
 
         | ALineFor(command, offered), TheLine line when List.contains line offered ->
             match saying question with
@@ -1155,6 +1090,7 @@ module Resolving =
                 let session = without session
 
                 carryOn
+                    question.Chooser
                     { session with
                         Pile = Run(command, { source with Line = line }) :: session.Pile }
                     []
@@ -1168,5 +1104,5 @@ module Resolving =
                 { without session with
                     Field = session.Field |> Field.update whose (Side.arranged order) }
 
-            carryOn session [ Happened(Rearranged(whose, order)) ]
+            carryOn whose session [ Happened(Rearranged(whose, order)) ]
         | _ -> None, [ Refused(NotOnOffer question.Wanting) ]

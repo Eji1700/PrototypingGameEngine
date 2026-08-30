@@ -5,14 +5,15 @@ open Prototyping.Table
 
 module Ink =
 
-    let key color = (Words.color color).ToLowerInvariant()
+    let key colour =
+        (Words.colour colour).ToLowerInvariant()
 
     [<Literal>]
     let Hidden = "hidden"
 
-    let ink palette color = Palette.inkOf (key color) palette
+    let ink palette colour = Palette.inkOf (key colour) palette
 
-    let color palette faction =
+    let colour palette faction =
         (Palette.shadeOf (key faction) palette).Color
 
     let hidden palette = Palette.inkOf Hidden palette
@@ -55,13 +56,13 @@ module Ink =
     let paint = Tint.painter marking
 
     let slots =
-        (StoneColor.all
-         |> List.map (fun color ->
-             { Key = key color
-               Draws = $"{Words.color color} stones, and the regions {Words.color color} rules"
-               Shows = $"{Words.color color}   {Words.glyph color} {Words.glyph color}   >{Words.glyph color}"
+        (StoneColour.all
+         |> List.map (fun colour ->
+             { Key = key colour
+               Draws = $"{Words.colour colour} stones, and the regions {Words.colour colour} rules"
+               Shows = $"{Words.colour colour}   {Words.glyph colour} {Words.glyph colour}   >{Words.glyph colour}"
                Standard =
-                 match color with
+                 match colour with
                  | Red -> Palette.crimson
                  | Blue -> Palette.azure
                  | Green -> Palette.moss }))

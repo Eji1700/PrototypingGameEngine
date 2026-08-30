@@ -29,3 +29,21 @@ module Rng =
         // not divide 2^64. At the sizes anything here shuffles or picks from, that is far
         // below what a game could show.
         int (value % uint64 exclusiveMax), rng
+
+    /// One of them, each as likely as the next. Nothing to pick from is refused the way a bound of
+    /// nought is, since it is the same mistake.
+    let pick items rng =
+        let n, rng = intBelow (List.length items) rng
+        List.item n items, rng
+
+    /// The same items in a random order: drawn one at a time out of what is left, which is a
+    /// Fisher-Yates shuffle written the long way round because it is a list.
+    let shuffle items rng =
+        let rec draw taken left rng =
+            match left with
+            | [] -> List.rev taken, rng
+            | _ ->
+                let n, rng = intBelow (List.length left) rng
+                draw (List.item n left :: taken) (List.removeAt n left) rng
+
+        draw [] items rng

@@ -2,9 +2,7 @@
 #load "Conforms.fsx"
 
 open System
-open System.Net
-open System.Text.RegularExpressions
-open System.Xml
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Life
@@ -17,9 +15,8 @@ let private dealt = Update.start rules 1 0UL |> Result.toOption |> Option.get
 
 let private standing model = Model.state model
 
-let private mentions (needle: string) (text: string) = text.Contains needle
 
-let private at word = Grid.read word |> Option.get
+let private at word = Torus.read word |> Option.get
 
 let private played moves =
     moves
@@ -35,20 +32,23 @@ let private shape cells = Set.ofList (cells |> List.map at)
 
 report "the board hangs together" [] life.Faults
 
-report "it is four hundred and sixteen squares" (Grid.Width * Grid.Height) (List.length Grid.all)
+report "it is four hundred and sixteen squares" (Torus.Width * Torus.Height) (List.length Torus.all)
 
 report
     "every cell has eight neighbours"
     []
-    (Grid.all
-     |> List.filter (fun cell -> List.length (List.distinct (Grid.neighbours cell)) <> 8))
+    (Torus.all
+     |> List.filter (fun cell -> List.length (List.distinct (Torus.neighbours cell)) <> 8))
 
 
-report "the corner touches the far corner" true (Grid.neighbours (at "a1") |> List.contains (at "z16"))
+report "the corner touches the far corner" true (Torus.neighbours (at "a1") |> List.contains (at "z16"))
 
-report "and the far side of its own row" true (Grid.neighbours (at "a1") |> List.contains (at "z1"))
+report "and the far side of its own row" true (Torus.neighbours (at "a1") |> List.contains (at "z1"))
 
-report "a cell whose name does not read back" [] (Grid.all |> List.filter (fun cell -> Grid.read (Grid.name cell) <> Some cell))
+report
+    "a cell whose name does not read back"
+    []
+    (Torus.all |> List.filter (fun cell -> Torus.read (Torus.name cell) <> Some cell))
 
 
 report "a lone cell dies" Set.empty (living (drawn [ "m8" ] |> fun model -> Update.update rules (Make(Step 1)) model))
@@ -82,8 +82,8 @@ report "and is still five cells after forty" 5 (Set.count (living (gliding 40)))
 let private moved (down, across) cells =
     cells
     |> Set.map (fun cell ->
-        { Row = (cell.Row - 1 + down) % Grid.Height + 1
-          Column = (cell.Column - 1 + across) % Grid.Width + 1 })
+        { Row = (cell.Row - 1 + down) % Torus.Height + 1
+          Column = (cell.Column - 1 + across) % Torus.Width + 1 })
 
 report "and has gone ten squares diagonally by then, edges and all" (moved (10, 10) (shape glider)) (living (gliding 40))
 
@@ -131,6 +131,11 @@ report
 
 
 report "but a refused move is written down all the same" 1 (Journal.length (played [ Step 0 ]).Journal)
+
+report
+    "a run that leaves one cell says so in words that agree"
+    "Ran 1 generation to generation 1, and 1 cell alive."
+    (Words.said (Happened(Ran(1, 1, 1))))
 
 
 let private settled = drawn block
@@ -217,21 +222,7 @@ report
     ))
 
 
-let private reads typed =
-    match Playable.read life typed with
-    | Ok(Send msg) -> Ok(Words.command msg)
-    | Ok Help -> Ok "help"
-    | Ok(Notes wanted) -> Ok $"notes {wanted}"
-    | Ok(Listing wanted) -> Ok $"commands {wanted}"
-    | Ok(Logging wanted) -> Ok(sprintf "log %A" wanted)
-    | Ok(Hushing hushed) -> Ok $"sound {hushed}"
-    | Ok(Looking name) -> Ok $"view {name}"
-    | Ok(Asking question) -> Ok $"asking {question}"
-    | Ok Recount -> Ok "history"
-    | Ok Keep -> Ok "save"
-    | Ok Leave -> Ok "quit"
-    | Ok Nothing -> Ok "nothing"
-    | Error problem -> Error problem
+let private reads typed = Conforms.readsAs life typed
 
 report "'undo' is not this game's business" (Ok "undo") (reads "undo")
 
@@ -272,7 +263,7 @@ let private board = view.Board Margins.all (Seat.at 1) (gliding 4)
 
 report "the board is drawn with the living cells on it" true (board |> mentions "#")
 
-report "under the letters its columns are named by" true (board |> mentions Grid.letters)
+report "under the letters its columns are named by" true (board |> mentions Torus.letters)
 
 report "it says which generation this is, and how many are alive" true (board |> mentions "Generation 4 - 5 cells alive")
 
@@ -307,16 +298,13 @@ report
 
 let private views = life.Views standard
 
-let private seen text =
-    let uncoloured = Regex.Replace(text, string (char 27) + @"?\[[0-9;]*m", "")
-    Regex.Replace(uncoloured, "<[^>]*>", "")
 
 report "there are three of them" [ "plain"; "rich"; "html" ] (views |> List.map (fun view -> view.Name))
 
 let private ninthRow =
     String.replicate 7 Ink.Empty
     + String.replicate 2 Ink.Living
-    + String.replicate (Grid.Width - 9) Ink.Empty
+    + String.replicate (Torus.Width - 9) Ink.Empty
 
 let private arriving =
     [ { Player = Seat.at 1
@@ -331,7 +319,7 @@ for view in views do
 
     report $"the {view.Name} view draws that board's ninth row, cell for cell" true (drawn |> mentions ninthRow)
 
-    report $"the {view.Name} view names the rows and columns" true (drawn |> mentions Grid.letters)
+    report $"the {view.Name} view names the rows and columns" true (drawn |> mentions Torus.letters)
 
     for block in
         [ Render.Blocks.board
@@ -359,39 +347,14 @@ for view in views do
 
 let private page = Page.page life.Page standard
 
-let private fragments =
+// The states the contract never reaches - a glider four generations on, a board that has died,
+// a cell asked about; the rest of what a page is sent is held for every game in `Conforms`.
+Conforms.patched
     [ "board", Page.Screen, asPage.Board Margins.all (Seat.at 1) (gliding 4)
       "board with the notes off", Page.Screen, asPage.Board Margins.none (Seat.at 1) (gliding 4)
       "empty board", Page.Screen, asPage.Board Margins.all (Seat.at 1) died
-      "waiting", Page.Screen, asPage.Waiting arriving
-      "a line the game said", Page.Told, asPage.Says "f7 comes alive."
       "the record", Page.Told, asPage.History (Seat.at 1) walked
-      "an answer", Page.Told, asPage.Answer (Seat.at 1) "h9" (gliding 4)
-      "the rules", Page.Told, asPage.Rules ]
-
-let private read (markup: string) =
-    let document = XmlDocument()
-    use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
-    document.Load reader
-    document
-
-let private parses (markup: string) =
-    try
-        read markup |> ignore
-        true
-    with _ ->
-        false
-
-for name, _, markup in fragments do
-    report $"the {name} is well-formed markup" true (parses markup)
-
-report "and so is the page itself" true (parses page)
-
-for name, slot, markup in fragments do
-    report
-        $"the {name} is one element, carrying the id it will be patched by"
-        slot
-        ((read markup).DocumentElement.GetAttribute "id")
+      "an answer", Page.Told, asPage.Answer (Seat.at 1) "h9" (gliding 4) ]
 
 
 let private lifeIsTeal =
@@ -405,38 +368,20 @@ report
 
 report "the game's own stylesheet reaches the page" true (page |> mentions "line-height: 1.15")
 
-let private posted (markup: string) =
-    Regex.Matches(WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
-    |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
-    |> List.ofSeq
-
-let private buttons = posted (asPage.Board Margins.all (Seat.at 1) (gliding 4))
+let private buttons =
+    Conforms.posted (asPage.Board Margins.all (Seat.at 1) (gliding 4))
 
 report
     "the board offers the things a person does over and over, the clock first"
     [ "stop"; "step"; "step 10"; "slower"; "faster"; "undo"; "clear"; "restart" ]
     buttons
 
-report
-    "and every one of them types a line the program takes"
-    []
-    (buttons
-     |> List.filter (fun line ->
-         match reads line with
-         | Ok "nothing"
-         | Error _ -> true
-         | Ok _ -> false))
 
-
-let rec private controls scene =
-    match scene with
-    | Does(caption, line, _) -> [ (caption, line) ]
-    | Block(_, body)
-    | Stack body
-    | Beside body
-    | Tile(_, _, body) -> body |> List.collect controls
-    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect controls)
-    | _ -> []
+let private controls scene =
+    Conforms.everywhere scene
+    |> List.choose (function
+        | Does(caption, line, _) -> Some(caption, line)
+        | _ -> None)
 
 let private described = controls (Render.board Margins.all (Seat.at 1) (gliding 4))
 
@@ -451,15 +396,11 @@ report
      |> List.forall (fun (caption, _) -> plain.Board Margins.all (Seat.at 1) (gliding 4) |> mentions caption))
 
 
-let rec private notes scene =
-    match scene with
-    | Note text -> [ text ]
-    | Block(_, body)
-    | Stack body
-    | Beside body
-    | Tile(_, _, body) -> body |> List.collect notes
-    | Walled(_, rows) -> rows |> List.collect (fun row -> row.Cells |> List.collect notes)
-    | _ -> []
+let private notes scene =
+    Conforms.everywhere scene
+    |> List.choose (function
+        | Note text -> Some text
+        | _ -> None)
 
 report
     "the notes the game explains its board with"
@@ -536,29 +477,35 @@ report "and an empty one the same" (standing died) (standing (beating (List.repl
 
 // Winding it, which is the same ladder Snake has and a slower one.
 
-report "winding it up shortens the beat" true (pulse.Every(standing (beating [ Faster ] dealt)) < pulse.Every(standing dealt))
+report
+    "winding it up shortens the beat"
+    true
+    (pulse.Every(standing (beating [ Wind Winding.Faster ] dealt)) < pulse.Every(standing dealt))
 
-report "and down lengthens it" true (pulse.Every(standing (beating [ Slower ] dealt)) > pulse.Every(standing dealt))
+report "and down lengthens it" true (pulse.Every(standing (beating [ Wind Winding.Slower ] dealt)) > pulse.Every(standing dealt))
 
-report "a notch can be asked for outright" 9 (standing (beating [ Speed 9 ] dealt)).Speed
+report "a notch can be asked for outright" 9 (standing (beating [ Wind(Winding.Speed 9) ] dealt)).Speed
 
 report
     "the quickest is about nine a second"
     true
-    (pulse.Every(standing (beating [ Speed 9 ] dealt)) < TimeSpan.FromMilliseconds 120.0)
+    (pulse.Every(standing (beating [ Wind(Winding.Speed 9) ] dealt)) < TimeSpan.FromMilliseconds 120.0)
 
-report "and the slowest about two" true (pulse.Every(standing (beating [ Speed 1 ] dealt)) > TimeSpan.FromMilliseconds 500.0)
+report
+    "and the slowest about two"
+    true
+    (pulse.Every(standing (beating [ Wind(Winding.Speed 1) ] dealt)) > TimeSpan.FromMilliseconds 500.0)
 
 report
     "a speed nobody has is refused, and says what there is"
     true
-    (toldBy (beating [ Speed 12 ] dealt)
+    (toldBy (beating [ Wind(Winding.Speed 12) ] dealt)
      |> List.exists (mentions "The clock winds from 1 to 9"))
 
 report
     "winding past the end of the range does nothing"
-    (standing (beating [ Speed 9 ] dealt))
-    (standing (beating [ Speed 9; Faster ] dealt))
+    (standing (beating [ Wind(Winding.Speed 9) ] dealt))
+    (standing (beating [ Wind(Winding.Speed 9); Wind Winding.Faster ] dealt))
 
 // The keys, held to the rule every control here is held to: a key stands for a line the game
 // itself reads.
@@ -618,6 +565,24 @@ report
          |> Result.toOption
          |> Option.get
      ))
+
+
+// --- where the rule has got to, and what a terminal's keys are for --------------------------------
+
+report
+    "where the rule has got to is one answer, which the heading and the box beside the board both read"
+    [ Condition.Going; Condition.Settled; Condition.Empty; Condition.Beating ]
+    ([ gliding 4
+       settled
+       died
+       played (Clear :: (blinker |> List.map (at >> Toggle)) @ [ Step 2 ]) ]
+     |> List.map (standing >> World.condition))
+
+report
+    "the two keys a terminal has for stepping and sweeping are in the box of commands"
+    true
+    (Render.commands |> mentions "'.' at a terminal"
+     && Render.commands |> mentions "'c' at a terminal")
 
 
 // === The seam every game fills in ===

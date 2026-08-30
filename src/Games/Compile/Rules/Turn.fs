@@ -106,17 +106,23 @@ module Turn =
             let seat = session.ToPlay
             let side = Session.side seat session
 
-            if List.isEmpty side.Hand then
-                None, [ Refused MustRefresh ]
-            elif not (Lines.holds line) then
-                None, [ Refused(NoSuchLine line) ]
-            elif not (Side.holds card side) then
-                None, [ Refused(NotInHand card) ]
-            elif (Field.barred seat line face session.Field).IsSome then
-                None, [ Refused(Forbidden((Field.barred seat line face session.Field).Value, line)) ]
-            elif face = FaceUp && not (Field.allows seat card line session.Field) then
-                None, [ Refused(NotFacingThere(card, line, Field.facingLines seat card session.Field)) ]
-            else
+            let refusal =
+                if List.isEmpty side.Hand then
+                    Some MustRefresh
+                elif not (Lines.holds line) then
+                    Some(NoSuchLine line)
+                elif not (Side.holds card side) then
+                    Some(NotInHand card)
+                else
+                    match Field.barred seat line face session.Field with
+                    | Some why -> Some(Forbidden(why, line))
+                    | None when face = FaceUp && not (Field.allows seat card line session.Field) ->
+                        Some(NotFacingThere(card, line, Field.facingLines seat card session.Field))
+                    | None -> None
+
+            match refusal with
+            | Some refusal -> None, [ Refused refusal ]
+            | None ->
                 let placed = Placed.laid face card
 
                 // `ending` goes on the bottom of the pile and `laying` on the top, so the card is
@@ -129,7 +135,7 @@ module Turn =
                                 { side with
                                     Hand = side.Hand |> List.filter ((<>) card) }) }
                     |> Resolving.ending
-                    |> Resolving.laying seat placed line None
+                    |> Resolving.laying seat placed line FromHand
                     |> fun session -> Resolving.settle session []
 
                 Some session, told

@@ -11,10 +11,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
+. (Join-Path $PSScriptRoot "Driving.ps1")
 
 $template = Join-Path $root "templates/game"
 $into = Join-Path $root "src/Games/$Name"
@@ -45,7 +42,8 @@ try {
     Report "it builds, with warnings as errors" ($LASTEXITCODE -eq 0) ($build -split "`n" | Select-String "error" | Select-Object -First 1)
 
     if ($LASTEXITCODE -eq 0) {
-        $exe = Join-Path $into "bin/Debug/net10.0/$Name"
+        $framework = ([xml](Get-Content (Join-Path $into "$Name.fsproj"))).Project.PropertyGroup.TargetFramework
+        $exe = Join-Path $into "bin/Debug/$framework/$Name"
         if (Test-Path "$exe.exe") { $exe = "$exe.exe" }
 
         $help = & $exe --help 2>&1 | Out-String
@@ -62,8 +60,9 @@ try {
     }
 
     # And the contract itself. The harness is written here rather than shipped with the template
-    # because the engine's own load list belongs to the engine: it is taken from the shortest
-    # harness there is, so a file added to the engine reaches this without anybody remembering to.
+    # because the engine's own load list belongs to the engine: it is taken from Life's harness,
+    # which is `Stack.fsx` and the game's own files, so a file added to the engine reaches this
+    # without anybody remembering to.
     $head = @()
     foreach ($line in Get-Content (Join-Path $root "tests/Living.fsx")) {
         if ($line -match "src/Games/") { break }
@@ -106,10 +105,4 @@ finally {
     if ($installed) { dotnet new uninstall $template 2>&1 | Out-Null }
 }
 
-""
-if ($failed) {
-    $lost = if ($failed -eq 1) { "1 check" } else { "$failed checks" }
-    "$lost failed"
-    exit 1
-}
-else { "all checks passed"; exit 0 }
+Finish "check"

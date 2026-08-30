@@ -4,13 +4,14 @@ Eight games sit on this engine, and about four fifths of the program is not abou
 That claim is only worth something if there is a record of what it cost to keep — so this file is
 the ledger: every change to the seam, which game demanded it, and what would break without it.
 
-The seam is three types and thirty-three members between them:
-[`Rules`](src/Engine/Rules.fs) (7), [`Playable`](src/Table/Playable.fs) (22) and `Pulse` (4).
+The seam is three types and thirty-four members between them:
+[`Rules`](src/Engine/Rules.fs) (7), [`Playable`](src/Table/Playable.fs) (22) and `Pulse` (5).
 Everything else a game touches is vocabulary it may use and need not.
 
-**The headline is what is missing from the table below.** Four of the eight games in this
-repository — Diplomacy, Compile, Life and Warband — changed the seam in no way at all. Neither
-`Rules` nor `Playable` has a commit against it from any of them.
+**The headline is what is missing from the table below.** Three of the eight games in this
+repository — Diplomacy, Compile and Life — changed the seam in no way at all. Neither `Rules`
+nor `Playable` has a commit against it from any of them, and Warband went six days before it
+asked for anything.
 
 EndTimes is the ninth and the first from *outside* the repository, built against the packages rather
 than beside the sources. That it could ask for something is the point of packaging them; that it
@@ -29,7 +30,8 @@ asked for two fields is the answer worth keeping.
 | 2026-08-24 | **EndTimes** | `Playable.Aside`; and `Menu.Choice.Working` |
 | 2026-08-24 | **EndTimes** | `Playable.Steering` |
 | 2026-08-24 | **EndTimes** | `Margins.Showing`; `Command.Showing`; `Screens.askingOver` |
-| 2026-08-27 | **EndTimes** | `Keys.path` for `Keys.started`; `Keys.draw` in columns |
+| 2026-08-27 | **EndTimes** | `Keys.path` for `Keys.standing`; `Keys.draw` in columns |
+| 2026-08-29 | **Warband** | `Pulse.Free` |
 
 ## What each one was for
 
@@ -146,6 +148,23 @@ dozen short rows drawn one to a line is a dozen lines of a window that had a boa
 than the first list only, and accepts any line the game reads rather than only a move - a row that
 opens one of the game's own screens is still a row standing for something somebody could have typed.
 
+**Warband — `Pulse.Free`, 2026-08-29.** The first game that is on a clock and takes turns at the
+same time, and the seam had no word for that. A table over a network held the turn only at a game
+with no pulse, so at a hosted Warband either console could muster into the other squad, and a
+`resign` from the wrong keyboard walked the wrong squad away — the acting half of the question the
+muster asks, where `SeenBy` had only ever answered the hiding half. `Free` is a game's answer, from
+where it stands, to whether the clock has freed every seat to speak. Snake, Life and Cascade say yes
+at every state, since a line at those boards is a steer and the beat is what moves the game; Warband
+says no through the muster and yes once the battle is running, when nothing is asked of anybody. The
+lobby asks it before every move and holds the turn where it says no, exactly as it does at a game of
+turns. It is a function of the state rather than a flag because the answer changes as the game goes
+on, and a member rather than something read off `Rules.Active` because at a clocked game `Active` is
+who the board is drawn for — which Warband had already found is not the same question.
+`Conforms.against` asks it at every state a suite walks through, so a pulse that cannot answer never
+reaches a table. The seatless `resign` at a four-player clocked Snake is the same shape of gap and is
+left where it is, pinned in `snake.fsx`: closing it needs `Resign` to carry a seat, which is a
+different change.
+
 ## What the four quiet games did instead
 
 They are the evidence, so what they found is worth as much as what they changed.
@@ -176,7 +195,8 @@ neither half had been asked: a table with a `Pulse` lets any console speak whene
 (`Lobby` only enforces whose turn it is at a game *without* one), so a game that hides something
 cannot lean on the turn order to keep it hidden. It does not have to — `SeenBy` and the per-seat
 board were already the whole of the curtain, and the lobby draws every console its own seat's board
-either way. Nothing moved.
+either way. Nothing moved - for six days, until the acting half of the same question did, and
+  `Pulse.Free` is the row above.
 
 Two things it found that are worth writing down and are not seam:
 
@@ -206,6 +226,15 @@ Two things it found that are worth writing down and are not seam:
 - **The record's `format` line** (2026-08-23). Not asked for by a game — asked for by the engine
   being packaged and versioned apart from the games built on it, so a record written by one
   version will be read by another.
+- **Helpers for what every game was writing for itself** (2026-08-29). None a member, all found by
+  reading eight games side by side: `Playable.seating` builds a game's `Seating` from its skills, its
+  rival and what it plays, where six games had the same dozen lines; `Scene.seated` marks the reader's
+  own seat, where all eight wrote " (you)"; `Commands.verbs`, `restart` and `resign` describe the
+  table's own words once, where every commands box described them in its own way and `quit` was
+  already said three ways; `Common.Grid` is the board of lettered cells that Life, Snake and Cascade
+  each carried a copy of, and `Common.Notch` the clock's nine notches that the same three each wound
+  in their own six arms. `Common.Cascade` became `Tiebreak`, the game of that name having arrived
+  after it.
 
 ## Keeping this honest
 
@@ -215,4 +244,4 @@ down too — and worth a second look, because a seam that grows without a game a
 growing towards one game's idea of what a game is.
 
 The other half of holding the line is [`tests/Conforms.fsx`](tests/Conforms.fsx), which is the
-contract all thirty-three members are checked against, for every game, on every run.
+contract all thirty-four members are checked against, for every game, on every run.

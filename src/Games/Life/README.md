@@ -38,10 +38,10 @@ Every command that is not about cells or generations - `undo`, `redo`, `history`
 | `toggle f7` (`t`) | the same, the long way round |
 | `run` (`p`, space in a browser) | start the rule, and stop it again |
 | `start`, `stop` | say which outright, rather than turning it the other way |
-| `step` (`s`) | one generation, which is what you want while it is stopped |
+| `step` (`s`, `.` at a terminal) | one generation, which is what you want while it is stopped |
 | `step 10` (`10`) | ten of them, stopping early if there is nothing left to happen |
 | `+` and `-` | wind the clock (`faster`, `slower`); `speed 7` goes straight to a notch |
-| `clear` | sweep the board, to draw on it from nothing |
+| `clear` (`c` at a terminal) | sweep the board, to draw on it from nothing |
 | `why f7` (`ask`) | how many living neighbours that cell has, and what the rule will do with it |
 
 Cells are named the way a person reads a square off a board they are looking at: a letter for
@@ -124,7 +124,7 @@ thing anybody watching wants to know. So the world carries the two generations b
 the heading says which of the three is happening: still going, settled, or beating between two
 shapes.
 
-**The board is worked out rather than written down.** `Grid.Width` and `Grid.Height` are the
+**The board is worked out rather than written down.** `Torus.Width` and `Torus.Height` are the
 only two numbers, and the cells, their names, the letters they are named by and every cell's
 eight neighbours all follow. What could be wrong with that is arithmetic rather than a typo -
 but arithmetic goes wrong too, which is why this game fills in the seam's `Faults` and says so
@@ -163,7 +163,7 @@ Eight files, in the same shape as every other game here.
 
 | File | Role |
 | --- | --- |
-| [Grid.fs](Rules/Grid.fs) | The board, its names, its joined edges - and `step`, which is the whole of Conway's rule |
+| [Torus.fs](Rules/Torus.fs) | The board, its names, its joined edges - and `step`, which is the whole of Conway's rule |
 | [World.fs](Rules/World.fs) | Where the game stands: the living, the two generations behind them, and the soup they were dealt from |
 | [Turn.fs](Rules/Turn.fs) | `Move`, and how far a run goes before something stops it |
 | [Words.fs](Rules/Words.fs) | Every string a player reads |

@@ -85,13 +85,14 @@ module Transcript =
     let write game sitters journal =
         pieces game sitters journal |> String.concat ""
 
-    let read game (text: string) =
-        let meaningful =
-            text.Split('\n')
-            |> Array.map (fun line -> line.Trim())
-            |> Array.filter (fun line -> line <> "" && not (line.StartsWith "#"))
-            |> List.ofArray
+    /// The lines that are not comments or blank - the deal, the format marker and the moves.
+    let private meaningful (text: string) =
+        text.Split('\n')
+        |> Array.map (fun line -> line.Trim())
+        |> Array.filter (fun line -> line <> "" && not (line.StartsWith "#"))
+        |> List.ofArray
 
+    let read game (text: string) =
         let words (line: string) =
             line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
             |> List.ofArray
@@ -104,7 +105,7 @@ module Transcript =
                 | Ok _ -> Error $"'{line}' is not a move, so it cannot be part of a record."
                 | Error problem -> Error problem)
 
-        match formatted meaningful with
+        match formatted (meaningful text) with
         | Error problem -> Error problem
         | Ok meaningful ->
 
@@ -178,6 +179,19 @@ module Transcript =
     let about path =
         filed path |> Option.bind (fun (stamp, _, _) -> gameOf stamp)
 
+    [<NoComparison; NoEquality>]
+    type TakenUp<'Move, 'State, 'Notice> =
+        {
+            Model: Model<'Move, 'State, 'Notice>
+            Sitters: Sitter list
+
+            /// The stamp the record is filed under, where its name proves it is this game's to go on
+            /// writing to; a renamed record is filed afresh instead.
+            Stamp: string option
+
+            Moves: int
+        }
+
     let takenUp hint game (path: string) =
         let ours =
             match about path with
@@ -193,25 +207,16 @@ module Transcript =
                 Update.replay game.Rules reading.Players reading.Seed reading.Moves
                 |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
                 |> Result.map (fun model ->
-                    model, reading.Sitters, stampOf path reading.Players reading.Seed, List.length reading.Moves))
-
-    /// How much of what is already on disk the new record agrees with, and what is left to write. A
-    /// game is saved after every move, and a game that has only gone forward writes the same bytes
-    /// again with more on the end - so the common case is an append rather than a rewrite.
-    let private shared (existing: string) pieces =
-        let rec walk at rest =
-            match rest with
-            | (piece: string) :: more when
-                at + piece.Length <= existing.Length
-                && String.CompareOrdinal(existing, at, piece, 0, piece.Length) = 0
-                ->
-                walk (at + piece.Length) more
-            | _ -> at, rest
-
-        walk 0 pieces
+                    { Model = model
+                      Sitters = reading.Sitters
+                      Stamp = stampOf path reading.Players reading.Seed
+                      Moves = List.length reading.Moves }))
 
     // Written beside and moved over, so a record is never half-written: an interruption leaves either
-    // the game as it stood before or the game as it stands now, and not something in between.
+    // the game as it stood before or the game as it stands now, and not something in between. The
+    // whole file each time, even for a game that has only gone forward by one line - a hosted table
+    // saves after every move, and a record is small enough that appending would save nothing worth
+    // the second, unatomic, way of writing it.
     let private replace path (text: string) =
         let beside = path + ".writing"
         File.WriteAllText(beside, text)
@@ -232,10 +237,8 @@ module Transcript =
         |> Option.map (fun (stamp, players, seed) ->
             let moves =
                 try
-                    File.ReadAllLines path
-                    |> Array.map (fun line -> line.Trim())
-                    |> Array.filter (fun line -> line <> "" && not (line.StartsWith "#"))
-                    |> List.ofArray
+                    File.ReadAllText path
+                    |> meaningful
                     // Through the same door the reader uses, so the count is of moves rather than
                     // of lines: without this a record with a format marker reads as one move long
                     // before it has any moves in it.
@@ -268,12 +271,25 @@ module Transcript =
     let save game stamp sitters journal =
         Directory.CreateDirectory folder |> ignore
         let path = path stamp journal
-        let pieces = pieces game sitters journal
+        let text = write game sitters journal
 
+        // Nothing is written for a record that has not changed: a hosted table keeps after every
+        // line, refusals and idle beats included, and most of those change nothing.
         let existing = if File.Exists path then File.ReadAllText path else ""
 
-        match shared existing pieces with
-        | at, rest when at = existing.Length -> File.AppendAllText(path, String.concat "" rest)
-        | _ -> replace path (String.concat "" pieces)
+        if text <> existing then replace path text
 
         path
+
+    /// What a player is told when a record is written, and where.
+    let announced path = $"Record saved to {path}."
+
+    /// Written whether or not anything has happened, since `save` is a player asking for it. Answers
+    /// where, as a path from here.
+    let keep game stamp sitters (model: Model<'Move, 'State, 'Notice>) =
+        Path.GetRelativePath(Directory.GetCurrentDirectory(), save game stamp sitters model.Journal)
+
+    /// Written unless nothing has happened - a record of nothing is not a record, and a sitting that
+    /// added nothing to a game should not rewrite it. Every table used to keep this rule for itself.
+    let kept game stamp sitters (model: Model<'Move, 'State, 'Notice>) =
+        if Journal.isEmpty model.Journal then None else Some(keep game stamp sitters model)

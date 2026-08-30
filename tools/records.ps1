@@ -4,21 +4,16 @@ param(
 
 # Every record in logs/, taken back up. They are committed as replay fixtures, and until this
 # existed CI took up two of them - so a change that broke the reading of a Snake record, or of a
-# seven-handed Diplomacy one, had twenty-three files sitting in the repository that would have
-# said so and nothing that asked them.
+# seven-handed Diplomacy one, had every other file in the folder to say so and nothing that asked.
 #
-# A record's file name says which game it is: <stamp>-<game>-<n>p-seed<seed>.log, and the oldest
-# ones have no game in the name at all, from before the program held more than one. Those are
-# Turncoats, which is what the program opens with no game named.
+# A record's file name says which game it is: <stamp>-<game>-<n>p-seed<seed>.log. A name without
+# a game in it is one the house will never offer, and is refused here too rather than guessed at.
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
 
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
+. (Join-Path $PSScriptRoot "Driving.ps1")
 
 # The stamp is yyyy-MM-dd-HHmmss, which is four parts; anything after that and before the seats is
 # the game's name, and a game's name may have dashes in it too.
@@ -33,6 +28,11 @@ $records = @(Get-ChildItem (Join-Path $root "logs") -Filter *.log | Sort-Object 
 if ($Only) { $records = @($records | Where-Object { $_.Name -like "*$Only*" }) }
 
 if (-not $records) { throw "no records found in logs/$(if ($Only) { " matching '$Only'" })." }
+
+# Built once here, so that --no-build below has something to run on a clean clone rather than
+# failing every record with the same line from the SDK.
+dotnet build (Join-Path $root "Proto.fsproj") | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "the program would not build" }
 
 "Taking up $($records.Count) records..."
 
@@ -49,9 +49,9 @@ foreach ($record in $records) {
     # every line in an error record and takes the script down with it.
     $out = Join-Path ([IO.Path]::GetTempPath()) "proto-record-$PID"
 
-    $arguments = @("run", "--no-build", "--")
-    if ($game) { $arguments += $game }
-    $arguments += @("replay", $path)
+    if (-not $game) { Report $record.Name $false "no game in the name"; continue }
+
+    $arguments = @("run", "--no-build", "--", $game, "replay", $path)
 
     $p = Start-Process -PassThru -NoNewWindow -Wait -WorkingDirectory $root -FilePath "dotnet" `
         -ArgumentList $arguments -RedirectStandardInput $nothing `
@@ -60,19 +60,10 @@ foreach ($record in $records) {
     $said = (Get-Content "$out.out", "$out.err" -ErrorAction SilentlyContinue) -join "`n"
     Remove-Item "$out.out", "$out.err" -ErrorAction SilentlyContinue
 
-    $named = $record.Name
-    if (-not $game) { $named += "  (no game in the name, so Turncoats)" }
-
-    Report $named ($p.ExitCode -eq 0 -and $said -match "Took up") (
+    Report $record.Name ($p.ExitCode -eq 0 -and $said -match "Took up") (
         ($said -split "`n" | Where-Object { $_.Trim() } | Select-Object -First 1))
 }
 
 Remove-Item $nothing -ErrorAction SilentlyContinue
 
-""
-if ($failed) {
-    $lost = if ($failed -eq 1) { "1 record" } else { "$failed records" }
-    "$lost would not be taken up"
-    exit 1
-}
-else { "all checks passed"; exit 0 }
+Finish "record"

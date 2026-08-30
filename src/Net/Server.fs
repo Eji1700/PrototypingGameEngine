@@ -19,7 +19,7 @@ open Prototyping.Table
 
 module Wire =
 
-    let deliver (clients: IHubClients<IClientProxy>) (pages: Browser.Pages) posts =
+    let deliver (clients: IHubClients<IClientProxy>) (pages: Pages) posts =
         posts
         |> List.map (fun post ->
             if Browser.isPage post.To then
@@ -30,19 +30,19 @@ module Wire =
             let console = clients.Client post.To
 
             match post.Say with
-            | Seated(seat, token) -> console.SendAsync(Protocol.Call.Seated, box seat, box token)
-            | Screen text -> console.SendAsync(Protocol.Call.Screen, box text)
-            | Told text -> console.SendAsync(Protocol.Call.Told, box text)
-            | TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why)
-            | GotUp said -> console.SendAsync(Protocol.Call.GotUp, box said)
-            | Nudged -> console.SendAsync Protocol.Call.Nudged
-            | Rang sound -> console.SendAsync(Protocol.Call.Rang, box (Sound.word sound)))
+            | ToPlayer.Seated(seat, token) -> console.SendAsync(Protocol.Call.Seated, box seat, box token)
+            | ToPlayer.Screen text -> console.SendAsync(Protocol.Call.Screen, box text)
+            | ToPlayer.Told text -> console.SendAsync(Protocol.Call.Told, box text)
+            | ToPlayer.TurnedAway why -> console.SendAsync(Protocol.Call.TurnedAway, box why)
+            | ToPlayer.GotUp said -> console.SendAsync(Protocol.Call.GotUp, box said)
+            | ToPlayer.Nudged -> console.SendAsync Protocol.Call.Nudged
+            | ToPlayer.Rang sound -> console.SendAsync(Protocol.Call.Rang, box (Sound.word sound)))
         |> Task.WhenAll
 
 type Finding =
     abstract At: HttpContext -> Table option
 
-type TableHub(finding: Finding, pages: Browser.Pages) =
+type TableHub(finding: Finding, pages: Pages) =
     inherit Hub()
 
     let deliver (clients: IHubCallerClients) posts = Wire.deliver clients pages posts
@@ -65,7 +65,7 @@ type TableHub(finding: Finding, pages: Browser.Pages) =
 
         let resuming = if String.IsNullOrWhiteSpace token then None else Some token
 
-        table.Sits(this.Context.ConnectionId, Guid.NewGuid().ToString "N", resuming, AtATerminal, view, palette)
+        Table.sits table this.Context.ConnectionId resuming AtATerminal view palette
         |> deliver this.Clients
 
     member this.Say(line: string) =
@@ -80,49 +80,40 @@ type TableHub(finding: Finding, pages: Browser.Pages) =
 
 module Server =
 
-    let private reachableAt reach =
+    // Every address this machine answers to on its network, for the lines that say where a table
+    // is. Nothing here is worth failing for: a machine with no name of its own, or no network at
+    // all, still opens a table, and the localhost line said beneath these is always there.
+    let private network () =
         try
             Dns.GetHostAddresses(Dns.GetHostName())
             |> Array.filter (fun address -> address.AddressFamily = AddressFamily.InterNetwork)
-            |> Array.map (fun address -> Reach.at reach (string address), "on this network")
+            |> Array.map string
             |> List.ofArray
         with _ ->
             []
 
-    let private addresses reach =
-        (Reach.told reach
-         |> Option.map (fun given -> given, "what you told them to use")
-         |> Option.toList)
-        @ reachableAt reach
-        @ [ Reach.at reach "localhost", "for anyone on this machine" ]
-
-    let private takeSeatAt game reach table where =
-        [ ""
-          $"    {Launch.written game (Launch.Join(where, None, Reach.word reach, table))}"
-          ""
-          $"  or open {Reach.opened reach where} in a browser."
-          "" ]
-
     let private waiting (options: HubOptions) =
-        options.KeepAliveInterval <- TimeSpan.FromSeconds 15.0
-        options.ClientTimeoutInterval <- TimeSpan.FromSeconds 60.0
-        options.HandshakeTimeout <- TimeSpan.FromSeconds 30.0
+        options.KeepAliveInterval <- Protocol.KeepAlive
+        options.ClientTimeoutInterval <- Protocol.GivenUp
+        options.HandshakeTimeout <- Protocol.Handshake
         options.MaximumReceiveMessageSize <- Nullable 32768L
 
+    // Any address, wrapped or in the clear: a table that answered on IPv4 alone in the clear and
+    // on both with a certificate was two tables to find.
     let private listening (builder: WebApplicationBuilder) reach =
-        match reach.Wrapping with
-        | Kept(certificate, password) ->
-            builder.WebHost.ConfigureKestrel(fun options ->
+        builder.WebHost.ConfigureKestrel(fun options ->
+            match reach.Wrapping with
+            | Kept(certificate, password) ->
                 options.ListenAnyIP(
                     reach.Port,
                     fun listen ->
                         match password with
                         | Some password -> listen.UseHttps(certificate, password) |> ignore
                         | None -> listen.UseHttps certificate |> ignore
-                ))
-            |> ignore
-        | InTheClear
-        | Ahead -> builder.WebHost.UseUrls $"http://0.0.0.0:{reach.Port}" |> ignore
+                )
+            | InTheClear
+            | Ahead -> options.ListenAnyIP reach.Port)
+        |> ignore
 
     let private bucket many (dripping: TimeSpan) =
         TokenBucketRateLimiterOptions(
@@ -133,7 +124,11 @@ module Server =
             AutoReplenishment = true
         )
 
-    let private guarded (app: WebApplication) (drawn: Browser.Drawn) reach =
+    // How long a wrong answer costs: the bucket for one address gives a token back this often, and
+    // it is what the door tells a stranger to wait.
+    let private dripping = TimeSpan.FromSeconds 5.0
+
+    let private guarded (app: WebApplication) (drawn: Browser.Drawn) (place: string) reach =
         match reach.Wrapping with
         | InTheClear
         | Kept _ -> ()
@@ -168,7 +163,7 @@ module Server =
                         | null -> "somewhere"
                         | address -> string address
 
-                    RateLimitPartition.GetTokenBucketLimiter(whoever, (fun _ -> bucket 10 (TimeSpan.FromSeconds 5.0))))
+                    RateLimitPartition.GetTokenBucketLimiter(whoever, (fun _ -> bucket 10 dripping)))
 
             let door = new TokenBucketRateLimiter(bucket 60 (TimeSpan.FromSeconds 1.0))
 
@@ -184,202 +179,112 @@ module Server =
                         use all = door.AttemptAcquire()
                         not (mine.IsAcquired && all.IsAcquired)
 
-                    if waiting then Browser.tooOften ctx else Browser.turned drawn ctx)
+                    if waiting then Browser.tooOften dripping ctx else Browser.turned drawn place ctx)
             )
             |> ignore
 
-    let private serving (app: WebApplication) (drawn: Browser.Drawn) sitting pages =
+    /// The routes every table serves a page by: the script, the stream, a line said and a fault
+    /// reported. Which table a page is at is the caller's to say, and a page at none is sent to
+    /// the front.
+    let private serving
+        (app: WebApplication)
+        (drawn: Browser.Drawn)
+        (pages: Pages)
+        (sitting: HttpContext -> Browser.Sitting option)
+        =
+        let at doing (ctx: HttpContext) : Task =
+            match sitting ctx with
+            | Some sitting -> doing sitting ctx
+            | None ->
+                ctx.Response.Redirect "/"
+                Task.CompletedTask
+
         app.MapGet(Page.Client, RequestDelegate(fun ctx -> Browser.script ctx))
         |> ignore
 
-        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page drawn ctx)) |> ignore
-
-        app.MapGet(Page.Stream, RequestDelegate(fun ctx -> Browser.stream drawn sitting pages ctx :> Task))
+        app.MapGet(Page.Stream, RequestDelegate(at (fun sitting ctx -> Browser.stream drawn sitting pages ctx :> Task)))
         |> ignore
 
-        app.MapPost(Page.Say, RequestDelegate(fun ctx -> Browser.say sitting ctx :> Task))
+        app.MapPost(Page.Say, RequestDelegate(at (fun sitting ctx -> Browser.say sitting ctx :> Task)))
         |> ignore
 
         app.MapPost(Page.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
         |> ignore
 
-    /// The clock a real-time game runs on. A one-shot timer that sets itself again from what the last
-    /// beat asked for, rather than a repeating one - so a game that changes speed is followed, and two
-    /// beats can never overlap however long one of them takes. A beat that throws waits a second and
-    /// carries on rather than stopping the table.
-    let private keeping (first: TimeSpan) (beats: unit -> Post list * TimeSpan) deliver =
-        let held = ref None
-
-        let due (wait: TimeSpan) =
-            match held.Value with
-            | Some(timer: Threading.Timer) -> timer.Change(wait, Threading.Timeout.InfiniteTimeSpan) |> ignore
-            | None -> ()
-
-        let beat _ =
-            let wait =
-                try
-                    let posts, wait = beats ()
-                    deliver posts
-                    wait
-                with _ ->
-                    TimeSpan.FromSeconds 1.0
-
-            due wait
-
-        let timer =
-            new Threading.Timer(
-                Threading.TimerCallback beat,
-                null,
-                Threading.Timeout.InfiniteTimeSpan,
-                Threading.Timeout.InfiniteTimeSpan
-            )
-
-        held.Value <- Some timer
-        due first
-        timer
+    /// The clock a real-time game runs on: set again from what the last beat asked for, so a game
+    /// that changes speed is followed. A beat that throws is said, and the table tries again in a
+    /// second rather than stopping.
+    let private keeping (first: TimeSpan) (beats: unit -> Post list * TimeSpan option) deliver =
+        Clock.ticking
+            first
+            (fun () ->
+                let posts, wait = beats ()
+                deliver posts
+                wait |> Option.defaultValue Threading.Timeout.InfiniteTimeSpan)
+            (fun problem ->
+                eprintfn "A beat went wrong at this table, which waits a second and tries again: %s" problem.Message
+                TimeSpan.FromSeconds 1.0)
 
     let host game reach model sitters keep playing =
         let builder = WebApplication.CreateBuilder()
 
-        let rivals =
-            game.Seating (Model.seed model) (Seating.machines sitters) (Model.state model)
-
-        let held = Held(Lobby.opened game model rivals, keep)
-        let pages = Browser.Pages()
+        let held = Held(Lobby.openedFor game model sitters, keep)
+        let table = held :> Table
+        let pages = Pages()
 
         builder.Logging.ClearProviders() |> ignore
         builder.Services.AddSignalR(waiting) |> ignore
 
         builder.Services.AddSingleton<Finding>(
             { new Finding with
-                member _.At _ = Some(held :> Table) }
+                member _.At _ = Some table }
         )
         |> ignore
 
-        builder.Services.AddSingleton<Browser.Pages> pages |> ignore
+        builder.Services.AddSingleton<Pages> pages |> ignore
         listening builder reach
 
         let app = builder.Build()
+        let drawn = Browser.drawn game
 
-        let drawn: Browser.Drawn =
-            { Shell = game.Page
-              Slots = game.Slots
-              Standard = Playable.standard game }
-
-        guarded app drawn reach
+        guarded app drawn "table" reach
         app.MapHub<TableHub>(Protocol.Path) |> ignore
 
         let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
 
         let sitting: Browser.Sitting =
-            { Watching =
-                fun console view palette ->
-                    (held :> Table).Sits(console, Guid.NewGuid().ToString "N", None, InABrowser, view, palette)
+            { Watching = fun console view palette -> Table.sits table console None InABrowser view palette
               Said = fun console line -> held.Change(Lobby.said console line)
               Gone = fun console -> held.Change(Lobby.left console)
               Deliver = fun posts -> Wire.deliver hub.Clients pages posts |> ignore }
 
-        serving app drawn sitting pages
+        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page drawn ctx)) |> ignore
+        serving app drawn pages (fun _ -> Some sitting)
 
         let clock =
             game.Pulse
             |> Option.map (fun pulse ->
-                keeping (pulse.Every(Model.state model)) (held :> Table).Beats (fun posts ->
+                keeping (pulse.Every(Model.state model)) table.Beats (fun posts ->
                     Wire.deliver hub.Clients pages posts |> ignore))
 
-        let seats = game.Rules.Seats(Model.state model)
-        let mine, theirs = Seating.awaited sitters
+        Announce.hosted game reach sitters (Option.isSome playing) (network ())
+        |> List.iter (printfn "%s")
 
-        printfn ""
-        printfn "=== A table for %d, waiting to be joined ===" seats
-        printfn ""
-        Seating.roster game.Skills sitters |> List.iter (printfn "%s")
-        printfn ""
-
-        match Reach.word reach with
-        | Some code ->
-            printfn "  The word at this table's door:  %s" code
-            printfn ""
-        | None ->
-            printfn "  No word at the door: whoever can reach the address below may sit down."
-            printfn ""
-
-        let claimed = if Option.isSome playing then 1 else 0
-
-        if mine > 0 then
-            match claimed, mine with
-            | 1, 1 ->
-                printfn "  One of these seats is yours, and this console is about to take it."
-                printfn ""
-            | 1, mine ->
-                printfn "  %d of these seats are yours. This console takes one; the others are taken" mine
-                printfn "  from another terminal on this machine, by running:"
-
-                takeSeatAt game reach None (Reach.at reach "localhost")
-                |> List.iter (printfn "%s")
-            | _, 1 ->
-                printfn "  One of these seats is yours, at this machine. Take it by running:"
-
-                takeSeatAt game reach None (Reach.at reach "localhost")
-                |> List.iter (printfn "%s")
-            | _, mine ->
-                printfn "  %d of these seats are yours, at this machine. Take one by running:" mine
-
-                takeSeatAt game reach None (Reach.at reach "localhost")
-                |> List.iter (printfn "%s")
-
-        if theirs > 0 then
-            if theirs = 1 then
-                printfn "  One is somebody else's, from their own machine. They run:"
-            else
-                printfn "  %d are somebody else's, from their own machines. Each of them runs:" theirs
-
-            takeSeatAt game reach None (Reach.told reach |> Option.defaultValue "<address>")
-            |> List.iter (printfn "%s")
-
-            printfn "  Both sit down at this one table, which is at:"
-            printfn ""
-
-            addresses reach
-            |> List.iter (fun (address, who) -> printfn "    %-44s (%s)" address who)
-
-            printfn ""
-
-            match reach.Wrapping, Reach.told reach with
-            | InTheClear, Some _ ->
-                printfn "  This table speaks http, so anything between it and a player can read the"
-                printfn "  boards going past - and a board is drawn for one seat and nobody else."
-                printfn "  Over anything further than a network you trust, put it behind a tunnel or"
-                printfn "  a proxy that holds a certificate and say --behind, or hold one here with"
-                printfn "  --cert."
-                printfn ""
-            | (InTheClear | Kept _ | Ahead), _ -> ()
-
-        match mine + theirs - claimed with
-        | 1 -> printfn "  The game begins once that seat is taken. Ctrl+C closes the table."
-        | waited -> printfn "  The game begins once all %d open seats are taken. Ctrl+C closes the table." waited
-
-        printfn ""
-
-        let waited =
-            match playing with
-            | None ->
-                app.Run()
-                0
-            | Some playing ->
-                app.Start()
-                playing ()
-                app.WaitForShutdown()
-                0
+        match playing with
+        | None -> app.Run()
+        | Some playing ->
+            app.Start()
+            playing ()
+            app.WaitForShutdown()
 
         clock |> Option.iter (fun timer -> timer.Dispose())
-        waited
+        0
 
     let serve reach standing solo fresh keep =
         let builder = WebApplication.CreateBuilder()
 
         let aside = Aside(solo, fresh, keep)
-        let pages = Browser.Pages()
+        let pages = Pages()
 
         builder.Logging.ClearProviders() |> ignore
         listening builder reach
@@ -388,12 +293,11 @@ module Server =
 
         let app = builder.Build()
 
-        let drawn: Browser.Drawn =
-            { Shell = game.Page
-              Slots = game.Slots
-              Standard = standing }
+        let drawn =
+            { Browser.drawn game with
+                Standard = standing }
 
-        guarded app drawn reach
+        guarded app drawn "table" reach
 
         let sitting: Browser.Sitting =
             { Watching = fun console view palette -> aside.Watches(console, InABrowser, view, palette)
@@ -401,46 +305,26 @@ module Server =
               Gone = fun console -> aside.Change(Solo.gone console)
               Deliver = fun posts -> posts |> List.iter (Browser.send pages) }
 
-        serving app drawn sitting pages
+        app.MapGet("/", RequestDelegate(fun ctx -> Browser.page drawn ctx)) |> ignore
+        serving app drawn pages (fun _ -> Some sitting)
 
         let clock =
             game.Pulse
             |> Option.map (fun pulse ->
                 keeping (pulse.Every(Model.state (Solo.model solo))) aside.Beats (List.iter (Browser.send pages)))
 
-        let seats = game.Rules.Seats(Model.state (Solo.model solo))
-
-        printfn ""
-        printfn "=== A game for %d, to play in a browser ===" seats
-        printfn ""
-        printfn "  Open:"
-        printfn ""
-        printfn "    %s" (Reach.opened reach (Reach.at reach "localhost"))
-        printfn ""
-        printfn "  One seat, and it changes hands with the turn - the same as playing at"
-        printfn "  this keyboard. Ctrl+C puts it down."
-        printfn ""
-
-        match Reach.word reach with
-        | Some code ->
-            printfn "  The word at the door is in that address, and again here: %s" code
-            printfn ""
-        | None -> ()
-
-        printfn "  Others can watch and play too, at:"
-        printfn ""
-
-        addresses reach
-        |> List.iter (fun (address, who) -> printfn "    %-44s (%s)" (Reach.opened reach address) who)
-
-        printfn ""
+        Announce.served game reach (game.Rules.Seats(Model.state (Solo.model solo))) (network ())
+        |> List.iter (printfn "%s")
 
         app.Run()
         clock |> Option.iter (fun timer -> timer.Dispose())
         0
 
 
-    let private tableAt (id: string) = $"/at/{id}"
+    // The route value naming a table. Not `id`, which is also the name SignalR gives its own query
+    // value on the same address - and this route has bitten once already (DESIGN.md).
+    [<Literal>]
+    let private TableRoute = "table"
 
     let house (hosting: Hosting) reach filling =
         let builder = WebApplication.CreateBuilder()
@@ -450,20 +334,22 @@ module Server =
               Slots = hosting.Slots
               Standard = hosting.Standard }
 
+        // Spelt out because `House` on its own is the command-line case of that name, which
+        // `Launch` leaves unqualified.
         let home =
             Prototyping.Net.House(hosting, (fun () -> DateTime.Now), Reach.minted, Housekeeping.ordinary)
 
-        let pages = Browser.Pages()
+        let pages = Pages()
 
         builder.Logging.ClearProviders() |> ignore
         builder.Services.AddSignalR(waiting) |> ignore
-        builder.Services.AddSingleton<Browser.Pages> pages |> ignore
+        builder.Services.AddSingleton<Pages> pages |> ignore
 
         builder.Services.AddSingleton<Finding>(
             { new Finding with
                 member _.At ctx =
-                    match ctx.Request.RouteValues.TryGetValue "id" with
-                    | true, id -> home.At(string id) |> Option.map (fun opened -> opened.Table)
+                    match ctx.Request.RouteValues.TryGetValue TableRoute with
+                    | true, table -> home.At(string table) |> Option.map (fun opened -> opened.Table)
                     | _ -> None }
         )
         |> ignore
@@ -471,19 +357,14 @@ module Server =
         listening builder reach
 
         let app = builder.Build()
-        guarded app drawn reach
+        guarded app drawn "house" reach
 
-        app.MapHub<TableHub>(Protocol.Path + "/{id}") |> ignore
-
-        let theirs (ctx: HttpContext) =
-            Browser.tableOf ctx |> Option.bind home.At
+        app.MapHub<TableHub>(Protocol.Path + "/{" + TableRoute + "}") |> ignore
 
         let hub = app.Services.GetRequiredService<IHubContext<TableHub>>()
 
         let sitting (opened: Opened) : Browser.Sitting =
-            { Watching =
-                fun console view palette ->
-                    opened.Table.Sits(console, Guid.NewGuid().ToString "N", None, InABrowser, view, palette)
+            { Watching = fun console view palette -> Table.sits opened.Table console None InABrowser view palette
               Said = fun console line -> opened.Table.Said(console, line)
               Gone = fun console -> opened.Table.Left console
               Deliver = fun posts -> Wire.deliver hub.Clients pages posts |> ignore }
@@ -492,21 +373,13 @@ module Server =
             ctx.Response.Redirect "/"
             Task.CompletedTask
 
-        let atTheirTable (ctx: HttpContext) doing =
-            match theirs ctx with
-            | Some opened -> doing opened
-            | None -> elsewhere ctx
-
-        app.MapGet(Page.Client, RequestDelegate(fun ctx -> Browser.script ctx))
-        |> ignore
-
         app.MapGet(
             "/",
             RequestDelegate(fun ctx ->
                 let rows =
                     home.Listed
                     |> List.map (fun (opened, standing) ->
-                        { Page.Where = tableAt opened.Id
+                        { Page.Where = Browser.tableAt opened.Id
                           Page.Name = opened.Id
                           Page.Stage =
                             match standing.Stage with
@@ -519,103 +392,84 @@ module Server =
                             standing.Stage = Lobby.Filling
                             && standing.Sat < standing.Places - standing.Machines })
 
-                let opening =
-                    [ for players in hosting.Fewest .. hosting.Most -> players, $"/open?players={players}" ]
-
                 ctx.Response.ContentType <- "text/html; charset=utf-8"
-                ctx.Response.WriteAsync(Page.house hosting.Shell hosting.Standard opening rows))
+                ctx.Response.WriteAsync(Page.house hosting.Shell hosting.Standard [ hosting.Fewest .. hosting.Most ] rows))
+        )
+        |> ignore
+
+        // A table is dealt for a POST and nothing else: a link prefetched or previewed is a GET,
+        // and every one of those used to open a table that then sat on the list for an hour. How
+        // many are held to what the game takes before anything is dealt, and a refusal is said.
+        app.MapPost(
+            Page.Open,
+            RequestDelegate(fun ctx ->
+                task {
+                    let! asked =
+                        task {
+                            if ctx.Request.HasFormContentType then
+                                let! form = ctx.Request.ReadFormAsync()
+
+                                return
+                                    (match form.TryGetValue "players" with
+                                     | true, given when given.Count > 0 -> string given[0]
+                                     | _ -> "")
+                            else
+                                return ""
+                        }
+
+                    let dealt =
+                        Commands.tryPlayerCount (hosting.Fewest, hosting.Most) asked
+                        |> Result.bind (fun players -> home.Opens(Seating.hosting players, None, None))
+
+                    match dealt with
+                    | Ok opened ->
+                        Browser.sitAt opened.Id ctx
+                        ctx.Response.Redirect(Browser.tableAt opened.Id)
+                    | Error why -> do! Browser.refused why ctx
+                }
+                :> Task)
         )
         |> ignore
 
         app.MapGet(
-            "/open",
+            Browser.tableAt ("{" + TableRoute + "}"),
             RequestDelegate(fun ctx ->
-                let players =
-                    match ctx.Request.Query.TryGetValue "players" with
-                    | true, given when given.Count > 0 ->
-                        match Int32.TryParse(string given[0]) with
-                        | true, many -> many
-                        | _ -> hosting.Fewest
-                    | _ -> hosting.Fewest
-
-                match home.Opens(Seating.here players, None, None) with
-                | Ok opened ->
-                    Browser.sitAt opened.Id ctx
-                    ctx.Response.Redirect(tableAt opened.Id)
-                    Task.CompletedTask
-                | Error _ -> elsewhere ctx)
-        )
-        |> ignore
-
-        app.MapGet(
-            tableAt "{id}",
-            RequestDelegate(fun ctx ->
-                match ctx.Request.RouteValues.TryGetValue "id" with
-                | true, id when (home.At(string id)).IsSome ->
-                    Browser.sitAt (string id) ctx
+                match ctx.Request.RouteValues.TryGetValue TableRoute with
+                | true, table when (home.At(string table)).IsSome ->
+                    Browser.sitAt (string table) ctx
                     Browser.page drawn ctx
                 | _ -> elsewhere ctx)
         )
         |> ignore
 
-        app.MapGet(
-            Page.Stream,
-            RequestDelegate(fun ctx -> atTheirTable ctx (fun opened -> Browser.stream drawn (sitting opened) pages ctx :> Task))
-        )
-        |> ignore
+        serving app drawn pages (fun ctx -> Browser.tableOf ctx |> Option.bind home.At |> Option.map sitting)
 
-        app.MapPost(
-            Page.Say,
-            RequestDelegate(fun ctx -> atTheirTable ctx (fun opened -> Browser.say (sitting opened) ctx :> Task))
-        )
-        |> ignore
-
-        app.MapPost(Page.Amiss, RequestDelegate(fun ctx -> Browser.amiss ctx :> Task))
-        |> ignore
+        Announce.housed hosting reach (network ()) |> List.iter (printfn "%s")
 
         if filling then
-            let found =
+            let taken =
                 Transcript.saved ()
                 |> List.filter (fun record -> record.Game = Some hosting.Name)
-                |> List.choose (fun record -> home.Resumes record.Path |> Result.toOption)
+                |> List.filter (fun record ->
+                    match home.Resumes record.Path with
+                    | Ok _ -> true
+                    | Error why ->
+                        eprintfn "  Could not take up %s: %s" (IO.Path.GetFileName record.Path) why
+                        false)
 
-            printfn "  Took up %s from logs/." (Counting.several "game" "games" (List.length found))
+            printfn "  Took up %s from logs/." (Counting.orNone "no games" "game" "games" (List.length taken))
+            printfn ""
 
-        home.Sweeping(
-            TimeSpan.FromMinutes 5.0,
-            (fun gone -> printfn "  Swept %s nobody was at." (Counting.several "table" "tables" (List.length gone)))
-        )
-        |> ignore
+        use _ =
+            home.Sweeping(
+                TimeSpan.FromMinutes 5.0,
+                (fun gone -> printfn "  Swept %s nobody was at." (Counting.several "table" "tables" (List.length gone)))
+            )
 
         // The house beats faster than any game does; each table is asked only when its own next beat
         // has come round, which `House.Beat` keeps track of.
-        home.Beating(TimeSpan.FromMilliseconds 40.0, (fun posts -> Wire.deliver hub.Clients pages posts |> ignore))
-        |> ignore
-
-        printfn ""
-        printfn "=== A house of %s ===" hosting.Title
-        printfn ""
-        printfn "  Open in a browser:"
-        printfn ""
-
-        for where, who in addresses reach do
-            printfn "    %-44s %s" (Reach.opened reach where) who
-
-        printfn ""
-        printfn "  Whoever opens a table there reads its address out to whoever is playing."
-        printfn ""
-        printfn "  A player at a terminal joins one by name, which the list on that page shows:"
-        printfn ""
-
-        printfn
-            "    %s"
-            (Launch.writtenFor hosting.Name (Launch.Join(Reach.at reach "localhost", None, Reach.word reach, Some "<table>")))
-
-        match Reach.word reach with
-        | Some word -> printfn "  The word at the door is %s." word
-        | None -> printfn "  There is no word at the door."
-
-        printfn ""
+        use _ =
+            home.Beating(TimeSpan.FromMilliseconds 40.0, (fun posts -> Wire.deliver hub.Clients pages posts |> ignore))
 
         app.Run()
         0

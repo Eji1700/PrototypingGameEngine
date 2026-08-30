@@ -1,7 +1,6 @@
 namespace Prototyping.Diplomacy
 
 open Prototyping.Table
-open Prototyping.Diplomacy
 
 module Ink =
 

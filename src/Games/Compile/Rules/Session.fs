@@ -134,7 +134,7 @@ module Session =
             |> List.fold
                 (fun (field, rng) seat ->
                     let side = Field.side seat field
-                    let deck, rng = Deck.shuffled (Deck.ofProtocols side.Order) rng
+                    let deck, rng = Rng.shuffle (Deck.ofProtocols side.Order) rng
                     let side, rng = Side.drawing Deck.HandSize { side with Deck = deck } rng
                     Field.withSide seat side field, rng)
                 (session.Field, session.Rng)

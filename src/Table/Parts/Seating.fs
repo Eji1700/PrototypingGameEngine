@@ -42,6 +42,19 @@ module Seating =
         | Some sitter -> Ok sitter
         | None -> Error $"'{word}' is not somebody to seat. There is {names skills}."
 
+    /// A machine by the name of its skill, for a line that says who plays a seat. The refusal lists
+    /// the machines rather than every sitter, since 'you' and 'joins' are not ways for it to play.
+    let machineByName skills (word: string) =
+        let machines = skills |> List.map fst
+        let offered = String.concat ", " machines
+
+        match machines with
+        | [] -> Error "This game has no machine to play it."
+        | _ ->
+            match machines |> List.tryFind (fun name -> name = word.ToLowerInvariant()) with
+            | Some name -> Ok name
+            | None -> Error $"'{word}' is not a way for the machine to play. There is {offered}."
+
     let line sitters =
         sitters |> List.map says |> String.concat " "
 
@@ -53,9 +66,7 @@ module Seating =
             |> List.tryFindIndex (fun other -> says other = says sitter)
             |> Option.defaultValue 0
 
-        let count = List.length all
-
-        all[((at + step) % count + count) % count]
+        all[Keys.wrapped (List.length all) at step]
 
     let seated at sitter sitters =
         sitters |> List.mapi (fun seat was -> if seat = at then sitter else was)
@@ -109,8 +120,5 @@ module Seating =
 
         sitters
         |> Result.bind (fun sitters ->
-            let count = List.length sitters
-
-            if count >= fewest && count <= most then Ok sitters
-            elif fewest = most then Error $"That is a table of {count}. The game takes {fewest}."
-            else Error $"That is a table of {count}. The game takes {fewest} to {most}.")
+            Commands.tryPlayers (fewest, most) (List.length sitters)
+            |> Result.map (fun _ -> sitters))

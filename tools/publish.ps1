@@ -14,11 +14,6 @@ $failed = 0
 
 . (Join-Path $PSScriptRoot "Driving.ps1")
 
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
-
 if (-not $Runtime) {
     $Runtime = (dotnet --info | Select-String -Pattern "^\s*RID:\s*(\S+)" | Select-Object -First 1).Matches[0].Groups[1].Value
 }
@@ -31,24 +26,22 @@ $building = @(
 ) | Where-Object { $Shape -eq "both" -or $_.Name -eq $Shape }
 
 $programs = @(
-    @{ Name = "Proto"; Project = "Proto.fsproj"; Words = @{ Serve = "tictactoe serve"; Host = "turncoats host"; Join = "turncoats join" }; Draws = "\.grid" }
-    @{ Name = "Turncoats"; Project = "src/Games/Turncoats/Turncoats.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.map" }
-    @{ Name = "TicTacToe"; Project = "src/Games/TicTacToe/TicTacToe.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.grid" }
-    @{ Name = "Diplomacy"; Project = "src/Games/Diplomacy/Diplomacy.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
-    @{ Name = "Compile"; Project = "src/Games/Compile/Compile.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile" }
-    @{ Name = "Life"; Project = "src/Games/Life/Life.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15" }
-    @{ Name = "Snake"; Project = "src/Games/Snake/Snake.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15" }
-    @{ Name = "Cascade"; Project = "src/Games/Cascade/Cascade.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.speck" }
-    @{ Name = "Warband"; Project = "src/Games/Warband/Warband.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "--cell: 3\.6rem" }
+    @{ Name = "Proto"; Project = "Proto.fsproj"; Words = @{ Serve = "tictactoe serve"; Host = "turncoats host"; Join = "turncoats join" }; Draws = "\.grid"; Seats = 2 }
+    @{ Name = "Turncoats"; Project = "src/Games/Turncoats/Turncoats.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.map"; Seats = 2 }
+    @{ Name = "TicTacToe"; Project = "src/Games/TicTacToe/TicTacToe.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.grid"; Seats = 2 }
+    @{ Name = "Diplomacy"; Project = "src/Games/Diplomacy/Diplomacy.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile"; Seats = 7 }
+    @{ Name = "Compile"; Project = "src/Games/Compile/Compile.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.tile"; Seats = 2 }
+    @{ Name = "Life"; Project = "src/Games/Life/Life.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15"; Seats = 1 }
+    @{ Name = "Snake"; Project = "src/Games/Snake/Snake.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "line-height: 1\.15"; Seats = 2 }
+    @{ Name = "Cascade"; Project = "src/Games/Cascade/Cascade.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "\.speck"; Seats = 1 }
+    @{ Name = "Warband"; Project = "src/Games/Warband/Warband.fsproj"; Words = @{ Serve = "serve"; Host = "host"; Join = "join" }; Draws = "--cell: 3\.6rem"; Seats = 2 }
 ) | Where-Object { $Program -eq "all" -or $_.Name -eq $Program }
-
-$seats = @{ Proto = 2; Turncoats = 2; TicTacToe = 2; Diplomacy = 7; Compile = 2; Life = 1; Snake = 2; Cascade = 1; Warband = 2 }
 
 
 function Test-Published($exe, $made) {
     $words = $made.Words
-    $many = $seats[$made.Name]
-    Stop-Tables
+    $many = $made.Seats
+    Stop-Tables @("Proto", $made.Name)
 
     $here = Split-Path -Parent $exe
 
@@ -72,7 +65,7 @@ function Test-Published($exe, $made) {
     }
     finally {
         Close-Console $served
-        Stop-Tables
+        Stop-Tables @("Proto", $made.Name)
     }
 
     $hosted = Start-Console $exe "$($words.Host) $many --port $Port --open" $here
@@ -89,7 +82,7 @@ function Test-Published($exe, $made) {
     finally {
         if ($joined) { Close-Console $joined }
         Close-Console $hosted
-        Stop-Tables
+        Stop-Tables @("Proto", $made.Name)
     }
 }
 
@@ -104,7 +97,7 @@ try {
             $loose = @(Get-ChildItem -Path $folder -File -ErrorAction SilentlyContinue)
 
             if ($loose.Count -gt 0) {
-                "  swept $($loose.Count) file(s) left in $($each.Name) by the layout before this one"
+                "  swept $(if ($loose.Count -eq 1) { "1 file" } else { "$($loose.Count) files" }) left in $($each.Name) by the layout before this one"
                 $loose | Remove-Item -Force
             }
         }
@@ -138,8 +131,7 @@ try {
         }
     }
 
-    ""
-    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    Finish "check"
 }
 finally {
     Stop-Tables

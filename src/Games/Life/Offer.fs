@@ -3,7 +3,6 @@ namespace Prototyping.Life
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Life
 
 module Offer =
 
@@ -30,48 +29,38 @@ module Offer =
         | System.ConsoleKey.P -> Some "run"
         | System.ConsoleKey.OemPeriod -> Some "step"
         | System.ConsoleKey.C -> Some "clear"
-        | System.ConsoleKey.OemPlus
-        | System.ConsoleKey.Add -> Some "faster"
-        | System.ConsoleKey.OemMinus
-        | System.ConsoleKey.Subtract -> Some "slower"
-        | _ -> None
-
-    let private asked = Counting.several "player" "players"
+        | _ -> Commands.winding key
 
     let private deal players seed =
         if players = Seats then
             Ok(World.dealt seed)
         else
-            Error $"{asked players}? Life is played by nobody - there is one seat at it, for whoever is watching."
+            Error $"{Commands.players players}? Life is played by nobody - there is one seat at it, for whoever is watching."
 
 
     let private faults =
-        [ if Grid.Width < 3 || Grid.Height < 3 then
-              yield $"a board {Grid.Width} by {Grid.Height}, small enough that joining the edges makes a cell its own neighbour"
+        [ if Torus.Width < 3 || Torus.Height < 3 then
+              yield $"a board {Torus.Width} by {Torus.Height}, small enough that joining the edges makes a cell its own neighbour"
 
-          if Grid.Width > String.length Grid.letters then
-              yield $"{Grid.Width} columns, where the letters they are named by run out at {String.length Grid.letters}"
-
-          if List.length Grid.all <> Grid.Width * Grid.Height then
-              yield $"{List.length Grid.all} squares on a board of {Grid.Width} by {Grid.Height}"
+          yield! Grid.faults Torus.grid
 
           if
-              Grid.all
-              |> List.exists (fun cell -> List.length (List.distinct (Grid.neighbours cell)) <> 8)
+              Torus.all
+              |> List.exists (fun cell -> List.length (List.distinct (Torus.neighbours cell)) <> 8)
           then
               yield "a cell with something other than eight neighbours"
 
-          if Grid.all |> List.exists (fun cell -> Grid.neighbours cell |> List.contains cell) then
+          if
+              Torus.all
+              |> List.exists (fun cell -> Torus.neighbours cell |> List.contains cell)
+          then
               yield "a cell that is its own neighbour"
 
           if
-              Grid.all
-              |> List.exists (fun cell -> Grid.neighbours cell |> List.exists (Grid.holds >> not))
+              Torus.all
+              |> List.exists (fun cell -> Torus.neighbours cell |> List.exists (Torus.holds >> not))
           then
               yield "a neighbour off the board, where joining the edges should have brought it back on"
-
-          if Grid.all |> List.exists (fun cell -> Grid.read (Grid.name cell) <> Some cell) then
-              yield "a cell whose name does not read back as the cell it was drawn on"
 
           if World.Density < 1 || World.Density > 99 then
               yield $"a deal filling {World.Density} squares in a hundred, which is not a soup" ]
@@ -126,13 +115,13 @@ module Offer =
                   // two of them to draw.
                   Frames = fun _ -> 0
 
-                  Pressed = pressed }
+                  Pressed = pressed
 
+                  // Every line typed at this board is a steer, so nobody is ever waited for.
+                  Free = fun _ -> true }
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Render.shell

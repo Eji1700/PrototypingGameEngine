@@ -16,21 +16,17 @@ let private stamping (game: Playable<_, _, _>) =
 let private Keyboard = "keyboard"
 
 let private errand game sitters doing =
-    let write model stamp announce =
-        if announce then
-            let path = Transcript.save game stamp sitters model.Journal
-            [ $"Record saved to {Path.GetRelativePath(Directory.GetCurrentDirectory(), path)}" ]
-        else
-            if not (Journal.isEmpty model.Journal) then
-                Transcript.save game stamp sitters model.Journal |> ignore
-
-            []
-
     match doing with
-    | Carrying -> []
-    | Keeping(model, stamp, announce) -> write model stamp announce
-    | Leaving(Some model, stamp) -> if Journal.isEmpty model.Journal then [] else write model stamp true
+    | Carrying
     | Leaving(None, _) -> []
+    | Keeping(model, stamp, true) -> [ Transcript.announced (Transcript.keep game stamp sitters model) ]
+    | Keeping(model, stamp, false) ->
+        Transcript.kept game stamp sitters model |> ignore
+        []
+    | Leaving(Some model, stamp) ->
+        Transcript.kept game stamp sitters model
+        |> Option.map Transcript.announced
+        |> Option.toList
 
 /// A terminal has one bell, so a batch of posts that a board rang three times over rings once -
 /// this is the only place that knows how many posts came out of a single move.
@@ -39,26 +35,26 @@ let private tell rings posts =
         posts
         |> List.exists (fun post ->
             match post.Say with
-            | Nudged -> true
-            | Rang sound -> Sound.worthABell sound
-            | Seated _
-            | Screen _
-            | Told _
-            | TurnedAway _
-            | GotUp _ -> false)
+            | ToPlayer.Nudged -> true
+            | ToPlayer.Rang sound -> Sound.worthABell sound
+            | ToPlayer.Seated _
+            | ToPlayer.Screen _
+            | ToPlayer.Told _
+            | ToPlayer.TurnedAway _
+            | ToPlayer.GotUp _ -> false)
 
     if rings && heard then printf "\a"
 
     posts
     |> List.choose (fun post ->
         match post.Say with
-        | Told text
-        | TurnedAway text
-        | GotUp text -> Some text
-        | Nudged
-        | Rang _
-        | Screen _
-        | Seated _ -> None)
+        | ToPlayer.Told text
+        | ToPlayer.TurnedAway text
+        | ToPlayer.GotUp text -> Some text
+        | ToPlayer.Nudged
+        | ToPlayer.Rang _
+        | ToPlayer.Screen _
+        | ToPlayer.Seated _ -> None)
 
 /// Playing a game of turns at this keyboard.
 ///
@@ -70,19 +66,22 @@ let private tell rings posts =
 /// `at` is where the mark had got to, carried across a move on purpose: every line rebuilds the
 /// screen from the state it left behind, and a mark that went back to the top each time would make
 /// walking one row through its choices impossible.
-let rec private loop rings sitters said at solo =
-    let show lines =
-        for line in lines do
-            printf "%s" (line + Environment.NewLine)
+let private show lines =
+    for line in lines do
+        printf "%s" (line + Environment.NewLine)
 
+/// A typed line folded in, with everything there is to say back: what the table answered, and where
+/// the record went if it was written. Both loops start from here.
+let private folded rings sitters line solo =
+    let next, posts, doing = Solo.said (stamping (Solo.game solo)) Keyboard line solo
+    next, tell rings posts @ errand (Solo.game solo) sitters doing, doing
+
+let rec private loop rings sitters said at solo =
     let heard at line =
-        let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
-        let answered = tell rings posts @ errand (Solo.game solo) sitters doing
+        let next, answered, doing = folded rings sitters line solo
 
         match doing with
-        | Leaving _ ->
-            show answered
-            Solo.model next
+        | Leaving _ -> show answered
         | Carrying
         | Keeping _ -> loop rings sitters answered at next
 
@@ -116,18 +115,14 @@ let rec private loop rings sitters said at solo =
 /// the loop it always was, and one that does gets its in-between pictures without any of them
 /// reaching the timeline or the record.
 let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
-    let show lines =
-        for line in lines do
-            printf "%s" (line + Environment.NewLine)
-
     // A game gets first refusal on every key but the two this loop cannot give up: Enter opens the
     // line prompt and Escape puts the game down, and a game that could take those could leave
     // somebody at a board with no way out. `h` holds as well as the space bar always does, so a
     // game that takes the space bar does not cost a player the one key that stops the clock.
-    let (|Typing|Holding|Restarting|Leaving'|Steering|Idle|) (key: ConsoleKeyInfo) =
+    let (|Typing|Holding|Restarting|PuttingDown|Steering|Idle|) (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> Typing
-        | ConsoleKey.Escape -> Leaving'
+        | ConsoleKey.Escape -> PuttingDown
         | _ ->
             match pulse.Pressed key with
             | Some line -> Steering line
@@ -184,22 +179,24 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
         // `drawn` is passed in rather than taken from above so the one caller that wipes the
         // terminal first can say so - an identical screen is not written again, which would leave
         // the player looking at the blank it was cleared to.
-        let heard holding drawn since due line solo =
-            let next, posts, doing = Solo.said (stamping (Solo.game solo) ()) Keyboard line solo
-            let answered = tell rings posts @ errand (Solo.game solo) sitters doing
+        // `timing` says when the next beat is due once the line has been folded in, and is asked
+        // about the game as it then stands: a line that dealt a fresh board runs at that board's
+        // pace, while a steer leaves the beat where it was.
+        let heard holding drawn timing line solo =
+            let next, answered, doing = folded rings sitters line solo
 
             // What the player asked for, running clock or not: the margins this loop imposes on a
             // moving board are never written back into their choice.
             let wanted = Solo.margins Keyboard next |> Option.defaultValue wanted
 
             match doing with
-            | Leaving _ ->
-                show answered
-                Solo.model next
+            | Leaving _ -> show answered
             | Carrying
-            | Keeping _ -> spin holding wanted drawn answered since due next
+            | Keeping _ ->
+                let since, due = timing next
+                spin holding wanted drawn answered since due next
 
-        let afresh () =
+        let afresh solo =
             let now = DateTime.UtcNow
             now, now + pulse.Every(Model.state (Solo.model solo))
 
@@ -217,26 +214,28 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
 
             spin holding wanted drawn (tell rings posts @ errand (Solo.game solo) sitters doing) since due next
         | Some key ->
+            let unmoved _ = since, due
+
             match key with
-            | Leaving' -> heard holding drawn since due "quit" solo
+            | PuttingDown -> heard holding drawn unmoved "quit" solo
+            // A board that is over has nothing to hold: the key would toggle a flag the footer
+            // never shows, and the next deal would come up held without anybody meaning it.
+            | Holding when over -> spin holding wanted drawn said since due solo
             | Holding ->
-                let since, due = afresh ()
+                let since, due = afresh solo
                 spin (not holding) wanted drawn said since due solo
-            | Restarting when still ->
-                let since, due = afresh ()
-                heard holding drawn since due "restart" solo
+            | Restarting when still -> heard holding drawn afresh "restart" solo
             | Restarting -> spin holding wanted drawn said since due solo
             | Typing ->
                 printf "> "
 
                 match Console.ReadLine() with
-                | null -> heard holding drawn since due "quit" solo
+                | null -> heard holding drawn unmoved "quit" solo
                 | line ->
                     Screens.cleared ()
-                    let since, due = afresh ()
-                    heard holding Screens.nothing since due line solo
+                    heard holding Screens.nothing afresh line solo
             | Steering _ when over -> spin holding wanted drawn said since due solo
-            | Steering line -> heard holding drawn since due line solo
+            | Steering line -> heard holding drawn unmoved line solo
             | Idle -> spin holding wanted drawn said since due solo
 
     if Screens.steering () then
@@ -254,8 +253,9 @@ let rec private racing rings sitters said (pulse: Pulse<_, _>) solo =
     else
         loop rings sitters said [] solo
 
-// Annotated because `Playable` and `View` both carry a field called `Rules`, and with the two of
-// them now in different assemblies it is the view's - a string - that a bare `game.Rules` finds.
+// Annotated because `Playable` and `View` both carry a field called `Rules`, and this file opens
+// the table's namespace after the engine's - so it is the view's, a string, that a bare
+// `game.Rules` would find.
 let private dealt (game: Playable<_, _, _>) players seed = Update.start game.Rules players seed
 
 let private takeUp game path =
@@ -265,21 +265,16 @@ let private takeUp game path =
         | None -> ""
 
     Transcript.takenUp elsewhere game path
-    |> Result.map (fun (model, sitters, stamp, moves) ->
-        printfn "Took up %s from %s." (Counting.several "move" "moves" moves) path
-        printfn "Take them back with 'undo', or read them with 'history'."
-        model, sitters, stamp)
+    |> Result.map (fun (taken: Transcript.TakenUp<_, _, _>) ->
+        printfn "Took up %s from %s." (Counting.several "move" "moves" taken.Moves) path
+        taken.Model, taken.Sitters, taken.Stamp)
 
 let private machines game sitters model =
     game.Seating (Model.seed model) (Seating.machines sitters) (Model.state model)
 
 let private serveFor game palette reach (model, sitters, stamp) =
     let keep model stamp =
-        if Journal.isEmpty model.Journal then
-            None
-        else
-            let path = Transcript.save game stamp sitters model.Journal
-            Some(Path.GetRelativePath(Directory.GetCurrentDirectory(), path))
+        Transcript.kept game stamp sitters model
 
     let solo, doing =
         Solo.opened game stamp model |> Solo.against (machines game sitters model)
@@ -303,8 +298,7 @@ let private hostFor game view rings reach (model, sitters, stamp) =
                 | _ -> ())
 
     let keep model =
-        if not (Journal.isEmpty model.Journal) then
-            Transcript.save game stamp sitters model.Journal |> ignore
+        Transcript.kept game stamp sitters model |> ignore
 
     Server.host game reach model sitters keep playing
 
@@ -344,10 +338,7 @@ let rec private settling settled at said =
         | Ok(Options.Opening Options.Audio) -> settling (listening settled [] "") at ""
         | Ok(Options.Opening Options.Video) -> settling (watching settled [] "") at ""
         | Ok(Options.Opening Options.Game) -> settling (playing settled [] "") at ""
-        | Ok step ->
-            match wayOut settled step (fun settled said -> settling settled at said) with
-            | Some again -> again
-            | None -> settling settled at ""
+        | Ok step -> wayOut settled step (fun settled said -> settling settled at said)
 
 and private listening settled at said =
     let view = settled.View
@@ -359,10 +350,7 @@ and private listening settled at said =
         | Error problem -> listening settled at problem
         | Ok Options.Done -> settled
         | Ok(Options.Ringing on) -> listening { settled with Rings = on } at ""
-        | Ok step ->
-            match wayOut settled step (fun settled said -> listening settled at said) with
-            | Some again -> again
-            | None -> listening settled at ""
+        | Ok step -> wayOut settled step (fun settled said -> listening settled at said)
 
 and private watching settled at said =
     let view = settled.View
@@ -387,10 +375,7 @@ and private watching settled at said =
             match Playable.byName AtATerminal view.Palette settled.Game name with
             | Ok chosen -> watching { settled with View = chosen } at ""
             | Error problem -> watching settled at problem
-        | Ok step ->
-            match wayOut settled step (fun settled said -> watching settled at said) with
-            | Some again -> again
-            | None -> watching settled at ""
+        | Ok step -> wayOut settled step (fun settled said -> watching settled at said)
 
 and private playing settled at said =
     let view = settled.View
@@ -402,27 +387,32 @@ and private playing settled at said =
         | Error problem -> playing settled at problem
         | Ok Options.Done -> settled
         | Ok(Options.Playing name) -> playing (Settled.playing name settled) at ""
-        | Ok step ->
-            match wayOut settled step (fun settled said -> playing settled at said) with
-            | Some again -> again
-            | None -> playing settled at ""
+        | Ok step -> wayOut settled step (fun settled said -> playing settled at said)
 
+/// The two answers every settings page has in common, and where the page goes on from them: `save`
+/// keeps all three pages at once, and anything else leaves the page where it was.
 and private wayOut settled step onwards =
     match step with
-    | Options.Same -> Some(onwards settled "")
     | Options.Keep ->
         let settings, _ = Settings.load ()
+
+        // A game with one way of being played has nothing to say under `plays`, and a line saying
+        // it anyway is noise to whoever reads the file by hand.
+        let chosen =
+            match settled.Ways with
+            | [ _ ] -> id
+            | ways -> Settings.playing (List.head ways).Name settled.Game.Name
 
         let kept =
             settings
             |> Settings.keeping settled.Game.Name settled.View.Name settled.View.Palette
             |> Settings.ringing settled.Rings
-            |> Settings.playing (List.head settled.Ways).Name settled.Game.Name
+            |> chosen
 
         match Settings.save kept with
-        | Ok path -> Some(onwards settled $"Kept in {path}. Every game opened from here on opens like this.")
-        | Error problem -> Some(onwards settled problem)
-    | _ -> None
+        | Ok path -> onwards settled $"Kept in {path}. Every game opened from here on opens like this."
+        | Error problem -> onwards settled problem
+    | _ -> onwards settled ""
 
 let private starting settled choice =
     let game, view = settled.Game, settled.View
@@ -490,7 +480,8 @@ and private answering settled word sitters reach at line asked =
 /// `Menu.choose` is deliberately not consulted here. At a bench, the game's words come first and
 /// the menu's do not get in the way - otherwise a bench with a row called '3' would deal a game of
 /// three instead, and every word a bench wanted would be one the menu had not already taken. The
-/// four that navigate are answered here and by name, so nothing a game does can take them away.
+/// five words that navigate - back, menu, quit, exit, q - are answered here and by name, so nothing
+/// a game does can take them away.
 let rec private working settled (aside: Aside) at said =
     match Screens.asking settled.View.Says said (aside.Screen()) at with
     | None, _ -> Some(Done 0)
@@ -513,9 +504,14 @@ let rec private working settled (aside: Aside) at said =
 let rec private taking settled at said =
     let game = settled.Game
 
+    // Every way this game can be played is listed, not only the way settled on: a record says on
+    // its deal line which way it was, and taking it up switches to that way rather than refusing.
     let records =
         Transcript.saved ()
-        |> List.filter (fun record -> record.Game = Some game.Name || record.Game = None)
+        |> List.filter (fun record ->
+            match record.Game with
+            | Some name -> settled.Ways |> List.exists (fun way -> way.Name = name)
+            | None -> true)
 
     match Screens.asking settled.View.Says said (Menu.continuing game records) at with
     | None, _ -> Some(Done 0)
@@ -526,6 +522,14 @@ let rec private taking settled at said =
         | Ok Menu.Backing -> None
         | Ok Menu.Leave -> Some(Done 0)
         | Ok chosen ->
+            let settled =
+                match chosen with
+                | Menu.Replay path ->
+                    Transcript.about path
+                    |> Option.map (fun name -> Settled.playing name settled)
+                    |> Option.defaultValue settled
+                | _ -> settled
+
             match starting settled chosen with
             | Ok opening -> Some opening
             | Error problem -> taking settled at problem
@@ -552,23 +556,16 @@ let rec private welcome settled behind at said =
         again ()
     | Ok(Menu.Looking chosen) -> welcome { settled with View = chosen } behind at ""
     | Ok Menu.Options -> welcome (settling settled [] "") behind at ""
-    | Ok Menu.Continuing ->
-        match taking settled [] "" with
-        | Some opening -> opening
-        | None -> again ()
+    | Ok Menu.Continuing -> taking settled [] "" |> Option.defaultWith again
     | Ok Menu.Working ->
         match game.Aside with
         | None -> again ()
-        | Some aside ->
-            match working settled aside [] "" with
-            | Some opening -> opening
-            | None -> again ()
+        | Some aside -> working settled aside [] "" |> Option.defaultWith again
     | Ok(Menu.Sitting(sitters, asked)) ->
         let word = Reach.minted ()
 
-        match sitting settled word sitters (asked |> Option.defaultValue (Reach.locked word)) [] "" with
-        | Some opening -> opening
-        | None -> again ()
+        sitting settled word sitters (asked |> Option.defaultValue (Reach.locked word)) [] ""
+        |> Option.defaultWith again
     | Ok chosen ->
         match starting settled chosen with
         | Ok opening -> opening
@@ -591,11 +588,20 @@ let private play settled sitters stamp model =
               Hushed = false
               View = settled.View }
 
-    let said = kept @ tell settled.Rings posts
+    // Said here, under the board and beside the prompt, because this is the one table with a prompt
+    // to say it at - a game taken up into a browser or hosted for others has no `undo` to offer the
+    // person at this keyboard.
+    let takenUp =
+        if Timeline.movesMade model.Timeline > 0 then
+            [ "The moves taken up can be taken back with 'undo', or read with 'history'." ]
+        else
+            []
+
+    let said = kept @ takenUp @ tell settled.Rings posts
 
     match game.Pulse with
-    | Some pulse -> racing settled.Rings sitters said pulse solo |> ignore
-    | None -> loop settled.Rings sitters said [] solo |> ignore
+    | Some pulse -> racing settled.Rings sitters said pulse solo
+    | None -> loop settled.Rings sitters said [] solo
 
     0
 
@@ -627,13 +633,17 @@ let private opening settled launch =
         table Here start
         |> onward (fun (model, sitters, stamp) ->
             printfn "%s" view.Rules
+
+            // A board on a clock is drawn over a cleared screen, which would take the rules away
+            // before anybody had read them - so at a terminal it waits to be told to go on.
+            if game.Pulse.IsSome then Screens.held ()
+
             play settled sitters stamp model)
     | Launch.Serve(start, reach) -> table Here start |> onward (serveFor game view.Palette reach)
     | Launch.Host(start, reach) -> table Elsewhere start |> onward (hostFor game view settled.Rings reach)
     | Launch.Join(address, token, code, table) -> Client.join game address token code table settled.Rings view
     | Launch.House(reach, filling) ->
-        let hosting =
-            Net.Hosting.of' settled.Ways clockSeed (fun game -> Transcript.stamping game.Name DateTime.Now)
+        let hosting = Net.Hosting.of' settled.Ways clockSeed (fun game -> stamping game ())
 
         Server.house hosting reach filling
 
@@ -683,17 +693,23 @@ let rec private making (ways: Playable<'Move, 'State, 'Notice> list) (game: Play
         member _.Faults = game.Faults
 
         member _.FromCommandLine argv =
-            let settings, _ = Settings.load ()
+            let settings, unread = Settings.load ()
             let opened = settling settings
-            let view, _ = Playable.opening AtATerminal settings opened
 
-            let settled =
-                { Ways = ways
-                  Game = opened
-                  View = view
-                  Rings = Settings.bell settings }
+            // A line in settings.txt that could not be read is said here as it is at the menu, so a
+            // file edited by hand is never silently half-read.
+            unread |> List.iter (eprintfn "%s")
 
-            Launch.run opened (fun view launch -> opening { settled with View = view } launch) argv
+            Launch.run
+                opened
+                (fun view launch ->
+                    opening
+                        { Ways = ways
+                          Game = opened
+                          View = view
+                          Rings = Settings.bell settings }
+                        launch)
+                argv
 
         member _.FromMenu behind =
             let settings, unread = Settings.load ()

@@ -3,7 +3,6 @@ namespace Prototyping.Diplomacy
 open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Diplomacy
 
 module Parse =
 

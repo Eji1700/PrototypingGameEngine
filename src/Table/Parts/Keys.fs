@@ -50,18 +50,22 @@ module Keys =
           Pick = Types text
           Turns = None }
 
-    // Rows are numbered from 1 as they are read, so the tenth is 0 and there is no eleventh.
+    // Rows are numbered from 1 as they are read, and there is no tenth: 0 is the way out of every
+    // screen, so a row that was handed it would answer the key meant for leaving. A screen with
+    // more rows than digits walks the rest with the arrows.
     let nth n =
-        if n > 9 then None else Some(char (int '0' + ((n + 1) % 10)))
+        if n > 8 then None else Some(char (int '0' + n + 1))
 
-    // Moving off either end comes round to the other. The doubled modulo is to bring a negative
-    // remainder back round, which .NET's does not do.
-    let moved by at (screen: Screen) =
+    /// Moving off either end of a list comes round to the other. The doubled modulo is to bring a
+    /// negative remainder back round, which .NET's does not do.
+    let wrapped count at by = ((at + by) % count + count) % count
+
+    let private moved by at (screen: Screen) =
         match List.length screen.Rows with
         | 0 -> 0
-        | count -> ((at + by) % count + count) % count
+        | count -> wrapped count at by
 
-    let byDigit digit (screen: Screen) =
+    let private byDigit digit (screen: Screen) =
         screen.Rows |> List.tryFind (fun row -> row.Digit = Some digit)
 
     [<Literal>]
@@ -296,7 +300,7 @@ module Keys =
                       Typing = false }
             | [] -> Steering standing
 
-        /// Out of the prompt and back to the rows, with whatever was half-typed thrown away.
+        // Out of the prompt and back to the rows, with whatever was half-typed thrown away.
         let dropped () =
             Steering
                 { standing with
@@ -338,8 +342,8 @@ module Keys =
             | Some row -> taking row
             | None -> Steering standing
 
-        // Right on a row that has nothing to turn through takes it, so a screen of plain rows can
-        // still be walked with one hand on the arrows.
+        // Right on a row that has nothing to turn through takes it, and Left backs out, so a screen
+        // of plain rows can be walked into and out of with one hand on the arrows.
         | Turned by ->
             match
                 here ()

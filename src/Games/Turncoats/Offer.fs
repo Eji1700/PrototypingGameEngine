@@ -1,27 +1,15 @@
 namespace Prototyping.Turncoats
 
-open Prototyping.Common
-open Prototyping.Engine
 open Prototyping.Table
 
 module Offer =
 
 
-    let private refused =
-        let asked = Counting.several "player" "players"
-
-        function
-        | TooFewPlayers n
-        | TooManyPlayers n -> $"{asked n}? The game takes {Table.MinPlayers} to {Table.MaxPlayers}."
-
+    // The table only asks about seats that are at the game. Were it to ask about one that is not,
+    // a stranger's view is the honest answer: no bag of their own, and every other one closed.
     let private at seat model =
         Game.tryPlayer seat (Playing.game model)
-        |> Option.defaultValue (Game.active (Playing.game model))
-
-
-    let machine rival = Machines.choosing Rival.taking rival
-
-    let private skill name = Rival.byName name |> Result.toOption
+        |> Option.defaultValue ({ Id = seat; Bag = Pile.empty }: Player)
 
 
     let private answering says ruling _ question model =
@@ -65,14 +53,7 @@ module Offer =
 
 
     let playable: Playable<Move, Session, Notice> =
-        { Rules =
-            { Deal = fun players seed -> Setup.deal players seed |> Result.map Playing.opening |> Result.mapError refused
-              Play = Turn.asked
-              Active = fun session -> (Game.active (Session.game session)).Id
-              Turn = Session.turn
-              Over = Session.isOver
-              Seats = fun session -> Game.playerCount (Session.game session)
-              Reseed = fun session -> Rng.next (Session.game session).Rng |> fst }
+        { Rules = Playing.rules
 
           Name = "turncoats"
           Title = "Turncoats"
@@ -93,21 +74,13 @@ module Offer =
           Slots = Ink.slots
           Skills = Rival.all |> List.map (fun skill -> skill.Name, skill.Describe)
 
-          Seating =
-            fun seed sitting session ->
-                Rival.seating seed (sitting |> List.map (Option.bind skill)) (Session.game session)
-                |> List.map (fun (seat, rival) ->
-                    seat,
-                    { Skill = rival.Skill.Name
-                      Plays = machine rival })
+          Seating = Playable.seating Rival.byName Rival.seating (fun rival -> rival.Skill.Name) Rival.taking
 
           Pulse = None
 
 
-          // Nothing but a board on offer, so no section of the menu belongs to this game.
           Aside = None
 
-          // Nothing to steer: this board is typed at, and every line it takes is one somebody wrote.
           Steering = fun _ _ _ _ -> None
 
           Page = Html.shell

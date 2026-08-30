@@ -2,6 +2,7 @@ namespace Prototyping.Diplomacy
 
 open Prototyping.Common
 open Prototyping.Engine
+// After the engine, so that a Play's fields are found on it and not on a Journal's.
 open Prototyping.Diplomacy
 
 type Skill =
@@ -16,15 +17,50 @@ type Rival = { Skill: Skill; Rng: Rng }
 
 module Rival =
 
+    // The whole valuation. Only a centre is worth anything - one somebody else holds the most, one
+    // nobody holds nearly as much, one's own enough to keep - and a worth is counted in tens so that
+    // being near one, never worth more than a skill's Sight, only ever comes between centres worth
+    // the same.
+    [<Literal>]
+    let private Kept = 3
+
+    [<Literal>]
+    let private Theirs = 8
+
+    [<Literal>]
+    let private Unclaimed = 6
+
+    [<Literal>]
+    let private Tens = 10
+
+    // Against the same ground bare: walking at a unit, backing a push instead of making one, and
+    // standing over a centre instead of going anywhere.
+    [<Literal>]
+    let private Occupied = -4
+
+    [<Literal>]
+    let private Backing = 2
+
+    [<Literal>]
+    let private Guarding = -5
+
+    // Further than any Sight reaches, for ground no centre worth having can be walked to from.
+    [<Literal>]
+    let private BeyondSight = 9
+
+    // A home is the better to build in the nearer it stands to something worth taking, out to here.
+    [<Literal>]
+    let private BuildingReach = 12
+
 
     let private worthOf power position province =
         if not (Atlas.isCentre province) then
             0
         else
             match Position.ownerOf province position with
-            | Some owner when owner = power -> 3
-            | Some _ -> 8
-            | None -> 6
+            | Some owner when owner = power -> Kept
+            | Some _ -> Theirs
+            | None -> Unclaimed
 
     /// How far every province is from the nearest centre this power does not already own, worked out
     /// once by spreading outwards from all of them at once rather than by searching from each unit.
@@ -35,19 +71,13 @@ module Rival =
             Atlas.centres
             |> List.filter (fun centre -> Position.ownerOf centre position <> Some power)
 
-        let step province =
-            Atlas.armyReach province
-            @ (Atlas.fleetReach { At = province; Coast = None }
-               |> List.map (fun there -> there.At))
-            |> List.distinct
-
         let rec spread found edge depth =
             match edge with
             | [] -> found
             | _ ->
                 let next =
                     edge
-                    |> List.collect step
+                    |> List.collect Atlas.anyReach
                     |> List.distinct
                     |> List.filter (fun province -> not (Map.containsKey province found))
 
@@ -56,7 +86,16 @@ module Rival =
 
                 spread found next (depth + 1)
 
-        spread (wanted |> List.map (fun centre -> centre, 0) |> Map.ofList) wanted 1
+        let found =
+            spread (wanted |> List.map (fun centre -> centre, 0) |> Map.ofList) wanted 1
+
+        fun province -> Map.tryFind province found |> Option.defaultValue BeyondSight
+
+    /// What going to a province is worth: its centre, and how near it stands to one this power wants.
+    let private pull skill power position =
+        let far = nearness power position
+
+        fun province -> worthOf power position province * Tens + max 0 (skill.Sight - far province)
 
 
     // Where this power's other units have already been sent. Orders are written one unit at a time,
@@ -71,12 +110,8 @@ module Rival =
 
     let private offers skill power play (piece: Piece) =
         let position = play.Board
-        let steps = nearness power position
+        let pull = pull skill power position
         let taken = spokenFor power play
-
-        let pull province =
-            let far = Map.tryFind province steps |> Option.defaultValue 9
-            worthOf power position province * 10 + max 0 (skill.Sight - far)
 
         let here = pull piece.Where.At
 
@@ -90,7 +125,7 @@ module Rival =
             |> List.map (fun into ->
                 let against =
                     match Position.at into.At position with
-                    | Some _ -> -4
+                    | Some _ -> Occupied
                     | None -> 0
 
                 pull into.At + against, MoveTo into)
@@ -105,7 +140,7 @@ module Rival =
                     match says, Position.at from position with
                     | MoveTo into, Some other when other.Power = power && from <> piece.Where.At ->
                         if Atlas.canGo piece.Kind piece.Where into.At && into.At <> piece.Where.At then
-                            Some(pull into.At + 2, SupportMove(from, into.At))
+                            Some(pull into.At + Backing, SupportMove(from, into.At))
                         else
                             None
                     | _ -> None)
@@ -118,7 +153,7 @@ module Rival =
                 |> List.choose (fun into ->
                     match Position.at into.At position with
                     | Some sitting when sitting.Power = power && Atlas.isCentre into.At ->
-                        Some(worthOf power position into.At * 10 - 5, SupportHold into.At)
+                        Some(worthOf power position into.At * Tens + Guarding, SupportHold into.At)
                     | _ -> None)
 
         (here, Holds) :: moves @ backing @ guarding
@@ -130,15 +165,15 @@ module Rival =
         | choices ->
             let best = choices |> List.map fst |> List.max
             let wanted = choices |> List.filter (fun (worth, _) -> worth = best) |> List.map snd
-            let picked, rng = Rng.intBelow (List.length wanted) rng
-            Some wanted[picked], rng
+            let picked, rng = Rng.pick wanted rng
+            Some picked, rng
 
     let private slipping rival choices =
         let slip, rng = Rng.intBelow 100 rival.Rng
 
         if slip < rival.Skill.Slips && List.length choices > 1 then
-            let picked, rng = Rng.intBelow (List.length choices) rng
-            Some(snd choices[picked]), { rival with Rng = rng }
+            let (_, picked), rng = Rng.pick choices rng
+            Some picked, { rival with Rng = rng }
         else
             let picked, rng = pickFrom rng choices
             picked, { rival with Rng = rng }
@@ -187,13 +222,9 @@ module Rival =
             match beatenAndSilent power play with
             | [] -> Some(Commit, rival)
             | beaten :: _ ->
-                let steps = nearness power play.Board
+                let pull = pull rival.Skill power play.Board
 
-                let choices =
-                    beaten.Options
-                    |> List.map (fun into ->
-                        let far = Map.tryFind into.At steps |> Option.defaultValue 9
-                        worthOf power play.Board into.At * 10 + max 0 (rival.Skill.Sight - far), MoveTo into)
+                let choices = beaten.Options |> List.map (fun into -> pull into.At, MoveTo into)
 
                 match slipping rival choices with
                 | Some says, rival -> Some(Give(beaten.From, says), rival)
@@ -201,15 +232,7 @@ module Rival =
 
         | Building ->
             let owing = Session.owed power play.Board
-
-            let already =
-                play.Written
-                |> Map.toList
-                |> List.filter (fun (province, says) ->
-                    match says with
-                    | Builds _ -> Position.ownerOf province play.Board = Some power
-                    | Disbands -> Position.at province play.Board |> Option.map (fun piece -> piece.Power) = Some power
-                    | _ -> false)
+            let already = Session.writtenBy power play
 
             if owing > 0 then
                 let room =
@@ -219,15 +242,14 @@ module Rival =
                 if List.length already >= owing || List.isEmpty room then
                     Some(Commit, rival)
                 else
-                    let steps = nearness power play.Board
+                    let far = nearness power play.Board
 
                     let choices =
                         room
                         |> List.map (fun home ->
-                            let far = Map.tryFind home steps |> Option.defaultValue 9
                             let kind = raising power play.Board home
                             let coast = if kind = Fleet then Atlas.coastsOf home |> List.tryHead else None
-                            max 0 (12 - far), (home, Builds(kind, coast)))
+                            max 0 (BuildingReach - far home), (home, Builds(kind, coast)))
 
                     match slipping rival choices with
                     | Some(home, says), rival -> Some(Give(home, says), rival)
@@ -241,13 +263,11 @@ module Rival =
                 if List.length already >= -owing || List.isEmpty keeping then
                     Some(Commit, rival)
                 else
-                    let steps = nearness power play.Board
+                    let far = nearness power play.Board
 
                     let choices =
                         keeping
-                        |> List.map (fun piece ->
-                            let far = Map.tryFind piece.Where.At steps |> Option.defaultValue 9
-                            far - worthOf power play.Board piece.Where.At, piece.Where.At)
+                        |> List.map (fun piece -> far piece.Where.At - worthOf power play.Board piece.Where.At, piece.Where.At)
 
                     match slipping rival choices with
                     | Some where, rival -> Some(Give(where, Disbands), rival)
@@ -283,11 +303,9 @@ module Rival =
 
     let all = [ easy; medium; hard ]
 
-    let names = Machines.named (fun skill -> skill.Name) all
-
     let byName name =
         Machines.byName (fun skill -> skill.Name) all name
 
-    let seating (seed: uint64) sitting =
+    let seating (seed: uint64) sitting _ =
         Machines.seating (Power.all |> List.map Power.seatOf) seed sitting
         |> List.map (fun (seat, skill, rng) -> seat, { Skill = skill; Rng = rng })

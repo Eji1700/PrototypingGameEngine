@@ -25,6 +25,23 @@ type Phase =
     | Fighting of Fight
     | Ended of Ending
 
+/// What the board is making a noise about after a move, and after no other. State rather than
+/// something read out of the notices, for the reason Cascade keeps its own: a table reads it off
+/// the position after every move, and after every undo and redo, so a sound left lying there
+/// would be heard again after everything that followed it.
+type Sounding =
+    /// A muster placed, and the other squad waited on.
+    | Waited
+
+    /// The tenth placement: the muster is done and the lines are formed.
+    | Formed
+
+    | Blow
+    | Settled
+
+    /// Somebody walked away from the muster.
+    | Abandoned
+
 type Play =
     {
         Squads: Map<int, Squad>
@@ -45,6 +62,8 @@ type Play =
         /// Whether the battle runs on its own. The clock beats either way; a battle that is stopped
         /// answers a beat with nothing, which the engine leaves out of the record.
         Running: bool
+
+        Sounding: Sounding list
         Turn: int
     }
 
@@ -78,7 +97,8 @@ module Session =
           Stage = Mustering 1
           Engaged = Closest
           Running = true
-          Turn = 0 }
+          Sounding = []
+          Turn = 1 }
 
     let groundHolds hexes = hexes >= Closest && hexes <= Furthest
 
@@ -103,14 +123,9 @@ module Session =
     let seats (_: Play) = Seats
 
     /// Whose turn it is - which through the battle is nobody's, since nobody is asked anything
-    /// once both squads are on the field. The first seat stands in for nobody there, as it does in
-    /// the two other games that reach a point with nothing owed to anybody.
-    ///
-    /// Naming the side whose unit swings next would read better in the history and would let
-    /// either squad give up mid-battle. It was tried, and it is wrong: one keyboard draws the
-    /// board for whoever is active, so the field turned over every single blow and the log changed
-    /// sides under the person reading it. Nothing is given up mid-battle now either - `Turn`
-    /// refuses it in words, because a battle already settled is not a thing anybody can concede.
+    /// once both squads are on the field, so the first seat stands in. Naming the side about to
+    /// swing was tried and taken out again: one keyboard draws the board for whoever is active, so
+    /// the field turned over every blow. SEAM.md has the account, under what Warband found.
     let active play =
         match play.Stage with
         | Mustering place -> Seat.at place

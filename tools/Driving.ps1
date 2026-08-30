@@ -1,8 +1,31 @@
+# What every script here does: report a check, add up the failures, wait for something, start a
+# console and read what it said. Dot-sourced rather than copied, so the wording of "1 check failed"
+# and the shape of a report line are one thing across nine scripts.
+
+function Report($name, $ok, $detail) {
+    if ($ok) { "ok   $name" }
+    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
+}
+
+# The last word, and the exit code. `$noun` is what was counted - a check, a record - and its
+# plural is the word with an s, which is every noun these scripts count.
+function Finish($noun) {
+    ""
+    if ($script:failed -gt 0) {
+        "$(if ($script:failed -eq 1) { "1 $noun" } else { "$($script:failed) ${noun}s" }) failed"
+        exit 1
+    }
+    else { "all ${noun}s passed"; exit 0 }
+}
+
+# Polls until the test answers with something, and hands that back - a page, a process, or just
+# `$true` - so a caller that wanted the thing it was waiting for has it without asking again.
 function Wait-For($what, $seconds, $test) {
     $until = (Get-Date).AddSeconds($seconds)
 
     while ((Get-Date) -lt $until) {
-        if (& $test) { return $true }
+        $answer = & $test
+        if ($answer) { return $answer }
         Start-Sleep -Milliseconds 200
     }
 
@@ -66,7 +89,19 @@ function Close-Console($console) {
     if ($console.Heard) { Unregister-Event -SourceIdentifier $console.Heard.Name -ErrorAction SilentlyContinue }
 }
 
-function Stop-Tables {
-    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# A process started with Start-Process, stopped if it is still going. Every script that starts one
+# had this line, with its own try and catch round it.
+function Stop-Started($started) {
+    if ($started -and -not $started.HasExited) { try { Stop-Process -Id $started.Id -Force } catch {} }
+}
+
+# By name, because `dotnet run` starts the program as a child that no handle here reaches - the
+# handle is `dotnet`'s. The names are the programs a script may have started: Proto for the
+# repository's own, and whichever published file a script was driving.
+function Stop-Tables([string[]]$names = @("Proto")) {
+    foreach ($name in $names) {
+        Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+
     Start-Sleep -Milliseconds 500
 }

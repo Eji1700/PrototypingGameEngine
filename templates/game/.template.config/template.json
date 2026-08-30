@@ -32,7 +32,7 @@
       "continueOnError": true,
       "manualInstructions": [
         {
-          "text": "1. Add the project to PrototypingGameEngine.slnx, under the /src/Games/ folder.\n2. Register it in src/Games.fs, which is the only file in the program that names more than one game.\n3. Give it a suite: tests/<name>.fsx, loading a harness of its own and tests/Conforms.fsx, then Conforms.against. Add the name to the list in tools/tests.ps1 or it never runs.\n\nThe game's own README.md has all three written out."
+          "text": "1. Add the project to PrototypingGameEngine.slnx, under the /src/Games/ folder, and a ProjectReference to it in the root Proto.fsproj.\n2. Register it in src/Games.fs, which is the only file in the program that names more than one game.\n3. Give it a suite: tests/<name>.fsx, loading a harness of its own and tests/Conforms.fsx, then Conforms.against. Name it in lower case and tools/tests.ps1 finds it; a capitalised .fsx is a harness and never runs on its own.\n\nThe game's own README.md has all three written out."
         }
       ]
     }

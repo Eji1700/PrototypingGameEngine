@@ -6,7 +6,7 @@ module RegionId =
     let value (RegionId n) = n
 
 type RegionKind =
-    | Home of StoneColor
+    | Home of StoneColour
     | Wild
     | Special
     | Dead
@@ -36,7 +36,7 @@ type Region =
 
 module Board =
 
-    let private table =
+    let private mainland =
         [ "Nightfen", Home Green
           "Saltmarsh", Wild
           "Greymarket", Wild
@@ -48,12 +48,15 @@ module Board =
           "Windgap", Wild
           "Tidewatch", Home Blue
           "Ironford", Wild
-          "Dunmoor", Wild
-          "The Flag", Special
-          "The Axe", Special ]
+          "Dunmoor", Wild ]
+
+    // The Flag and the Axe come after the mainland, in that order, so that their ids follow from the
+    // shape of the table rather than from a search of it: a search can come back with nothing,
+    // and an id has to be a region.
+    let private apart = [ "The Flag"; "The Axe" ]
 
     let regions =
-        table
+        mainland @ (apart |> List.map (fun name -> name, Special))
         |> List.mapi (fun index (name, kind) ->
             { Id = RegionId(index + 1)
               Name = name
@@ -71,21 +74,22 @@ module Board =
     let tryId n =
         if n >= 1 && n <= count then Some(RegionId n) else None
 
-    let private named name =
-        regions
-        |> List.tryFind (fun region -> region.Name = name)
-        |> Option.map (fun region -> region.Id)
-        |> Option.defaultValue (RegionId 0)
+    let flag = RegionId(List.length mainland + 1)
 
-    let flag = named "The Flag"
-
-    let axe = named "The Axe"
+    let axe = RegionId(List.length mainland + 2)
 
     let landRegions =
         regions |> List.filter (fun region -> RegionKind.isLand region.Kind)
 
     let apartRegions =
         regions |> List.filter (fun region -> RegionKind.isIsolated region.Kind)
+
+    let openRegions =
+        regions |> List.filter (fun region -> RegionKind.isOpen region.Kind)
+
+    /// Where a battle or a march may be aimed: open, and on the map.
+    let contestableRegions =
+        openRegions |> List.filter (fun region -> RegionKind.isLand region.Kind)
 
     let private declaredBorders =
         [ 1, [ 2; 4 ]
@@ -157,18 +161,12 @@ module Board =
                   for other in borders do
                       yield asPair from other ]
 
-    let reachableFrom (blocked: Set<RegionId>) start =
+    let private reachableFrom start =
         let rec walk seen frontier =
             match frontier with
             | [] -> seen
             | regionId :: rest when Set.contains regionId seen -> walk seen rest
-            | regionId :: rest ->
-                let next =
-                    neighbours regionId
-                    |> Set.filter (fun id -> not (Set.contains id blocked))
-                    |> Set.toList
-
-                walk (Set.add regionId seen) (next @ rest)
+            | regionId :: rest -> walk (Set.add regionId seen) (Set.toList (neighbours regionId) @ rest)
 
         walk Set.empty [ start ]
 
@@ -212,16 +210,15 @@ module Board =
               yield $"The map lays regions {one} and {other} side by side, but they share no border."
 
           for label, regionId in [ "The Flag", flag; "The Axe", axe ] do
-              match regions |> List.tryFind (fun region -> region.Id = regionId) with
-              | None -> yield $"{label} is missing from the board, but actions are declared through it."
-              | Some found ->
-                  if not (RegionKind.isIsolated found.Kind) then
-                      yield $"{label} must be a region that stands alone."
+              let found = region regionId
+
+              if found.Name <> label then
+                  yield $"{label} should be region {RegionId.value regionId}, which is {found.Name}."
 
           match regions |> List.filter (fun region -> not (RegionKind.isIsolated region.Kind)) with
           | [] -> ()
           | first :: _ ->
-              let reached = reachableFrom Set.empty first.Id
+              let reached = reachableFrom first.Id
 
               for region in regions do
                   if not (RegionKind.isIsolated region.Kind) && not (Set.contains region.Id reached) then

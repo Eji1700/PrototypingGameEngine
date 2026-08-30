@@ -6,8 +6,7 @@ card. Hold eighteen centres and you have won.
 
 ```powershell
 dotnet run -- diplomacy play 7      # seven seats at this keyboard
-dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard \
-              --rival hard --rival hard --rival hard    # one of you, in a browser
+dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard --rival hard --rival hard --rival hard    # one of you, in a browser
 dotnet run -- diplomacy host 7      # seven of you, at your own machines
 
 dotnet run -- diplomacy replay logs/...-diplomacy-7p-seed<n>.log        # take a saved game up
@@ -30,7 +29,7 @@ keep theirs.
 [Points the rules leave to the adjudicator](#points-the-rules-leave-to-the-adjudicator-decided-here) ·
 [The machine](#the-machine) · [The files](#the-files)
 
-The third of the three games here, and the engine it runs on is
+The third game written here, and the engine it runs on is
 [one directory up](../../../README.md). Every command that is not about this board - `undo`,
 `redo`, `history`, `save`, `notes`, `commands`, `log`, `view`, `restart`, `help`, `quit` - belongs to the engine
 and is documented there.
@@ -250,7 +249,7 @@ road to somewhere. That is the whole valuation, and it is in
 does nothing with them, which is worth knowing before you spend a season promising it things.
 ## The files
 
-Thirteen files and about fourteen hundred lines, in the same two folders the other two games
+Thirteen files and about thirty-four hundred lines, in the same two folders the other games
 use — [Turncoats](../Turncoats/README.md#the-files) has twenty-one and
 [noughts and crosses](../TicTacToe/README.md#the-files) has ten.
 

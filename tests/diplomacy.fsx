@@ -1,9 +1,7 @@
 #load "Europe.fsx"
 #load "Conforms.fsx"
 
-open System
 open System.Text.RegularExpressions
-open System.Xml
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Diplomacy
@@ -519,11 +517,12 @@ report
     "and is not asked where only one is"
     true
     (match Turn.asked (Give(p "gas", MoveTo(loc "spa"))) (afloat [ (France, Fleet, "gas") ]) with
-     | Some _, [ Happened(Wrote(_, _, MoveTo place)) ] -> place = loc "spa/nc"
+     | Some _, [ Happened(Wrote(_, _, MoveTo place, _)) ] -> place = loc "spa/nc"
      | _ -> false)
 
 
-let private wroteIt = Happened(Wrote(Austria, p "vie", MoveTo(loc "tri")))
+let private wroteIt =
+    Happened(Wrote(Austria, p "vie", MoveTo(loc "tri"), Moving Spring))
 
 report "the power that wrote an order reads it" true ((diplomacy.SeenBy (Power.seatOf Austria) wroteIt).Contains "vie - tri")
 report "and nobody else does" false ((diplomacy.SeenBy (Power.seatOf Italy) wroteIt).Contains "vie - tri")
@@ -696,34 +695,21 @@ report
 
 report "and what is standing in a province" true ((plain.Answer (Power.seatOf Austria) "where mun" drawn).Contains "Munich")
 
-let private parses (markup: string) =
-    try
-        let document = XmlDocument()
-        use reader = new XmlTextReader(new IO.StringReader(markup), Namespaces = false)
-        document.Load reader
-        true
-    with _ ->
-        false
+// The states the contract never reaches - a board the machines have played years into, its record,
+// and a question about a province. The rest of what a page is sent is held for every game in
+// `Conforms`.
+Conforms.patched
+    [ "board", Page.Screen, asPage.Board Margins.all (Power.seatOf Austria) drawn
+      "record", Page.Told, asPage.History (Power.seatOf Austria) drawn
+      "answer", Page.Told, asPage.Answer (Power.seatOf Austria) "borders vie" drawn ]
 
-for name, markup in
-    [ "board", asPage.Board Margins.all (Power.seatOf Austria) drawn
-      "board at the opening", asPage.Board Margins.all (Power.seatOf Austria) dealt
-      "record", asPage.History (Power.seatOf Austria) drawn
-      "rules", asPage.Rules
-      "answer", asPage.Answer (Power.seatOf Austria) "borders vie" drawn ] do
-    report $"the {name} is well-formed markup" true (parses markup)
-
-let private posted (markup: string) =
-    Text.RegularExpressions.Regex.Matches(Net.WebUtility.HtmlDecode markup, @"@post\('/say\?line=([^']*)'\)")
-    |> Seq.map (fun found -> Uri.UnescapeDataString found.Groups[1].Value)
-    |> List.ofSeq
-
-let private buttons = posted (asPage.Board Margins.all (Power.seatOf Austria) dealt)
+let private buttons =
+    Conforms.posted (asPage.Board Margins.all (Power.seatOf Austria) dealt)
 
 report "the opening board carries a control for every order Austria could write" true (List.length buttons > 12)
 
 report
-    "and every one of them is a line the parser takes"
+    "and every one of them is an order, 'commit' or a question - nothing the board could not take"
     []
     (buttons
      |> List.filter (fun line ->
@@ -767,6 +753,227 @@ report
     "every seat at a dealt game is one of the powers"
     (Power.all |> List.map Power.name)
     (Playable.seatsOf diplomacy (Model.state dealt) |> List.map diplomacy.Seat)
+
+
+// === What a review of the whole tree turned up ===
+
+report
+    "a walk by any road leaves Spain by sea as well as by land"
+    []
+    ([ "mao"; "gol"; "wes"; "por"; "gas"; "mar" ]
+     |> List.filter (fun code -> not (List.contains (p code) (Atlas.anyReach (p "spa")))))
+
+report
+    "and St Petersburg by both its coasts"
+    true
+    (let out = Atlas.anyReach (p "stp")
+     List.contains (p "bar") out && List.contains (p "bot") out)
+
+let private winter units owners =
+    InPlay
+        { Session.play opening with
+            Stage = Building
+            Board =
+                { (board units) with
+                    Owners = owners |> List.map (fun (code, power) -> p code, power) |> Map.ofList } }
+
+let private removals =
+    winter [ England, Army, "gas"; England, Army, "spa"; France, Army, "par" ] [ "lon", England; "par", France ]
+
+report
+    "a removal nobody named is measured by land and sea alike, so Spain is no further from London than Gascony"
+    [ "gas" ]
+    (match Turn.asked Commit removals with
+     | Some after, _ ->
+         (Session.play after).Last
+         |> List.collect (fun passing -> passing.Removed)
+         |> List.map (fun piece -> Atlas.code piece.Where.At)
+     | None, _ -> [])
+
+let private lastCentreGone =
+    winter [ Austria, Army, "vie"; Turkey, Army, "con" ] [ ("vie", Austria) ]
+
+let private afterTheWinter =
+    match Turn.asked (Give(p "con", Disbands)) lastCentreGone with
+    | Some named, _ ->
+        match Turn.asked Commit named with
+        | Some after, _ -> Some after
+        | None, _ -> None
+    | None, _ -> None
+
+report
+    "a power whose last unit goes in a winter is announced as out of the game"
+    (Some [ Turkey ])
+    (afterTheWinter
+     |> Option.map (fun after -> (Session.play after).Last |> List.collect (fun passing -> passing.Eliminated)))
+
+report
+    "in as many words"
+    (Some true)
+    (afterTheWinter
+     |> Option.map (fun after ->
+         (Session.play after).Last
+         |> List.exists (fun passing -> (Words.passing passing).Contains "Turkey is out of the game")))
+
+report
+    "and the game ends with the power left standing"
+    (Some(Some(LastStanding Austria)))
+    (afterTheWinter
+     |> Option.map (function
+         | Finished(_, ending) -> Some ending
+         | InPlay _ -> None))
+
+let private rebuilding =
+    opening
+    |> phase [ ("bud", MoveTo(loc "ser")); ("tri", MoveTo(loc "adr")) ]
+    |> phase []
+
+report
+    "a winter with an empty coastal home to build in"
+    (Building, [ Austria ])
+    ((Session.play rebuilding).Stage, Session.awaited (Session.play rebuilding))
+
+report
+    "a build written again for the same centre replaces the first rather than being refused"
+    (Some [ (p "tri", Builds(Fleet, None)) ])
+    (match Turn.asked (Give(p "tri", Builds(Army, None))) rebuilding with
+     | Some army, _ ->
+         match Turn.asked (Give(p "tri", Builds(Fleet, None))) army with
+         | Some after, [ Happened(Wrote(Austria, _, Builds(Fleet, None), Building)) ] ->
+             Some(Session.writtenBy Austria (Session.play after))
+         | _ -> None
+     | None, _ -> None)
+
+report
+    "while a build for a second centre is still one too many"
+    true
+    (match Turn.asked (Give(p "tri", Builds(Army, None))) rebuilding with
+     | Some army, _ ->
+         match Turn.asked (Give(p "bud", Builds(Army, None))) army with
+         | None, [ Refused(ThatIsEnough(Austria, 1)) ] -> true
+         | _ -> false
+     | None, _ -> false)
+
+let private shrinking =
+    winter [ Austria, Army, "vie"; Austria, Army, "bud"; France, Army, "par" ] [ "vie", Austria; "par", France ]
+
+report
+    "and naming the same unit to give up twice is not naming two"
+    true
+    (match Turn.asked (Give(p "vie", Disbands)) shrinking with
+     | Some once, _ ->
+         match Turn.asked (Give(p "vie", Disbands)) once with
+         | Some _, [ Happened(Wrote(Austria, _, Disbands, Building)) ] -> true
+         | _ -> false
+     | None, _ -> false)
+
+let private builtOrder =
+    Happened(Wrote(Austria, p "bud", Builds(Army, None), Building))
+
+report
+    "in a winter the other powers are not told which centre a build is for"
+    false
+    ((diplomacy.SeenBy (Power.seatOf Italy) builtOrder).Contains "Budapest")
+
+report
+    "though the power that wrote it reads it"
+    true
+    ((diplomacy.SeenBy (Power.seatOf Austria) builtOrder).Contains "build a bud")
+
+report
+    "nor which unit is given up"
+    false
+    ((diplomacy.SeenBy (Power.seatOf Italy) (Happened(Wrote(Austria, p "bud", Disbands, Building)))).Contains "Budapest")
+
+report
+    "nor which order was taken back"
+    false
+    ((diplomacy.SeenBy (Power.seatOf Italy) (Happened(Erased(Austria, p "bud", Building)))).Contains "Budapest")
+
+report
+    "where in a spring the province is the unit's own, and is named"
+    true
+    ((diplomacy.SeenBy (Power.seatOf Italy) (Happened(Erased(Austria, p "vie", Moving Spring)))).Contains "Vienna")
+
+let private driven moves model =
+    moves
+    |> List.fold (fun model move -> Update.update rules (Make move) model) model
+
+let private openWinter =
+    dealt
+    |> driven (Give(p "bud", MoveTo(loc "ser")) :: List.replicate 7 Commit)
+    |> driven (List.replicate 7 Commit)
+    |> driven [ Give(p "bud", Builds(Army, None)) ]
+
+report
+    "which reaches a winter with a build written"
+    (Building, 1901)
+    ((Session.play (Model.state openWinter)).Stage, (Session.play (Model.state openWinter)).Year)
+
+report
+    "the record keeps that build from the other powers while the winter is open"
+    false
+    ((plain.History (Power.seatOf Italy) openWinter).Contains "build a bud")
+
+report "and shows it to the power that wrote it" true ((plain.History (Power.seatOf Austria) openWinter).Contains "build a bud")
+
+report
+    "'where ion' says the Ionian Sea is open water, not a region called At sea"
+    true
+    (let answered = plain.Answer (Power.seatOf Austria) "where ion" drawn
+     answered.Contains "open water" && not (answered.Contains "At sea"))
+
+report
+    "'orders' answers with the power's own written orders"
+    true
+    ((plain.Answer (Power.seatOf Austria) "orders" ordered).Contains "vie - tri")
+
+report "and with nobody else's" false ((plain.Answer (Power.seatOf Italy) "orders" ordered).Contains "vie - tri")
+report "saying so when there are none" true ((plain.Answer (Power.seatOf Italy) "orders" ordered).Contains "Nothing written")
+
+let private unbacked =
+    resolve [ Germany, Army, "ber"; Germany, Army, "mun" ] [ ("mun", SupportMove(p "ber", p "sil")) ]
+
+report
+    "a support for a move that was never ordered is reported as having nothing to support"
+    (Some Unmatched)
+    (came unbacked "mun")
+
+let private unheld =
+    resolve [ Germany, Army, "ber"; Germany, Army, "mun" ] [ "ber", MoveTo(loc "sil"); "mun", SupportHold(p "ber") ]
+
+report "as is a support to hold for a unit that is moving" (Some Unmatched) (came unheld "mun")
+report "while a support that matched is still support given" (Some Helped) (came supported "mun")
+report "and the words say which" "nothing to support" (Words.fate Unmatched)
+
+let private walkedOut =
+    match Turn.asked (Give(p "vie", MoveTo(loc "gal"))) opening with
+    | Some written, _ ->
+        match Turn.asked Resign written with
+        | Some gone, _ -> Some gone
+        | None, _ -> None
+    | None, _ -> None
+
+report
+    "a power that resigns takes its written orders with it, so its units stand where they are"
+    (Some false)
+    (walkedOut
+     |> Option.map (fun session -> Map.containsKey (p "vie") (Session.play session).Written))
+
+report
+    "and the season leaves them standing"
+    (Some(true, false))
+    (walkedOut
+     |> Option.map (fun session ->
+         let after = Session.board (phase [] session)
+         Position.occupied (p "vie") after, Position.occupied (p "gal") after))
+
+report "a word to the table is closed with a full stop" true ((Words.said tabled).EndsWith ".")
+
+report
+    "and one the player closed is not closed twice"
+    "Austria to Italy: well?"
+    (Words.said (Happened(Whispered(Austria, Some Italy, "well?"))))
 
 
 // === The seam every game fills in ===

@@ -101,7 +101,7 @@ module Solo =
 
     let private screenFor solo (console, reading) =
         { To = console
-          Say = Screen(boardFor solo reading) }
+          Say = ToPlayer.Screen(boardFor solo reading) }
 
     let board console solo =
         readingAt console solo |> Option.map (boardFor solo)
@@ -142,7 +142,9 @@ module Solo =
         else
             [ for sound in solo.Game.Rings(standing solo) do
                   for console, reading in solo.Watchers do
-                      if not reading.Hushed then { To = console; Say = Rang sound } ]
+                      if not reading.Hushed then
+                          { To = console
+                            Say = ToPlayer.Rang sound } ]
 
     let private nudging console solo =
         if isOver solo then
@@ -151,7 +153,7 @@ module Solo =
             solo.Watchers
             |> List.map fst
             |> List.filter ((<>) console)
-            |> List.map (fun other -> { To = other; Say = Nudged })
+            |> List.map (fun other -> { To = other; Say = ToPlayer.Nudged })
 
     let private just console said = [ { To = console; Say = said } ]
 
@@ -159,13 +161,13 @@ module Solo =
         readingAt console solo
         |> Option.map (fun reading ->
             { To = console
-              Say = Told(reading.View.Says text) })
+              Say = ToPlayer.Told(reading.View.Says text) })
         |> Option.toList
 
 
     let private roster (reading: Reading<_, _, _>) solo =
         Playable.roster solo.Game solo.Rivals
-        |> Option.map (reading.View.Says >> Told)
+        |> Option.map (reading.View.Says >> ToPlayer.Told)
         |> Option.toList
 
     let watching console (reading: Reading<_, _, _>) solo =
@@ -208,15 +210,17 @@ module Solo =
         | None -> solo, [], Carrying
 
 
-    let said fresh console (typed: string) solo =
+    /// `fresh` is asked for a stamp only by `restart`, which is the one line that needs a new one -
+    /// so it is a function rather than a stamp minted for every line typed.
+    let said (fresh: unit -> string) console (typed: string) solo =
         match readingAt console solo with
-        | None -> solo, just console (TurnedAway "You are not watching this game."), Carrying
+        | None -> solo, just console (ToPlayer.TurnedAway "You are not watching this game."), Carrying
         | Some reading ->
 
         let beholder = active solo
 
         let told text =
-            solo, just console (Told(reading.View.Says text)), Carrying
+            solo, just console (ToPlayer.Told(reading.View.Says text)), Carrying
 
         let mine reading =
             let solo = withReading console reading solo
@@ -228,9 +232,9 @@ module Solo =
         match Playable.read solo.Game typed with
         | Error problem -> told problem
         | Ok Nothing -> solo, [ screenFor solo (console, reading) ], Carrying
-        | Ok Help -> solo, just console (Told reading.View.Rules), Carrying
-        | Ok Recount -> solo, just console (Told(reading.View.History beholder solo.Model)), Carrying
-        | Ok(Asking question) -> solo, just console (Told(reading.View.Answer beholder question solo.Model)), Carrying
+        | Ok Help -> solo, just console (ToPlayer.Told reading.View.Rules), Carrying
+        | Ok Recount -> solo, just console (ToPlayer.Told(reading.View.History beholder solo.Model)), Carrying
+        | Ok(Asking question) -> solo, just console (ToPlayer.Told(reading.View.Answer beholder question solo.Model)), Carrying
         | Ok(Notes wanted) ->
             mine
                 { reading with
@@ -267,14 +271,20 @@ module Solo =
         | Ok Leave -> solo, drawAll solo, Leaving((if added solo then Some solo.Model else None), solo.Stamp)
         | Ok(Send(Restart _ as msg)) ->
             let closing = solo.Model
+            let next = Update.update (rules solo) msg solo.Model
 
-            moved
-                (answering
-                    { solo with
-                        Model = Update.update (rules solo) msg solo.Model
-                        Stamp = fresh
-                        Opened = 0 })
-                (if added solo then Keeping(closing, solo.Stamp, false) else Carrying)
+            // A deal the rules refused leaves the game as it stood, with a line saying so. That is
+            // not a new game, so it keeps its name and its file rather than being filed twice.
+            if Journal.isEmpty next.Journal then
+                moved
+                    (answering
+                        { solo with
+                            Model = next
+                            Stamp = fresh ()
+                            Opened = 0 })
+                    (if added solo then Keeping(closing, solo.Stamp, false) else Carrying)
+            else
+                moved (answering { solo with Model = next }) Carrying
         | Ok(Send((Undo | Redo) as msg)) ->
             moved
                 (walking

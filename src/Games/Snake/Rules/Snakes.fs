@@ -1,5 +1,6 @@
 namespace Prototyping.Snake
 
+open Prototyping.Common
 open Prototyping.Engine
 
 type Fate =

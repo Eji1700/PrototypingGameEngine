@@ -5,7 +5,7 @@ open Prototyping.Common
 module Setup =
 
     [<Literal>]
-    let StonesPerColor = 21
+    let StonesPerColour = 21
 
     [<Literal>]
     let HomeSeedStones = 2
@@ -17,14 +17,17 @@ module Setup =
     let BagSize = 8
 
     let private fullSupply =
-        StoneColor.all |> List.map (fun color -> color, StonesPerColor) |> Pile.ofCounts
+        StoneColour.all
+        |> List.map (fun colour -> colour, StonesPerColour)
+        |> Pile.ofCounts
 
     let private seedHomes supply =
         Board.regions
         |> List.fold
             (fun (position, supply) region ->
                 match region.Kind with
-                | Home color -> position |> Position.add color HomeSeedStones region.Id, Pile.remove color HomeSeedStones supply
+                | Home colour ->
+                    position |> Position.add colour HomeSeedStones region.Id, Pile.remove colour HomeSeedStones supply
                 | Wild
                 | Special
                 | Dead -> position, supply)

@@ -46,10 +46,12 @@ Play.chosen Prototyping.MyGame.Offer.ways Prototyping.MyGame.Offer.playable
 and add a `<ProjectReference>` to it in the root `Proto.fsproj`.
 
 **3. Give it a suite.** `tests/mygame.fsx`, with a harness that `#load`s this game's sources over
-the engine's — copy `tests/Living.fsx`, which is the shortest — and then:
+the engine's — copy `tests/Living.fsx`: one line loads `Stack.fsx`, which is the engine, the table
+and the wire, and the rest is the game's own files in the order its project compiles them — and
+then:
 
 ```fsharp
-#load "MyGaming.fsx"
+#load "MyGameHarness.fsx"
 #load "Conforms.fsx"
 
 Conforms.against mygame 2 [ "2"; "1"; "3" ]
@@ -59,7 +61,8 @@ Checks.finish ()
 
 `Conforms.against` is the contract every game here is held to: the deal, the seats, reading and
 writing a line, the timeline, the record, the notices, every view at every state, the machines,
-the clock and the page. Add `"mygame"` to the list in `tools/tests.ps1` or the suite never runs.
+the clock and the page. Name the suite in lower case and `tools/tests.ps1` finds it; a capitalised
+`.fsx` is a harness other files load, and never runs on its own.
 
 ## Where to go next, when this is not enough
 
@@ -67,7 +70,7 @@ the clock and the page. Add `"mygame"` to the list in `tools/tests.ps1` or the s
   [`src/Games/TicTacToe/Rules/Rival.fs`](../../src/Games/TicTacToe/Rules/Rival.fs) is the small one.
 - **A board that moves on its own** — fill in `Pulse`, and a beat becomes a move.
   [`src/Games/Life/Offer.fs`](../../src/Games/Life/Offer.fs) is the plain case;
-  [`src/Games/Snake/`](../../src/Games/Snake/) is the one that also draws between beats.
+  [`src/Games/Cascade/`](../../src/Games/Cascade/) is the one that also draws between beats.
 - **Chance** — `Deal` is handed a seed, and `Prototyping.Common.Rng` is a generator you pass along
   rather than one that mutates, so a seed and a list of moves still reproduce the game exactly.
 - **Something hidden** — `SeenBy` is where a seat is told less than the table is, and it is the

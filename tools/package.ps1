@@ -18,11 +18,6 @@ $failed = 0
 
 . (Join-Path $PSScriptRoot "Driving.ps1")
 
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
-
 $version = ([xml](Get-Content (Join-Path $root "Directory.Build.props"))).Project.PropertyGroup.PrototypingVersion
 $feed = Join-Path $root "publish/packages"
 $template = Join-Path $root "templates/game"
@@ -62,9 +57,10 @@ try {
     New-Item -ItemType Directory -Force -Path $outside | Out-Null
     dotnet new proto-game -n $Name -o $into | Out-Null
 
-    # Nothing but the local feed. A consumer that could still reach nuget.org would restore
-    # FSharp.Core and Falco from there and this would not notice a dependency we failed to declare
-    # - so the feed is cleared to the packages, plus the one place their own dependencies live.
+    # The packed feed and nuget.org, and nothing else: the four packages come from the folder just
+    # packed, and what they depend on - FSharp.Core, Falco, Argu - from the one place those live. Any
+    # other feed on this machine is shut out, so a package that happened to be cached elsewhere
+    # could not stand in for the one that was meant to be tested.
     @"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -86,12 +82,17 @@ try {
     Report "and a game outside the repository asks for them by name" (
         (Get-Content $project -Raw) -notmatch "ProjectReference") "the project reference is still there"
 
-    $built = dotnet build $project -c Release | Out-String
+    # Restored into a folder of its own rather than the machine's package cache: the version has not
+    # changed since the last time this ran, and NuGet would hand back the 0.5.0 it cached then - an
+    # engine packed an hour ago standing in for the one packed a minute ago.
+    $packages = Join-Path $outside "packages"
+    $built = dotnet build $project -c Release -p:RestorePackagesPath=$packages | Out-String
     Report "it restores and builds against the packages alone" ($LASTEXITCODE -eq 0) (
         ($built -split "`n" | Select-String "error" | Select-Object -First 1))
 
     if ($LASTEXITCODE -eq 0) {
-        $exe = Join-Path $into "bin/Release/net10.0/$Name"
+        $framework = ([xml](Get-Content $project)).Project.PropertyGroup.TargetFramework
+        $exe = Join-Path $into "bin/Release/$framework/$Name"
         if (Test-Path "$exe.exe") { $exe = "$exe.exe" }
 
         $said = (@("2", "quit") | & $exe play 2) | Out-String
@@ -127,10 +128,4 @@ finally {
     if ($installed) { dotnet new uninstall $template 2>&1 | Out-Null }
 }
 
-""
-if ($failed) {
-    $lost = if ($failed -eq 1) { "1 check" } else { "$failed checks" }
-    "$lost failed"
-    exit 1
-}
-else { "all checks passed"; exit 0 }
+Finish "check"

@@ -1,10 +1,12 @@
 namespace Prototyping.Life
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Life
 
 module Render =
+
+    let seated = Scene.seated Words.player
 
     module Blocks =
         let board = "The board"
@@ -23,15 +25,13 @@ module Render =
 
     let heading world =
         let where = $"Generation {world.Generation}"
+        let living = Words.cells (World.living world)
 
-        if World.isEmpty world then
-            $"{where} - nothing is left alive"
-        elif World.settled world then
-            $"{where} - settled: {Words.cells (World.living world)} that will not change again"
-        elif World.beating world then
-            $"{where} - {Words.cells (World.living world)}, beating between two shapes"
-        else
-            $"{where} - {Words.cells (World.living world)} alive"
+        match World.condition world with
+        | Condition.Empty -> $"{where} - nothing is left alive"
+        | Condition.Settled -> $"{where} - settled: {living} that will not change again"
+        | Condition.Beating -> $"{where} - {living}, beating between two shapes"
+        | Condition.Going -> $"{where} - {living} alive"
 
 
     let private row world cells =
@@ -41,39 +41,37 @@ module Render =
 
     let private grid world =
         Aligned(
-            [ Scene.cell Tone.Quiet ""; Scene.cell Tone.Quiet Grid.letters ]
-            :: (Grid.rows
+            [ Scene.cell Tone.Quiet ""; Scene.cell Tone.Quiet Torus.letters ]
+            :: (Torus.rows
                 |> List.mapi (fun index cells -> [ Scene.cell Tone.Quiet (string (index + 1)); row world cells ]))
         )
 
 
     let private standing world =
         [ Scene.says $"Generation {world.Generation}."
-          Scene.says $"{Words.cells (World.living world)} alive, of {Grid.Width * Grid.Height} squares."
+          Scene.says $"{Words.cells (World.living world)} alive, of {Torus.Width * Torus.Height} squares."
           // Stays on the screen while the board is moving, where the notes and the box of
           // commands do not: somebody watching it run is entitled to find out how to stop it
           // without stopping it to read.
           Scene.quietly (
               if world.Running then
-                  $"running at speed {world.Speed} of {World.Fastest} - 'p' stops it, + and - wind the clock"
+                  $"running at speed {world.Speed} of {Notch.Fastest} - 'p' stops it, + and - wind the clock"
               else
-                  $"stopped at speed {world.Speed} of {World.Fastest} - 'p' starts it, 'step' goes one generation"
+                  $"stopped at speed {world.Speed} of {Notch.Fastest} - 'p' starts it, 'step' goes one generation"
           )
           Scene.quietly (
-              if World.isEmpty world then
+              match World.condition world with
+              | Condition.Empty ->
                   "Nothing is left for the rule to work on. Turn cells on to draw something, or restart for another soup."
-              elif World.settled world then
-                  "It has settled. Nothing the rule does will change it again."
-              elif World.beating world then
-                  "It is back where it was two generations ago, and will go on beating between the two."
-              else
-                  "It is still going."
+              | Condition.Settled -> "It has settled. Nothing the rule does will change it again."
+              | Condition.Beating -> "It is back where it was two generations ago, and will go on beating between the two."
+              | Condition.Going -> "It is still going."
           ) ]
 
     let private onwards world =
         [ Scene.quietly "each of these is a line you could type"
           Does((if world.Running then "stop" else "run"), (if world.Running then "stop" else "run"), Tone.Plainly)
-          Does("step", "step", Tone.Plainly)
+          Scene.types "step"
           Does("step 10", "step 10", Tone.Plainly)
           Scene.quietly "and the clock"
           Does("slower", "slower", Tone.Plainly)
@@ -87,42 +85,32 @@ module Render =
     let private verbs =
         [ "run, p", "start the rule, and stop it again"
           "f7", "turn cell f7 on, or off (or 'toggle f7')"
-          "step, step 10", "one generation, or ten, while it is stopped"
+          "step, step 10", "one generation, or ten, while it is stopped ('.' at a terminal)"
           "+ and -", "wind the clock up or down ('faster', 'slower')"
           "speed 7", "straight to a notch, from 1 to 9"
           "why f7", "what the rule will do with that cell, and why"
-          "undo, redo", "walk the run back and forward"
-          "clear", "sweep the board, to draw on it from nothing"
-          "restart", "deal another soup; 'restart 42' deals that one"
-          "history", "the record so far"
-          "notes", "hide the writing that explains the board"
-          "commands", "hide this box"
-          "log", "hide what the game has been saying"
-          "view <name>", "draw the board another way"
-          "save", "write the record now"
-          "help", "every command, at length"
-          "quit", "leave; the record is written and can be replayed" ]
+          "clear", "sweep the board, to draw on it from nothing ('c' at a terminal)"
+          "restart", "deal another soup; 'restart 42' deals that one" ]
+        @ Commands.verbs
 
     let commands = Scene.verbs verbs
-
-    let private wrapped text = Scene.paragraph 66 text
 
     let help =
         String.concat
             "\n"
-            [ wrapped $"Conway's Game of Life, on a board of {Grid.Width} by {Grid.Height} with its edges joined."
+            [ Scene.prose $"Conway's Game of Life, on a board of {Torus.Width} by {Torus.Height} with its edges joined."
               ""
-              wrapped
+              Scene.prose
                   "The rule runs on a clock: 'run' - or 'p' at a terminal, space in a browser - starts it and stops it again, and + and - wind the clock between two and nine generations a second. Stopped, 'step' goes one generation at a time."
               ""
-              wrapped Notes.rule
+              Scene.prose Notes.rule
               ""
-              wrapped Notes.board
+              Scene.prose Notes.board
               ""
-              wrapped
+              Scene.prose
                   "Nobody is opposed here and there is nothing to win. The deal is a soup drawn from the seed, and what happens to it is settled the moment it is dealt - so a seed is a pattern, and the same seed is the same pattern every time."
               ""
-              wrapped
+              Scene.prose
                   "It never ends. What it does instead is arrive somewhere the rule has nothing more to do: a board that has settled, or one with nothing left alive. Both are said plainly and neither takes the board away - turn a cell on, sweep it and draw something of your own, or walk the run back with 'undo'."
               ""
               "COMMANDS"
@@ -158,14 +146,14 @@ module Render =
     let answer asked (model: Model<Move, World, Notice>) =
         let world = Model.state model
 
-        match Grid.read asked with
-        | Some cell when Grid.holds cell ->
+        match Torus.read asked with
+        | Some cell when Torus.holds cell ->
             let neighbours =
-                Grid.neighbours cell |> List.filter (fun other -> World.alive other world)
+                Torus.neighbours cell |> List.filter (fun other -> World.alive other world)
 
             let around = List.length neighbours
             let alive = World.alive cell world
-            let next = Set.contains cell (Grid.step world.Cells)
+            let next = Set.contains cell world.Next
 
             let standing =
                 if alive then
@@ -197,7 +185,7 @@ module Render =
     let rules = Scene.rules help
 
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     let shell =

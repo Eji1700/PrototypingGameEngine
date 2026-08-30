@@ -1,15 +1,15 @@
 namespace Prototyping.Life
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Life
 
 module Parse =
 
     let private cell (word: string) =
-        match Grid.read word with
+        match Torus.read word with
         | Some cell -> Ok cell
-        | None -> Error $"'{word}' is not a cell. They are named by column and row - 'f7' is column f, row 7."
+        | None -> Error(Grid.unnamed Torus.grid word)
 
     let private toggling word =
         cell word |> Result.map (fun cell -> Send(Make(Toggle cell)))
@@ -38,15 +38,7 @@ module Parse =
         // game piped in from a file, or a record replaying - so a board driven by hand and one
         // driven by the clock are the same game and the same record.
         | [ "beat" ] -> Ok(Send(Make Beat))
-        | [ "faster" ]
-        | [ "quicker" ]
-        | [ "+" ] -> Ok(Send(Make Faster))
-        | [ "slower" ]
-        | [ "-" ] -> Ok(Send(Make Slower))
-        | [ "speed"; notch ] ->
-            match Commands.tryInt notch with
-            | Some notch -> Ok(Send(Make(Speed notch)))
-            | None -> Error $"'{notch}' is not a speed. They run from {World.Slowest} to {World.Fastest}."
+        | Notch.Winds winding -> winding |> Result.map (fun winding -> Send(Make(Wind winding)))
         | [ "step" ]
         | [ "s" ] -> Ok(Send(Make(Step 1)))
         | [ "step"; n ]

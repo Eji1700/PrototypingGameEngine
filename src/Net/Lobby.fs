@@ -3,12 +3,12 @@ namespace Prototyping.Net
 open Prototyping.Engine
 open Prototyping.Table
 
-/// Who has a seat. `Taken` with no console is somebody who is sitting there but whose connection has
-/// gone - the seat is held for them and nobody else may take it, and the token is what brings them
-/// back to it.
+/// Who has a seat. `Taken` names the console that took it and whether it is still here: a seat
+/// whose console has gone is held for it - nobody else may take it - and the token, or the same
+/// console coming back, brings it back to it.
 type Occupant =
     | Empty
-    | Taken of token: string * console: string option
+    | Taken of token: string * console: string * here: bool
     | Played
 
 [<NoComparison; NoEquality>]
@@ -44,6 +44,11 @@ module Lobby =
                   Hushed = false
                   View = plain }) }
 
+    /// Opened with the machines the seating asked for at their seats, which is how every table but
+    /// a check's is opened.
+    let openedFor game model sitters =
+        opened game model (game.Seating (Model.seed model) (Seating.machines sitters) (Model.state model))
+
     let model lobby = lobby.Model
 
     let game lobby = lobby.Game
@@ -69,13 +74,20 @@ module Lobby =
         lobby.Seats
         |> List.choose (fun seat ->
             match seat.Occupant with
-            | Taken(_, Some console) -> Some(console, seat)
-            | Taken(_, None)
+            | Taken(_, console, true) -> Some(console, seat)
+            | Taken(_, _, false)
             | Played
             | Empty -> None)
 
+    /// The seat a console is at and the token it holds there, for a console that is here.
     let private seatAt console lobby =
-        consoles lobby |> List.tryFind (fst >> (=) console) |> Option.map snd
+        lobby.Seats
+        |> List.tryPick (fun seat ->
+            match seat.Occupant with
+            | Taken(token, at, true) when at = console -> Some(seat, token)
+            | Taken _
+            | Played
+            | Empty -> None)
 
     let private withSeat seat (lobby: Lobby<_, _, _>) =
         { lobby with
@@ -93,12 +105,17 @@ module Lobby =
         | Finished
 
     type Standing =
-        { Stage: Stage
-          Places: int
-          Machines: int
-          Sat: int
-          Reading: int
-          Sitters: string list }
+        {
+            Stage: Stage
+            Places: int
+            Machines: int
+            Sat: int
+            Reading: int
+            /// Whether anything has been played at it - here, or before it was taken up off a record,
+            /// which leaves a table nobody is at holding somebody's game rather than nothing.
+            Begun: bool
+            Sitters: string list
+        }
 
     let described lobby : Standing =
         let counted wanted =
@@ -119,10 +136,11 @@ module Lobby =
           Reading =
             counted (fun occupant ->
                 match occupant with
-                | Taken(_, Some _) -> true
-                | Taken(_, None)
+                | Taken(_, _, true) -> true
+                | Taken(_, _, false)
                 | Played
                 | Empty -> false)
+          Begun = not (Journal.isEmpty lobby.Model.Journal)
           Sitters =
             lobby.Seats
             |> List.map (fun seat ->
@@ -130,8 +148,8 @@ module Lobby =
                     match seat.Occupant with
                     | Empty -> "waiting"
                     | Played -> "the machine"
-                    | Taken(_, Some _) -> "here"
-                    | Taken(_, None) -> "away"
+                    | Taken(_, _, true) -> "here"
+                    | Taken(_, _, false) -> "away"
 
                 $"{lobby.Game.Seat seat.Player} ({who})") }
 
@@ -143,8 +161,8 @@ module Lobby =
               Expected = isEmpty other
               Away =
                 match other.Occupant with
-                | Taken(_, None) -> true
-                | Taken(_, Some _)
+                | Taken(_, _, false) -> true
+                | Taken(_, _, true)
                 | Played
                 | Empty -> false
               Yours = other.Player = seat.Player })
@@ -156,7 +174,8 @@ module Lobby =
             elif stillSeated seat lobby then seat.View.Board seat.Margins seat.Player lobby.Model
             else seat.View.Says "Your seat is no longer at this table."
 
-        { To = console; Say = Screen text }
+        { To = console
+          Say = ToPlayer.Screen text }
 
     let private drawAll lobby =
         consoles lobby |> List.map (screenFor lobby)
@@ -171,7 +190,9 @@ module Lobby =
         else
             [ for sound in lobby.Game.Rings(standing lobby) do
                   for console, seat in consoles lobby do
-                      if not seat.Hushed then { To = console; Say = Rang sound } ]
+                      if not seat.Hushed then
+                          { To = console
+                            Say = ToPlayer.Rang sound } ]
 
     let private nudging spoke lobby =
         if (rules lobby).Over(standing lobby) || not (everyoneHere lobby) then
@@ -181,7 +202,7 @@ module Lobby =
 
             consoles lobby
             |> List.filter (fun (console, seat) -> seat.Player = active && Some console <> spoke)
-            |> List.map (fun (console, _) -> { To = console; Say = Nudged })
+            |> List.map (fun (console, _) -> { To = console; Say = ToPlayer.Nudged })
 
     let private just console said = [ { To = console; Say = said } ]
 
@@ -203,13 +224,14 @@ module Lobby =
 
 
     let join console offered resuming (view: View<_, _, _>) lobby =
-        let byToken token =
+        let holding wanted =
             lobby.Seats
-            |> List.tryFind (fun seat ->
+            |> List.tryPick (fun seat ->
                 match seat.Occupant with
-                | Taken(mine, _) -> mine = token
+                | Taken(token, at, _) when wanted token at -> Some(seat, token)
+                | Taken _
                 | Played
-                | Empty -> false)
+                | Empty -> None)
 
         let sit seat token lobby =
             let begins = not (everyoneHere lobby)
@@ -218,51 +240,51 @@ module Lobby =
                 lobby
                 |> withSeat
                     { seat with
-                        Occupant = Taken(token, Some console)
+                        Occupant = Taken(token, console, true)
                         View = view }
 
             let lobby = if begins && everyoneHere lobby then answering lobby else lobby
 
             lobby,
-            just console (Seated(PlayerId.value seat.Player, token))
+            just console (ToPlayer.Seated(PlayerId.value seat.Player, token))
             @ drawAll lobby
             @ (Playable.roster lobby.Game lobby.Rivals
                |> Option.map (fun said ->
                    { To = console
-                     Say = Told(view.Says said) })
+                     Say = ToPlayer.Told(view.Says said) })
                |> Option.toList)
             @ (if begins then nudging (Some console) lobby else [])
 
+        // A token brings a console back to the seat it left whatever it is called now, since a
+        // terminal comes back under a new name. A console the table already knows is put back in
+        // its own seat without one - which is what a page that reloads has: the same cookie, and
+        // no idea it was ever away.
         match resuming with
         | Some token ->
-            match byToken token with
-            | Some seat -> sit seat token lobby
-            | None -> lobby, just console (TurnedAway "That is not a seat at this table.")
+            match holding (fun mine _ -> mine = token) with
+            | Some(seat, token) -> sit seat token lobby
+            | None -> lobby, just console (ToPlayer.TurnedAway "That is not a seat at this table.")
         | None ->
-            match lobby.Seats |> List.tryFind isEmpty with
-            | Some seat -> sit seat offered lobby
-            | None -> lobby, just console (TurnedAway "Every seat at this table is taken.")
+            match holding (fun _ at -> at = console) with
+            | Some(seat, token) -> sit seat token lobby
+            | None ->
+                match lobby.Seats |> List.tryFind isEmpty with
+                | Some seat -> sit seat offered lobby
+                | None -> lobby, just console (ToPlayer.TurnedAway "Every seat at this table is taken.")
 
     let left console lobby =
         match seatAt console lobby with
         | None -> lobby, []
-        | Some seat ->
+        | Some(seat, token) ->
             let lobby =
-                match seat.Occupant with
-                | Taken(token, _) ->
-                    lobby
-                    |> withSeat
-                        { seat with
-                            Occupant = Taken(token, None) }
-                | Played
-                | Empty -> lobby
+                lobby
+                |> withSeat
+                    { seat with
+                        Occupant = Taken(token, console, false) }
 
             lobby, drawAll lobby
 
 
-    /// What a networked table will not do, and why. Undo is the interesting one: walking a game back
-    /// in front of several players would show somebody a position they were meant to have seen only
-    /// their own side of.
     let private refused =
         function
         | Undo
@@ -276,11 +298,11 @@ module Lobby =
 
     let said console (typed: string) lobby =
         match seatAt console lobby with
-        | None -> lobby, just console (TurnedAway "You are not sitting at this table.")
-        | Some seat ->
+        | None -> lobby, just console (ToPlayer.TurnedAway "You are not sitting at this table.")
+        | Some(seat, _) ->
 
         let told text =
-            lobby, just console (Told(seat.View.Says text))
+            lobby, just console (ToPlayer.Told(seat.View.Says text))
 
         let redraw seat lobby =
             lobby, [ screenFor lobby (console, seat) ]
@@ -292,28 +314,22 @@ module Lobby =
             posts
             @ just
                 console
-                (GotUp(
+                (ToPlayer.GotUp(
                     seat.View.Says
                         "You are up from the table. Your seat is kept - nobody else may take it - and the line you were given when you sat down brings you back to it."
                 ))
 
-        match Playable.read lobby.Game typed with
-        | Ok Leave -> gotUp ()
-        | read ->
-
-        if not (everyoneHere lobby) then
-            redraw seat lobby
-        elif not (stillSeated seat lobby) then
-            told "Your seat is no longer at this table."
-        else
-
         let mine seat = lobby |> withSeat seat |> redraw seat
 
-        match read with
+        // Getting up comes before everything else, since a console may leave a table that is still
+        // filling or a seat that is no longer at it; at either of those nothing else is answered.
+        match Playable.read lobby.Game typed with
+        | Ok Leave -> gotUp ()
+        | _ when not (everyoneHere lobby) -> redraw seat lobby
+        | _ when not (stillSeated seat lobby) -> told "Your seat is no longer at this table."
         | Error problem -> told problem
         | Ok Nothing -> redraw seat lobby
-        | Ok Help -> lobby, just console (Told seat.View.Rules)
-        | Ok Leave -> gotUp ()
+        | Ok Help -> lobby, just console (ToPlayer.Told seat.View.Rules)
         | Ok(Notes wanted) ->
             mine
                 { seat with
@@ -344,19 +360,24 @@ module Lobby =
             match Playable.byName seat.View.Shown seat.View.Palette lobby.Game name with
             | Ok view -> mine { seat with View = view }
             | Error problem -> told problem
-        | Ok(Asking question) -> lobby, just console (Told(seat.View.Answer seat.Player question lobby.Model))
-        | Ok Recount -> lobby, just console (Told(seat.View.History seat.Player lobby.Model))
+        | Ok(Asking question) -> lobby, just console (ToPlayer.Told(seat.View.Answer seat.Player question lobby.Model))
+        | Ok Recount -> lobby, just console (ToPlayer.Told(seat.View.History seat.Player lobby.Model))
         | Ok Keep -> told "The table keeps the record itself, and writes it out after every move."
         | Ok(Send msg) ->
             match refused msg with
             | Some why -> told why
             | None ->
 
-            // A game on a clock takes what anybody says whenever they say it - steering a snake is not
-            // taking a turn. A game that goes by turns only takes it from whoever is to play.
+            // A game of turns takes a move from whoever is to play and from nobody else - and so does
+            // a game on a clock while it is still taking turns, which is what `Pulse.Free` says.
+            // Where the beat is what moves the game, any console may speak: steering a snake is
+            // not taking a turn.
             let active = (rules lobby).Active(standing lobby)
 
-            if lobby.Game.Pulse.IsNone && seat.Player <> active then
+            let free =
+                lobby.Game.Pulse |> Option.exists (fun pulse -> pulse.Free(standing lobby))
+
+            if not free && seat.Player <> active then
                 told $"It is {lobby.Game.Seat active}'s turn."
             else
                 let next =

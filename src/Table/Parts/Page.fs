@@ -32,6 +32,11 @@ module Page =
     [<Literal>]
     let Amiss = "/amiss"
 
+    /// Where a house deals a table, for a form and nothing else: a link is a GET, and a GET is what
+    /// a prefetch or a preview sends.
+    [<Literal>]
+    let Open = "/open"
+
     [<Literal>]
     let Notify = "notify"
 
@@ -42,8 +47,8 @@ module Page =
     let Alive = "alive()"
 
     /// What the page is asked to do when the table makes a sound. A `Sound` is named for what
-    /// happened rather than for what it sounds like, so this is where the one becomes the other
-    /// and it is the only place in the program that has an opinion about pitch.
+    /// happened rather than for what it sounds like, so this is where the one becomes the other;
+    /// what each then sounds like is the five recipes in `sounding`.
     let rang sound = $"rang('{Sound.word sound}')"
 
     type Signals =
@@ -58,9 +63,15 @@ module Page =
 """
 
 
+    /// An attribute whose value is text of ours. `Attr.create` writes a value exactly as given, so
+    /// a '"' or an '&' in one would end the attribute early or start an entity; this is load-bearing
+    /// rather than tidy, since a slot's key from a game goes into a `style` attribute through it.
     let attr name (value: string) =
         Attr.create name (Net.WebUtility.HtmlEncode value)
 
+    /// An attribute of the client's that stands for itself, given an empty value instead:
+    /// `data-bind:line` and `data-bind:line=""` say the same thing to the client, and only the
+    /// second is well-formed XML, which is what the checks read every screen as.
     let valued =
         function
         | NonValueAttr name -> KeyValueAttr(name, "")
@@ -226,6 +237,18 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
               "g.gain.exponentialRampToValueAtTime(0.0001,from+ring);"
               "o.connect(g);g.connect(horn.destination);o.start(from);o.stop(from+ring+0.02)})}" ]
 
+    /// How long the page goes without hearing from the table before deciding it has gone: six of
+    /// the beats the wire sends every fifteen seconds, so one slow beat is not a lost table. Then
+    /// how soon it first tries to reach the table again, and how long between tries after that.
+    [<Literal>]
+    let private Silence = 90000
+
+    [<Literal>]
+    let private FirstTry = 1000
+
+    [<Literal>]
+    let private Between = 3000
+
     let private holding =
         String.concat
             ""
@@ -234,9 +257,9 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
               $"const said=document.getElementById('{Told}');"
               "if(said)said.textContent='The table stopped answering. Trying to reach it again...';"
               "const again=()=>fetch(location.href,{method:'HEAD',cache:'no-store'})"
-              ".then(()=>location.reload()).catch(()=>setTimeout(again,3000));"
-              "setTimeout(again,1000)};"
-              "const watch=()=>{clearTimeout(beat);beat=setTimeout(regain,90000)};"
+              $".then(()=>location.reload()).catch(()=>setTimeout(again,{Between}));"
+              $"setTimeout(again,{FirstTry})}};"
+              $"const watch=()=>{{clearTimeout(beat);beat=setTimeout(regain,{Silence})}};"
               "window.alive=watch;watch();"
               "document.addEventListener('datastar-fetch',e=>{"
               "const doing=e.detail?e.detail.type:'';"
@@ -314,27 +337,37 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                   "const line=steer[e.key];if(!line)return;e.preventDefault();"
                   $"fetch('{Say}?line='+line,{{method:'POST'}}).catch(()=>{{}})}})" ]
 
+    let private head shell palette scripts =
+        Elem.head
+            []
+            ([ Elem.meta [ Attr.create "charset" "utf-8" ]
+               Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
+               Elem.title [] [ Text.enc shell.Title ]
+               Elem.style [] [ Text.raw (styles shell palette) ] ]
+             @ scripts)
+
+    /// How many of its own faults a page reports to the table before going quiet, so that a page
+    /// stuck in a loop says so a few times rather than for ever.
+    [<Literal>]
+    let private Reports = 8
+
+    let private telling =
+        String.concat
+            ""
+            [ $"let left={Reports};const tell=w=>{{if(left-->0)fetch('{Amiss}',{{method:'POST',body:w}}).catch(()=>{{}})}};"
+              "addEventListener('error',e=>tell((e.message||'')+' at '+(e.filename||'')+':'+(e.lineno||0)));"
+              "addEventListener('unhandledrejection',e=>tell('unsettled: '+e.reason))" ]
+
     let page shell palette =
         let asked = Uri.EscapeDataString(Palette.write palette)
 
         renderHtml (
             Elem.html
                 [ Attr.lang "en" ]
-                [ Elem.head
-                      []
-                      [ Elem.meta [ Attr.create "charset" "utf-8" ]
-                        Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
-                        Elem.title [] [ Text.enc shell.Title ]
-                        Elem.style [] [ Text.raw (styles shell palette) ]
-                        Elem.script
-                            []
-                            [ Text.raw (
-                                  "let left=8;const tell=w=>{if(left-->0)fetch('"
-                                  + Amiss
-                                  + "',{method:'POST',body:w}).catch(()=>{})};"
-                                  + "addEventListener('error',e=>tell((e.message||'')+' at '+(e.filename||'')+':'+(e.lineno||0)));"
-                                  + "addEventListener('unhandledrejection',e=>tell('unsettled: '+e.reason))"
-                              ) ]
+                [ head
+                      shell
+                      palette
+                      [ Elem.script [] [ Text.raw telling ]
                         Elem.script [ attr "type" "module"; Attr.src Client ] [] ]
                   Elem.body
                       [ Ds.signals nothingTyped
@@ -368,17 +401,12 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
         renderHtml (
             Elem.html
                 [ Attr.lang "en" ]
-                [ Elem.head
-                      []
-                      [ Elem.meta [ Attr.create "charset" "utf-8" ]
-                        Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
-                        Elem.title [] [ Text.enc shell.Title ]
-                        Elem.style [] [ Text.raw (styles shell palette) ] ]
+                [ head shell palette []
                   Elem.body
                       []
                       [ Elem.main
                             [ Attr.id Screen ]
-                            [ Elem.h1 [] [ Text.raw "This table has a word at the door" ]
+                            [ Elem.h1 [] [ Text.raw "There is a word at the door" ]
                               block
                                   "The word"
                                   [ Elem.form
@@ -405,24 +433,19 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
           Sitters: string
           Spare: bool }
 
-    let house shell palette (opening: (int * string) list) (rows: Row list) =
+    let house shell palette (opening: int list) (rows: Row list) =
         let table (row: Row) =
             Elem.li
                 [ Attr.class' (if row.Spare then "spare" else "taken") ]
                 [ Elem.a [ Attr.href row.Where; Attr.class' "types" ] [ Text.enc (if row.Spare then "sit down" else "look on") ]
                   Elem.span [] [ Text.enc $"{row.Stage} - {row.Seats}" ]
-                  Elem.span [ Attr.class' "quiet" ] [ Text.enc row.Name ]
+                  quiet row.Name
                   note row.Sitters ]
 
         renderHtml (
             Elem.html
                 [ Attr.lang "en" ]
-                [ Elem.head
-                      []
-                      [ Elem.meta [ Attr.create "charset" "utf-8" ]
-                        Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1" ]
-                        Elem.title [] [ Text.enc shell.Title ]
-                        Elem.style [] [ Text.raw (styles shell palette) ] ]
+                [ head shell palette []
                   Elem.body
                       []
                       [ Elem.main
@@ -430,10 +453,12 @@ pre { margin: 0; white-space: pre-wrap; overflow-x: auto; }
                             [ Elem.h1 [] [ Text.enc shell.Title ]
                               block
                                   "Open a table"
-                                  [ Elem.p
-                                        [ Attr.class' "opening" ]
-                                        [ for players, where in opening do
-                                              Elem.a [ Attr.href where; Attr.class' "types" ] [ Text.enc $"for {players}" ] ] ]
+                                  [ Elem.form
+                                        [ attr "method" "post"; attr "action" Open; Attr.class' "opening" ]
+                                        [ for players in opening do
+                                              Elem.button
+                                                  [ Attr.class' "types"; attr "name" "players"; attr "value" (string players) ]
+                                                  [ Text.enc $"for {players}" ] ] ]
                               block
                                   "Tables"
                                   [ match rows with

@@ -1,10 +1,12 @@
 namespace Prototyping.Snake
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Snake
 
 module Render =
+
+    let seated = Scene.seated Words.player
 
     module Blocks =
         let board = "The board"
@@ -38,15 +40,14 @@ module Render =
 
             match mine with
             | Some(seat, snake) when Snake.isAlive snake ->
-                $"Beat {play.Turn} - {Words.seated (seat = beholder) seat}, {Words.segments (Snake.length snake)}, ate {Words.eaten snake.Eaten}"
-            | Some(seat, snake) ->
-                $"Beat {play.Turn} - {Words.seated (seat = beholder) seat} {Words.fate (Option.get snake.Fate)}"
+                $"Beat {play.Turn} - {seated (seat = beholder) seat}, {Words.segments (Snake.length snake)}, ate {Words.eaten snake.Eaten}"
+            | Some(seat, snake) -> $"Beat {play.Turn} - {seated (seat = beholder) seat} {Words.fate (Option.get snake.Fate)}"
             | None -> $"Beat {play.Turn}"
         | InPlay play ->
             let yours = play.ToPlay = beholder
             let snake = Session.snakeAt play.ToPlay play
 
-            $"Turn {play.Turn} - {Words.seated yours play.ToPlay} to play, {Words.segments (Snake.length snake)} and facing {Words.direction snake.Facing}"
+            $"Turn {play.Turn} - {seated yours play.ToPlay} to play, {Words.segments (Snake.length snake)} and facing {Words.direction snake.Facing}"
         | Finished(play, over) -> $"The game is over: {Words.scored play over}"
 
 
@@ -86,7 +87,7 @@ module Render =
             [ Scene.cell
                   Tone.Yours
                   (if play.Pace = Turns && seat = play.ToPlay && not (Session.isOver session) then "->" else "")
-              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (Words.seated yours seat)
+              Scene.cell (if yours then Tone.Yours else Tone.Slot(Ink.key seat)) (seated yours seat)
               Scene.cell Tone.Quiet (Words.segments (Snake.length snake))
               Scene.cell Tone.Quiet $"ate {Words.eaten snake.Eaten}"
               Scene.cell Tone.Quiet standing ])
@@ -95,7 +96,7 @@ module Render =
     let private clock play =
         match play.Pace with
         | Turns -> Blank
-        | Clock -> Scene.quietly $"clock at speed {play.Speed} of {Session.Fastest} - 'faster' and 'slower', or + and -"
+        | Clock -> Scene.quietly $"clock at speed {play.Speed} of {Notch.Fastest} - 'faster' and 'slower', or + and -"
 
     let private onwards beholder session =
         let play = Session.play session
@@ -139,7 +140,7 @@ module Render =
               yield "arrows, wasd", "turn your snake - the arrows are A's, wasd are B's"
               yield "north, n, up", "the same, typed (and 'b north' for somebody else's)"
               yield "+ and -", $"wind the clock up or down ('faster', 'slower')"
-              yield "speed 7", $"straight to a notch, from {Session.Slowest} to {Session.Fastest}"
+              yield "speed 7", $"straight to a notch, from {Notch.Slowest} to {Notch.Fastest}"
               yield "space", "hold the clock while you think; space again to go on"
 
           yield "why east", "what is one square that way, before you commit to it"
@@ -150,49 +151,40 @@ module Render =
               | Clock -> "another board - or 'r', once the clock has stopped"
               | Turns -> "another board, dealt fresh"
 
-          yield "undo, redo", "walk the game back and forward"
-          yield "history", "the record so far"
-          yield "notes", "hide the writing that explains the board"
-          yield "commands", "hide this box"
-          yield "log", "hide what the game has been saying"
-          yield "view <name>", "draw the board another way"
-          yield "save", "write the record now"
-          yield "help", "every command, at length"
           yield
               "resign",
               (if pace = Turns then
                    "stop your snake, but write the game down"
                else
                    "give the game up, and write it down")
-          yield "quit", "leave; the record is written and can be replayed" ]
+
+          yield! Commands.verbs ]
 
     let commands pace = Scene.verbs (verbs pace)
-
-    let private wrapped text = Scene.paragraph 66 text
 
     let help pace =
         String.concat
             "\n"
-            [ wrapped $"Snake, on a board of {Board.Width} by {Board.Height}."
+            [ Scene.prose $"Snake, on a board of {Board.Width} by {Board.Height}."
               ""
-              wrapped (Notes.moving pace)
+              Scene.prose (Notes.moving pace)
               ""
-              wrapped Notes.board
+              Scene.prose Notes.board
               ""
-              wrapped
+              Scene.prose
                   "A snake stops when its head meets the wall, another snake, or itself - and what is left of it lies where it fell, for everybody else to go round. At a table of one that is the end of the game and the score is what you ate. At a table of more, the last one moving has won."
               ""
               match pace with
               | Turns ->
-                  wrapped
+                  Scene.prose
                       "Nothing happens here until you say so: a direction is a step, and the board waits between them. The other way of playing this game does not wait - see 'snake' rather than 'snake-turns'."
               | Clock ->
-                  wrapped
+                  Scene.prose
                       "Nobody waits for anybody here. The clock moves every snake at once, quicker as they eat, and what you press only turns a head - so the wall arrives whether or not you had decided. Space holds the clock, Enter types a whole line, Esc puts the game down."
 
                   ""
 
-                  wrapped
+                  Scene.prose
                       "Four snakes at one keyboard have a hand each: the arrows are Snake A, wasd is B, ijkl is C and the number pad is D. Typed, they say which snake they mean - 'b north' - and a bare direction is A's."
 
               ""
@@ -201,13 +193,6 @@ module Render =
 
 
     let wording = Told.inWords Words.said Words.command
-
-    let private lately (margins: Margins) lines =
-        if not margins.Notes && not margins.Commands then
-            lines |> List.skip (max 0 (List.length lines - 3))
-        else
-            lines
-
 
     let board margins beholder (model: Model<Move, Session, Notice>) =
         let session = Model.state model
@@ -225,7 +210,7 @@ module Render =
                     )
                     Scene.offering margins Blocks.onwards (onwards beholder session) ]
               Scene.listing margins Blocks.commands (commands pace)
-              Scene.logged margins Blocks.log (lately margins (Scene.log wording model)) ]
+              Scene.logged margins Blocks.log (Scene.lately margins (Scene.log wording model)) ]
 
 
     let history beholder (model: Model<Move, Session, Notice>) =
@@ -278,7 +263,7 @@ module Render =
     let rules pace = Scene.rules (help pace)
 
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     let private hands =

@@ -1,15 +1,13 @@
 namespace Prototyping.Cascade
 
-open Prototyping.Engine
+open Prototyping.Common
 
 type Move =
     | Touch of Cell
     | Point of Way
     | Press
     | Beat
-    | Faster
-    | Slower
-    | Speed of notch: int
+    | Wind of Winding
     | Resign
 
 type Happening =
@@ -244,18 +242,9 @@ module Turn =
             ),
             [ Happened(Touched cell) ]
 
-        | InPlay _, Speed notch when notch < Session.Slowest || notch > Session.Fastest -> None, [ Refused(NoSuchSpeed notch) ]
+        | InPlay _, Wind(Winding.Speed notch) when not (Notch.holds notch) -> None, [ Refused(NoSuchSpeed notch) ]
 
-        | InPlay play, Speed notch when notch = play.Speed -> None, []
-        | InPlay play, Faster when play.Speed = Session.Fastest -> None, []
-        | InPlay play, Slower when play.Speed = Session.Slowest -> None, []
-
-        | InPlay play, (Faster | Slower | Speed _ as winding) ->
-            let notch =
-                match winding with
-                | Faster -> play.Speed + 1
-                | Slower -> play.Speed - 1
-                | Speed notch -> notch
-                | _ -> play.Speed
-
-            Some(InPlay { play with Speed = notch }), [ Happened(Wound notch) ]
+        | InPlay play, Wind winding ->
+            match Notch.wound winding play.Speed with
+            | None -> None, []
+            | Some notch -> Some(InPlay { play with Speed = notch }), [ Happened(Wound notch) ]

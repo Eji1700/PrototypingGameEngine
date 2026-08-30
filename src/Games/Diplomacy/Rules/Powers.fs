@@ -100,8 +100,6 @@ module Kind =
 
 module Coast =
 
-    let all = [ North; South; East ]
-
     let code =
         function
         | North -> "nc"

@@ -1,13 +1,12 @@
-#r "nuget: FsCheck, 3.3.3"
-
+#load "Holds.fsx"
 #load "Whole.fsx"
 
-open FsCheck
 open FsCheck.FSharp
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Turncoats
-open Harness
+open Checks
+open Holds
 open Whole
 
 
@@ -16,7 +15,7 @@ type Play =
       Seed: uint64
       Moves: Msg list }
 
-let private color = Gen.elements StoneColor.all
+let private colour = Gen.elements StoneColour.all
 
 let private region =
     Gen.elements (Board.regions |> List.map (fun region -> region.Id))
@@ -26,32 +25,32 @@ let private casualties =
         [ Gen.constant AsManyAsAllowed
           gen {
               let! n = Gen.choose (0, 2)
-              let! named = Gen.listOfLength n color
+              let! named = Gen.listOfLength n colour
               return These named
           } ]
 
 let private recruit =
     gen {
-        let! color = color
+        let! colour = colour
         let! into = region
-        return Recruit(color, into)
+        return Recruit(colour, into)
     }
 
 let private battle =
     gen {
-        let! color = color
+        let! colour = colour
         let! target = region
         let! driven = casualties
-        return Battle(color, target, driven)
+        return Battle(colour, target, driven)
     }
 
 let private march =
     gen {
-        let! color = color
+        let! colour = colour
         let! from = region
         let! into = region
         let! count = Gen.choose (1, 3)
-        return March(color, from, into, count)
+        return March(colour, from, into, count)
     }
 
 let private move =
@@ -60,7 +59,7 @@ let private move =
           4, battle
           4, march
           4, Gen.constant Negotiate
-          3, color |> Gen.map Settle
+          3, colour |> Gen.map Settle
           1, Gen.constant Resign ]
 
 let private message =
@@ -99,38 +98,21 @@ let private played play =
     | Ok model -> play.Moves |> List.fold (fun model msg -> Playing.update msg model) model
 
 
-let private config =
-    Config.QuickThrowOnFailure.WithMaxTest(300).WithQuietOnSuccess(true)
-
-let private holds name property =
-    let failure =
-        try
-            Check.One(config, property)
-            None
-        with problem ->
-            Some problem.Message
-
-    match failure with
-    | None -> report name true true
-    | Some message ->
-        report name true false
-
-        message.Split '\n'
-        |> Array.iter (fun line -> printfn "     %s" (line.TrimEnd()))
-
 let private about property = Prop.forAll plays property
 
 
 holds
+    300
     "every colour keeps all 21 of its stones, whatever the game is asked to do"
     (about (fun play ->
         let game = Playing.game (played play)
 
-        StoneColor.all
-        |> List.forall (fun color -> Pile.count color (Game.allStones game) = 21)))
+        StoneColour.all
+        |> List.forall (fun colour -> Pile.count colour (Game.allStones game) = 21)))
 
 
 holds
+    300
     "a move the rules refuse leaves the game exactly where it was"
     (about (fun play ->
         let step (model, sound) msg =
@@ -149,6 +131,7 @@ holds
 
 
 holds
+    300
     "whoever rules a region is holding as many stones there as anyone"
     (about (fun play ->
         let game = Playing.game (played play)
@@ -158,18 +141,19 @@ holds
             let stones = Game.stones region.Id game
 
             let most =
-                StoneColor.all |> List.map (fun color -> Pile.count color stones) |> List.max
+                StoneColour.all |> List.map (fun colour -> Pile.count colour stones) |> List.max
 
-            let leading color =
-                Pile.count color stones = most && most > 0
+            let leading colour =
+                Pile.count colour stones = most && most > 0
 
             match Game.ruleOver region.Id game with
             | Unclaimed -> Pile.isEmpty stones
-            | RuledBy color -> leading color
+            | RuledBy colour -> leading colour
             | Contested tied -> List.length tied >= 2 && tied |> List.forall leading)))
 
 
 holds
+    300
     "a player sees their own bag, the size of everyone else's, and nothing more"
     (about (fun play ->
         let game = Playing.game (played play)
@@ -192,19 +176,20 @@ holds
                 | Open _ -> false
 
             let unseenAddsUp =
-                StoneColor.all
-                |> List.forall (fun color ->
-                    let out = Pile.count color seen.Unseen
+                StoneColour.all
+                |> List.forall (fun colour ->
+                    let out = Pile.count colour seen.Unseen
 
                     out >= 0
-                    && out = Pile.count color (Game.allStones game)
-                             - Pile.count color (Position.total game.Position)
-                             - Pile.count color beholder.Bag)
+                    && out = Pile.count colour (Game.allStones game)
+                             - Pile.count colour (Position.total game.Position)
+                             - Pile.count colour beholder.Bag)
 
             bagsRight && reserveClosed && unseenAddsUp)))
 
 
 holds
+    300
     "a game written down and read back is the same game, state for state"
     (about (fun play ->
         let model = played play
@@ -227,6 +212,7 @@ holds
 
 
 holds
+    300
     "taking the last move back and making it again leaves the game where it stood"
     (about (fun play ->
         let model = played play

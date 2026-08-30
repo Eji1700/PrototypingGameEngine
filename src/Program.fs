@@ -1,5 +1,6 @@
 module Prototyping.Program
 
+open Prototyping.Common
 open Prototyping.Table
 
 let private picked argv =
@@ -12,10 +13,10 @@ let private picked argv =
 
 
 let private seating (game: Play.Chosen) =
-    match game.Fewest, game.Most with
-    | 1, 1 -> "1 player"
-    | fewest, most when fewest = most -> $"{fewest} players"
-    | fewest, most -> $"{fewest} to {most} players"
+    if game.Fewest = game.Most then
+        Counting.several "player" "players" game.Fewest
+    else
+        $"{game.Fewest} to {game.Most} players"
 
 let private picking: Keys.Screen =
     { Title = "Which game?"
@@ -25,7 +26,7 @@ let private picking: Keys.Screen =
               Keys.sends (Keys.nth index) game.Title $"{seating game} - {game.Blurb}" game.Name ]
       Note =
         [ "Or name one outright, here or on a command line, and everything after it is"
-          $"read by that game:  dotnet run -- {Games.usually.Name} play 3" ]
+          $"read by that game:  {Invoked.opening Games.usually.Name} play 3" ]
       Backs = None }
 
 let rec private asking at said =

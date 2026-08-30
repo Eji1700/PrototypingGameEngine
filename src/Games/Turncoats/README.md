@@ -1,6 +1,6 @@
 # Turncoats
 
-The game this program was built for, and the first of the three in it. The engine it runs
+The game this program was built for, and the first of those in it. The engine it runs
 on, and everything that is not this game — the record, the seats, the wire, the screens, the
 command line — is [one directory up](../../../README.md).
 
@@ -161,9 +161,8 @@ and of each other — sharing no side with anything, they border nothing.
 No two homes border each other, and every home is three steps from every other,
 whether or not the dead region is passable.
 
-Rules that use adjacency can be written against `Board.areAdjacent`,
-`Board.neighbours` and `Board.reachableFrom` (which takes a set of blocked regions,
-ready for the dead region to obstruct movement).
+Rules that use adjacency can be written against `Board.areAdjacent` and
+`Board.neighbours`.
 
 ## The four actions
 
@@ -240,7 +239,7 @@ Saltmarsh holds 1 Blue and 1 Green.
 ## Winning
 
 Two cascades run when the game ends, both shaped exactly like ruling a region — see
-`Cascade.run`, which all three share.
+`Tiebreak.run`, which all three share.
 
 **The faction that carries the board:**
 
@@ -286,7 +285,7 @@ run exactly as a negotiation does. So in a two-player game, one player being
 skipped and the other negotiating ends it. If every bag is empty, every turn is a
 skip and the run fills in one lap of the table — which is the "all players have
 played out their stones" ending, arrived at by the same counter rather than a
-separate check. The end is reported either way: *every player negotiated in turn*,
+separate check. The end is reported either way: *every player has negotiated in turn*,
 or *every player has played out their bag*.
 
 Since a negotiation never grows a bag and only a stone in hand allows one, every
@@ -294,9 +293,9 @@ bag shrinks monotonically, so a game always winds down.
 
 ## Who knows what
 
-A bag is held closed and so is the reserve, so nobody sees the whole game. The
-screen belongs to whoever is to play, and `Knowledge.seenBy`
-([Knowledge.fs](Rules/Knowledge.fs)) is what they are shown:
+A bag is held closed and so is the reserve, so nobody sees the whole game. Every
+screen is drawn for one seat, and `Knowledge.seenBy`
+([Knowledge.fs](Rules/Knowledge.fs)) is what that seat is shown:
 
 | | what they see |
 | --- | --- |
@@ -430,7 +429,7 @@ ever sees.
 
 | File | Role |
 | --- | --- |
-| [Stones.fs](Rules/Stones.fs) | `StoneColor` and `Pile`, a multiset of stones |
+| [Stones.fs](Rules/Stones.fs) | `StoneColour` and `Pile`, a multiset of stones |
 | [Board.fs](Rules/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
 | [Players.fs](Rules/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
 | [Position.fs](Rules/Position.fs) | Which stones stand where |

@@ -15,12 +15,12 @@ type PlayerMeasure =
     | ClosestToActing
 
 type DrawReason =
-    | NoFactionSeparated of StoneColor list
-    | EveryBagPlayedOut of StoneColor
-    | NoPlayerSeparated of StoneColor
+    | NoFactionSeparated of StoneColour list
+    | EveryBagPlayedOut of StoneColour
+    | NoPlayerSeparated of StoneColour
 
 type Verdict =
-    | Won of faction: StoneColor * player: PlayerId
+    | Won of faction: StoneColour * player: PlayerId
     | Drawn of DrawReason
 
 module Outcome =
@@ -30,20 +30,20 @@ module Outcome =
         let axe = Game.axeStones game
         let flag = Game.flagStones game
 
-        [ Cascade.by LandRuled (fun color -> ruled[color])
-          Cascade.by AxeHeld (fun color -> Pile.count color axe)
-          Cascade.by FlagHeld (fun color -> Pile.count color flag) ]
+        [ Tiebreak.by LandRuled (fun colour -> ruled[colour])
+          Tiebreak.by AxeHeld (fun colour -> Pile.count colour axe)
+          Tiebreak.by FlagHeld (fun colour -> Pile.count colour flag) ]
 
     let weighFactions game =
-        Cascade.run (factionMeasures game) StoneColor.all
+        Tiebreak.run (factionMeasures game) StoneColour.all
 
     let private playerMeasures winning game =
         let ofWinning (player: Player) = Pile.count winning player.Bag
 
         let ofLosing (player: Player) =
-            StoneColor.all
-            |> List.filter (fun color -> color <> winning)
-            |> List.sumBy (fun color -> Pile.count color player.Bag)
+            StoneColour.all
+            |> List.filter (fun colour -> colour <> winning)
+            |> List.sumBy (fun colour -> Pile.count colour player.Bag)
 
         // The last tie-break: whoever would have acted soonest. Counted from the seat after the one
         // that just played, so it settles every time rather than leaving two players level.
@@ -52,12 +52,12 @@ module Outcome =
             |> List.mapi (fun place player -> player.Id, place)
             |> Map.ofList
 
-        [ Cascade.by WinningStonesHeld ofWinning
-          Cascade.byFewest LosingStonesHeld ofLosing
-          Cascade.byFewest ClosestToActing (fun (player: Player) -> waiting[player.Id]) ]
+        [ Tiebreak.by WinningStonesHeld ofWinning
+          Tiebreak.byFewest LosingStonesHeld ofLosing
+          Tiebreak.byFewest ClosestToActing (fun (player: Player) -> waiting[player.Id]) ]
 
     let weighPlayers winning game =
-        Cascade.run (playerMeasures winning game) (Game.players game)
+        Tiebreak.run (playerMeasures winning game) (Game.players game)
 
     let verdict game =
         match weighFactions game |> fst with

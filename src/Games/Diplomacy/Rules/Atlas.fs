@@ -1,5 +1,7 @@
 namespace Prototyping.Diplomacy
 
+open Prototyping.Common
+
 type Terrain =
     | Inland
     | Coastal
@@ -301,14 +303,7 @@ module Atlas =
         Map.tryFind (text.ToLowerInvariant()) lookup
         |> Option.map (fun province -> province.Id)
 
-    let about id =
-        Map.tryFind (code id) lookup
-        |> Option.defaultValue
-            { Id = id
-              Name = code id
-              Terrain = Inland
-              Centre = NotACentre
-              Region = Waters }
+    let about id = Map.find (code id) lookup
 
     let nameOf id = (about id).Name
 
@@ -321,8 +316,6 @@ module Atlas =
     let isCentre id = centreOf id <> NotACentre
 
     let isSea id = terrainOf id = Sea
-
-    let isLand id = terrainOf id <> Sea
 
     let centres =
         all |> List.filter (fun p -> p.Centre <> NotACentre) |> List.map (fun p -> p.Id)
@@ -400,307 +393,55 @@ module Atlas =
     let waysInto kind location into =
         reach kind location |> List.filter (fun there -> there.At = into)
 
-    let walkable from into = armyReach from |> List.contains into
+    /// Everywhere a piece of either kind could step to from a province: by land, and by sea from
+    /// every coast it has. Fleet borders are kept by location, so a two-coasted province asked
+    /// without its coast reaches nothing by sea - right for a fleet, and wrong for a walk that only
+    /// wants to know how far apart two provinces are. This is that walk.
+    let anyReach id =
+        let coasts =
+            match coastsOf id with
+            | [] -> [ None ]
+            | coasts -> coasts |> List.map Some
+
+        armyReach id
+        @ (coasts
+           |> List.collect (fun coast -> fleetReach { At = id; Coast = coast })
+           |> List.map (fun there -> there.At))
+        |> List.distinct
 
 
     // The map, drawn as rows of hexes. Each row starts at an offset counted in halves of a cell and
     // its cells sit two apart, so a row offset by an odd number nestles between the one above it. A
     // province named in several neighbouring cells is drawn as one shape covering all of them, and
-    // "." is a hole. `problems` checks the shape this makes against the borders actually declared.
+    // "." is a hole, and a row is one string so that the formatter leaves it a row and the list reads
+    // as the map it is. `problems` checks the shape this makes against the borders actually declared.
     let private places =
-        [ 0, [ "nao"; "nwg"; "nwg"; "nwg"; "nwg"; "bar"; "bar" ]
-          -3, [ "mao"; "nao"; "cly"; "nwg"; "nwg"; "edi"; "nwg"; "nwy"; "stp" ]
-          -4,
-          [ "mao"
-            "iri"
-            "nao"
-            "cly"
-            "cly"
-            "cly"
-            "edi"
-            "nwg"
-            "nwy"
-            "stp"
-            "stp"
-            "stp"
-            "stp" ]
-          -5,
-          [ "mao"
-            "iri"
-            "lvp"
-            "cly"
-            "lvp"
-            "lvp"
-            "edi"
-            "nwg"
-            "nwy"
-            "nwy"
-            "nwy"
-            "nwy"
-            "nwy"
-            "stp" ]
-          -4,
-          [ "mao"
-            "iri"
-            "lvp"
-            "lvp"
-            "wal"
-            "yor"
-            "nth"
-            "nth"
-            "nth"
-            "nth"
-            "ska"
-            "swe"
-            "fin"
-            "stp" ]
-          -3,
-          [ "mao"
-            "iri"
-            "iri"
-            "wal"
-            "lon"
-            "nth"
-            "nth"
-            "nth"
-            "den"
-            "den"
-            "swe"
-            "bot"
-            "stp"
-            "stp"
-            "stp" ]
-          -2,
-          [ "mao"
-            "eng"
-            "eng"
-            "lon"
-            "lon"
-            "nth"
-            "hel"
-            "den"
-            "bal"
-            "bal"
-            "bot"
-            "bot"
-            "bot"
-            "lvn"
-            "stp" ]
-          -3,
-          [ "mao"
-            "eng"
-            "eng"
-            "eng"
-            "eng"
-            "nth"
-            "hol"
-            "kie"
-            "bal"
-            "bal"
-            "bal"
-            "bal"
-            "lvn"
-            "lvn"
-            "stp" ]
-          -4,
-          [ "mao"
-            "bre"
-            "pic"
-            "bel"
-            "bel"
-            "bel"
-            "hol"
-            "kie"
-            "kie"
-            "ber"
-            "pru"
-            "pru"
-            "pru"
-            "war"
-            "mos" ]
-          -5,
-          [ "mao"
-            "gas"
-            "bre"
-            "pic"
-            "bel"
-            "bel"
-            "hol"
-            "kie"
-            "kie"
-            "kie"
-            "ber"
-            "pru"
-            "pru"
-            "war"
-            "war"
-            "mos" ]
-          -6,
-          [ "mao"
-            "mao"
-            "gas"
-            "par"
-            "bur"
-            "bur"
-            "bel"
-            "ruh"
-            "ruh"
-            "mun"
-            "mun"
-            "sil"
-            "sil"
-            "sil"
-            "gal"
-            "ukr"
-            "sev" ]
-          -5,
-          [ "mao"
-            "gas"
-            "gas"
-            "bur"
-            "bur"
-            "bur"
-            "bur"
-            "bur"
-            "mun"
-            "mun"
-            "boh"
-            "boh"
-            "gal"
-            "gal"
-            "ukr"
-            "sev"
-            "sev" ]
-          -6,
-          [ "mao"
-            "spa"
-            "spa"
-            "gas"
-            "mar"
-            "."
-            "."
-            "."
-            "."
-            "tyr"
-            "boh"
-            "vie"
-            "vie"
-            "bud"
-            "rum"
-            "sev"
-            "bla"
-            "sev"
-            "sev" ]
-          -5,
-          [ "mao"
-            "spa"
-            "spa"
-            "spa"
-            "mar"
-            "pie"
-            "pie"
-            "pie"
-            "tyr"
-            "tyr"
-            "tyr"
-            "tri"
-            "tri"
-            "ser"
-            "rum"
-            "bla"
-            "bla"
-            "bla"
-            "arm" ]
-          -4,
-          [ "mao"
-            "por"
-            "por"
-            "spa"
-            "gol"
-            "tus"
-            "tus"
-            "ven"
-            "ven"
-            "ven"
-            "tri"
-            "tri"
-            "ser"
-            "ser"
-            "bul"
-            "con"
-            "ank"
-            "arm" ]
-          -3,
-          [ "mao"
-            "mao"
-            "spa"
-            "gol"
-            "tus"
-            "rom"
-            "rom"
-            "ven"
-            "adr"
-            "adr"
-            "tri"
-            "ser"
-            "ser"
-            "bul"
-            "con"
-            "ank"
-            "arm" ]
-          -2,
-          [ "mao"
-            "wes"
-            "wes"
-            "tys"
-            "rom"
-            "nap"
-            "apu"
-            "adr"
-            "adr"
-            "adr"
-            "alb"
-            "alb"
-            "gre"
-            "aeg"
-            "smy"
-            "smy"
-            "syr" ]
-          -1,
-          [ "naf"
-            "naf"
-            "wes"
-            "tys"
-            "tys"
-            "ion"
-            "adr"
-            "ion"
-            "ion"
-            "alb"
-            "gre"
-            "gre"
-            "aeg"
-            "smy"
-            "syr"
-            "syr" ]
-          2,
-          [ "naf"
-            "tun"
-            "tun"
-            "ion"
-            "ion"
-            "ion"
-            "ion"
-            "ion"
-            "ion"
-            "ion"
-            "ion"
-            "eas"
-            "eas" ] ]
+        [ 0, "nao nwg nwg nwg nwg bar bar"
+          -3, "mao nao cly nwg nwg edi nwg nwy stp"
+          -4, "mao iri nao cly cly cly edi nwg nwy stp stp stp stp"
+          -5, "mao iri lvp cly lvp lvp edi nwg nwy nwy nwy nwy nwy stp"
+          -4, "mao iri lvp lvp wal yor nth nth nth nth ska swe fin stp"
+          -3, "mao iri iri wal lon nth nth nth den den swe bot stp stp stp"
+          -2, "mao eng eng lon lon nth hel den bal bal bot bot bot lvn stp"
+          -3, "mao eng eng eng eng nth hol kie bal bal bal bal lvn lvn stp"
+          -4, "mao bre pic bel bel bel hol kie kie ber pru pru pru war mos"
+          -5, "mao gas bre pic bel bel hol kie kie kie ber pru pru war war mos"
+          -6, "mao mao gas par bur bur bel ruh ruh mun mun sil sil sil gal ukr sev"
+          -5, "mao gas gas bur bur bur bur bur mun mun boh boh gal gal ukr sev sev"
+          -6, "mao spa spa gas mar . . . . tyr boh vie vie bud rum sev bla sev sev"
+          -5, "mao spa spa spa mar pie pie pie tyr tyr tyr tri tri ser rum bla bla bla arm"
+          -4, "mao por por spa gol tus tus ven ven ven tri tri ser ser bul con ank arm"
+          -3, "mao mao spa gol tus rom rom ven adr adr tri ser ser bul con ank arm"
+          -2, "mao wes wes tys rom nap apu adr adr adr alb alb gre aeg smy smy syr"
+          -1, "naf naf wes tys tys ion adr ion ion alb gre gre aeg smy syr syr"
+          2, "naf tun tun ion ion ion ion ion ion ion ion eas eas" ]
 
     let private placedCells =
         places
-        |> List.map (fun (start, cells) -> cells |> List.mapi (fun step code -> code, start + 2 * step))
+        |> List.map (fun (start, cells: string) ->
+            cells.Split ' '
+            |> List.ofArray
+            |> List.mapi (fun step code -> code, start + 2 * step))
 
     let private placedPlaces =
         placedCells |> List.map (List.filter (fun (code, _) -> code <> "."))
@@ -746,6 +487,16 @@ module Atlas =
 
             start - westmost, row |> List.map (fun (code, _) -> if code = "." then None else byCode code))
 
+
+    let private provinces = Counting.several "province" "provinces"
+
+    let private supplyCentres = Counting.several "supply centre" "supply centres"
+
+    let private openSeas = Counting.several "sea" "seas"
+
+    let private homeCentres = Counting.several "home centre" "home centres"
+
+    let private namedCoasts = Counting.several "coast" "coasts"
 
     let problems =
         let codes = declared |> List.map (fun (code, _, _, _, _) -> code)
@@ -802,21 +553,21 @@ module Atlas =
         [ if List.length codes <> List.length (List.distinct codes) then
               yield "the same province written down twice"
 
-          if count <> 75 then yield $"{count} provinces, where the board has 75"
+          if count <> 75 then yield $"{provinces count}, where the board has 75"
 
           if List.length centres <> 34 then
-              yield $"{List.length centres} supply centres, where the board has 34"
+              yield $"{supplyCentres (List.length centres)}, where the board has 34"
 
           match all |> List.filter (fun p -> p.Terrain = Sea) |> List.length with
           | 19 -> ()
-          | seas -> yield $"{seas} seas, where the board has 19"
+          | many -> yield $"{openSeas many}, where the board has 19"
 
           for power in Power.all do
               let homes = homesOf power |> List.length
               let due = if power = Russia then 4 else 3
 
               if homes <> due then
-                  yield $"{Power.name power} starts with {homes} home centres rather than {due}"
+                  yield $"{Power.name power} starts with {homeCentres homes} rather than {due}"
 
           if all |> List.exists (fun p -> p.Terrain = Sea && p.Centre <> NotACentre) then
               yield "a supply centre out at sea"
@@ -876,7 +627,7 @@ module Atlas =
                   |> List.sort
 
               if declaredCoasts <> List.sort coasts then
-                  yield $"{province} has two coasts and the fleet table names {List.length declaredCoasts}"
+                  yield $"{province} has two coasts and the fleet table names {namedCoasts (List.length declaredCoasts)}"
 
               if fleetBorders |> List.exists (fun (from, _) -> from = province) then
                   yield $"{province} has two coasts and a fleet border that names neither"

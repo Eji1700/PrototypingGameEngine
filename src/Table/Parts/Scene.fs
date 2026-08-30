@@ -2,9 +2,10 @@ namespace Prototyping.Table
 
 open Prototyping.Engine
 
-/// How much of a screen to draw, and how far through a beat it is being drawn. The three switches
-/// are the boxes round the game itself; none is part of the game, so none reaches the model or the
-/// record, and at a table over a network each person has their own.
+/// How much of a screen to draw, which of a game's own screens, and how far through a beat it is
+/// being drawn. None of it is part of the game - the switches and the name are boxes round the
+/// game itself - so none reaches the model or the record, and at a table over a network each
+/// person has their own.
 ///
 /// `Phase` is the one thing here that is not a player's choice: it runs from 0 at a beat towards 1
 /// just before the next, and is how a board drawn between two beats knows how far a moving piece
@@ -126,11 +127,6 @@ module Span =
 
 module Speck =
 
-    let plainly glyph =
-        { Glyph = glyph
-          Tone = Tone.Plainly
-          Mood = [] }
-
     let quiet glyph =
         { Glyph = glyph
           Tone = Tone.Quiet
@@ -154,16 +150,36 @@ module Scene =
     let noted (margins: Margins) text =
         if margins.Notes then Note text else Blank
 
-    let listing (margins: Margins) title text =
-        if margins.Commands then Block(title, [ Written text ]) else Blank
+    let private boxed on title body =
+        if on then Block(title, body) else Blank
+
+    let offering (margins: Margins) title body = boxed margins.Commands title body
+
+    let listing (margins: Margins) title text = offering margins title [ Written text ]
 
     /// What the game has been saying, if the reader still wants to see it - a dozen lines of what
     /// led to a board, under the board somebody is trying to read, is a dozen lines in the way.
-    let logged (margins: Margins) title body =
-        if margins.Logged then Block(title, body) else Blank
+    let logged (margins: Margins) title body = boxed margins.Logged title body
 
-    let offering (margins: Margins) title body =
-        if margins.Commands then Block(title, body) else Blank
+    [<Literal>]
+    let Lately = 3
+
+    /// The last few of the game's lines, once the reader has put the notes and the commands away:
+    /// a board with both boxes gone is a board somebody is playing rather than reading about, and
+    /// twelve lines under it are twelve lines it has to share the window with.
+    let lately (margins: Margins) lines =
+        if margins.Notes || margins.Commands then
+            lines
+        else
+            lines |> List.skip (max 0 (List.length lines - Lately))
+
+    /// A control that types exactly what it says, for a word that is its own caption.
+    let types line = Does(line, line, Tone.Plainly)
+
+    /// The reader's own seat, marked as such after its name. The mark is the table's word, so no
+    /// game writes it for itself.
+    let seated name yours seat =
+        name seat + (if yours then " (you)" else "")
 
     let plainText (line: Line) =
         line |> List.map (fun span -> span.Text) |> String.concat ""
@@ -182,6 +198,12 @@ module Scene =
         lines @ [ last ]
 
     let paragraph room text = wrap room text |> String.concat "\n"
+
+    [<Literal>]
+    let Prose = 66
+
+    /// A paragraph at the width prose is comfortable at, which is narrower than a board.
+    let prose text = paragraph Prose text
 
 
     let runs (glyphs: (string * Tone) seq) : Line =
@@ -203,10 +225,10 @@ module Scene =
         | [] -> [ quietly NothingYet ]
         | notices -> notices |> List.rev |> List.map (told >> says)
 
-    let record heading rows =
+    let record footer rows =
         match rows with
         | [] -> Block("The record", [ quietly NothingYet ])
-        | rows -> Block("The record", [ Aligned rows; quietly heading ])
+        | rows -> Block("The record", [ Aligned rows; quietly footer ])
 
     let rules help = Block("The rules", [ Written help ])
 
@@ -229,12 +251,11 @@ module Scene =
         let stillToCome (seats: Waiting list) =
             match seats |> List.filter (fun seat -> seat.Expected) |> List.length with
             | 0 -> "Everybody is here."
-            | 1 -> "1 more to come. The game begins once every seat is taken."
             | more -> $"{more} more to come. The game begins once every seat is taken."
 
-    let waiting seated (seats: Waiting list) =
+    let waiting name (seats: Waiting list) =
         let standing (seat: Waiting) =
-            [ (if seat.Yours then Span.yours else Span.plainly) (seated seat.Yours seat.Player) ]
+            [ (if seat.Yours then Span.yours else Span.plainly) (seated name seat.Yours seat.Player) ]
             :: [ [ Span.quiet (Filling.standing seat) ] ]
 
         Stack

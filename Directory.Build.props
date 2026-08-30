@@ -1,15 +1,34 @@
 <Project>
 
   <!-- What every project here shares. The version lives in one place because the four engine
-       projects are packed together and a game asks for one of them by number: Prototyping.Play 0.1.0
-       has to mean the Table and Engine that were built alongside it, or a restore will find a
-       mixture. Nothing is packable unless it says so - the games are programs, not libraries. -->
+       projects are packed together and a game asks for one of them by number: Prototyping.Play at
+       this version has to mean the Table and Engine that were built alongside it, or a restore will
+       find a mixture. Nothing is packable unless it says so - the games are programs, not libraries.
+
+       Warnings are errors everywhere, not only in CI: a build that is green at a keyboard and red on
+       the runner is two builds. The template keeps its own copy of the framework line, because a game
+       generated outside this repository has no file like this above it. -->
 
   <PropertyGroup>
     <PrototypingVersion>0.5.0</PrototypingVersion>
     <Version>$(PrototypingVersion)</Version>
 
+    <TargetFramework>net10.0</TargetFramework>
+    <WarningLevel>5</WarningLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <SelfContained>false</SelfContained>
+
     <IsPackable>false</IsPackable>
+
+    <!-- The packages the table and the wire are built on, pinned once. Not central package management,
+         which takes the version off the FSharp.Core reference the F# SDK adds on its own - a project
+         with any other package in it then restores the oldest FSharp.Core those packages accept.
+         tests/Packages.fsx carries the same four for the scripts, which cannot read this. -->
+    <ArguVersion>6.2.5</ArguVersion>
+    <FalcoMarkupVersion>1.4.0</FalcoMarkupVersion>
+    <FalcoDatastarVersion>1.3.0</FalcoDatastarVersion>
+    <SpectreConsoleVersion>0.51.1</SpectreConsoleVersion>
+    <SignalRClientVersion>10.0.10</SignalRClientVersion>
 
     <Product>PrototypingGameEngine</Product>
     <PackageTags>fsharp;game;turn-based;mvu</PackageTags>

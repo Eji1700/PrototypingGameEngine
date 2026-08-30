@@ -12,7 +12,7 @@ type Table =
         { Seats: Player list
           ActiveSeat: int }
 
-type TableTooBig =
+type Unseatable =
     | TooFewPlayers of int
     | TooManyPlayers of int
 

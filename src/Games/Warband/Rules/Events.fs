@@ -38,8 +38,12 @@ type Happening =
 
     /// It had something to do and no way of doing it across that much ground.
     | Unreached of side: int * hex: Hex * kind: Kind * reach: int
-    | Started
-    | Halted
+
+    /// Whether the battle runs of its own accord - and whether there is one yet, since it can be
+    /// said during the muster too, where it settles how the battle will go once it is joined.
+    | Started of joined: bool
+    | Halted of joined: bool
+
     | GameEnded of Ending
 
 /// The refusals that belong to a squad carry which one, because the other side is told only that
@@ -47,7 +51,6 @@ type Happening =
 /// is hidden in `Words.saidTo` and nowhere else, and this is what gives it enough to go on.
 type Refusal =
     | HexTaken of side: int * hex: Hex * kind: Kind
-    | SquadFull of side: int
     | TooAlike of side: int * kind: Kind
     | NotMustering
     | NoBattleYet

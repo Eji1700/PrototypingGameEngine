@@ -8,6 +8,7 @@ type Fate =
     | Stood
     | Helped
     | Interrupted
+    | Unmatched
     | Carried
     | NoRoute
     | Swamped
@@ -36,6 +37,10 @@ type Resolution =
 // question is answered lazily, and a question that comes back round to itself is answered by
 // guessing - twice, once false and once true. Agreeing answers settle it; disagreeing ones
 // mean the orders form a ring, and `breakTheRing` says what a ring does.
+//
+// The guesses live in a Dictionary and a ResizeArray local to `outcome` - the one mutable state
+// in these rules, because answers are withdrawn and asked again as guesses are overturned, and
+// nothing outside the function ever sees them. It is not a shape for anything else here to copy.
 module Adjudicate =
 
     type private Doing =
@@ -417,6 +422,14 @@ module Adjudicate =
                   Options = options })
 
 
+        // A support with nothing under it: the unit it names is not there, or is not doing what
+        // the support says. It counted for nothing above, and is reported so rather than as given.
+        let unmatched doing =
+            match doing with
+            | HoldsUp who -> (pieceAt who).IsNone || (destinationOf who).IsSome
+            | HelpsMove(who, into) -> destinationOf who |> Option.forall (fun there -> there.At <> into)
+            | _ -> false
+
         let reports =
             plan
             |> Map.toList
@@ -429,7 +442,10 @@ module Adjudicate =
                         match doing with
                         | Stands -> Stood
                         | HoldsUp _
-                        | HelpsMove _ -> if answered province then Helped else Interrupted
+                        | HelpsMove _ ->
+                            if unmatched doing then Unmatched
+                            elif answered province then Helped
+                            else Interrupted
                         | Carries _ -> if answered province then Carried else Swamped
                         | Marches(into, carried) ->
                             if answered province then Advanced into

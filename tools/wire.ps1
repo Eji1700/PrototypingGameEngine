@@ -1,4 +1,3 @@
-﻿
 param(
     [int]$Port = 5100,
     [ValidateSet("", "turncoats", "tictactoe", "compile", "warband")]
@@ -15,7 +14,7 @@ $failed = 0
 # What this drives is the wire, which does not know what game it is carrying - so the game only
 # has to supply a line to type and something the *other* console should then be told.
 #
-# Three of the eight are not here and cannot be. Life and Cascade seat one, so there is no other
+# Four of the eight are not here and cannot be. Life and Cascade seat one, so there is no other
 # console for a move to reach; Snake runs on a clock, and a board that moves on its own while the
 # check waits for a phrase is a flake rather than a check. Diplomacy seats seven, which this could
 # be taught, but its orders are written in secret - "the move reached the other console" is the
@@ -36,11 +35,6 @@ $moves = @{
 
 $named = $(if ($Game) { $Game } else { "turncoats" })
 $m = $moves[$named]
-
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
 
 
 # A table hosted from the repository writes its record into logs/, which is committed on purpose -
@@ -127,7 +121,7 @@ try {
     $inn = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $housed
     Wait-ForPort $housePort 120
 
-    $dealt = Invoke-WebRequest "http://localhost:$housePort/open?players=2" -UseBasicParsing -TimeoutSec 30
+    $dealt = Invoke-WebRequest "http://localhost:$housePort/open" -Method Post -Body @{ players = 2 } -UseBasicParsing -TimeoutSec 30
     $listed = Invoke-WebRequest "http://localhost:$housePort/" -UseBasicParsing -TimeoutSec 30
     $name = [regex]::Match($listed.Content, '/at/([a-z0-9-]+)').Groups[1].Value
 
@@ -177,7 +171,7 @@ try {
         Report "a console naming a table that is not there is told so rather than dropped" ((Told $lost) -match "no table by that name") "it was told '$((Told $lost) -replace '\s+', ' ')'"
     }
 
-    if ($inn -and -not $inn.HasExited) { try { Stop-Process -Id $inn.Id -Force } catch {} }
+    Stop-Started $inn
 
 
     ""
@@ -196,10 +190,10 @@ try {
     $filling += @("house", "--port", "$fillPort", "--open")
 
     try {
-        $first = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $box -FilePath "dotnet" -ArgumentList $filling
+        $filled = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $box -FilePath "dotnet" -ArgumentList $filling
         Wait-ForPort $fillPort 120
 
-        Invoke-WebRequest "http://localhost:$fillPort/open?players=2" -UseBasicParsing -TimeoutSec 30 | Out-Null
+        Invoke-WebRequest "http://localhost:$fillPort/open" -Method Post -Body @{ players = 2 } -UseBasicParsing -TimeoutSec 30 | Out-Null
         $listed = Invoke-WebRequest "http://localhost:$fillPort/" -UseBasicParsing -TimeoutSec 30
         $name = [regex]::Match($listed.Content, '/at/([a-z0-9-]+)').Groups[1].Value
 
@@ -220,7 +214,7 @@ try {
 
         Close-Console $five
         Close-Console $six
-        if (-not $first.HasExited) { try { Stop-Process -Id $first.Id -Force } catch {} }
+        Stop-Started $filled
         Start-Sleep -Seconds 2
 
         $kept = @(Get-ChildItem (Join-Path $box "logs") -Filter *.log -ErrorAction SilentlyContinue)
@@ -234,7 +228,7 @@ try {
 
         Report "a house started with --fill offers the games it finds in logs/" ($tables -ge 1) "the front page listed $tables tables"
 
-        if (-not $again.HasExited) { try { Stop-Process -Id $again.Id -Force } catch {} }
+        Stop-Started $again
         Start-Sleep -Seconds 1
 
         $bare = Start-Process -PassThru -WindowStyle Hidden -WorkingDirectory $box -FilePath "dotnet" -ArgumentList $filling
@@ -245,21 +239,21 @@ try {
 
         Report "and one started without it comes up holding nothing" ($none -eq 0) "the front page listed $none tables"
 
-        if (-not $bare.HasExited) { try { Stop-Process -Id $bare.Id -Force } catch {} }
+        Stop-Started $bare
     }
     finally {
+        foreach ($house in @($filled, $again, $bare)) { Stop-Started $house }
         Start-Sleep -Milliseconds 500
         Remove-Item -Recurse -Force $box -ErrorAction SilentlyContinue
     }
 
 
-    ""
-    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    Finish "check"
 }
 finally {
     foreach ($console in $consoles) { Close-Console $console }
 
-    if ($table -and -not $table.HasExited) { try { Stop-Process -Id $table.Id -Force } catch {} }
+    Stop-Started $table
 
     Stop-Tables
 

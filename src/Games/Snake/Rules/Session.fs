@@ -33,15 +33,6 @@ module Session =
     [<Literal>]
     let Most = 4
 
-    [<Literal>]
-    let Slowest = 1
-
-    [<Literal>]
-    let Fastest = 9
-
-    [<Literal>]
-    let Ordinary = 5
-
     let play =
         function
         | InPlay play -> play
@@ -69,10 +60,10 @@ module Session =
         match free play with
         | [] -> { play with Food = None }
         | cells ->
-            let picked, rng = Rng.intBelow (List.length cells) play.Rng
+            let picked, rng = Rng.pick cells play.Rng
 
             { play with
-                Food = Some cells[picked]
+                Food = Some picked
                 Rng = rng }
 
 
@@ -103,7 +94,7 @@ module Session =
                   ToPlay = List.head seats
                   Turn = 1
                   Pace = pace
-                  Speed = Ordinary
+                  Speed = Notch.Ordinary
                   Rng = Rng.ofSeed seed }
         )
 

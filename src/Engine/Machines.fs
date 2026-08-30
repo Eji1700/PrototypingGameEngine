@@ -11,7 +11,7 @@ module Machines =
     let rec choosing plays rival =
         Choosing(fun state -> plays state rival |> Option.map (fun (move, next) -> move, choosing plays next))
 
-    let named nameOf all =
+    let private named nameOf all =
         all |> List.map nameOf |> String.concat ", "
 
     let byName nameOf all (name: string) =

@@ -1,4 +1,3 @@
-﻿
 param(
     [int]$Port = 5000,
     [int]$DebugPort = 9222,
@@ -12,6 +11,8 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 $failed = 0
+
+. (Join-Path $PSScriptRoot "Driving.ps1")
 
 $Stream = "/stream"
 $Say = "/say"
@@ -70,20 +71,16 @@ $games = @{
 
 $g = $games[$(if ($Game) { $Game } else { "turncoats" })]
 
-function Report($name, $ok, $detail) {
-    if ($ok) { "ok   $name" }
-    else { $script:failed++; "FAIL $name$(if ($detail) { ": $detail" })" }
-}
-
 function Find-Browser {
     if ($Browser -and (Test-Path $Browser)) { return $Browser }
     $candidates = @(
         "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
         "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe",
         "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
-        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
-        "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"
+        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
     )
+    # Windows only, and on purpose: what clears up after the browser is Win32_Process, which pwsh
+    # on Linux does not have, so a Linux browser found here would be opened and never closed.
     foreach ($c in $candidates) { if ($c -and (Test-Path $c)) { return $c } }
     throw "No Chromium-based browser found. Pass one with -Browser."
 }
@@ -95,18 +92,6 @@ function Get-Pages {
         @($answered)
     }
     catch { @() }
-}
-
-function Wait-For($what, $seconds, $test) {
-    $until = (Get-Date).AddSeconds($seconds)
-
-    while ((Get-Date) -lt $until) {
-        $answer = & $test
-        if ($answer) { return $answer }
-        Start-Sleep -Milliseconds 100
-    }
-
-    throw "waited $seconds seconds for $what and it never came"
 }
 
 function Invoke-InPage($url, $script) {
@@ -391,7 +376,7 @@ $before = @(Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue | Fo
 try {
     "Serving a game and opening it in $(Split-Path -Leaf $exe)..."
 
-    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Stop-Tables
 
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like "*--remote-debugging-port=$DebugPort*" } |
@@ -408,16 +393,7 @@ try {
 
     $table = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $served
 
-    Wait-For "the game to come up on port $Port" 60 {
-        try {
-            $probe = New-Object Net.Sockets.TcpClient
-            $probe.Connect("localhost", $Port)
-            $answered = $probe.Connected
-            $probe.Close()
-            $answered
-        }
-        catch { $false }
-    } | Out-Null
+    Wait-ForPort $Port 60
 
     Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
     $stranger = New-Object Net.Http.HttpClient
@@ -471,7 +447,7 @@ try {
     Report "and the box is emptied for the next one" ($r.boxAfterSend -eq "") "left holding '$($r.boxAfterSend)'"
     Report "the Enter key sends one too" ($r.afterEnter -ne $r.afterSend) "$($r.afterSend) -> $($r.afterEnter)"
     Report "a board's own button types its own line" ($r.buttonTypes -match $g.Types) $r.buttonTypes
-    Report "and the table hears it" ($r.said -gt 0) "$($r.said) line(s) in the log"
+    Report "and the table hears it" ($r.said -gt 0) "$(if ($r.said -eq 1) { "1 line" } else { "$($r.said) lines" }) in the log"
     if ($g.Asking) {
         Report "asking this game's own question lands beside the board" ($r.working -match $g.Working) $r.working
         Report "and arrives with its lines still separate" ($r.working -match "`n") "no newline survived"
@@ -514,7 +490,7 @@ try {
     ""
     "A house, and a table opened at it..."
 
-    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Stop-Tables
     Start-Sleep -Milliseconds 500
 
     $housePort = $Port + 1
@@ -525,16 +501,7 @@ try {
 
     $inn = Start-Process -PassThru -WindowStyle Hidden -FilePath "dotnet" -ArgumentList $housed
 
-    Wait-For "the house to come up on port $housePort" 60 {
-        try {
-            $probe = New-Object Net.Sockets.TcpClient
-            $probe.Connect("localhost", $housePort)
-            $answered = $probe.Connected
-            $probe.Close()
-            $answered
-        }
-        catch { $false }
-    } | Out-Null
+    Wait-ForPort $housePort 60
 
     try {
         $outside = New-Object Net.Http.HttpClient
@@ -554,7 +521,7 @@ try {
 (async () => {
   const said = { };
   said.heading = document.querySelector("h1")?.textContent ?? "";
-  said.opens = [...document.querySelectorAll("a")].map(a => a.getAttribute("href")).filter(h => h && h.startsWith("/open"));
+  said.opens = [...document.querySelectorAll("form.opening button")].map(b => b.value);
   said.tables = [...document.querySelectorAll("ul.tables li")].length;
   said.text = document.body.innerText;
   return JSON.stringify(said);
@@ -594,7 +561,19 @@ try {
 })()
 '@
 
-        $opened = Invoke-InPage "http://localhost:$housePort$($f.opens[0])" $opening
+        # A table is dealt for a POST and nothing else, so the form is sent from the front page and
+        # the browser is then taken where the house sent it.
+        $dealing = @'
+(async () => {
+  const form = new URLSearchParams();
+  form.set("players", "2");
+  const answer = await fetch("/open", { method: "POST", body: form });
+  return JSON.stringify({ where: new URL(answer.url).pathname });
+})()
+'@
+
+        $dealt = Invoke-InPage "http://localhost:$housePort/" $dealing
+        $opened = Invoke-InPage "http://localhost:$housePort$($dealt.value.where)" $opening
         $o = $opened.value
 
         Report "opening a table sends the browser to a table of its own" ($o.where -like "/at/*") "it landed on '$($o.where)'"
@@ -606,23 +585,20 @@ try {
         Report "and the house says somebody is sitting at it" ($said -match "1 of 2 seated") "the front page read '$said'"
     }
     finally {
-        if ($inn -and -not $inn.HasExited) { Stop-Process -Id $inn.Id -Force -ErrorAction SilentlyContinue }
+        Stop-Started $inn
     }
 
     }
 
-    ""
-    if ($failed -gt 0) { "$(if ($failed -eq 1) { "1 check" } else { "$failed checks" }) failed"; exit 1 } else { "all checks passed"; exit 0 }
+    Finish "check"
 }
 finally {
-    foreach ($p in @($browser, $table)) {
-        if ($p -and -not $p.HasExited) { try { Stop-Process -Id $p.Id -Force } catch {} }
-    }
+    foreach ($p in @($browser, $table)) { Stop-Started $p }
 
     Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -like "*--remote-debugging-port=$DebugPort*" } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Get-Process -Name "Proto" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Stop-Tables
     Remove-Item -Recurse -Force $profile -ErrorAction SilentlyContinue
 
     Get-ChildItem $logs -Filter *.log -ErrorAction SilentlyContinue |

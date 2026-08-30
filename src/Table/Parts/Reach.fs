@@ -33,6 +33,8 @@ module Reach =
     [<Literal>]
     let Cookie = "proto-code"
 
+    // No 0, 1, i, l, o or u: a word is read out across a room or down a phone, and those are the
+    // letters heard as one another.
     let private letters = "23456789abcdefghjkmnpqrstvwxyz"
 
     [<Literal>]
@@ -84,12 +86,17 @@ module Reach =
 
     let fresh () = locked (minted ())
 
+    /// What goes in front of the address a player is given: https wherever a certificate is,
+    /// whether this program holds it or something in front of this program does.
     let scheme reach =
         match reach.Wrapping with
         | InTheClear -> "http"
         | Kept _
         | Ahead -> "https"
 
+    // What this machine itself is listening in, which behind something that ends the https is
+    // plain http. The two answer differently for `Ahead` on purpose; this one is only ever said
+    // of the machine's own address.
     let private spoken reach =
         match reach.Wrapping with
         | Kept _ -> "https"
@@ -117,6 +124,10 @@ module Reach =
         | _ -> Error $"'{given}' is not an address to send anybody to. Say a name, or a whole URL."
 
 
+    /// A reach as one line `read` takes back, which is what the reaches screen shows and offers
+    /// to be typed. A certificate's password is left off: the line goes on a screen and into a
+    /// prompt, and a password belongs on neither. Nothing is lost by it - a reach with a password
+    /// only ever comes from the command line, which never passes through the menu.
     let line reach =
         [ yield $"port:{reach.Port}"
 
@@ -156,6 +167,14 @@ module Reach =
     let says =
         "port:<n>, open or word:<word>, clear or behind or cert:<file>, and at:<address>"
 
+    /// A port, or what is wrong with the number given for one. The command line and the reaches
+    /// screen both read one, and used to say the same sentence separately.
+    let port (given: int) =
+        if given >= 1 && given <= 65535 then
+            Ok given
+        else
+            Error $"{given} is not a port. They run from 1 to 65535."
+
     let read (words: string list) =
         let folded reach (said: string) =
             reach
@@ -166,7 +185,7 @@ module Reach =
                 | "behind", _ -> Ok { reach with Wrapping = Ahead }
                 | _, [| "port"; given |] ->
                     match Int32.TryParse given with
-                    | true, port when port >= 1 && port <= 65535 -> Ok { reach with Port = port }
+                    | true, said -> port said |> Result.map (fun port -> { reach with Port = port })
                     | _ -> Error $"'{given}' is not a port. They run from 1 to 65535."
                 | _, [| "word"; given |] when given.Trim() <> "" -> Ok { reach with Doorway = Locked given }
                 | _, [| "cert"; given |] when given.Trim() <> "" ->

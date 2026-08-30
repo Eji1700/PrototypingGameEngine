@@ -1,7 +1,7 @@
 namespace Prototyping.Life
 
+open Prototyping.Common
 open Prototyping.Table
-open Prototyping.Life
 
 module Ink =
 

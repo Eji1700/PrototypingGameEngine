@@ -3,6 +3,7 @@
 
 open Prototyping.Engine
 open Prototyping.Table
+open Prototyping.Net
 open Prototyping.Warband
 open Checks
 open Warbands
@@ -217,6 +218,7 @@ let private fighting engaged waiting mine theirs =
       Stage = Fighting { Round = 1; Waiting = waiting }
       Engaged = engaged
       Running = true
+      Sounding = []
       Turn = 0 }
 
 /// What one unit does when its turn comes round, and nothing else: the order has that one unit in
@@ -314,9 +316,14 @@ report
 report
     "ground off the range is refused in words"
     (Session.Closest,
-     [ $"0 hexes of ground? The lines are drawn up somewhere from 1 hex apart - touching - to {Session.Furthest} hexes." ])
+     [ $"Ground of 0? The lines are drawn up somewhere from 1 hex apart - touching - to {Session.Furthest} hexes." ])
     (let model = played [ Engage 0 ]
      (standing model).Engaged, lastSaid model)
+
+report
+    "and a range below nought is read back as it was said, sign and all"
+    true
+    ((lastSaid (played [ Engage -3 ]) |> List.head).StartsWith "Ground of -3?")
 
 report
     "and it will not move once the lines are formed"
@@ -416,6 +423,7 @@ report
           Stage = Fighting { Round = Session.Rounds; Waiting = [] }
           Engaged = Session.Closest
           Running = true
+          Sounding = []
           Turn = 0 }
 
      Turn.asked Beat play
@@ -433,6 +441,7 @@ report
           Stage = Fighting { Round = Session.Rounds; Waiting = [] }
           Engaged = Session.Closest
           Running = true
+          Sounding = []
           Turn = 0 }
 
      Turn.asked Beat play
@@ -497,6 +506,125 @@ report
      Squad.mustered (Session.squadOf 1 played),
      Squad.mustered (Session.squadOf 2 played),
      Rival.plays played rival |> Option.map fst)
+
+
+// --- what it sounds like ----------------------------------------------------------------------------
+
+let private rings model = warband.Rings(standing model)
+
+let private undone model = Update.update rules Undo model
+
+report "a muster is heard as the table waiting on the other squad" [ Ready ] (rings (played [ Muster(Rider, at "f2") ]))
+
+report "setting the ground is not a muster, and is silent" [] (rings (played [ Engage 3 ]))
+
+report "the tenth placement chimes: the muster is done and the lines are formed" [ Chime ] (rings joined)
+
+report
+    "stopping the battle and starting it again is not a blow, and is silent"
+    ([], [])
+    (rings (played (woven strong feeble @ [ Running(Some false) ])),
+     rings (played (woven strong feeble @ [ Running(Some false); Running(Some true) ])))
+
+report
+    "a blow is a tap, since there are thirty of them"
+    [ Tap ]
+    (rings (played (woven strong feeble @ [ Running(Some false); Step ])))
+
+report "a battle settled is a fanfare" [ Fanfare ] (rings (fought strong feeble))
+
+report
+    "and walking away from the muster is a knell rather than one"
+    [ Knell ]
+    (rings (played [ Muster(Footman, at "f1"); Resign ]))
+
+report
+    "the sound is the board's rather than the move's: walked back off the ending it is not the fanfare, and walked forward again it is"
+    (false, [ Fanfare ])
+    (let ended = fought strong feeble
+     List.contains Fanfare (rings (undone ended)), rings (Update.update rules Redo (undone ended)))
+
+
+// --- the words round the clock, and the keys ----------------------------------------------------------
+
+report
+    "stopping the clock during the muster says what that will mean, rather than that a battle is stopped"
+    true
+    ((lastSaid (played [ Running(Some false) ]) |> List.head).Contains "once both squads are mustered")
+
+let private occurrences (needle: string) (text: string) =
+    (text.Length - text.Replace(needle, "").Length) / needle.Length
+
+report
+    "where the lines stand is said once on the board, between the two squads and in neither's box"
+    (1, 1)
+    (occurrences "The lines are touching." (plain.Board Margins.all (Seat.at 1) dealt),
+     occurrences "The lines are touching." (plain.Board Margins.all (Seat.at 1) joined))
+
+report "the deal is turn one, as it is at every other game here" 1 (rules.Turn(standing dealt))
+
+report
+    "the help reads its numbers off the rules rather than spelling them"
+    true
+    (Render.help.Contains "12 rounds" && Render.help.Contains "5 units each")
+
+let private keyed key =
+    (warband.Pulse |> Option.get).Pressed(System.ConsoleKeyInfo(' ', key, false, false, false))
+
+report
+    "'p' sets the battle going and stops it, and a full stop is one blow"
+    (Some "run", Some "step")
+    (keyed System.ConsoleKey.P, keyed System.ConsoleKey.OemPeriod)
+
+report "and space is left to the table, whose hold it is" None (keyed System.ConsoleKey.Spacebar)
+
+
+// --- at a hosted table, where the two squads are at different keyboards --------------------------------
+
+// A muster names no seat, so the rules place it for whichever squad is mustering and cannot tell
+// who typed it - right at one keyboard, where every hand is one console. At a hosted table it is
+// the lobby that keeps the wrong console out: `Pulse.Free` says the seats are not free while the
+// muster is on, and the lobby holds the turn as it does at a game without a clock.
+let private hosted () =
+    let lobby, _ =
+        Lobby.opened warband dealt [] |> Lobby.join "one" "tok-one" None plain
+
+    lobby |> Lobby.join "two" "tok-two" None plain |> fst
+
+let private toldTo console posts =
+    posts
+    |> List.choose (fun post ->
+        match post.To, post.Say with
+        | at, ToPlayer.Told text when at = console -> Some text
+        | _ -> None)
+    |> String.concat "\n"
+
+let private mustered lobby =
+    let play = Model.state (Lobby.model lobby)
+    Squad.mustered (Session.squadOf 1 play), Squad.mustered (Session.squadOf 2 play)
+
+report
+    "a hosted table refuses a muster from the console whose turn it is not, and says whose it is"
+    (true, (0, 0))
+    (let lobby, posts = hosted () |> Lobby.said "two" "bowman b2"
+     toldTo "two" posts |> mentions "It is Squad One's turn.", mustered lobby)
+
+report
+    "and a 'resign' from that console is refused the same way, so no squad is walked away by the other"
+    (true, true)
+    (let lobby, posts = hosted () |> Lobby.said "two" "resign"
+     toldTo "two" posts |> mentions "It is Squad One's turn.", Session.isMustering (Model.state (Lobby.model lobby)))
+
+report
+    "while the console whose turn it is musters, as at one keyboard"
+    (1, 0)
+    (hosted () |> Lobby.said "one" "bowman b2" |> fst |> mustered)
+
+report
+    "and once both squads are on the field the clock frees every seat, nothing being asked of anybody in the battle"
+    (false, true)
+    (let pulse = warband.Pulse |> Option.get
+     pulse.Free(standing dealt), pulse.Free(standing joined))
 
 
 // --- and the contract every game here answers to -------------------------------------------------------

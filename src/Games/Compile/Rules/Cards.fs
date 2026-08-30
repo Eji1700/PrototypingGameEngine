@@ -1,7 +1,5 @@
 namespace Prototyping.Compile
 
-open Prototyping.Common
-
 type Card = { Protocol: Protocol; Value: int }
 
 module Card =
@@ -22,7 +20,8 @@ module Card =
         |> List.filter ((<>) (without protocol))
         |> List.map (fun value -> { Protocol = protocol; Value = value })
 
-    let PerProtocol = List.length values - 1
+    [<Literal>]
+    let PerProtocol = 6
 
     let exists card =
         card.Value <> without card.Protocol && List.contains card.Value values
@@ -95,26 +94,11 @@ module Placed =
 
 module Deck =
 
-    let Size = Protocol.Each * Card.PerProtocol
+    [<Literal>]
+    let Size = 18
 
     [<Literal>]
     let HandSize = 5
 
     let ofProtocols protocols =
         protocols |> List.collect Card.inProtocol
-
-    let private pluck cards rng =
-        let n, rng = Rng.intBelow (List.length cards) rng
-        List.item n cards, List.removeAt n cards, rng
-
-    // Drawing one at a time out of what is left, which is a Fisher-Yates shuffle written the
-    // long way round because the deck is a list.
-    let shuffled cards rng =
-        let rec draw taken left rng =
-            match left with
-            | [] -> List.rev taken, rng
-            | _ ->
-                let card, left, rng = pluck left rng
-                draw (card :: taken) left rng
-
-        draw [] cards rng

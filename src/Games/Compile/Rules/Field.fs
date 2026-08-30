@@ -1,5 +1,6 @@
 namespace Prototyping.Compile
 
+open Prototyping.Common
 open Prototyping.Engine
 
 module Lines =
@@ -25,10 +26,8 @@ module Ruling =
     let saying uncovered placed =
         if Placed.isFaceUp placed then Printed.ongoing uncovered placed.Card else []
 
-    let private live = saying
-
     let silences uncovered placed =
-        live uncovered placed |> List.contains Silence
+        saying uncovered placed |> List.contains Silence
 
 module Stack =
 
@@ -36,8 +35,6 @@ module Stack =
     let ToCompile = 10
 
     let uncovered cards = List.tryHead cards
-
-    let value cards = cards |> List.sumBy Placed.value
 
 module Side =
 
@@ -55,9 +52,6 @@ module Side =
 
     let protocolOn line side = side.Order |> List.tryItem (line - 1)
 
-    let lineOf protocol side =
-        side.Order |> List.tryFindIndex ((=) protocol) |> Option.map ((+) 1)
-
     let holds card side = side.Hand |> List.contains card
 
     let drafted protocol side =
@@ -70,7 +64,7 @@ module Side =
     // discarded stays empty, and whoever asked gets less than they wanted.
     let private restocked side rng =
         if List.isEmpty side.Deck && not (List.isEmpty side.Discard) then
-            let deck, rng = Deck.shuffled side.Discard rng
+            let deck, rng = Rng.shuffle side.Discard rng
             { side with Deck = deck; Discard = [] }, rng
         else
             side, rng
@@ -132,6 +126,10 @@ module Side =
         | [] -> None, side, rng
         | top :: rest -> Some top, { side with Deck = rest }, rng
 
+    /// Nothing left to draw: the deck is empty and there is no discard to shuffle back into it.
+    let drained side =
+        List.isEmpty side.Deck && List.isEmpty side.Discard
+
     let took card side =
         { side with
             Hand = side.Hand @ [ card ] }
@@ -192,10 +190,6 @@ module Field =
         elif face = FaceUp && List.contains TheyMustPlayFaceDown anywhere then Some OnlyFaceDown
         else None
 
-    let homeOf card field =
-        seats field
-        |> List.tryFind (fun seat -> List.contains card.Protocol (side seat field).Drafted)
-
 
     /// What a line is worth to a seat. Face-down cards count as two unless something of yours
     /// says otherwise, your own ongoing text adds, and the other side's takes away. It cannot
@@ -203,11 +197,7 @@ module Field =
     let valueOn seat line field =
         let mine = Side.stack line (side seat field)
         let ours = Side.rulesOn line (side seat field)
-
-        let across =
-            seats field
-            |> List.filter ((<>) seat)
-            |> List.collect (fun other -> Side.rulesOn line (side other field))
+        let theirs = across seat line field
 
         let faceDown =
             ours
@@ -232,7 +222,7 @@ module Field =
                 | _ -> 0)
 
         let taken =
-            across
+            theirs
             |> List.sumBy (function
                 | TheirLineMinus n -> n
                 | _ -> 0)

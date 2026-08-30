@@ -7,11 +7,6 @@ namespace Prototyping.Warband
 /// is the one idea this game is built on, so it lives in the type rather than in a table of
 /// exceptions - a kind is not "an archer with a bonus at range", it is three answers to the same
 /// question, one for each rank.
-/// `reach` on the two that cross the ground is how many hexes of it a blow will carry. The two
-/// lines stand a hex apart to begin with, so at the moment every reach here is enough and none of
-/// them bites; wind the ground out and they start to, one kind at a time. Nothing here counts the
-/// ranks *within* a formation towards the crossing yet - a rank is who you are, not how far away
-/// you are - which is a thing to look at again when a unit gets stats of its own.
 type Stance =
     /// Hand to hand: it falls on the foremost rank of the other squad that still has anybody up.
     | Strikes of power: int * times: int * reach: int

@@ -1261,10 +1261,10 @@ report
      | None, _ -> false, false)
 
 
-report "all ninety of them are written" (90, 0) (Printed.written, 90 - Printed.written)
+report "all ninety of them are written" [] Printed.unwritten
 
 report
-    "every written card is a card that is really printed, and says exactly what it says"
+    "and the fifteen fives all say the one thing"
     []
     (Protocol.all
      |> List.map (fun protocol -> Printed.on { Protocol = protocol; Value = 5 })
@@ -1646,6 +1646,42 @@ report
      listened one, listened two)
 
 report
+    "and it listens just the same when the discard was picked out of a hand of several"
+    true
+    (let session = standing (opened 1UL) |> poised one 1 [ card Plague 1 ]
+     let asked, _ = running (Opposing Discard) (card Plague 0) session
+
+     match Session.asking asked with
+     | Some question ->
+         let chosen = (Session.side two asked).Hand |> List.head
+
+         match Resolving.choosing question (TheCard chosen) asked with
+         | Some _, said ->
+             happenings said
+             |> List.exists (function
+                 | Drew(who, 1) -> who = one
+                 | _ -> false)
+         | None, _ -> false
+     | None -> false)
+
+report
+    "and when the draw it listens for was a yes to a question"
+    true
+    (let session = standing (opened 1UL) |> poised one 1 [ card Spirit 3 ]
+     let asked, _ = running (May(Draw(Just 1))) (card Death 1) session
+
+     match Session.asking asked with
+     | Some question ->
+         match Resolving.choosing question Yes asked with
+         | Some _, said ->
+             happenings said
+             |> List.exists (function
+                 | Asked(who, saying) -> who = one && saying = card Spirit 3
+                 | _ -> false)
+         | None, _ -> false
+     | None -> false)
+
+report
     "and the check cache phase fires one every turn, whether or not there was anything to put down"
     (true, true)
     (let session = standing (opened 1UL) |> poised two 3 [ card Speed 1 ]
@@ -1784,7 +1820,7 @@ report
     [ 2 ]
     (let session = standing (opened 1UL) |> lyingDown one 1 [ mute Speed 2 ]
 
-     let after, told =
+     let after, _ =
          Resolving.settle
              { session with
                  Pile =
@@ -1795,8 +1831,6 @@ report
                              Line = 3 }
                        ) ] }
              []
-
-     ignore told
 
      Lines.all
      |> List.filter (fun line -> Side.stack line (Session.side one after) |> List.isEmpty |> not))
@@ -1952,6 +1986,23 @@ report
      (if (Session.asking after).IsNone then 1 else 0))
 
 report
+    "and takes them in line order, first to last - so it is the first one's interrupt that speaks first"
+    [ Card.name (card Metal 6); Card.name (mute Speed 2) ]
+    (let session =
+        standing (opened 1UL)
+        |> poised one 1 [ card Metal 6 ]
+        |> poised one 2 [ mute Speed 2 ]
+
+     let _, told =
+         running (Every(Flip(Select.any |> Select.faceUp |> Select.other))) (card Plague 3) session
+
+     happenings told
+     |> List.choose (function
+         | Deleted(_, gone, _) -> Some(Card.name gone.Card)
+         | Flipped(_, turned, _) -> Some(Card.name turned.Card)
+         | _ -> None))
+
+report
     "and 'other' spares the card that said it"
     true
     (let session = standing (opened 1UL) |> poised one 2 [ card Apathy 1; quiet Water 4 ]
@@ -2063,6 +2114,11 @@ report
     "and the card prints what it does"
     "Discard a card, one or more times. If you do, draw that many cards plus 1."
     (Words.printed (card Fire 4) |> List.head)
+
+report
+    "and so does the one that hands that count on to the other player"
+    "Discard a card, one or more times. If you do, your opponent: discard a card, as many times as that plus 1."
+    (Words.printed (card Plague 2) |> List.head)
 
 
 report
@@ -2538,7 +2594,43 @@ report
          | _ -> false))
 
 report
-    "and where it goes is asked when the card does not say - but never the line it came from"
+    "and it is announced once, as coming off the deck, and not again as it lands"
+    (1, 0)
+    (let session = standing (opened 1UL) |> holding one (card Water 1)
+     let _, told = running (FromDeck(FaceDown, ThisLine)) (card Water 1) session
+
+     happenings told
+     |> List.filter (function
+         | PlayedFromDeck _ -> true
+         | _ -> false)
+     |> List.length,
+     happenings told
+     |> List.filter (function
+         | Played _ -> true
+         | _ -> false)
+     |> List.length)
+
+report
+    "and face down it is named to nobody, since neither player has seen it"
+    (false, false)
+    (let session = standing (opened 1UL) |> holding one (card Water 1)
+     let _, told = running (FromDeck(FaceDown, ThisLine)) (card Water 1) session
+
+     let played =
+         happenings told
+         |> List.tryPick (function
+             | PlayedFromDeck(_, placed, _) -> Some placed.Card
+             | _ -> None)
+
+     let heardBy seat =
+         told |> List.map (compiled.SeenBy seat) |> String.concat " "
+
+     match played with
+     | Some played -> mentions (Card.name played) (heardBy one), mentions (Card.name played) (heardBy two)
+     | None -> true, true)
+
+report
+    "and where it goes is asked first when the card does not say - but never the line it came from"
     [ 1; 3 ]
     (let session = standing (opened 1UL) |> holding one (card Water 1)
 
@@ -2555,8 +2647,49 @@ report
              []
 
      match Session.asking after with
-     | Some { Wanting = ALine(_, offered) } -> offered
+     | Some { Wanting = ALineFor(_, offered) } -> offered
      | _ -> [])
+
+report
+    "and once the line is chosen the card comes off the deck into it, and is announced as that"
+    (true, false, 12)
+    (let session = standing (opened 1UL) |> holding one (card Water 1)
+     let asked, _ = running (FromDeck(FaceDown, OtherLines)) (card Water 1) session
+
+     match Session.asking asked with
+     | Some question ->
+         match Resolving.choosing question (TheLine 3) asked with
+         | Some after, said ->
+             happenings said
+             |> List.exists (function
+                 | PlayedFromDeck(who, _, 3) -> who = one
+                 | _ -> false),
+             happenings said
+             |> List.exists (function
+                 | Shifted _
+                 | Played _ -> true
+                 | _ -> false),
+             List.length (Session.side one after).Deck
+         | None, _ -> false, true, 0
+     | None -> false, true, 0)
+
+report
+    "a refresh a card calls for counts the hand it puts down"
+    (Deck.HandSize, Deck.HandSize)
+    (let _, told = running RefreshHand (card Love 2) (standing (opened 1UL))
+
+     happenings told
+     |> List.tryPick (function
+         | Refreshed(_, put, took) -> Some(put, took)
+         | _ -> None)
+     |> Option.defaultValue (-1, -1))
+
+report
+    "a draw is counted in cards, and nought of them is nothing"
+    [ "Player 1 draws nothing."
+      "Player 1 draws a card."
+      "Player 1 draws 3 cards." ]
+    ([ 0; 1; 3 ] |> List.map (fun n -> compiled.Says(Happened(Drew(one, n)))))
 
 report
     "a card given goes out of one hand and into the other, and one taken at random comes back"
@@ -2819,7 +2952,7 @@ report
     (let session = standing (opened 1UL) |> poised one 1 [ card Gravity 1 ]
 
      let after, told =
-         running (Shift(Select.any |> Select.this', AnyLine)) (card Gravity 1) session
+         running (Shift(Select.any |> Select.thisCard, AnyLine)) (card Gravity 1) session
 
      match Session.asking after with
      | Some question ->
@@ -2934,6 +3067,31 @@ report
      | None, _ -> false, false)
 
 report
+    "and the gate reads what its own command did, not what a card that command uncovered went on to do"
+    true
+    (let session =
+        standing (opened 1UL)
+        |> poised one 1 [ card Psychic 4 ]
+        |> poised two 1 [ card Hate 3; card Death 3 ]
+
+     let asked, _ =
+         running
+             (IfYouDo(May(Return(Select.any |> Select.theirs)), [ Flip(Select.any |> Select.thisCard) ]))
+             (card Psychic 4)
+             session
+
+     let answered chosen session =
+         match Session.asking session with
+         | Some question -> Resolving.choosing question chosen session |> fst
+         | None -> None
+
+     match answered Yes asked |> Option.bind (answered (TheCard(card Hate 3))) with
+     | Some after ->
+         Side.stack 1 (Session.side one after)
+         |> List.exists (fun placed -> placed.Card = card Psychic 4 && not (Placed.isFaceUp placed))
+     | None -> false)
+
+report
     "an offer of something impossible is not made at all"
     true
     (let session =
@@ -2974,7 +3132,7 @@ let private eitherOr session =
     { session with
         Pile =
             [ Run(
-                  Either(Discard, Flip(Select.any |> Select.this')),
+                  Either(Discard, Flip(Select.any |> Select.thisCard)),
                   { Owner = one
                     Saying = card Spirit 1
                     Line = 1 }
@@ -3848,18 +4006,16 @@ report
      |> List.forall (fun view -> mentions (Card.name card) (view.Board Margins.all one after)))
 
 report
-    "the page carries no control the game would not take"
-    []
-    (let model = opened 1UL
-     let page = asPage.Board Margins.all one model
+    "the page carries no control the game would not take, and it does carry some"
+    (true, [])
+    (let posted = Conforms.posted (asPage.Board Margins.all one (opened 1UL))
 
-     System.Text.RegularExpressions.Regex.Matches(page, "sendLine\\('([^']*)'\\)")
-     |> Seq.map (fun found -> found.Groups[1].Value)
-     |> Seq.filter (fun line ->
+     not (List.isEmpty posted),
+     posted
+     |> List.filter (fun line ->
          match Playable.read compiled line with
          | Ok(Send(Make _)) -> false
-         | _ -> true)
-     |> List.ofSeq)
+         | _ -> true))
 
 report
     "the draft offers a button for every protocol still on the table"
@@ -3882,6 +4038,7 @@ report
 let rec private wording scene : string list =
     match scene with
     | Blank -> []
+    | Scene.Field _ -> []
     | Say line -> [ Scene.plainText line ]
     | Note text
     | Written text
@@ -3900,6 +4057,7 @@ let rec private wording scene : string list =
 
 let rec private named scene : string list =
     match scene with
+    | Scene.Field _ -> []
     | Tile(title, _, body) -> Option.toList title @ (body |> List.collect named)
     | Block(_, body)
     | Stack body
@@ -4038,6 +4196,7 @@ report
 let rec private typing scene : string list =
     match scene with
     | Does(_, line, _) -> [ line ]
+    | Scene.Field _ -> []
     | Block(_, body)
     | Stack body
     | Beside body

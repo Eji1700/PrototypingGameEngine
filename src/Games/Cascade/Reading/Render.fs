@@ -1,10 +1,12 @@
 namespace Prototyping.Cascade
 
+open Prototyping.Common
 open Prototyping.Engine
 open Prototyping.Table
-open Prototyping.Cascade
 
 module Render =
+
+    let seated = Scene.seated Words.player
 
     module Blocks =
         let board = "The board"
@@ -47,20 +49,32 @@ module Render =
             | None -> $"{where} - nothing has been touched yet"
 
 
-    /// Where in a lit shape the light has got to. It runs a cell a frame and is three cells wide,
-    /// so a whole row takes about three beats end to end and a square blinks. Beats and frames are
-    /// counted together, so the light travels on across a beat boundary rather than starting again.
-    let private lighting margins play (lit: Lit) index =
-        let head = (play.Wave - lit.Since) * Pictures + Margins.frame Pictures margins
+    /// How many cells a light moves a frame: enough to reach the far end of the longest shape on
+    /// the last frame a shape is still lit for. Two on this board, so a whole row is crossed end
+    /// to end in the three beats it lingers, and a square blinks.
+    let private stride =
+        let frames = Session.Lingers * Pictures - 1
+        let far = max Board.Width Board.Height - 1
+        (far + frames - 1) / max 1 frames
 
+    /// How many frames into a shape's showing this drawing is. Beats and frames are counted
+    /// together, so a light travels on across a beat boundary rather than starting again.
+    let private frames margins play since =
+        (play.Wave - since) * Pictures + Margins.frame Pictures margins
+
+    /// Where in a lit shape the light has got to: three cells wide, `stride` cells further on a frame.
+    let private lighting margins play (lit: Lit) index =
+        let head = frames margins play lit.Since * stride
         index <= head && head < index + 3
 
-    /// The visual bell: a band of light four rows deep, crossing the board in about three beats.
-    /// The row *labels* are marked as well as the cells coloured, so a reader with no colour at all
-    /// still sees the band travel down the edge of the board.
+    /// The visual bell: a band of light four rows deep, going down the board at the pace a light
+    /// goes along a shape, so it too reaches the far edge before it goes out. The row *labels* are
+    /// marked as well as the cells coloured, so a reader with no colour at all still sees it.
     let private strikes margins play row =
-        match Session.struck Pictures (Margins.frame Pictures margins) play with
-        | Some head -> row - 1 <= head && head < row + 3
+        match play.Struck with
+        | Some since ->
+            let head = frames margins play since * stride
+            row - 1 <= head && head < row + 3
         | None -> false
 
     let private litAt margins play cell =
@@ -83,8 +97,6 @@ module Render =
         // A page can ring a cell without taking anything away from it, so it is told where the hand
         // is; a terminal is told on the edges of the board instead.
         let under = if cell = play.At then [ "at" ] else []
-
-        let struck = if strikes margins play cell.Row then [ "struck" ] else []
 
         if Session.isTurning cell play then
             let glyph =
@@ -114,7 +126,7 @@ module Render =
             Speck.slot (if flashing then Ink.Turning else Ink.wornBy wear) glyph
             |> Speck.doing ([ "landed"; $"wear-{wear}" ] @ under)
         elif strikes margins play cell.Row then
-            Speck.slot Ink.Lit glyph |> Speck.doing ([ $"wear-{wear}" ] @ struck @ under)
+            Speck.slot Ink.Lit glyph |> Speck.doing ([ $"wear-{wear}"; "struck" ] @ under)
         else
             Speck.slot (Ink.wornBy wear) glyph |> Speck.doing ([ $"wear-{wear}" ] @ under)
 
@@ -172,7 +184,7 @@ module Render =
         [ count play
           Scene.quietly "this cascade, and every cascade so far"
           Scene.says $"{Words.touches play.Tally.Touches} spent of {Session.Touches}."
-          Scene.says $"{Session.quarter play.Speed}ms a quarter turn - notch {play.Speed} of {Session.Fastest}." ]
+          Scene.says $"{Session.quarter play.Speed}ms a quarter turn - notch {play.Speed} of {Notch.Fastest}." ]
 
     let private onwards play =
         [ Scene.quietly "each of these is a line you could type"
@@ -194,43 +206,32 @@ module Render =
           "why f7", "what that cell would reach when it lands"
           "faster, slower", "how long a quarter turn takes"
           "speed 7", "go straight to that notch, from 1 to 9"
-          "sound, mute", "whether this board is heard as well as read"
-          "undo, redo", "walk the cascade back and forward, a wave at a time"
           "restart", "deal another board; 'restart 42' deals that one"
-          "resign", "put the board down with your touches unspent"
-          "history", "the record so far"
-          "notes", "hide the writing that explains the board"
-          "commands", "hide this box"
-          "log", "hide what the game has been saying"
-          "view <name>", "draw the board another way"
-          "save", "write the record now"
-          "help", "every command, at length"
-          "quit", "leave; the record is written and can be replayed" ]
+          "resign", "put the board down with your touches unspent" ]
+        @ Commands.verbs
 
     let commands = Scene.verbs verbs
-
-    let private wrapped text = Scene.paragraph 66 text
 
     let help =
         String.concat
             "\n"
-            [ wrapped
+            [ Scene.prose
                   $"A board of {Board.Width} by {Board.Height}, and every cell on it an elbow: two arms at a right angle, pointing up and right, right and down, down and left, or left and up. They are dealt at random and nothing is checked about them until you touch one."
               ""
-              wrapped Notes.rule
+              Scene.prose Notes.rule
               ""
-              wrapped
-                  $"A quarter turn takes {Session.quarter Session.Ordinary}ms at the notch a board is dealt on. Everything that is turning lands together, and only once it has all landed is the board read for what happens next - so a cascade goes in waves, and a wave is a beat of the clock."
+              Scene.prose
+                  $"A quarter turn takes {Session.quarter Notch.Ordinary}ms at the notch a board is dealt on. Everything that is turning lands together, and only once it has all landed is the board read for what happens next - so a cascade goes in waves, and a wave is a beat of the clock."
               ""
-              wrapped
+              Scene.prose
                   "A cell that has already turned is not spared. A cascade may come back over its own ground, and the good ones do."
               ""
-              wrapped
-                  $"You are given {Session.Touches} touches. A row or a column counts when every one of its {Board.Width} cells has turned during a single cascade, and a square counts when all four of a two-by-two have; squares overlap and each is worth its own. That is the score, and the board is over when the touches are spent."
+              Scene.prose
+                  $"You are given {Session.Touches} touches. A row counts when every one of its {Board.Width} cells has turned during a single cascade, a column when every one of its {Board.Height} has, and a square when all {Shape.Side * Shape.Side} of a {Shape.Side} by {Shape.Side} have; squares overlap and each is worth its own. That is the score, and the board is over when the touches are spent."
               ""
-              wrapped Notes.wear
+              Scene.prose Notes.wear
               ""
-              wrapped
+              Scene.prose
                   $"A cascade is held to {Session.MostRotations} turns over {Session.MostWaves} waves. Nothing ordinary comes near it - it is there because a board that never came to rest would be a board that could never be touched again."
               ""
               "COMMANDS"
@@ -239,19 +240,6 @@ module Render =
 
     let wording = Told.inWords Words.said Words.command
 
-
-    /// The log, cut down to its last few lines while the clock is running. A cascade says something
-    /// every time a shape comes up, and a screen that grows a line a beat walks the board off the
-    /// top of the terminal. Opening the notes or the commands puts the whole log back, on the
-    /// grounds that a board with its margins open is one being read rather than watched.
-    [<Literal>]
-    let private Lately = 3
-
-    let private lately (margins: Margins) lines =
-        if margins.Notes || margins.Commands then
-            lines
-        else
-            lines |> List.skip (max 0 (List.length lines - Lately))
 
     /// The board on the left and everything counted on the right. Side by side rather than stacked,
     /// because a board sixteen deep with three boxes under it is taller than a terminal - and a
@@ -265,9 +253,9 @@ module Render =
                   [ Block(Blocks.board, [ field margins play; Scene.noted margins Notes.board ])
                     Stack
                         [ Block(Blocks.count, standing play @ [ Scene.noted margins Notes.rule ])
-                          Block(Blocks.onwards, onwards play) ] ]
+                          Scene.offering margins Blocks.onwards (onwards play) ] ]
               Scene.listing margins Blocks.commands commands
-              Scene.logged margins Blocks.log (lately margins (Scene.log wording model)) ]
+              Scene.logged margins Blocks.log (Scene.lately margins (Scene.log wording model)) ]
 
 
     let history _ (model: Model<Move, Session, Notice>) =
@@ -335,7 +323,7 @@ module Render =
 
     let rules = Scene.rules help
 
-    let waiting = Scene.waiting Words.seated
+    let waiting = Scene.waiting Words.player
 
 
     /// What a page needs that no general reader could know: how to turn a cell that is turning. The
@@ -344,7 +332,7 @@ module Render =
     /// cells carry the notch as a mood because the sheet is written before any notch is known.
     let private sheet =
         let paces =
-            [ for notch in Session.Slowest .. Session.Fastest -> $".speck.pace-{notch} {{ --turn: {Session.quarter notch}ms; }}" ]
+            [ for notch in Notch.Slowest .. Notch.Fastest -> $".speck.pace-{notch} {{ --turn: {Session.quarter notch}ms; }}" ]
 
         let lights =
             [ for at in 0 .. Board.Width - 1 -> $".speck.lit-{at} {{ animation-delay: {at * 40}ms; }}" ]
@@ -402,4 +390,6 @@ module Render =
               "d", "right"
               " ", "press"
               "+", "faster"
-              "-", "slower" ] }
+              "=", "faster"
+              "-", "slower"
+              "_", "slower" ] }

@@ -1,6 +1,7 @@
 #r "nuget: FsCheck, 3.3.3"
 
 #load "Whole.fsx"
+#load "Holds.fsx"
 
 open System
 open FsCheck
@@ -10,25 +11,7 @@ open Prototyping.Table
 open Prototyping.Turncoats
 open Harness
 open Whole
-
-let private config =
-    Config.QuickThrowOnFailure.WithMaxTest(200).WithQuietOnSuccess(true)
-
-let private holds name property =
-    let failure =
-        try
-            Check.One(config, property)
-            None
-        with problem ->
-            Some problem.Message
-
-    match failure with
-    | None -> report name true true
-    | Some message ->
-        report name true false
-
-        message.Split '\n'
-        |> Array.iter (fun line -> printfn "     %s" (line.TrimEnd()))
+open Holds
 
 
 let private certificate =
@@ -101,6 +84,7 @@ let private launches =
 
 
 holds
+    200
     "a launch written out and read back is the same launch"
     (Prop.forAll launches (fun launch -> Launch.read playing (Launch.words launch) = Ok launch))
 
@@ -128,6 +112,61 @@ report
      | Error problem -> problem.Contains "seed"
      | Ok _ -> false)
 
+report
+    "an option said twice is refused rather than the second quietly winning"
+    true
+    (match Launch.read playing [ "play"; "2"; "--seed"; "1"; "--seed"; "2" ] with
+     | Error problem -> problem.Contains "seed"
+     | Ok _ -> false)
+
+report
+    "and so are two counts of players"
+    true
+    (match Launch.read playing [ "play"; "2"; "3" ] with
+     | Error _ -> true
+     | Ok _ -> false)
+
+report
+    "only a leading 'dotnet run --' is taken off a pasted line, so a word at a door may be 'run'"
+    (Ok(Launch.Join("greg-pc", None, Some "run", None)))
+    (Launch.read playing [ "join"; "greg-pc"; "--code"; "run" ])
+
+report
+    "a machine asked for by a name the game does not offer is refused, naming the ones it does"
+    true
+    (match Launch.read playing [ "play"; "2"; "--rival"; "cunning" ] with
+     | Error problem -> problem.Contains "easy, medium, hard" && not (problem.Contains "you")
+     | Ok _ -> false)
+
+report
+    "and at a game with no machine at all, the refusal says so"
+    (Error "This game has no machine to play it.")
+    (Launch.read { playing with Skills = [] } [ "play"; "2"; "--rival"; "hard" ])
+
+report
+    "'vs' at the menu lists the machines, not every kind of sitter"
+    true
+    (match Menu.choose playing standard "vs cunning" with
+     | Error problem -> problem.Contains "easy, medium, hard" && not (problem.Contains "joins")
+     | Ok _ -> false)
+
+report
+    "and more machines than the table seats are refused in the count's own words"
+    (Error "6 players? The game takes 2 to 5.")
+    (Menu.choose playing standard "vs hard hard hard hard hard" |> Result.map ignore)
+
+report
+    "and at a game with no machine, 'vs' says so"
+    (Error "This game has no machine to play it.")
+    (Menu.choose { playing with Skills = [] } standard "vs hard" |> Result.map ignore)
+
+report
+    "a lone word the menu does not know is said not to be known, rather than called a number"
+    true
+    (match Menu.choose playing standard "setings" with
+     | Error problem -> problem.StartsWith "I don't know how to 'setings'"
+     | Ok _ -> false)
+
 
 let private through (words: string list) =
     let mutable opened = None
@@ -152,6 +191,7 @@ let private through (words: string list) =
     code, opened
 
 holds
+    200
     "the command line accepts every line the program can write, and reads it the same way"
     (Prop.forAll launches (fun launch ->
         match through (Launch.words launch) with
@@ -228,7 +268,7 @@ report
 report
     "how the board is drawn can be said in either spelling"
     (0, Some(Launch.Play(Start.Dealt(2, None, []))))
-    (through [ "play"; "2"; "--color"; "blue=teal" ])
+    (through [ "play"; "2"; "--colour"; "blue=teal" ])
 
 report
     "a game with nobody said to play it is a game between people"
@@ -380,7 +420,9 @@ report
     "and a table it would deal too big is refused, rather than dealt"
     true
     (match chosen "vs easy easy hard hard medium" with
-     | Error problem -> problem.Contains $"table of 6"
+     | Error problem ->
+         problem.Contains "6"
+         && problem.Contains $"The game takes {Table.MinPlayers} to {Table.MaxPlayers}"
      | Ok _ -> false)
 
 report
@@ -412,7 +454,9 @@ report
     "a seating the table would refuse is refused where it is named"
     true
     (match chosen "play you" with
-     | Error problem -> problem.Contains "table of 1"
+     | Error problem ->
+         problem.Contains "1 player?"
+         && problem.Contains $"The game takes {Table.MinPlayers} to {Table.MaxPlayers}"
      | Ok _ -> false)
 
 report
@@ -683,6 +727,85 @@ report
     "a bell that is neither on nor off is a complaint and not a silence"
     true
     (Settings.read "bell sometimes" |> snd |> List.isEmpty |> not)
+
+report
+    "a settings file written by another program can open with a byte order mark, and is read all the same"
+    (Some "rich", [])
+    (let settings, problems = Settings.read "\uFEFFview rich\n"
+     Settings.drawn "compile" settings, problems)
+
+report
+    "a file with nothing in it settles nothing, and complains of nothing"
+    (None, true, [])
+    (let settings, problems = Settings.read ""
+     Settings.drawn "compile" settings, Settings.bell settings, problems)
+
+report
+    "a game's name left unclosed is complained about, and told how to close it"
+    true
+    (match Settings.read "[compile\nview rich" |> snd with
+     | [ problem ] -> problem.Contains "does not close" && problem.Contains "'[compile]'"
+     | _ -> false)
+
+report
+    "a colour said above any game is complained about, since it does not say whose"
+    true
+    (match Settings.read "blue teal" |> snd with
+     | [ problem ] -> problem.Contains "nothing above it says which game"
+     | _ -> false)
+
+report
+    "and a line that is none of the four is complained about, saying what the four are"
+    true
+    (match Settings.read "frobnicate" |> snd with
+     | [ problem ] -> problem.Contains "'frobnicate' is not 'view <name>', 'bell on', 'plays <name>' or '<what> <colour>'"
+     | _ -> false)
+
+
+let private colourNames (shades: Shade list) =
+    shades |> List.map (fun shade -> shade.Name)
+
+report
+    "a colours file adds a colour by name and six hex digits"
+    (true, [])
+    (let shades, problems = Palette.fromText "rust #b7410e"
+     List.contains "rust" (colourNames shades), problems)
+
+report
+    "'no <name>' drops one, and dropping one there is none of is complained about"
+    (false, true)
+    (List.contains "crimson" (colourNames (fst (Palette.fromText "no crimson"))),
+     snd (Palette.fromText "no beige")
+     |> List.exists (fun said -> said.Contains "'no beige' drops a colour there is none of"))
+
+report
+    "a name is letters only"
+    true
+    (snd (Palette.fromText "rust2 #b7410e")
+     |> List.exists (fun said -> said.Contains "Letters only"))
+
+report
+    "and a colour is six hex digits"
+    true
+    (snd (Palette.fromText "rust b741")
+     |> List.exists (fun said -> said.Contains "six hex digits"))
+
+report
+    "a file that drops every colour leaves the usual ones standing, and says so"
+    (colourNames Palette.catalogue, true)
+    (let shades, problems =
+        Palette.catalogue
+        |> List.map (fun shade -> $"no {shade.Name}")
+        |> String.concat "\n"
+        |> Palette.fromText
+
+     colourNames shades, problems |> List.exists (fun said -> said.Contains "leaves no colours at all"))
+
+report
+    "and one that opens with a byte order mark is read as if it did not"
+    (true, [])
+    (let shades, problems = Palette.fromText "\uFEFFrust #b7410e"
+     List.contains "rust" (colourNames shades), problems)
 
 report
     "and no two rows on one screen answer to the same number"

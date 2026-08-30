@@ -20,3 +20,6 @@ tools
 tests
 Dockerfile
 .dockerignore
+
+# Nothing the build wants, and one of them holds absolute paths to this machine
+.claude

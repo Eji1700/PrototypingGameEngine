@@ -16,9 +16,6 @@ module Words =
 
     let player playerId = mark (Session.markAt playerId)
 
-    let seated yours playerId =
-        player playerId + (if yours then " (you)" else "")
-
     let square (n: int) = string n
 
     let ending =
@@ -36,7 +33,7 @@ module Words =
 
     let rejection =
         function
-        | NoSuchSquare said -> $"There is no square {said}. They are numbered 1 to {Squares.Side * Squares.Side}."
+        | NoSuchSquare said -> $"There is no square {said}. They are numbered 1 to {Squares.Count}."
         | AlreadyTaken(where, taken) -> $"Square {where} already has {mark taken} in it."
 
     let command =

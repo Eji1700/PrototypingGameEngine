@@ -13,9 +13,6 @@ module Words =
 
     let player playerId = $"Player {PlayerId.value playerId}"
 
-    let seated yours playerId =
-        player playerId + (if yours then " (you)" else "")
-
     let ending =
         function
         | TookTheLast seat -> $"{player (Seat.at seat)} took the last of them"

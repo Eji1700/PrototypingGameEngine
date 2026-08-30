@@ -1,50 +1,32 @@
 namespace Prototyping.Turncoats
 
 open System
-open System.Text.Json.Serialization
 open Falco.Markup
-open Falco.Datastar
 open Prototyping.Engine
 open Prototyping.Table
+// After the table, so that a Sight is this game's and not the command line's.
 open Prototyping.Turncoats
 
 module Html =
 
-
-    let private attr = Page.attr
-
-    let private types = Page.types
-
-    let private block = Page.block
-
-    let private note = Page.note
-
-    let private lines = Page.lines
-
-    let private screen = Page.screen
-
-    let private aside = Page.aside
-
-    let private shade color = (Words.color color).ToLowerInvariant()
-
     let private quiet text =
         Elem.span [ Attr.class' "quiet" ] [ Text.enc text ]
 
-    let private stone color =
-        Elem.span [ Attr.class' $"stone {shade color}" ] [ Text.raw (string (Words.glyph color)) ]
+    let private stone colour =
+        Elem.span [ Attr.class' $"stone {Ink.key colour}" ] [ Text.raw (string (Words.glyph colour)) ]
 
     let private laid pile =
-        match Pile.toColors pile with
+        match Pile.toColours pile with
         | [] -> [ quiet "-" ]
-        | colors -> colors |> List.map stone
+        | colours -> colours |> List.map stone
 
     let private counted pile =
         match Pile.toCounts pile with
         | [] -> [ quiet "-" ]
         | counts ->
             counts
-            |> List.map (fun (color, n) ->
-                Elem.span [ Attr.class' $"stone {shade color}" ] [ Text.raw $"{Words.glyph color}x{n}" ])
+            |> List.map (fun (colour, n) ->
+                Elem.span [ Attr.class' $"stone {Ink.key colour}" ] [ Text.raw $"{Words.glyph colour}x{n}" ])
 
     let private unnamed n =
         if n = 0 then [ quiet "-" ] else List.replicate n (quiet "?")
@@ -57,7 +39,7 @@ module Html =
 
     let private rulerBadge ruling =
         match ruling with
-        | RuledBy color -> [ Elem.span [ Attr.class' $"rules {shade color}" ] [ Text.raw $">{Words.glyph color}" ] ]
+        | RuledBy colour -> [ Elem.span [ Attr.class' $"rules {Ink.key colour}" ] [ Text.raw $">{Words.glyph colour}" ] ]
         | Contested tied -> [ Elem.span [ Attr.class' "tied" ] (Text.raw "=" :: (tied |> List.map stone)) ]
         | Unclaimed -> []
 
@@ -67,7 +49,7 @@ module Html =
         let border =
             match region.Kind, ruling with
             | Dead, _ -> "var(--hidden)"
-            | _, RuledBy color -> $"var(--{shade color})"
+            | _, RuledBy colour -> $"var(--{Ink.key colour})"
             | _, (Contested _ | Unclaimed) -> "var(--edge)"
 
         let standing =
@@ -77,46 +59,44 @@ module Html =
             | Wild
             | Special -> laid (Game.stones region.Id game)
 
-        let short color =
-            (Words.glyph color |> string).ToLowerInvariant()
-
         let recruiting =
             match region.Kind with
             | Dead -> []
             | Home _
             | Wild
             | Special ->
-                StoneColor.all
-                |> List.map (fun color -> types $"recruit {short color} {Words.number region.Id}" (string (Words.glyph color)))
+                StoneColour.all
+                |> List.map (fun colour ->
+                    Page.types $"recruit {Words.short colour} {Words.number region.Id}" (string (Words.glyph colour)))
 
         let withWhatIsHere =
             let here = Game.stones region.Id game
 
-            let marching color =
+            let marching colour =
                 Board.neighbours region.Id
                 |> Set.toList
-                |> List.filter (fun other -> (Board.region other).Kind <> Dead)
+                |> List.filter (fun other -> RegionKind.isOpen (Board.region other).Kind)
                 |> List.map (fun other ->
-                    types
-                        $"march {short color} {Words.number region.Id} {Words.number other}"
-                        $"{Words.glyph color}→{Words.number other}")
+                    Page.types
+                        $"march {Words.short colour} {Words.number region.Id} {Words.number other}"
+                        $"{Words.glyph colour}→{Words.number other}")
 
             match region.Kind with
             | Dead -> []
             | Home _
             | Wild
             | Special ->
-                StoneColor.all
-                |> List.filter (fun color -> Pile.count color here > 0)
-                |> List.collect (fun color ->
-                    types $"battle {short color} {Words.number region.Id}" $"×{Words.glyph color}"
-                    :: marching color)
+                StoneColour.all
+                |> List.filter (fun colour -> Pile.count colour here > 0)
+                |> List.collect (fun colour ->
+                    Page.types $"battle {Words.short colour} {Words.number region.Id}" $"×{Words.glyph colour}"
+                    :: marching colour)
 
         Elem.div
-            [ Attr.class' "region"; attr "style" $"border-color: {border}" ]
+            [ Attr.class' "region"; Page.attr "style" $"border-color: {border}" ]
             ([ Elem.div [ Attr.class' "title" ] [ Text.enc (Render.regionTitle 24 region) ]
                Elem.div [ Attr.class' "standing" ] (standing @ rulerBadge ruling)
-               Elem.div [ Attr.class' "acts" ] (recruiting @ [ types $"rule {Words.number region.Id}" "?" ]) ]
+               Elem.div [ Attr.class' "acts" ] (recruiting @ [ Page.types $"rule {Words.number region.Id}" "?" ]) ]
              @ (match withWhatIsHere with
                 | [] -> []
                 | acts -> [ Elem.div [ Attr.class' "acts wide" ] acts ]))
@@ -128,7 +108,7 @@ module Html =
 
             Elem.div
                 [ Attr.class' "row"
-                  attr "style" $"margin-left: calc(%d{offset} * var(--half))" ]
+                  Page.attr "style" $"margin-left: calc(%d{offset} * var(--half))" ]
                 (row |> List.map (fst >> Board.region >> regionCell game)))
         |> Elem.div [ Attr.class' "map" ]
 
@@ -151,7 +131,7 @@ module Html =
             Elem.div
                 [ Attr.class' (if yours then "player yours" else "player") ]
                 [ Elem.span [ Attr.class' "marker" ] [ Text.raw (if playerId = active then "-&gt;" else " ") ]
-                  Elem.span [ Attr.class' "who" ] [ Text.enc (Words.seated yours playerId) ]
+                  Elem.span [ Attr.class' "who" ] [ Text.enc (Render.seated yours playerId) ]
                   Elem.span [ Attr.class' "bag" ] (sighted bag) ]
 
         let run =
@@ -172,7 +152,7 @@ module Html =
                | Open pile -> counted pile
                | Closed n -> [ quiet $"?x{n}" ])
           line Render.Supply.outOfSight (counted seen.Unseen) ]
-        @ (if notes && not over then [ note Render.Notes.supply ] else [])
+        @ (if notes && not over then [ Page.note Render.Notes.supply ] else [])
 
     let private landRuled notes game =
         let standing = Game.landStanding game
@@ -182,8 +162,8 @@ module Html =
                 1
                 (List.sum (
                     standing.Tied
-                    :: standing.Unclaimed
-                    :: (StoneColor.all |> List.map (fun c -> Map.find c standing.Ruled))
+                    :: standing.Vacant
+                    :: (StoneColour.all |> List.map (fun c -> Map.find c standing.Ruled))
                 ))
 
         let bar name colour n =
@@ -192,19 +172,19 @@ module Html =
                 [ Elem.span [ Attr.class' "who" ] [ Text.enc name ]
                   Elem.span
                       [ Attr.class' "fill"
-                        attr "style" $"width: calc(%d{n} * 100%% / %d{total}); background: {colour}" ]
+                        Page.attr "style" $"width: calc(%d{n} * 100%% / %d{total}); background: {colour}" ]
                       []
                   Elem.span [ Attr.class' "count" ] [ Text.enc (string n) ] ]
 
-        (StoneColor.all
-         |> List.map (fun color -> bar (Words.color color) $"var(--{shade color})" (Map.find color standing.Ruled)))
+        (StoneColour.all
+         |> List.map (fun colour -> bar (Words.colour colour) $"var(--{Ink.key colour})" (Map.find colour standing.Ruled)))
         @ [ bar Words.tied "var(--edge)" standing.Tied
-            bar Words.unclaimed "var(--hidden)" standing.Unclaimed ]
-        @ (if notes then [ note Render.Notes.landRuled ] else [])
+            bar Words.unclaimed "var(--hidden)" standing.Vacant ]
+        @ (if notes then [ Page.note Render.Notes.landRuled ] else [])
 
     let private log told (model: Model) =
         match model.Log with
-        | [] -> [ quiet Render.nothingYet ]
+        | [] -> [ quiet Scene.NothingYet ]
         | notices ->
             notices
             |> List.rev
@@ -222,34 +202,34 @@ module Html =
 
         let told = Render.wording beholder model
 
-        let noted text = if notes then [ note text ] else []
+        let noted text =
+            if notes then [ Page.note text ] else []
 
         let toHand =
             match Playing.session model with
             | InPlay { Phase = AwaitingReturn _ } ->
-                StoneColor.all
-                |> List.map (fun color ->
-                    types $"return {(Words.glyph color |> string).ToLowerInvariant()}" $"return {Words.color color}")
-            | InPlay _ -> [ types "negotiate" "negotiate" ]
+                StoneColour.all
+                |> List.map (fun colour -> Page.types $"return {Words.short colour}" $"return {Words.colour colour}")
+            | InPlay _ -> [ Page.types "negotiate" "negotiate" ]
             | Finished _ -> []
 
         let result =
             if over then
-                [ block Render.Blocks.result [ lines (String.concat Environment.NewLine (Render.result game)) ] ]
+                [ Page.block Render.Blocks.result [ Page.lines (String.concat Environment.NewLine (Render.result game)) ] ]
             else
                 []
 
         let commands =
             if margins.Commands then
-                [ block
+                [ Page.block
                       Render.Blocks.commands
-                      [ lines (String.concat Environment.NewLine (Render.commands @ [ ""; "  " + Render.shorthand ])) ] ]
+                      [ Page.lines (String.concat Environment.NewLine (Render.commands @ [ ""; "  " + Render.shorthand ])) ] ]
             else
                 []
 
-        screen (
+        Page.screen (
             [ Elem.h1 [] [ Text.enc (Render.heading beholder model) ]
-              block
+              Page.block
                   Render.Blocks.map
                   ([ mapOf game ]
                    @ noted (
@@ -257,29 +237,29 @@ module Html =
                            " "
                            [ Render.Notes.map
                              Render.Notes.bordered
-                             "The letters under a region recruit a stone into it, and '?' shows why it is ruled as it is."
-                             "Where a region holds stones there is a second row: '×R' battles with a Red one and drives out all it may, and 'R→8' marches a Red one into 8." ]
+                             Render.Notes.recruiting
+                             Render.Notes.acting ]
                    ))
-              block Render.Blocks.apart ([ apart game ] @ noted Render.Notes.apart)
-              block "This turn" [ Elem.div [ Attr.class' "acts wide" ] toHand ]
-              block Render.Blocks.players (players seen active.Id model)
-              block Render.Blocks.supply (supply notes over seen)
-              block Render.Blocks.landRuled (landRuled notes game) ]
+              Page.block Render.Blocks.apart ([ apart game ] @ noted Render.Notes.apart)
+              Page.block Render.Blocks.thisTurn [ Elem.div [ Attr.class' "acts wide" ] toHand ]
+              Page.block Render.Blocks.players (players seen active.Id model)
+              Page.block Render.Blocks.supply (supply notes over seen)
+              Page.block Render.Blocks.landRuled (landRuled notes game) ]
             @ result
             @ commands
-            @ (if margins.Logged then [ block Render.Blocks.log (log told model) ] else [])
+            @ (if margins.Logged then [ Page.block Render.Blocks.log (log told model) ] else [])
         )
 
     let waiting (seats: Waiting list) =
         let standing (seat: Waiting) =
             Elem.div
                 [ Attr.class' (if seat.Yours then "player yours" else "player") ]
-                [ Elem.span [ Attr.class' "who" ] [ Text.enc (Words.seated seat.Yours seat.Player) ]
-                  quiet (Render.Filling.standing seat) ]
+                [ Elem.span [ Attr.class' "who" ] [ Text.enc (Render.seated seat.Yours seat.Player) ]
+                  quiet (Scene.Filling.standing seat) ]
 
-        screen
-            [ Elem.h1 [] [ Text.enc Render.Filling.title ]
-              block "The table" ((seats |> List.map standing) @ [ quiet (Render.Filling.stillToCome seats) ]) ]
+        Page.screen
+            [ Elem.h1 [] [ Text.enc Scene.Filling.title ]
+              Page.block Render.Blocks.table ((seats |> List.map standing) @ [ quiet (Scene.Filling.stillToCome seats) ]) ]
 
 
     let says = Page.says
@@ -288,7 +268,7 @@ module Html =
         let told = Render.wording beholder model
 
         match Journal.entries model.Journal with
-        | [] -> aside [ Elem.h2 [] [ Text.enc Render.Blocks.record ]; quiet Render.nothingYet ]
+        | [] -> Page.aside [ Elem.h2 [] [ Text.enc Render.Blocks.record ]; quiet Scene.NothingYet ]
         | entries ->
             let row (entry: Entry) =
                 Elem.div
@@ -297,18 +277,19 @@ module Html =
                       Elem.span [ Attr.class' "asked" ] [ Text.enc $"{Words.player entry.Actor}: {Words.command entry.Asked}" ]
                       Elem.span [ Attr.class' "outcome" ] (entry.Told |> List.map (fun notice -> quiet (told notice))) ]
 
-            aside (
+            Page.aside (
                 [ Elem.h2 [] [ Text.enc Render.Blocks.record ] ]
                 @ (entries |> List.map row)
                 @ [ quiet (Render.recordStanding model) ]
             )
 
     let ruling regionId model =
-        aside
+        Page.aside
             [ Elem.h2 [] [ Text.enc (Render.Blocks.region regionId) ]
-              lines (Render.explainRule regionId model) ]
+              Page.lines (Render.explainRule regionId model) ]
 
-    let rules = aside [ Elem.h2 [] [ Text.enc Render.Blocks.rules ]; lines Render.help ]
+    let rules =
+        Page.aside [ Elem.h2 [] [ Text.enc Render.Blocks.rules ]; Page.lines Render.help ]
 
     let private sheet =
         """

@@ -7,3 +7,8 @@ publish/
 settings.txt
 colours.txt
 colors.txt
+
+# What an editor leaves behind
+.vs/
+.vscode/
+.idea/

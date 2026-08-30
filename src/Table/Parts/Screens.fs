@@ -38,19 +38,26 @@ module Screens =
             printf "Press any key."
             System.Console.ReadKey true |> ignore
 
+    /// The narrowest a window is taken to be - a terminal mid-resize can answer nought, and twenty
+    /// columns is the least a row's marker, digit and name can be laid out in - and what a
+    /// redirected console is written to fit, having no window to ask about.
+    [<Literal>]
+    let private Narrowest = 20
+
+    [<Literal>]
+    let private Usual = 80
+
+    let private across () =
+        try
+            max Narrowest (System.Console.WindowWidth - 1)
+        with _ ->
+            Usual
+
     /// Draw over what is already on the screen rather than clearing it first, which is what keeps a
     /// board redrawn several times a second from flickering. Every line is padded to the width and
     /// any line the last drawing used and this one does not is blanked, so nothing is left behind.
     /// A screen identical to the one already there is not written again. Answers with what is now
     /// on the terminal, to be passed back in next time - after `cleared`, that is `nothing`.
-    /// How many columns there are to draw into. A redirected console has no window to ask about, so
-    /// it is given the width anything written for a terminal is written to fit.
-    let across () =
-        try
-            max 20 (System.Console.WindowWidth - 1)
-        with _ ->
-            80
-
     let redrawn (before: Drawn) (text: string) =
         if before.Text = text then
             before
@@ -87,6 +94,11 @@ module Screens =
 
         { Lines = lines.Length; Text = text }
 
+    /// How long to wait between looks at the keyboard: short enough that a key is never felt to
+    /// lag, long enough that a table waiting on its next beat is not spinning.
+    [<Literal>]
+    let private Glance = 8
+
     let awaiting (until: System.DateTime) =
         let rec waiting () =
             if System.Console.KeyAvailable then
@@ -94,18 +106,29 @@ module Screens =
             elif System.DateTime.UtcNow >= until then
                 None
             else
-                System.Threading.Thread.Sleep 8
+                System.Threading.Thread.Sleep Glance
                 waiting ()
 
         waiting ()
 
+    /// The fewest lines a window is taken to have. A terminal that answers with fewer - or with
+    /// none, mid-resize - is given eight, which is too few to cut a board to, so the board is drawn
+    /// whole rather than cut to nothing.
+    [<Literal>]
+    let private Shortest = 8
+
     /// How many lines there are to draw into, or no limit at all where there is no window to ask
     /// about - which is every redirected console, and nothing reading one is looking at edges.
-    let room () =
+    let private room () =
         try
-            max 8 (System.Console.WindowHeight - 1)
+            max Shortest (System.Console.WindowHeight - 1)
         with _ ->
             System.Int32.MaxValue
+
+    /// The fewest spare lines worth cutting a board to: one for the line that says it was cut, and
+    /// two of the board itself.
+    [<Literal>]
+    let private Worth = 3
 
     /// A body trimmed to what is left after everything that must be drawn.
     ///
@@ -115,11 +138,13 @@ module Screens =
     let fitting room rest (says: string -> string) (body: string list) =
         let spare = room - rest
 
-        if List.length body <= spare || spare < 3 then
+        if List.length body <= spare || spare < Worth then
             body
         else
             let kept = List.truncate (spare - 1) body
 
+            // At least two lines are cut whenever any are: the body ran past the spare lines, and
+            // one of those went to say so. So the count is never one, and never reads wrong.
             kept
             @ [ says $"  ... {List.length body - List.length kept} more lines, and this screen is taller than the window" ]
 

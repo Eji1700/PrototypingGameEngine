@@ -8,34 +8,33 @@ type RulingMeasure =
     | StonesInFlag
 
 type Rule =
-    | RuledBy of StoneColor
-    | Contested of StoneColor list
+    | RuledBy of StoneColour
+    | Contested of StoneColour list
     | Unclaimed
 
 type LandStanding =
-    { Ruled: Map<StoneColor, int>
+    { Ruled: Map<StoneColour, int>
       Tied: int
-      Unclaimed: int }
+      Vacant: int }
 
 module Ruling =
 
     let private measures axe flag stones =
-        [ Cascade.by StonesInRegion (fun color -> Pile.count color stones)
-          Cascade.by StonesInAxe (fun color -> Pile.count color axe)
-          Cascade.by StonesInFlag (fun color -> Pile.count color flag) ]
+        [ Tiebreak.by StonesInRegion (fun colour -> Pile.count colour stones)
+          Tiebreak.by StonesInAxe (fun colour -> Pile.count colour axe)
+          Tiebreak.by StonesInFlag (fun colour -> Pile.count colour flag) ]
 
     let private contenders stones =
-        StoneColor.all |> List.filter (fun color -> Pile.count color stones > 0)
+        StoneColour.all |> List.filter (fun colour -> Pile.count colour stones > 0)
 
-    let weigh axe flag stones =
-        Cascade.run (measures axe flag stones) (contenders stones)
+    let private weigh axe flag stones =
+        Tiebreak.run (measures axe flag stones) (contenders stones)
 
     let decide axe flag stones =
         match weigh axe flag stones |> fst with
         | [] -> Unclaimed
-        | [ color ] -> RuledBy color
+        | [ colour ] -> RuledBy colour
         | tied -> Contested tied
-
 
     let over regionId position =
         decide (Position.stones Board.axe position) (Position.stones Board.flag position) (Position.stones regionId position)
@@ -51,12 +50,12 @@ module Ruling =
             landRulings position
             |> List.choose (fun (_, rule) ->
                 match rule with
-                | RuledBy color -> Some color
+                | RuledBy colour -> Some colour
                 | Contested _
                 | Unclaimed -> None)
 
-        StoneColor.all
-        |> List.map (fun color -> color, ruled |> List.filter ((=) color) |> List.length)
+        StoneColour.all
+        |> List.map (fun colour -> colour, ruled |> List.filter ((=) colour) |> List.length)
         |> Map.ofList
 
     let landStanding position =
@@ -72,7 +71,7 @@ module Ruling =
             counting (function
                 | Contested _ -> true
                 | _ -> false)
-          Unclaimed =
+          Vacant =
             counting (function
                 | Unclaimed -> true
                 | _ -> false) }

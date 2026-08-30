@@ -38,8 +38,6 @@ type Play =
 
       Beaten: Retreating list
 
-      Contested: Set<ProvinceId>
-
       Adrift: Set<Power>
 
       Last: Passing list
@@ -73,14 +71,7 @@ module Session =
         | InPlay _ -> false
         | Finished _ -> true
 
-    let ending =
-        function
-        | InPlay _ -> None
-        | Finished(_, ending) -> Some ending
-
     let seatOf = Power.seatOf
-
-    let powerAt = Power.atSeat
 
     let owed power position =
         let centres, units = Position.counts power position
@@ -111,30 +102,42 @@ module Session =
             | power :: _ -> seatOf power
             | [] -> Seat.at 1
 
+    /// The orders a power has written this phase: a build is its where it holds the centre, and
+    /// any other order is its where its unit stands - or stood, for one beaten out and retreating.
+    let writtenBy power play =
+        play.Written
+        |> Map.toList
+        |> List.filter (fun (province, says) ->
+            match says with
+            | Builds _ -> Position.ownerOf province play.Board = Some power
+            | _ ->
+                Position.at province play.Board |> Option.map (fun piece -> piece.Power) = Some power
+                || play.Beaten
+                   |> List.exists (fun beaten -> beaten.From = province && beaten.Piece.Power = power))
 
-    /// How many steps a province is from the nearest of a power's home centres, walked over land and
-    /// sea alike. Only used to order units for removal, so somewhere unreachable answering 99 is
-    /// exactly right: it goes first.
+
+    // Further than any road runs, for a walk that finds no home at all.
+    [<Literal>]
+    let private Nowhere = 99
+
+    /// How many steps a province is from the nearest of a power's home centres, walked by land and
+    /// by sea alike. Only used to order units for removal, so a unit no road leads home from
+    /// answering `Nowhere` is exactly right: it goes first.
     let private fromHome power province =
         let homes = Atlas.homesOf power |> Set.ofList
 
         let rec walk seen edge steps =
             match edge with
-            | [] -> 99
+            | [] -> Nowhere
             | _ when edge |> List.exists (fun place -> Set.contains place homes) -> steps
             | _ ->
                 let next =
                     edge
-                    |> List.collect (fun place ->
-                        Atlas.armyReach place
-                        @ (Atlas.fleetReach { At = place; Coast = None }
-                           |> List.map (fun there -> there.At)))
+                    |> List.collect Atlas.anyReach
                     |> List.distinct
                     |> List.filter (fun place -> not (Set.contains place seen))
 
-                match next with
-                | [] -> 99
-                | _ -> walk (List.fold (fun seen place -> Set.add place seen) seen next) next (steps + 1)
+                walk (List.fold (fun seen place -> Set.add place seen) seen next) next (steps + 1)
 
         walk (Set.singleton province) [ province ] 0
 
@@ -176,11 +179,7 @@ module Session =
                 | was -> Some(province, owner, was))
             |> List.sortBy (fun (province, _, _) -> Atlas.code province)
 
-        let goneOut =
-            Power.all
-            |> List.filter (fun power -> not (Position.isOut power before) && Position.isOut power after)
-
-        { play with Board = after }, changed, goneOut
+        { play with Board = after }, changed
 
     let private decided play =
         let standing =
@@ -198,6 +197,11 @@ module Session =
             | [ only ] -> Some(LastStanding only)
             | _ -> None
 
+    let private restingIn play =
+        Power.all
+        |> List.filter (fun power -> not (hasSomethingToDo power play))
+        |> Set.ofList
+
     /// Opening a stage, with every power that has nothing to do in it already sealed. A power with no
     /// retreat to make is not waited on, and a stage nobody is waited on for passes straight through.
     let private entering stage play =
@@ -205,17 +209,14 @@ module Session =
             { play with
                 Stage = stage
                 Written = Map.empty
-                Sealed = Set.empty
                 Turn = play.Turn + 1 }
 
-        { play with
-            Sealed =
-                Power.all
-                |> List.filter (fun power -> not (hasSomethingToDo power play))
-                |> Set.ofList }
+        { play with Sealed = restingIn play }
 
-    let private nextAfter season =
-        if season = Spring then Moving Autumn else Building
+    let private nextAfter =
+        function
+        | Spring -> Moving Autumn
+        | Autumn -> Building
 
     /// Working the game forward from a stage everybody has sealed. It loops rather than settling one
     /// stage and stopping, because settling one often opens another that nobody has anything to say
@@ -234,8 +235,7 @@ module Session =
 
                 { play with
                     Board = resolution.Position
-                    Beaten = resolution.Retreats
-                    Contested = resolution.Contested },
+                    Beaten = resolution.Retreats },
                 { nothingHappened (Moving season) play.Year with
                     Reports = resolution.Reports },
                 (if List.isEmpty resolution.Retreats then nextAfter season else Falling season)
@@ -301,19 +301,22 @@ module Session =
                 Moving Spring
 
         // Centres change hands on the autumn count only, which is to say on the way into a winter.
-        let resolved, passing =
-            if next = Building then
-                let after, changed, goneOut = harvested resolved
+        let resolved, changed = if next = Building then harvested resolved else resolved, []
 
-                after,
-                { passing with
-                    Changed = changed
-                    Eliminated = goneOut }
-            else
-                resolved, passing
+        // A power is out once it has neither a centre nor a unit. The autumn count can leave it so,
+        // and so can the winter after the autumn that took its last centre while units still stood:
+        // the removals take those, and the power goes with them.
+        let goneOut =
+            Power.all
+            |> List.filter (fun power -> not (Position.isOut power play.Board) && Position.isOut power resolved.Board)
 
         let after = entering next resolved
-        let told = passing :: told
+
+        let told =
+            { passing with
+                Changed = changed
+                Eliminated = goneOut }
+            :: told
 
         match decided after with
         | Some finish -> Finished(after, finish), List.rev told
@@ -337,10 +340,15 @@ module Session =
 
         if List.isEmpty (awaited play) then resolveNow play else InPlay play, []
 
+    /// A power that walks away takes what it had written this phase with it, so its units stand
+    /// where they are from here on - which is what the board then says of it.
     let walkAway power play =
         let play =
             { play with
-                Adrift = Set.add power play.Adrift }
+                Adrift = Set.add power play.Adrift
+                Written =
+                    writtenBy power play
+                    |> List.fold (fun written (province, _) -> Map.remove province written) play.Written }
 
         if List.isEmpty (awaited play) then resolveNow play else InPlay play, []
 
@@ -353,14 +361,10 @@ module Session =
               Written = Map.empty
               Sealed = Set.empty
               Beaten = []
-              Contested = Set.empty
               Adrift = Set.empty
               Last = []
               Turn = 1 }
 
         InPlay
             { opening with
-                Sealed =
-                    Power.all
-                    |> List.filter (fun power -> not (hasSomethingToDo power opening))
-                    |> Set.ofList }
+                Sealed = restingIn opening }

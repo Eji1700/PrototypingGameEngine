@@ -63,7 +63,7 @@ module Select =
     let covered selector = { selector with Covered = true }
     let worth values selector = { selector with Worth = values }
     let other selector = { selector with NotThis = true }
-    let this' selector = { selector with JustThis = true }
+    let thisCard selector = { selector with JustThis = true }
     let thatCard selector = { selector with WasChosen = true }
     let highest selector = { selector with Pick = Highest }
     let lowest selector = { selector with Pick = Lowest }
@@ -81,7 +81,7 @@ type Command =
     | Flip of Selector
     | Return of Selector
     | Shift of Selector * Where
-    | Refreshing'
+    | RefreshHand
     | FromDeck of Face * Where
     | PlayFromHand of Face * Where
     | Give
@@ -107,22 +107,24 @@ type Command =
     | Either of Command * Command
     | Opposing of Command
 
+/// A rule that holds for as long as the card lies face up, rather than a thing done once.
 type Ongoing =
-
-
+    // What a line counts to.
     | FaceDownWorth of int
     | LinePlus of int
     | LinePlusPerFaceDown of int
     | TheirLineMinus of int
 
-
+    // Where a card may be played, theirs and yours.
     | TheyCannotPlayHere
     | TheyCannotPlayFaceDownHere
     | TheyMustPlayFaceDown
     | YouMayPlayAnywhere
 
+    // A phase of your own turn that does not happen.
     | SkipsCacheCheck
 
+    // The middle box of every card in the line, either side's, says nothing.
     | Silence
 
 type Trigger =
@@ -190,6 +192,13 @@ type Question =
       Because: Asker
       Wanting: Wanting }
 
+/// Where a card was until it was placed, which is what the placing is announced as. A card out
+/// of a line was announced as it set off, so that placing says nothing when it lands.
+type Origin =
+    | FromHand
+    | OffTheDeck
+    | FromLine of int
+
 /// One piece of work on the pile. Most of these exist because something has to happen between
 /// two commands rather than inside one: a card is only really placed once whatever it covers
 /// has spoken, a `Gate` only opens once the command under it has run, and a turn only ends
@@ -203,7 +212,7 @@ type Pending =
     | Refreshing
     | Repeating of Command * Source * tally: int
     | Trimming
-    | Placing of PlayerId * Placed * line: int * from: int option
+    | Placing of PlayerId * Placed * line: int * from: Origin
     | Gate of Command list * Source
     | Turning of PlayerId * Placed * line: int
     | Escaping of lines: int list

@@ -1,6 +1,7 @@
 namespace Prototyping.Net
 
 open System
+open System.Net.Http
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http.Connections.Client
@@ -35,6 +36,17 @@ module Client =
 
     let private wait (task: Task) = task.GetAwaiter().GetResult()
 
+    /// The status a door answered with, wherever the client library buried it - which is what says
+    /// whether the table refused us or nothing answered at all.
+    let rec private statusOf (problem: exn) =
+        match problem with
+        | :? HttpRequestException as http when http.StatusCode.HasValue -> Some(int http.StatusCode.Value)
+        | :? AggregateException as several -> several.InnerExceptions |> Seq.tryPick statusOf
+        | _ ->
+            match problem.InnerException with
+            | null -> None
+            | inner -> statusOf inner
+
     let join game given resuming code table rings (chosen: View<_, _, _>) =
         let where =
             match table with
@@ -59,15 +71,16 @@ module Client =
                 .WithAutomaticReconnect(Patient())
                 .Build()
 
-        connection.ServerTimeout <- TimeSpan.FromSeconds 60.0
-        connection.HandshakeTimeout <- TimeSpan.FromSeconds 30.0
-        connection.KeepAliveInterval <- TimeSpan.FromSeconds 15.0
+        connection.ServerTimeout <- Protocol.GivenUp
+        connection.HandshakeTimeout <- Protocol.Handshake
+        connection.KeepAliveInterval <- Protocol.KeepAlive
 
         let token = ref (resuming |> Option.defaultValue "")
 
-        let up = ref false
-
+        // Set once the table has nothing more for this console - it got up, or it was turned away -
+        // so that the prompt is not left waiting for lines nothing will answer.
         let over = new ManualResetEventSlim(false)
+        let turned = ref false
 
         let sitDown () =
             connection.InvokeAsync(Protocol.Call.Join, box token.Value, box chosen.Name, box (Palette.write chosen.Palette))
@@ -93,6 +106,8 @@ module Client =
             fun why ->
                 printfn ""
                 printfn "%s" why
+                turned.Value <- true
+                over.Set()
         )
         |> ignore
 
@@ -101,7 +116,6 @@ module Client =
             fun said ->
                 printfn ""
                 printfn "%s" said
-                up.Value <- true
                 over.Set()
         )
         |> ignore
@@ -138,16 +152,25 @@ module Client =
                 wait (connection.StartAsync())
                 true
             with problem ->
-                let refused = problem.Message.Contains "401" || problem.Message.Contains "403"
+                match statusOf problem with
+                | Some 401
+                | Some 403 ->
+                    match code with
+                    | None -> eprintfn "That table has a word at its door. Say it with --code <word>."
+                    | Some _ -> eprintfn "That table has a word at its door, and that is not it."
 
-                if refused then
-                    eprintfn "That table would not let me in - %s" problem.Message
-                    eprintfn "It has a word at its door. Say it with --code <word>."
                     false
-                elif attempts <= 1 then
-                    eprintfn "There is no table at %s - %s" url problem.Message
+                | Some 429 ->
+                    eprintfn "That door has heard too many wrong words lately and is not answering for the moment."
+                    eprintfn "Try again in a few seconds."
                     false
-                else
+                | Some status ->
+                    eprintfn "Something at %s answered %d, which is not a table." url status
+                    false
+                | None when attempts <= 1 ->
+                    eprintfn "Nothing answered at %s. Is the table open, and is that its address?" url
+                    false
+                | None ->
                     eprintfn "No answer from %s yet - trying again." url
                     Thread.Sleep 2000
                     arriving (attempts - 1)
@@ -167,12 +190,12 @@ module Client =
                 try
                     wait (connection.InvokeAsync(Protocol.Call.Say, box line))
                 with _ ->
-                    if not up.Value then
+                    if not over.IsSet then
                         printfn ""
                         printfn "That did not reach the table. Say it again in a moment."
                         show ""
 
-                if not up.Value then reading ()
+                if not over.IsSet then reading ()
 
         let hands =
             Thread(
@@ -186,4 +209,4 @@ module Client =
         over.Wait()
         wait (connection.StopAsync())
         looked ()
-        0
+        if turned.Value then 1 else 0

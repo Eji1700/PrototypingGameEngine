@@ -3,7 +3,7 @@
 open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Turncoats
-open Harness
+open Checks
 open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
@@ -16,9 +16,11 @@ let private reading =
 let private sitting =
     Solo.opened playing "first" dealt |> Solo.watching "keyboard" reading |> fst
 
-let private say line solo = Solo.said "afresh" "keyboard" line solo
+let private say line solo =
+    Solo.said (fun () -> "afresh") "keyboard" line solo
 
-let private turn solo = Solo.said "afresh" "keyboard" "" solo
+let private turn solo =
+    Solo.said (fun () -> "afresh") "keyboard" "" solo
 
 let private next line solo =
     let solo, _, _ = say line solo
@@ -28,15 +30,15 @@ let private screens (posts: Post list) =
     posts
     |> List.choose (fun post ->
         match post.Say with
-        | Screen text -> Some text
+        | ToPlayer.Screen text -> Some text
         | _ -> None)
 
 let private saidTo (posts: Post list) =
     posts
     |> List.choose (fun post ->
         match post.Say with
-        | Told text
-        | TurnedAway text -> Some text
+        | ToPlayer.Told text
+        | ToPlayer.TurnedAway text -> Some text
         | _ -> None)
 
 
@@ -51,7 +53,7 @@ report
 report
     "a line typed by somebody who is not watching is turned away"
     [ "You are not watching this game." ]
-    (Solo.said "afresh" "stranger" "negotiate" (Solo.opened playing "s" dealt)
+    (Solo.said (fun () -> "afresh") "stranger" "negotiate" (Solo.opened playing "s" dealt)
      |> fun (_, posts, _) -> saidTo posts)
 
 
@@ -74,10 +76,6 @@ let private drawnAfter lines =
     |> Solo.board "keyboard"
     |> Option.get
 
-let private flat (text: string) =
-    text.Split([| ' '; '\t'; '\r'; '\n' |], System.StringSplitOptions.RemoveEmptyEntries)
-    |> String.concat " "
-
 let private says (needle: string) (text: string) = (flat text).Contains(flat needle)
 
 let private aCommand = List.head Render.commands
@@ -97,7 +95,8 @@ report
 
 
 let private nudged console posts =
-    posts |> List.exists (fun post -> post.To = console && post.Say = Nudged)
+    posts
+    |> List.exists (fun post -> post.To = console && post.Say = ToPlayer.Nudged)
 
 report
     "a move nudges the other console watching the hot seat"
@@ -110,7 +109,7 @@ report
     "at one keyboard nothing is nudged at all, there being nobody to interrupt but yourself"
     []
     (say "recruit r 1" sitting
-     |> fun (_, posts, _) -> posts |> List.filter (fun post -> post.Say = Nudged))
+     |> fun (_, posts, _) -> posts |> List.filter (fun post -> post.Say = ToPlayer.Nudged))
 
 report
     "a line that only changes how you read nudges nobody"
@@ -227,10 +226,15 @@ report
 report "an empty line simply draws the board again" 1 (turn sitting |> fun (_, posts, _) -> screens posts |> List.length)
 
 report
-    "and a line the parser cannot read is answered, leaving the game alone"
+    "a line the parser cannot read is answered, in words"
+    true
+    (say "frobnicate" sitting
+     |> fun (_, posts, _) -> saidTo posts |> List.exists (fun said -> said <> ""))
+
+report
+    "and it leaves the game alone"
     (Playing.session dealt)
-    (let solo, posts, _ = say "frobnicate" sitting
-     ignore (saidTo posts)
+    (let solo, _, _ = say "frobnicate" sitting
      Playing.session (Solo.model solo))
 
 

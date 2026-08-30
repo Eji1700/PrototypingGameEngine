@@ -5,12 +5,12 @@ open System.Collections.Generic
 open System.IO
 open System.Reflection
 open System.Threading
-open System.Threading.Channels
 open System.Threading.Tasks
 open Falco.Datastar
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Http.Features
 open Microsoft.Extensions.Primitives
+open Prototyping.Common
 open Prototyping.Table
 
 module Browser =
@@ -21,66 +21,28 @@ module Browser =
     [<Literal>]
     let Prefix = "page-"
 
+    /// Where a house keeps a table's board, under the table's name.
+    [<Literal>]
+    let At = "/at"
+
+    let tableAt (id: string) = $"{At}/{id}"
+
     [<NoComparison; NoEquality>]
     type Drawn =
         { Shell: Shell
           Slots: Slot list
           Standard: Palette }
 
+    let drawn (game: Playable<_, _, _>) : Drawn =
+        { Shell = game.Page
+          Slots = game.Slots
+          Standard = Playable.standard game }
+
     let isPage (console: string) = console.StartsWith Prefix
 
-    let private Beat = TimeSpan.FromSeconds 15.0
-
-
-    type Frame =
-        | Piece of html: string
-        | Doing of script: string
-
-    /// The pages currently reading, and the token each of them was given for its seat.
-    ///
-    /// A page that reloads opens a second stream before the first has noticed it is gone, so opening
-    /// one for a console that already has one closes the old one rather than leaving both writing to
-    /// a browser that is only listening to the newer.
-    type Pages() =
-        let gate = obj ()
-        let streams = Dictionary<string, Channel<Frame>>()
-        let seats = Dictionary<string, string>()
-
-        member _.Open console =
-            let channel = Channel.CreateUnbounded<Frame>()
-
-            lock gate (fun () ->
-                match streams.TryGetValue console with
-                | true, before -> before.Writer.TryComplete() |> ignore
-                | _ -> ()
-
-                streams[console] <- channel)
-
-            channel
-
-        member _.Close(console, channel: Channel<Frame>) =
-            lock gate (fun () ->
-                match streams.TryGetValue console with
-                | true, current when Object.ReferenceEquals(current, channel) -> streams.Remove console |> ignore
-                | _ -> ())
-
-            channel.Writer.TryComplete() |> ignore
-
-        member _.Send(console, frame) =
-            lock gate (fun () ->
-                match streams.TryGetValue console with
-                | true, channel -> channel.Writer.TryWrite frame |> ignore
-                | _ -> ())
-
-        member _.Remember(console, token) =
-            lock gate (fun () -> seats[console] <- token)
-
-        member _.Seat console =
-            lock gate (fun () ->
-                match seats.TryGetValue console with
-                | true, token -> Some token
-                | _ -> None)
-
+    /// What the wire does with a page: seats it, hears it, notices it go, and delivers what the
+    /// table says back. `Watching` is handed the console's name, then the view and the colours the
+    /// page asked for as the words it sent - the same three `Table.Sits` names.
     [<NoComparison; NoEquality>]
     type Sitting =
         { Watching: string -> string -> string -> Post list
@@ -91,25 +53,30 @@ module Browser =
 
     let private saying =
         function
-        | Screen text
-        | Told text -> Some(Piece text)
-        | TurnedAway why -> Some(Piece(Page.says why))
-        | GotUp said -> Some(Piece(Page.says said))
-        | Nudged -> Some(Doing Page.Nudge)
-        | Rang sound -> Some(Doing(Page.rang sound))
-        | Seated _ -> None
+        | ToPlayer.Screen text
+        | ToPlayer.Told text -> Some(Piece text)
+        | ToPlayer.TurnedAway why -> Some(Piece(Page.says why))
+        | ToPlayer.GotUp said -> Some(Piece(Page.says said))
+        | ToPlayer.Nudged -> Some(Doing Page.Nudge)
+        | ToPlayer.Rang sound -> Some(Doing(Page.rang sound))
+        | ToPlayer.Seated _ -> None
 
     let send (pages: Pages) (post: Post) =
         saying post.Say |> Option.iter (fun frame -> pages.Send(post.To, frame))
 
 
+    /// A value from the query by name - the several it may have been given joined by a space,
+    /// which is how colours arrive, one slot to a word.
+    let private queried name (ctx: HttpContext) =
+        match ctx.Request.Query.TryGetValue name with
+        | true, given when given.Count > 0 -> Some(String.Join(" ", given.ToArray()))
+        | _ -> None
+
+    // Lax rather than Strict: a table's address is handed round in chat and mail, and a link
+    // followed from there is a cross-site navigation that a Strict cookie stays home for - so a
+    // player who had the word and a seat would arrive with neither.
     let private kept (ctx: HttpContext) =
-        CookieOptions(
-            HttpOnly = true,
-            Secure = ctx.Request.IsHttps,
-            SameSite = SameSiteMode.Strict,
-            MaxAge = TimeSpan.FromDays 7.0
-        )
+        CookieOptions(HttpOnly = true, Secure = ctx.Request.IsHttps, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromDays 7.0)
 
     let private consoleOf (ctx: HttpContext) =
         match ctx.Request.Cookies.TryGetValue Cookie with
@@ -133,15 +100,13 @@ module Browser =
         | _ -> None
 
     let private paletteOf (drawn: Drawn) (ctx: HttpContext) =
-        match ctx.Request.Query.TryGetValue "colours" with
-        | true, given when given.Count > 0 -> Palette.read drawn.Slots (String.Join(" ", given.ToArray()))
-        | _ -> drawn.Standard
+        queried "colours" ctx
+        |> Option.map (Palette.read drawn.Slots)
+        |> Option.defaultValue drawn.Standard
 
 
     let presented (ctx: HttpContext) =
-        [ (match ctx.Request.Query.TryGetValue Reach.Asked with
-           | true, given when given.Count > 0 -> Some(string given[0])
-           | _ -> None)
+        [ queried Reach.Asked ctx
           (match ctx.Request.Headers.TryGetValue Reach.Header with
            | true, given when given.Count > 0 -> Some(string given[0])
            | _ -> None)
@@ -158,8 +123,18 @@ module Browser =
             | true, held when held = code -> ()
             | _ -> ctx.Response.Cookies.Append(Reach.Cookie, code, kept ctx)
 
-    let turned (drawn: Drawn) (ctx: HttpContext) =
-        if ctx.Request.Method = HttpMethods.Get && ctx.Request.Path = PathString "/" then
+    /// Shown the door. A request that would have been shown a page - the front, or a table's board
+    /// at a house, which is the address people share - gets the page with somewhere to type the
+    /// word, since `403` is not an instruction anybody can act on. Anything else gets the word
+    /// alone: a stream or a line is nothing a person reads.
+    let turned (drawn: Drawn) (place: string) (ctx: HttpContext) =
+        let path = ctx.Request.Path
+
+        let page =
+            ctx.Request.Method = HttpMethods.Get
+            && (path = PathString "/" || path.StartsWithSegments(PathString At))
+
+        if page then
             ctx.Response.StatusCode <- 401
             ctx.Response.ContentType <- "text/html; charset=utf-8"
 
@@ -167,13 +142,25 @@ module Browser =
         else
             ctx.Response.StatusCode <- 403
             ctx.Response.ContentType <- "text/plain; charset=utf-8"
-            ctx.Response.WriteAsync "This table has a word at the door, and that is not it."
+            ctx.Response.WriteAsync $"This {place} has a word at the door, and that is not it."
 
-    let tooOften (ctx: HttpContext) =
+    /// Too many wrong words from one address; `dripping` is how long the door takes to hear
+    /// another, and what it tells the stranger to wait.
+    let tooOften (dripping: TimeSpan) (ctx: HttpContext) =
+        let seconds = int (ceil dripping.TotalSeconds)
         ctx.Response.StatusCode <- 429
-        ctx.Response.Headers.RetryAfter <- StringValues "60"
+        ctx.Response.Headers.RetryAfter <- StringValues(string seconds)
         ctx.Response.ContentType <- "text/plain; charset=utf-8"
-        ctx.Response.WriteAsync "Too many wrong answers at this door. Try again in a minute."
+
+        ctx.Response.WriteAsync
+            $"""Too many wrong answers at this door. Try again in {Counting.several "second" "seconds" seconds}."""
+
+    /// A form that asked for something the house will not deal is told why, in plain words, rather
+    /// than sent back to the front page with no word about it.
+    let refused (why: string) (ctx: HttpContext) =
+        ctx.Response.StatusCode <- 400
+        ctx.Response.ContentType <- "text/plain; charset=utf-8"
+        ctx.Response.WriteAsync why
 
 
     let private client =
@@ -193,11 +180,14 @@ module Browser =
         ctx.Response.ContentType <- "text/html; charset=utf-8"
         ctx.Response.WriteAsync(Page.page drawn.Shell palette)
 
+    // What was typed: on the query for a button, otherwise in the signals the page posts. A body
+    // that is not those signals - a post from something other than the page, or one that stopped
+    // half way - reads as nothing typed rather than as a fault.
     let private lineOf (ctx: HttpContext) =
         task {
-            match ctx.Request.Query.TryGetValue "line" with
-            | true, given when given.Count > 0 -> return string given[0]
-            | _ ->
+            match queried "line" ctx with
+            | Some line -> return line
+            | None ->
                 try
                     match! Request.getSignals<Page.Signals> ctx with
                     | ValueSome signals -> return (signals.Line |> Option.ofObj |> Option.defaultValue "")
@@ -246,16 +236,8 @@ module Browser =
     let stream (drawn: Drawn) (sitting: Sitting) (pages: Pages) (ctx: HttpContext) =
         task {
             let console = consoleOf ctx
-
-            let asked =
-                match ctx.Request.Query.TryGetValue "view" with
-                | true, given when given.Count > 0 -> string given[0]
-                | _ -> ""
-
-            let colours =
-                match ctx.Request.Query.TryGetValue "colours" with
-                | true, given when given.Count > 0 -> String.Join(" ", given.ToArray())
-                | _ -> ""
+            let asked = queried "view" ctx |> Option.defaultValue ""
+            let colours = queried "colours" ctx |> Option.defaultValue ""
 
             // A stream is only useful if what is written to it goes out at once, which means turning
             // off buffering here and asking any nginx in front not to add its own.
@@ -263,58 +245,53 @@ module Browser =
             |> Option.ofObj
             |> Option.iter (fun body -> body.DisableBuffering())
 
-            let channel = pages.Open console
-
-            do!
-                Response.sseStartResponseWithHeaders
-                    ctx
-                    [ KeyValuePair<string, StringValues>("X-Accel-Buffering", StringValues "no") ]
-
-            let seated = sitting.Watching console asked colours
-
-            for post in seated do
-                match post.To, post.Say with
-                | at, Seated(_, token) when at = console -> pages.Remember(console, token)
-                | _ -> ()
-
-            sitting.Deliver seated
+            let outgoing = pages.Open console
 
             try
-                let mutable reading = true
+                try
+                    do!
+                        Response.sseStartResponseWithHeaders
+                            ctx
+                            [ KeyValuePair<string, StringValues>("X-Accel-Buffering", StringValues "no") ]
 
-                let mutable waiting = channel.Reader.WaitToReadAsync(ctx.RequestAborted).AsTask()
+                    sitting.Watching console asked colours |> sitting.Deliver
 
-                // Whichever comes first: something to send, or the heartbeat falling due. A quiet
-                // stream still has to say something now and again, or a proxy between here and the
-                // browser closes it as idle. The timer is cancelled either way so that a busy stream
-                // does not leave one behind on every pass.
-                while reading do
-                    use beat = CancellationTokenSource.CreateLinkedTokenSource ctx.RequestAborted
-                    let! settled = Task.WhenAny(waiting, Task.Delay(Beat, beat.Token))
-                    beat.Cancel()
+                    let mutable reading = true
 
-                    if not (Object.ReferenceEquals(settled, waiting)) then
-                        do! Response.sseExecuteScript ctx Page.Alive
-                        do! ctx.Response.Body.FlushAsync ctx.RequestAborted
-                    else
+                    let mutable waiting = outgoing.Coming(ctx.RequestAborted).AsTask()
 
-                    let! more = waiting
+                    // Whichever comes first: something to send, or the heartbeat falling due. A quiet
+                    // stream still has to say something now and again, or a proxy between here and
+                    // the browser closes it as idle. The timer is cancelled either way so that a busy
+                    // stream does not leave one behind on every pass.
+                    while reading do
+                        use beat = CancellationTokenSource.CreateLinkedTokenSource ctx.RequestAborted
+                        let! settled = Task.WhenAny(waiting, Task.Delay(Protocol.KeepAlive, beat.Token))
+                        beat.Cancel()
 
-                    if not more then
-                        reading <- false
-                    else
-                        let mutable frame = Piece ""
+                        if not (Object.ReferenceEquals(settled, waiting)) then
+                            do! Response.sseExecuteScript ctx Page.Alive
+                            do! ctx.Response.Body.FlushAsync ctx.RequestAborted
+                        else
 
-                        while channel.Reader.TryRead &frame do
-                            match frame with
-                            | Piece html -> do! Response.sseStringElements ctx html
-                            | Doing script -> do! Response.sseExecuteScript ctx script
+                        let! more = waiting
 
-                        do! ctx.Response.Body.FlushAsync ctx.RequestAborted
-                        waiting <- channel.Reader.WaitToReadAsync(ctx.RequestAborted).AsTask()
-            with :? OperationCanceledException ->
-                ()
+                        if not more then
+                            reading <- false
+                        else
+                            for frame in outgoing.Taken() do
+                                match frame with
+                                | Piece html -> do! Response.sseStringElements ctx html
+                                | Doing script -> do! Response.sseExecuteScript ctx script
 
-            pages.Close(console, channel)
-            sitting.Gone console |> sitting.Deliver
+                            do! ctx.Response.Body.FlushAsync ctx.RequestAborted
+                            waiting <- outgoing.Coming(ctx.RequestAborted).AsTask()
+                with :? OperationCanceledException ->
+                    ()
+            finally
+                // However the stream ended - the page going, or a socket reset in the middle of a
+                // write - the table is told the console has gone, but only if this was still its
+                // stream: a reload's old stream ending after the new one sat down would otherwise
+                // get the page up from the seat it had just come back to.
+                if pages.Close(console, outgoing) then sitting.Gone console |> sitting.Deliver
         }

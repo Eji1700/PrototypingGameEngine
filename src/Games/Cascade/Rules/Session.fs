@@ -99,15 +99,6 @@ module Session =
     [<Literal>]
     let MostRotations = 4096
 
-    [<Literal>]
-    let Slowest = 1
-
-    [<Literal>]
-    let Fastest = 9
-
-    [<Literal>]
-    let Ordinary = 5
-
     /// How long a quarter turn takes, in milliseconds, at each notch. Five is the half second the
     /// rules are written in; the board does the same thing at every notch and takes longer over it.
     let quarter notch = 1000 - 100 * notch
@@ -144,23 +135,20 @@ module Session =
           Halted = false }
 
     let dealt seed =
-        let rec filling cells rng =
-            function
-            | [] -> cells, rng
-            | cell :: rest ->
-                let picked, rng = Rng.intBelow (List.length Facing.all) rng
+        let cells, rng =
+            Board.all
+            |> List.fold
+                (fun (cells, rng) cell ->
+                    let facing, rng = Rng.pick Facing.all rng
 
-                filling
-                    (Map.add
+                    Map.add
                         cell
-                        { Facing = Facing.all[picked]
+                        { Facing = facing
                           Turned = 0
                           Landed = 0 }
-                        cells)
-                    rng
-                    rest
-
-        let cells, rng = filling Map.empty (Rng.ofSeed seed) Board.all
+                        cells,
+                    rng)
+                (Map.empty, Rng.ofSeed seed)
 
         InPlay
             { Cells = cells
@@ -170,7 +158,7 @@ module Session =
                   Column = (Board.Width + 1) / 2 }
               Wave = 0
               Left = Touches
-              Speed = Ordinary
+              Speed = Notch.Ordinary
               Run = None
               Tally = fresh
               Lit = []
@@ -181,10 +169,6 @@ module Session =
     let active (_: Session) = Seat.at 1
 
     let seats (_: Session) = Fewest
-
-    /// A turn is a touch. Beats are not turns of their own: a cascade is one thing a player did,
-    /// however many beats it took to finish.
-    let turn session = (play session).Tally.Touches + 1
 
     let isOver =
         function
@@ -205,6 +189,13 @@ module Session =
     let isTurning cell play = Set.contains cell play.Turning
 
     let atRest play = Set.isEmpty play.Turning
+
+    /// A turn is a touch. Beats are not turns of their own: a cascade is one thing a player did,
+    /// however many beats it took to finish - so the beats of one carry its number, and the next
+    /// number comes up once the board is at rest and a touch is what is owed.
+    let turn session =
+        let play = play session
+        play.Tally.Touches + (if atRest play then 1 else 0)
 
     /// Where the hand goes when pushed that way. A push off the edge does not move it, rather than
     /// wrapping or being refused - a hand held against the edge is what a player expects.
@@ -240,17 +231,6 @@ module Session =
     /// until that finishes the clock has a reason to go on beating.
     let settling play =
         not (atRest play) || not (List.isEmpty play.Lit) || play.Struck.IsSome
-
-    /// How far down the board the strike has got, in rows, or nothing if it is not showing. Beats
-    /// and the frames within them are counted together, so the band travels on across a beat
-    /// boundary rather than starting again at each one.
-    let struck pictures frame play =
-        play.Struck
-        |> Option.map (fun since -> ((play.Wave - since) * pictures + frame) * 2)
-
-    /// The activation being watched, running or finished. A board nobody has touched has none,
-    /// which is not the same as one of nought.
-    let run play = play.Run
 
     let lines shapes =
         shapes |> List.filter Shape.isLine |> List.length

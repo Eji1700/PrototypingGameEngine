@@ -4,7 +4,7 @@ open Prototyping.Engine
 open Prototyping.Table
 open Prototyping.Net
 open Prototyping.Turncoats
-open Harness
+open Checks
 open Whole
 
 let private dealt = Playing.start 2 42UL |> Result.toOption |> Option.get
@@ -24,18 +24,18 @@ let private heard console posts =
     |> List.filter (fun post -> post.To = console)
     |> List.map (fun post ->
         match post.Say with
-        | Told text
-        | Screen text
-        | TurnedAway text
-        | GotUp text -> text
-        | Seated(seat, token) -> $"seated at {seat} holding {token}"
-        | Nudged -> "(nudged)")
+        | ToPlayer.Told text
+        | ToPlayer.Screen text
+        | ToPlayer.TurnedAway text
+        | ToPlayer.GotUp text -> text
+        | ToPlayer.Seated(seat, token) -> $"seated at {seat} holding {token}"
+        | ToPlayer.Nudged -> "(nudged)"
+        | ToPlayer.Rang sound -> $"(rang {Sound.word sound})")
     |> String.concat "\n"
 
 let private nudged console posts =
-    posts |> List.exists (fun post -> post.To = console && post.Say = Nudged)
-
-let private mentions (needle: string) (text: string) = text.Contains needle
+    posts
+    |> List.exists (fun post -> post.To = console && post.Say = ToPlayer.Nudged)
 
 let private movesMade lobby =
     Timeline.movesMade (Lobby.model lobby).Timeline
@@ -100,7 +100,7 @@ report
      |> List.exists (fun post ->
          post.To = "one"
          && match post.Say with
-            | GotUp _ -> true
+            | ToPlayer.GotUp _ -> true
             | _ -> false))
 
 report
@@ -311,5 +311,120 @@ report
     "a seat somebody walked away from says so, rather than reading as empty"
     [ "Player 1 (away)"; "Player 2 (here)" ]
     (described dropped).Sitters
+
+// --- a console the table knows, back without its token -----------------------------------------------
+
+// What a page that reloads has: the same cookie and no token, at a table that may or may not have
+// seen it go. Either way it is put back in its own seat, rather than given a second one or turned
+// away from a table it is sitting at.
+let private again lobby = lobby |> sits "one" "tok-fresh"
+
+report
+    "a console the table knows is put back in its own seat without a token, while the table fills"
+    (true, 1)
+    (let lobby, posts = again seatedOne
+     heard "one" posts |> mentions "seated at 1", (Lobby.described lobby).Sat)
+
+report
+    "and at a full table, where a stranger would be turned away"
+    true
+    (heard "one" (again (full ()) |> snd) |> mentions "seated at 1")
+
+report
+    "and after the table saw it go, so a reload is back where it was"
+    (true, 2)
+    (let lobby, posts = again dropped
+     heard "one" posts |> mentions "seated at 1", (Lobby.described lobby).Reading)
+
+report
+    "under the token it was first given, so the line it was told still brings it back"
+    true
+    (heard "one" (again dropped |> snd) |> mentions "holding tok-one")
+
+report "a table nobody has played at has not begun" false (Lobby.described (full ())).Begun
+
+report "and one move begins it" true (Lobby.described acted).Begun
+
+
+// --- the streams a page reads by ------------------------------------------------------------------
+
+// A reload opens its second stream before the first has noticed it is gone, and the two can end in
+// either order; what must not happen is the old one's ending being taken for the page's going.
+report
+    "a page's second stream closes the first under it, and only the second's closing is the page's going"
+    (false, true)
+    (let pages = Pages()
+     let first = pages.Open "page-one"
+     let second = pages.Open "page-one"
+     pages.Close("page-one", first), pages.Close("page-one", second))
+
+report
+    "and what is sent after the reload goes down the second stream alone"
+    ([], [ Piece "a board" ])
+    (let pages = Pages()
+     let first = pages.Open "page-one"
+     let second = pages.Open "page-one"
+     pages.Send("page-one", Piece "a board")
+     first.Taken(), second.Taken())
+
+report
+    "a stream keeps a handful of boards and lets the oldest go, but never a script"
+    ([ for n in 3..10 -> $"board {n}" ], [ "nudge"; "rang" ])
+    (let outgoing = Outgoing()
+     outgoing.Write(Doing "nudge")
+
+     for n in 1..10 do
+         outgoing.Write(Piece $"board {n}")
+
+     outgoing.Write(Doing "rang")
+     let taken = outgoing.Taken()
+
+     taken
+     |> List.choose (fun frame ->
+         match frame with
+         | Piece html -> Some html
+         | Doing _ -> None),
+     taken
+     |> List.choose (fun frame ->
+         match frame with
+         | Doing script -> Some script
+         | Piece _ -> None))
+
+
+// --- what a host says as it opens ----------------------------------------------------------------------
+
+let private announced sitters =
+    Announce.hosted playing Reach.ajar sitters false [] |> String.concat "\n"
+
+report
+    "a table for two, one of them elsewhere, says both sit down at it"
+    true
+    (announced [ Here; Elsewhere ] |> mentions "Both sit down at this one table")
+
+report
+    "and a table for three elsewhere does not say 'both' of three people"
+    (false, true)
+    (announced (Seating.hosting 3) |> mentions "Both sit down",
+     announced (Seating.hosting 3)
+     |> mentions "Everybody sits down at this one table")
+
+report
+    "the open seats are counted in the table's own words"
+    (true, true)
+    (announced (Seating.hosting 3) |> mentions "all 3 open seats are taken",
+     announced (Seating.hosting 1) |> mentions "once that seat is taken")
+
+let private door reach =
+    [ Announce.hosted playing reach (Seating.hosting 2) false []
+      Announce.served playing reach 2 []
+      Announce.housed (Hosting.of' Offer.ways (fun () -> 1UL) (fun _ -> "stamp")) reach [] ]
+    |> List.map (List.find (fun line -> line.Contains "word at the door"))
+    |> List.distinct
+
+report
+    "and the door is said one way at a table, a game and a house"
+    ([ "  The word at the door is abcd-efgh-jkmn." ],
+     [ "  There is no word at the door: whoever can reach the address may sit down." ])
+    (door (Reach.locked "abcd-efgh-jkmn"), door Reach.ajar)
 
 finish ()

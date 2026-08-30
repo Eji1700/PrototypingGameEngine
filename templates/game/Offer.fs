@@ -16,13 +16,11 @@ module Offer =
     [<Literal>]
     let Most = 4
 
-    let private asked = Counting.several "player" "players"
-
     let private deal players _ =
         if players >= Fewest && players <= Most then
             Ok(Round.dealt players)
         else
-            Error $"{asked players}? This one takes {Fewest} to {Most}."
+            Error $"{Commands.players players}? This one takes {Fewest} to {Most}."
 
 
     /// What the game checks about itself before it will open at all. A board that cannot be played
@@ -54,12 +52,13 @@ module Offer =
               Over = Round.isOver
               Seats = Round.seats
 
-              // No chance in it anywhere, so the seed is never drawn from and a restart says so.
+              // No chance in it anywhere, so the seed is never drawn from, and a restart deals seed 0
+              // rather than pretending to have rolled one.
               Reseed = fun _ -> 0UL }
 
           Name = "mygame"
           Title = "MyGame"
-          Blurb = "A row of tokens, taken one to three at a time, and whoever takes the last one wins."
+          Blurb = $"A row of {Row.Dealt} tokens, taken 1 to {Row.Most} at a time, and whoever takes the last one wins."
           Fewest = Fewest
           Most = Most
 

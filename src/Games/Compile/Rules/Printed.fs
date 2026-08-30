@@ -23,7 +23,7 @@ module Printed =
 
     let private after trigger commands =
         { blank with
-            After = [ trigger, commands ] }
+            After = [ (trigger, commands) ] }
 
     let private atEnd commands = { blank with AtEnd = commands }
 
@@ -39,7 +39,7 @@ module Printed =
 
     let private apathyTwo =
         { standing [ Silence ] with
-            WhenCovered = [ Flip(Select.any |> Select.this') ] }
+            WhenCovered = [ Flip(Select.any |> Select.thisCard) ] }
 
     let private apathyThree =
         shown [ Flip(Select.any |> Select.theirs |> Select.faceUp) ]
@@ -74,7 +74,7 @@ module Printed =
         shown [ InAChosenLine(Every(Delete(Select.any |> Select.here |> Select.worth [ 1; 2 ]))) ]
 
     let private deathOne =
-        atStart [ IfYouDo(May(Draw(Just 1)), [ Delete(Select.any |> Select.other); Delete(Select.any |> Select.this') ]) ]
+        atStart [ IfYouDo(May(Draw(Just 1)), [ Delete(Select.any |> Select.other); Delete(Select.any |> Select.thisCard) ]) ]
 
     let private deathThree = shown [ Delete(Select.any |> Select.faceDown) ]
 
@@ -125,7 +125,7 @@ module Printed =
 
     let private lifeZero =
         { shown [ InEachLineHolding(FromDeck(FaceDown, ThisLine)) ] with
-            WhenCovered = [ Delete(Select.any |> Select.this') ] }
+            WhenCovered = [ Delete(Select.any |> Select.thisCard) ] }
 
     let private lifeOne = shown [ Flip Select.any; Flip Select.any ]
 
@@ -157,7 +157,7 @@ module Printed =
         { shown [ TakeTheirTop ] with
             AtEnd = [ IfYouDo(May Give, [ Draw(Just 2) ]) ] }
 
-    let private loveTwo = shown [ Opposing(Draw(Just 1)); Refreshing' ]
+    let private loveTwo = shown [ Opposing(Draw(Just 1)); RefreshHand ]
 
     let private loveThree = shown [ TakeAtRandom; Give ]
 
@@ -175,8 +175,8 @@ module Printed =
     let private metalTwo = standing [ TheyCannotPlayFaceDownHere ]
 
     let private metalSix =
-        { whenCovered [ Delete(Select.any |> Select.this') ] with
-            WhenFlipped = [ Delete(Select.any |> Select.this') ] }
+        { whenCovered [ Delete(Select.any |> Select.thisCard) ] with
+            WhenFlipped = [ Delete(Select.any |> Select.thisCard) ] }
 
 
     let private plagueZero =
@@ -193,7 +193,7 @@ module Printed =
     let private plagueFour =
         atEnd
             [ Opposing(Delete(Select.any |> Select.yours |> Select.faceDown))
-              May(Flip(Select.any |> Select.this')) ]
+              May(Flip(Select.any |> Select.thisCard)) ]
 
     let private plagueThree =
         shown [ Every(Flip(Select.any |> Select.faceUp |> Select.other)) ]
@@ -204,7 +204,7 @@ module Printed =
 
     let private psychicOne =
         { standing [ TheyMustPlayFaceDown ] with
-            AtStart = [ Flip(Select.any |> Select.this') ] }
+            AtStart = [ Flip(Select.any |> Select.thisCard) ] }
 
     let private psychicTwo =
         shown [ Opposing(Times(Just 2, Discard)); Rearrange Theirs ]
@@ -213,7 +213,7 @@ module Printed =
         shown [ Opposing Discard; Shift(Select.any |> Select.theirs, AnyLine) ]
 
     let private psychicFour =
-        atEnd [ IfYouDo(May(Return(Select.any |> Select.theirs)), [ Flip(Select.any |> Select.this') ]) ]
+        atEnd [ IfYouDo(May(Return(Select.any |> Select.theirs)), [ Flip(Select.any |> Select.thisCard) ]) ]
 
 
     let private speedZero =
@@ -225,11 +225,11 @@ module Printed =
 
     let private speedTwo =
         { blank with
-            WhenCompiled = [ Shift(Select.any |> Select.this', AnyLine) ] }
+            WhenCompiled = [ Shift(Select.any |> Select.thisCard, AnyLine) ] }
 
     let private speedThree =
         { shown [ Shift(Select.any |> Select.yours |> Select.other, AnyLine) ] with
-            AtEnd = [ IfYouDo(May(Shift(Select.any |> Select.yours, AnyLine)), [ Flip(Select.any |> Select.this') ]) ] }
+            AtEnd = [ IfYouDo(May(Shift(Select.any |> Select.yours, AnyLine)), [ Flip(Select.any |> Select.thisCard) ]) ] }
 
     let private speedFour =
         shown [ Shift(Select.any |> Select.theirs |> Select.faceDown, AnyLine) ]
@@ -237,23 +237,23 @@ module Printed =
 
     let private spiritZero =
         { whileClear [ SkipsCacheCheck ] with
-            Shown = [ Refreshing'; Draw(Just 1) ] }
+            Shown = [ RefreshHand; Draw(Just 1) ] }
 
     let private spiritOne =
         { standing [ YouMayPlayAnywhere ] with
             Shown = [ Draw(Just 2) ]
-            AtStart = [ Either(Discard, Flip(Select.any |> Select.this')) ] }
+            AtStart = [ Either(Discard, Flip(Select.any |> Select.thisCard)) ] }
 
     let private spiritTwo = shown [ May(Flip Select.any) ]
 
     let private spiritThree =
-        after YouDraw [ May(Shift(Select.any |> Select.this', AnyLine)) ]
+        after YouDraw [ May(Shift(Select.any |> Select.thisCard, AnyLine)) ]
 
     let private spiritFour = shown [ Swap ]
 
 
     let private waterZero =
-        shown [ Flip(Select.any |> Select.other); Flip(Select.any |> Select.this') ]
+        shown [ Flip(Select.any |> Select.other); Flip(Select.any |> Select.thisCard) ]
 
     let private waterOne = shown [ InEachOtherLine(FromDeck(FaceDown, ThisLine)) ]
 
@@ -264,107 +264,120 @@ module Printed =
 
     let private waterFour = shown [ Return(Select.any |> Select.yours) ]
 
+    let private card protocol value text =
+        { Protocol = protocol; Value = value }, text
+
+    // Every card and what it says, once each. The fives all say the same thing.
+    let private listed =
+        (Protocol.all |> List.map (fun protocol -> card protocol 5 theFive))
+        @ [ card Apathy 0 apathyZero
+            card Apathy 1 apathyOne
+            card Apathy 2 apathyTwo
+            card Apathy 3 apathyThree
+            card Apathy 4 apathyFour
+
+            card Darkness 0 darknessZero
+            card Darkness 1 darknessOne
+            card Darkness 2 darknessTwo
+            card Darkness 3 darknessThree
+            card Darkness 4 darknessFour
+
+            card Death 0 deathZero
+            card Death 1 deathOne
+            card Death 2 deathTwo
+            card Death 3 deathThree
+            card Death 4 deathFour
+
+            card Fire 0 fireZero
+            card Fire 1 fireOne
+            card Fire 2 fireTwo
+            card Fire 3 fireThree
+            card Fire 4 fireFour
+
+            card Gravity 0 gravityZero
+            card Gravity 1 gravityOne
+            card Gravity 2 gravityTwo
+            card Gravity 4 gravityFour
+            card Gravity 6 gravitySix
+
+            card Hate 0 hateZero
+            card Hate 1 hateOne
+            card Hate 2 hateTwo
+            card Hate 3 hateThree
+            card Hate 4 hateFour
+
+            card Life 0 lifeZero
+            card Life 1 lifeOne
+            card Life 2 lifeTwo
+            card Life 3 lifeThree
+            card Life 4 lifeFour
+
+            card Light 0 lightZero
+            card Light 1 lightOne
+            card Light 2 lightTwo
+            card Light 3 lightThree
+            card Light 4 lightFour
+
+            card Love 1 loveOne
+            card Love 2 loveTwo
+            card Love 3 loveThree
+            card Love 4 loveFour
+            card Love 6 loveSix
+
+            card Metal 0 metalZero
+            card Metal 1 metalOne
+            card Metal 2 metalTwo
+            card Metal 3 metalThree
+            card Metal 6 metalSix
+
+            card Plague 0 plagueZero
+            card Plague 1 plagueOne
+            card Plague 2 plagueTwo
+            card Plague 3 plagueThree
+            card Plague 4 plagueFour
+
+            card Psychic 0 psychicZero
+            card Psychic 1 psychicOne
+            card Psychic 2 psychicTwo
+            card Psychic 3 psychicThree
+            card Psychic 4 psychicFour
+
+            card Speed 0 speedZero
+            card Speed 1 speedOne
+            card Speed 2 speedTwo
+            card Speed 3 speedThree
+            card Speed 4 speedFour
+
+            card Spirit 0 spiritZero
+            card Spirit 1 spiritOne
+            card Spirit 2 spiritTwo
+            card Spirit 3 spiritThree
+            card Spirit 4 spiritFour
+
+            card Water 0 waterZero
+            card Water 1 waterOne
+            card Water 2 waterTwo
+            card Water 3 waterThree
+            card Water 4 waterFour ]
+
+    let private texts = Map.ofList listed
+
     let on card =
-        match card.Protocol, card.Value with
-        | _, 5 -> theFive
+        texts |> Map.tryFind card |> Option.defaultValue blank
 
-        | Apathy, 0 -> apathyZero
-        | Apathy, 1 -> apathyOne
-        | Apathy, 2 -> apathyTwo
-        | Apathy, 3 -> apathyThree
-        | Apathy, 4 -> apathyFour
+    let says card = Map.containsKey card texts
 
-        | Darkness, 0 -> darknessZero
-        | Darkness, 1 -> darknessOne
-        | Darkness, 2 -> darknessTwo
-        | Darkness, 3 -> darknessThree
-        | Darkness, 4 -> darknessFour
+    // A card left off the list, or listed twice, would read as blank or as the later entry
+    // without a word said - so `Offer.faults` says it instead.
+    let unwritten =
+        Protocol.all |> List.collect Card.inProtocol |> List.filter (says >> not)
 
-        | Death, 0 -> deathZero
-        | Death, 1 -> deathOne
-        | Death, 2 -> deathTwo
-        | Death, 3 -> deathThree
-        | Death, 4 -> deathFour
-
-        | Fire, 0 -> fireZero
-        | Fire, 1 -> fireOne
-        | Fire, 2 -> fireTwo
-        | Fire, 3 -> fireThree
-        | Fire, 4 -> fireFour
-
-        | Gravity, 0 -> gravityZero
-        | Gravity, 1 -> gravityOne
-        | Gravity, 2 -> gravityTwo
-        | Gravity, 4 -> gravityFour
-        | Gravity, 6 -> gravitySix
-
-        | Hate, 0 -> hateZero
-        | Hate, 1 -> hateOne
-        | Hate, 2 -> hateTwo
-        | Hate, 3 -> hateThree
-        | Hate, 4 -> hateFour
-
-        | Life, 0 -> lifeZero
-        | Life, 1 -> lifeOne
-        | Life, 2 -> lifeTwo
-        | Life, 3 -> lifeThree
-        | Life, 4 -> lifeFour
-
-        | Light, 0 -> lightZero
-        | Light, 1 -> lightOne
-        | Light, 2 -> lightTwo
-        | Light, 3 -> lightThree
-        | Light, 4 -> lightFour
-
-        | Love, 1 -> loveOne
-        | Love, 2 -> loveTwo
-        | Love, 3 -> loveThree
-        | Love, 4 -> loveFour
-        | Love, 6 -> loveSix
-
-        | Metal, 0 -> metalZero
-        | Metal, 1 -> metalOne
-        | Metal, 2 -> metalTwo
-        | Metal, 3 -> metalThree
-        | Metal, 6 -> metalSix
-
-        | Plague, 0 -> plagueZero
-        | Plague, 1 -> plagueOne
-        | Plague, 2 -> plagueTwo
-        | Plague, 3 -> plagueThree
-        | Plague, 4 -> plagueFour
-
-        | Psychic, 0 -> psychicZero
-        | Psychic, 1 -> psychicOne
-        | Psychic, 2 -> psychicTwo
-        | Psychic, 3 -> psychicThree
-        | Psychic, 4 -> psychicFour
-
-        | Speed, 0 -> speedZero
-        | Speed, 1 -> speedOne
-        | Speed, 2 -> speedTwo
-        | Speed, 3 -> speedThree
-        | Speed, 4 -> speedFour
-
-        | Spirit, 0 -> spiritZero
-        | Spirit, 1 -> spiritOne
-        | Spirit, 2 -> spiritTwo
-        | Spirit, 3 -> spiritThree
-        | Spirit, 4 -> spiritFour
-
-        | Water, 0 -> waterZero
-        | Water, 1 -> waterOne
-        | Water, 2 -> waterTwo
-        | Water, 3 -> waterThree
-        | Water, 4 -> waterFour
-
-        | _ -> blank
-
-    let says card = on card <> blank
+    let twice =
+        listed
+        |> List.countBy fst
+        |> List.filter (fun (_, entries) -> entries > 1)
+        |> List.map fst
 
     let ongoing uncovered card =
         let text = on card
         if uncovered then text.Top @ text.Bottom else text.Top
-
-    let written =
-        Protocol.all |> List.collect Card.inProtocol |> List.filter says |> List.length

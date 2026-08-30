@@ -1,6 +1,6 @@
 namespace Prototyping.Common
 
-module Cascade =
+module Tiebreak =
 
     [<NoComparison; NoEquality>]
     type Measure<'Label, 'T> =

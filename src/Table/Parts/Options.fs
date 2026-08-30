@@ -1,19 +1,13 @@
 namespace Prototyping.Table
 
+open Prototyping.Common
+
 module Options =
 
     type Page =
         | Audio
         | Video
         | Game
-
-    module Page =
-
-        let word page =
-            match page with
-            | Audio -> "audio"
-            | Video -> "video"
-            | Game -> "game"
 
     [<NoComparison; NoEquality>]
     type Step =
@@ -26,6 +20,18 @@ module Options =
         | Same
         | Done
 
+    // The columns a row is described in: what a setting shows, what it is set to, and the label at
+    // the head of a list in a note. Padded to a width rather than tabbed, so rows line up under one
+    // another whatever the words in them.
+    [<Literal>]
+    let private Shows = 24
+
+    [<Literal>]
+    let private Holds = 10
+
+    [<Literal>]
+    let private Labels = 11
+
     let private offered =
         let rec inRows names =
             match names with
@@ -37,10 +43,11 @@ module Options =
         Palette.shades
         |> List.map (fun shade -> shade.Name)
         |> inRows
-        |> List.mapi (fun i row -> sprintf "%-11s%s" (if i = 0 then "Colours:" else "") row)
+        |> List.mapi (fun i row -> (if i = 0 then "Colours:" else "").PadRight Labels + row)
 
     // What the left and right arrows send on a row that turns through a list of names: the next one
-    // along, coming round at either end.
+    // along, coming round at either end. Taking the row sends the next one too, so Enter on a row
+    // that turns does what Right does rather than sending back what is already there.
     let private stepping said (all: string list) standing step =
         match List.length all with
         | 0 -> said standing
@@ -48,7 +55,7 @@ module Options =
             let at =
                 all |> List.tryFindIndex (fun name -> name = standing) |> Option.defaultValue 0
 
-            said all[((at + step) % count + count) % count]
+            said all[Keys.wrapped count at step]
 
     let private wayOut words =
         match words with
@@ -63,11 +70,12 @@ module Options =
 
 
     let screen (settles: int) : Keys.Screen =
+        let ways = Counting.several "way" "ways"
+
         let game =
             match settles with
             | 0 -> "this game has nothing of its own to settle"
-            | 1 -> "one way this game can be played"
-            | many -> $"{many} ways this game can be played"
+            | many -> $"{ways many} this game can be played"
 
         { Title = "Settings"
           Prose =
@@ -80,8 +88,7 @@ module Options =
               Keys.sends (Keys.nth 2) "game" game "game"
               Keys.sends (Some '0') "done" "back to the menu" "done" ]
           Note =
-            [ ""
-              "Nothing on any of these pages is kept unless you say 'save', which keeps all three"
+            [ "Nothing on any of these pages is kept unless you say 'save', which keeps all three"
               "at once - so a page you only looked at is a page that changed nothing." ]
           Backs = Some "done" }
 
@@ -104,6 +111,7 @@ module Options =
 
     let audio (ringing: bool) : Keys.Screen =
         let said = if ringing then "on" else "off"
+        let turn = stepping (sprintf "bell %s") [ "on"; "off" ] said
 
         { Title = "Settings - Audio"
           Prose =
@@ -112,12 +120,13 @@ module Options =
               "move you made yourself. A game whose board makes a sound of its own rings for"
               "that too, and mute at the table silences one board without touching this." ]
           Rows =
-            [ Keys.sends (Keys.nth 0) "bell" (sprintf "%-24s%s" "" said) $"bell {said}"
-              |> Keys.turning (stepping (sprintf "bell %s") [ "on"; "off" ] said)
+            [ Keys.sends (Keys.nth 0) "bell" ("".PadRight Shows + said) (turn 1)
+              |> Keys.turning turn
               Keys.sends (Keys.nth 1) "save" "keep all this, and open that way next time" "save"
               Keys.sends (Some '0') "done" "back to the settings" "done" ]
           Note =
-            [ "Left and right turn it over, or say 'bell on' or 'bell off' outright."
+            [ "Left and right turn it over, and so does taking the row; or say 'bell on' or"
+              "'bell off' outright."
               ""
               "This one is not a game's own. A bell is a fact about the room you are sitting in,"
               "so it is asked once and every game picks it up." ]
@@ -143,18 +152,17 @@ module Options =
         let colours = Palette.shades |> List.map (fun shade -> shade.Name)
 
         let drawing =
-            Keys.sends (Keys.nth 0) "drawn" (sprintf "%-24s%s" "" drawn) $"view {drawn}"
-            |> Keys.turning (stepping (sprintf "view %s") views drawn)
+            let turn = stepping (sprintf "view %s") views drawn
+
+            Keys.sends (Keys.nth 0) "drawn" ("".PadRight Shows + drawn) (turn 1)
+            |> Keys.turning turn
 
         let standing at (slot: Slot) =
             let now = (Palette.inSlot slot palette).Name
+            let turn = stepping (sprintf "%s %s" slot.Key) colours now
 
-            Keys.sends
-                (Keys.nth at)
-                slot.Key
-                (sprintf "%-24s%-10s%s" slot.Shows now slot.Draws)
-                (stepping (sprintf "%s %s" slot.Key) colours now 1)
-            |> Keys.turning (stepping (sprintf "%s %s" slot.Key) colours now)
+            Keys.sends (Keys.nth at) slot.Key (slot.Shows.PadRight Shows + now.PadRight Holds + slot.Draws) (turn 1)
+            |> Keys.turning turn
 
         let after = List.length slots + 1
 
@@ -170,14 +178,14 @@ module Options =
                 Keys.sends (Keys.nth (after + 1)) "save" "keep all this, and open that way next time" "save"
                 Keys.sends (Some '0') "done" "back to the settings" "done" ]
           Note =
-            [ "Left and right walk the one marked -> through what it can be. Or name one outright:"
-              "'blue teal' for a colour, 'view rich' for a way of drawing."
+            [ "Left and right walk the one marked -> through what it can be, and so does taking it."
+              "Or name one outright: 'blue teal' for a colour, 'view rich' for a way of drawing."
               "" ]
-            @ [ sprintf "%-11s%s" "Drawn:" (String.concat ", " views) ]
+            @ [ "Drawn:".PadRight Labels + String.concat ", " views ]
             @ offered
             @ [ ""
-                "Only the rich view draws in colour, but either view will set them: plain carries"
-                "the colours along, and rich draws in them the moment you ask for it."
+                "Plain draws in no colour but sets them all the same: they are carried along, and"
+                "rich draws in them the moment you ask for it, as a browser does."
                 ""
                 "What is kept here is this game's own, except the way it is drawn - every game picks"
                 "that up unless one of them saved its own." ]
@@ -204,7 +212,7 @@ module Options =
         let standing at (name, says) =
             let now = if name = playing then "in play" else ""
 
-            Keys.sends (Keys.nth at) name (sprintf "%-10s%s" now says) $"plays {name}"
+            Keys.sends (Keys.nth at) name (now.PadRight Holds + says) $"plays {name}"
 
         { Title = "Settings - Game"
           Prose =
@@ -228,7 +236,7 @@ module Options =
             | _ ->
                 [ "Say the name of one outright, or 'plays <name>'."
                   ""
-                  sprintf "%-11s%s" "Played:" (String.concat ", " names) ]
+                  "Played:".PadRight Labels + String.concat ", " names ]
           Backs = Some "done" }
 
     let chooseGame (ways: (string * string) list) (text: string) : Result<Step, string> =

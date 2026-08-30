@@ -130,8 +130,17 @@ comes with the scenario and `engage` goes.
 
 ## The battle
 
-Once both squads are mustered nobody is asked anything again. It runs on a clock — `stop` holds it,
-`step` takes it a blow at a time — and every unit still up acts once a round, quickest first.
+Once both squads are mustered nobody is asked anything again. It runs on a clock, and every unit
+still up acts once a round, quickest first.
+
+```
+run, stop         whether the battle runs on its own ('p' at a terminal, space in a browser)
+step              one blow, while it is stopped ('.' at a terminal)
+beat              the clock's own move, spelt out for a console that cannot press anything
+```
+
+All three are moves, so the record says when the battle was running. Space or `h` at a terminal
+holds the table's own clock instead, and writes nothing down.
 
 - A **strike** falls on the foremost rank of the other squad that still has anybody up, on whoever
   there has the most left in them. Empty your front rank and the blows walk back to your middle.

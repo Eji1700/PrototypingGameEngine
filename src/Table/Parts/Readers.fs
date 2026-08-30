@@ -293,26 +293,18 @@ module Readers =
             picture
             |> Array.toList
             |> List.map (fun line ->
-                let last = line |> Array.tryFindIndexBack (fun (letter, _) -> letter <> ' ')
-
-                match last with
+                match line |> Array.tryFindIndexBack (fun (letter, _) -> letter <> ' ') with
                 | None -> []
                 | Some last ->
                     Array.sub line 0 (last + 1)
-                    |> Array.fold
-                        (fun spans (letter, tone) ->
-                            match spans with
-                            | (run: Span) :: rest when run.Tone = tone ->
-                                { run with
-                                    Text = run.Text + string letter }
-                                :: rest
-                            | _ -> { Text = string letter; Tone = tone } :: spans)
-                        []
-                    |> List.rev)
+                    |> Seq.map (fun (letter, tone) -> string letter, tone)
+                    |> Scene.runs)
 
 
     module Plain =
 
+        /// What a note is wrapped to. Plain text is written to fit an 80-column terminal, and a
+        /// note sits two columns in inside a block, with a couple more to spare at the edge.
         [<Literal>]
         let private Room = 76
 
@@ -403,9 +395,9 @@ module Readers =
                 (List.replicate (drawn |> List.fold (fun most (_, cells) -> max most (List.length cells)) 0) wall
                  |> String.concat "+")
 
-            drawn
-            |> List.map laid
-            |> List.reduce (fun above below -> above @ [ between ] @ below)
+            match drawn |> List.map laid with
+            | [] -> []
+            | first :: rest -> rest |> List.fold (fun above below -> above @ [ between ] @ below) first
 
         let screen scene =
             draw scene |> String.concat Environment.NewLine
@@ -419,6 +411,27 @@ module Readers =
         let private esc (text: string) = Markup.Escape text
 
         let private markup (text: string) = Markup text :> IRenderable
+
+        let private hushed = Style(hush.Color)
+
+        /// What a panel's title is drawn in: the heading ink, in the plain bone a title on a wall
+        /// reads best in.
+        let private titleInk = $"{Tint.HeadingInk} {Palette.ink Palette.bone}"
+
+        /// What a panel takes off the width for a note inside it: a wall and a space of padding on
+        /// either side, and a column more each side so a wrapped line never touches the wall.
+        [<Literal>]
+        let private Walls = 6
+
+        /// The narrowest a column beside others is drawn at: narrower than this every word wraps,
+        /// and a column of wrapped words is not a column.
+        [<Literal>]
+        let private Narrowest = 20
+
+        /// The narrowest cell a grid draws, so a board of single letters is still squares rather
+        /// than ticks.
+        [<Literal>]
+        let private Cell = 5
 
         let private ink palette tone =
             match tone with
@@ -441,7 +454,7 @@ module Readers =
             let panel = Panel(content)
 
             match title with
-            | Some title -> panel.Header <- PanelHeader $"[bold silver] {esc title} [/]"
+            | Some title -> panel.Header <- PanelHeader(Tint.wrap titleInk $" {esc title} ")
             | None -> ()
 
             panel.Border <- BoxBorder.Rounded
@@ -449,7 +462,7 @@ module Readers =
             panel.BorderStyle <-
                 match ink palette tone with
                 | Some style -> Style.Parse style
-                | None -> Style(Color.Grey37)
+                | None -> hushed
 
             panel.Expand <- wide
             panel :> IRenderable
@@ -458,17 +471,17 @@ module Readers =
             match scene with
             | Blank -> []
             | Heading text ->
-                let rule = Rule($"[bold]{esc text}[/]")
+                let rule = Rule(Tint.wrap Tint.HeadingInk (esc text))
                 rule.Justification <- Justify.Left
-                rule.Style <- Style(Color.Grey37)
+                rule.Style <- hushed
                 [ rule :> IRenderable ]
             | Say text -> [ markup (line paint palette text) ]
-            | Note text -> markup "" :: (Scene.wrap (room - 6) text |> List.map (quietly >> markup))
+            | Note text -> markup "" :: (Scene.wrap (room - Walls) text |> List.map (quietly >> markup))
             | Written text -> [ markup (paint palette text) ]
             | Block(title, body) -> [ walled palette Tone.Plainly (Some title) (stacked paint palette room body) wide ]
             | Stack parts -> [ stacked paint palette room parts ]
             | Beside parts ->
-                let share = max 20 (room / max 1 (List.length parts))
+                let share = max Narrowest (room / max 1 (List.length parts))
                 let grid = Spectre.Console.Grid()
 
                 for _ in parts do
@@ -505,13 +518,13 @@ module Readers =
                   |> List.map (line paint palette)
                   |> String.concat "\n"
                   |> markup ]
-            | Walled(across, rows) -> [ grid paint palette room across rows ]
+            | Walled(across, rows) -> [ grid paint palette across rows ]
             | Tile(title, tone, body) ->
                 match title with
                 | Some _ -> [ walled palette tone title (spread paint palette room wide body) wide ]
                 | None -> [ spread paint palette room wide body ]
             | Patch(_, _, body) -> [ stacked paint palette room body ]
-            | Big text -> [ markup (Tint.wrap "bold" (span paint palette text)) ]
+            | Big text -> [ markup (Tint.wrap Tint.HeadingInk (span paint palette text)) ]
             | Does(caption, _, tone) -> [ markup (span paint palette { Text = caption; Tone = tone }) ]
             | Field(legend, rows) ->
                 laid
@@ -526,49 +539,44 @@ module Readers =
 
         and private stacked paint palette room parts = spread paint palette room false parts
 
-        and private grid paint palette room across rows =
-            let inner = max across 5
+        and private grid paint palette across rows =
+            let inner = max across Cell
 
             let roomy cell =
                 Spectre.Console.Rows([ markup " " ] @ render paint palette inner true cell @ [ markup " " ]) :> IRenderable
 
-            let walls (row: Course) =
+            let walled columns (rows: IRenderable list list) =
                 let table = Table()
                 table.Border <- TableBorder.Rounded
-                table.BorderStyle <- Style(Color.Grey37)
+                table.BorderStyle <- hushed
                 table.ShowHeaders <- false
-
-                for _ in row.Cells do
-                    table.AddColumn(TableColumn("").Width(inner).Centered()) |> ignore
-
-                table.AddRow(row.Cells |> List.map roomy |> Array.ofList) |> ignore
-
-                table :> IRenderable
-
-            if rows |> List.forall (fun row -> row.Shift = 0) then
-                let table = Table()
-                table.Border <- TableBorder.Rounded
-                table.BorderStyle <- Style(Color.Grey37)
-                table.ShowHeaders <- false
-
-                let columns = rows |> List.fold (fun most row -> max most (List.length row.Cells)) 0
 
                 for _ in 1..columns do
                     table.AddColumn(TableColumn("").Width(inner).Centered()) |> ignore
 
                 for row in rows do
-                    let cells =
-                        row.Cells @ List.replicate (columns - List.length row.Cells) Blank
-                        |> List.map roomy
-
-                    table.AddRow(Array.ofList cells) |> ignore
+                    table.AddRow(Array.ofList row) |> ignore
 
                 table :> IRenderable
+
+            // One table for the whole grid, unless its rows are shifted against one another:
+            // Spectre cannot offset a row of a table, so then each row is a table of its own,
+            // padded across by its shift.
+            if rows |> List.forall (fun row -> row.Shift = 0) then
+                let columns = rows |> List.fold (fun most row -> max most (List.length row.Cells)) 0
+
+                rows
+                |> List.map (fun row ->
+                    row.Cells @ List.replicate (columns - List.length row.Cells) Blank
+                    |> List.map roomy)
+                |> walled columns
             else
                 Spectre.Console.Rows(
                     rows
                     |> List.map (fun row ->
-                        Padder(walls row).Padding(Padding(row.Shift * (inner + 2) / 2, 0, 0, 0)) :> IRenderable)
+                        Padder(walled (List.length row.Cells) [ row.Cells |> List.map roomy ])
+                            .Padding(Padding(row.Shift * (inner + 2) / 2, 0, 0, 0))
+                        :> IRenderable)
                 )
                 :> IRenderable
 
@@ -582,12 +590,22 @@ module Readers =
 
         open Falco.Markup
 
-        let private toned tone =
+        /// A tone as the variable in the page's stylesheet that draws it: every slot is one, the
+        /// reader's own colour is one, and the quiet tone is the page's own edge colour - so a tone
+        /// reaches a page as a name its stylesheet already has, for text and for walls alike.
+        let private variable tone =
             match tone with
-            | Tone.Plainly -> []
-            | Tone.Quiet -> [ Attr.class' "quiet" ]
-            | Tone.Yours -> [ Page.attr "style" "color: var(--yours)" ]
-            | Tone.Slot key -> [ Page.attr "style" $"color: var(--{key})" ]
+            | Tone.Plainly -> None
+            | Tone.Quiet -> Some "edge"
+            | Tone.Yours -> Some "yours"
+            | Tone.Slot key -> Some key
+
+        let private styled property tone =
+            match variable tone with
+            | Some name -> [ Page.attr "style" $"{property}: var(--{name})" ]
+            | None -> []
+
+        let private toned tone = styled "color" tone
 
         let private span (span: Span) =
             Elem.span (toned span.Tone) [ Text.enc span.Text ]
@@ -601,14 +619,10 @@ module Readers =
             |> List.filter (fun word -> word <> "")
 
         let private speck (speck: Speck) =
-            let painted =
-                match speck.Tone with
-                | Tone.Plainly -> []
-                | Tone.Quiet -> [ Page.attr "style" "color: var(--edge)" ]
-                | Tone.Yours -> [ Page.attr "style" "color: var(--yours)" ]
-                | Tone.Slot key -> [ Page.attr "style" $"color: var(--{key})" ]
-
-            Elem.span (Attr.class' (String.concat " " ("speck" :: moods speck.Mood)) :: painted) [ Text.enc speck.Glyph ]
+            Elem.span
+                (Attr.class' (String.concat " " ("speck" :: moods speck.Mood))
+                 :: toned speck.Tone)
+                [ Text.enc speck.Glyph ]
 
         let rec private draw scene : XmlNode list =
             match scene with
@@ -639,15 +653,8 @@ module Readers =
                                         [ Page.attr "style" $"margin-left: calc(var(--cell) * {row.Shift} / 2)" ]))
                                (row.Cells |> List.collect draw))) ]
             | Tile(title, tone, body) ->
-                let walls =
-                    match tone with
-                    | Tone.Plainly -> []
-                    | Tone.Quiet -> [ Page.attr "style" "border-color: var(--edge)" ]
-                    | Tone.Yours -> [ Page.attr "style" "border-color: var(--yours)" ]
-                    | Tone.Slot key -> [ Page.attr "style" $"border-color: var(--{key})" ]
-
                 [ Elem.div
-                      (Attr.class' "tile" :: walls)
+                      (Attr.class' "tile" :: styled "border-color" tone)
                       ((match title with
                         | Some title -> [ Elem.h3 [] [ Text.enc title ] ]
                         | None -> [])
@@ -690,40 +697,46 @@ module Readers =
 
           Width: int }
 
-    let views (scenes: Scenes<'Move, 'State, 'Notice>) palette : View<'Move, 'State, 'Notice> list =
+    /// The three views of a game, from its scenes. Every `Offer` applies this to its scenes and no
+    /// further - `Views = Readers.views scenes` - so what does not depend on the palette is built
+    /// once for the game rather than once per asking: the two painters each compile a regex, and
+    /// a table asks for the views every time somebody sits down or changes a colour.
+    let views (scenes: Scenes<'Move, 'State, 'Notice>) : Palette -> View<'Move, 'State, 'Notice> list =
         let paint = Tint.painter scenes.Marking
+        let markup = Tint.markup scenes.Marking
 
-        let inPanels = Panels.screen (Tint.markup scenes.Marking) scenes.Width palette
+        fun palette ->
+            let inPanels = Panels.screen markup scenes.Width palette
 
-        [ { Name = "plain"
-            Describe = "plain text, and nothing this terminal has to understand"
-            Shown = AtATerminal
-            Palette = palette
-            Board = fun margins seat model -> Plain.screen (scenes.Board margins seat model)
-            History = fun seat model -> Plain.screen (scenes.History seat model)
-            Answer = fun seat asked model -> Plain.screen (scenes.Answer seat asked model)
-            Rules = Plain.screen scenes.Rules
-            Says = id
-            Waiting = fun seats -> Plain.screen (scenes.Waiting seats) }
+            [ { Name = "plain"
+                Describe = "plain text, and nothing this terminal has to understand"
+                Shown = AtATerminal
+                Palette = palette
+                Board = fun margins seat model -> Plain.screen (scenes.Board margins seat model)
+                History = fun seat model -> Plain.screen (scenes.History seat model)
+                Answer = fun seat asked model -> Plain.screen (scenes.Answer seat asked model)
+                Rules = Plain.screen scenes.Rules
+                Says = id
+                Waiting = fun seats -> Plain.screen (scenes.Waiting seats) }
 
-          { Name = "rich"
-            Describe = "panels, walls and colour, for a terminal that can show them"
-            Shown = AtATerminal
-            Palette = palette
-            Board = fun margins seat model -> inPanels (scenes.Board margins seat model)
-            History = fun seat model -> inPanels (scenes.History seat model)
-            Answer = fun seat asked model -> inPanels (scenes.Answer seat asked model)
-            Rules = inPanels scenes.Rules
-            Says = paint palette
-            Waiting = fun seats -> inPanels (scenes.Waiting seats) }
+              { Name = "rich"
+                Describe = "panels, walls and colour, for a terminal that can show them"
+                Shown = AtATerminal
+                Palette = palette
+                Board = fun margins seat model -> inPanels (scenes.Board margins seat model)
+                History = fun seat model -> inPanels (scenes.History seat model)
+                Answer = fun seat asked model -> inPanels (scenes.Answer seat asked model)
+                Rules = inPanels scenes.Rules
+                Says = paint palette
+                Waiting = fun seats -> inPanels (scenes.Waiting seats) }
 
-          { Name = "html"
-            Describe = "a page, for a player reading in a browser"
-            Shown = InABrowser
-            Palette = palette
-            Board = fun margins seat model -> Pages.screen (scenes.Board margins seat model)
-            History = fun seat model -> Pages.aside (scenes.History seat model)
-            Answer = fun seat asked model -> Pages.aside (scenes.Answer seat asked model)
-            Rules = Pages.aside scenes.Rules
-            Says = Page.says
-            Waiting = fun seats -> Pages.screen (scenes.Waiting seats) } ]
+              { Name = "html"
+                Describe = "a page, for a player reading in a browser"
+                Shown = InABrowser
+                Palette = palette
+                Board = fun margins seat model -> Pages.screen (scenes.Board margins seat model)
+                History = fun seat model -> Pages.aside (scenes.History seat model)
+                Answer = fun seat asked model -> Pages.aside (scenes.Answer seat asked model)
+                Rules = Pages.aside scenes.Rules
+                Says = Page.says
+                Waiting = fun seats -> Pages.screen (scenes.Waiting seats) } ]
