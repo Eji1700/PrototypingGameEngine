@@ -11,14 +11,15 @@ module Parse =
     let private province word =
         match Atlas.byWord word with
         | Some id -> Ok id
-        | None -> Error $"'{word}' is not a province. They are named by their first three letters - 'vie', 'tri', 'nth'."
+        | None ->
+            Error $"'{word}' is not a province. They go by the short name written across each on the map - 'vie', 'tri', 'nth'."
 
     let private spot word =
         match Atlas.spotBy word with
         | Some location -> Ok location
         | None ->
             Error
-                $"'{word}' is not a place on this board. Say a province's first three letters, and a coast after a slash where it has two - 'stp/sc'."
+                $"'{word}' is not a place on this board. Say a province's short name, and a coast after a slash where it has two - 'stp/sc'."
 
     let private send at says = Send(Make(Give(at, says)))
 

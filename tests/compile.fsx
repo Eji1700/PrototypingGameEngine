@@ -167,7 +167,7 @@ report
      (Session.side one session).Drafted, (Session.side two session).Drafted)
 
 report
-    "the six nobody took are gone, not held"
+    "the nine nobody took are gone, not held"
     []
     (let session = standing (played 1UL draft)
 

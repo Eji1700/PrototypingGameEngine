@@ -1,117 +1,91 @@
 # Noughts and crosses
 
-Nine squares, three in a row, and nothing hidden. The second of the games here, and the
-engine it runs on is [one directory up](../../../README.md).
+Nine squares, three in a row, and nothing hidden. Two play, crosses first, and
+`dotnet run -- tictactoe play 2` deals one at this keyboard; `--rival hard` after it seats a
+machine that cannot be beaten. The engine it runs on is described [at the root](../../../README.md).
 
-**It is not a feature.** It exists because about four fifths of this program was extracted on
-the claim that it is generic - a history to walk back through, a record that replays, seats
-and tokens, a machine to play one of them, three ways of drawing a board, a table over a wire -
-and a claim like that cannot be tested by the game it was extracted from. This is a second one
-going through the same two seams at a fraction of the size, and [what that turned
-up](../../../README.md#what-a-second-game-found) is worth more than the game.
+## The rules
 
-```powershell
-dotnet run -- tictactoe play 2
-dotnet run -- tictactoe play 2 --rival hard    # a machine that cannot be beaten
-dotnet run -- tictactoe serve 2 --rival hard   # nine buttons in a browser
+- Two seats, and exactly two: seat 1 plays the crosses, `X`, and goes first; seat 2 plays the
+  noughts, `O`. A deal for any other number is refused at the door.
+- A turn is one mark on a free square, named by its number - 1 to 9, left to right and top to
+  bottom. A square that is not there, or already has a mark in it, is refused and the turn does
+  not pass.
+- Three of a mark in a row wins - along a row, down a column, or corner to corner - on the mark
+  that makes the line. There are eight lines.
+- A full board with no such line is a draw.
+- `resign` ends the game on whoever is to play, and the record says that mark walked away.
 
-dotnet run -- tictactoe replay logs/...-tictactoe-2p-seed<n>.log   # one you put down
-```
+## The words
 
-A game of nine squares is not one anybody puts down for the evening, but it is taken up the
-same way every game here is: `quit` writes the record, `Continue a game` at the menu lists
-them, and the machine comes back to the seat it was playing at the strength it was playing
-it. All of that is the engine's rather than this game's, and is [documented
-there](../../../README.md#taking-it-back-and-writing-it-down) — which is the point of this
-game being here at all.
+One move, in four spellings, and [Parse.fs](Reading/Parse.fs) reads nothing else:
 
-## Playing
-
-Crosses go first. Every command that is not about squares - `undo`, `redo`, `history`, `save`,
-`notes`, `commands`, `log`, `view`, `resign`, `restart`, `help`, `quit` - belongs to the engine and is
-[documented there](../../../README.md). What this game adds is a number.
-
-| command | action |
+| typed | move |
 | --- | --- |
 | `5` | take square 5 |
-| `place 5` (`mark`, `p`) | the same, the long way round |
+| `place 5`, `mark 5`, `p 5` | the same, the long way round |
 
-Squares are numbered the way a telephone keypad is: 1 to 9, left to right and top to bottom, so the
-number a player types is the square they are looking at.
+A word that is not a number is refused where it was typed - `'seven' is not a square` - and never
+reaches the rules. Whichever way a move was typed, the record writes it as `place 5`. `resign`,
+`undo`, `history`, `view`, `quit` and the rest are [the table's](../../../README.md#at-the-prompt).
 
-```
- 1 | 2 | 3
----+---+---
- 4 | 5 | 6
----+---+---
- 7 | 8 | 9
-```
+## The board
 
-A bare number is a move, because on a board where there is only one thing to do, naming the
-square *is* saying what to do - and it is what everybody types anyway. The long way round is
-kept because it is what a record is written in, and a record that read as a column of bare
-digits would be a record nobody could skim.
+Every screen is described once as a [`Scene`](../../../README.md#screens) in
+[Render.fs](Reading/Render.fs) and drawn as `plain`, `rich` and `html` by the engine's readers, so
+the three show the same things: a heading with whose turn it is, or how the game ended; the board,
+a taken square showing its mark and a free one its number - at a terminal the thing to type, in a
+browser a button that types it; and the players, `->` at whoever is to play, `(you)` after the
+seat that is reading, and the squares each holds, `2 of 9`.
 
-## Rules as implemented
-
-- Two players, and exactly two. Seat one plays the crosses, because the crosses go first.
-- Three in a row wins: along a row, down a column, or corner to corner.
-- A full board with no such line is a draw.
-- `resign` gives the game up, and writes it down. It is whoever is to play that walks away: at one
-  keyboard that is whoever typed it, and over a wire the table lets a line in from no other seat.
-
-Nothing is dealt, nothing is shuffled, and nothing is hidden - both players are looking at the
-whole game, which is the only kind of game this is. So there is no `Knowledge` here, no seed
-that means anything, and no answer to this game's own question: the board is nine squares in
-plain sight, and asking it anything gets a line saying there is nothing to work out.
-
-**The board is worked out rather than written down.** `Squares.Side` is three, and the rows,
-the columns, the diagonals and the count of winning lines all follow from it. What could be
-wrong with that is arithmetic rather than a typo - but arithmetic goes wrong too, which is why
-this game still fills in the seam's `Faults` and says so before anybody sits down.
+A note under each block explains it, and `notes` puts both away; the commands box and the log are
+the [table's margins](../../../README.md#how-the-board-is-drawn). Crosses are drawn in crimson and
+noughts in azure until the [video page](../../../README.md#colours) says otherwise, under the slots
+`x` and `o`. Nothing is hidden, so both seats are told the same; nothing is on a clock, so there
+are no keys; and the board makes no sound of its own.
 
 ## The machine
 
-Three ways of playing, and none of them is a strategy. This game is small enough to be solved
-outright - nine squares, and every line of play can be walked to its end - so what `easy`,
-`medium` and `hard` name is how *far* a machine looks and how often it does not play what it
-saw.
+Three skills, from [Rival.fs](Rules/Rival.fs), seated [as any machine is](../../../README.md#against-the-machine).
+One search - the game walked ahead from each free square, with alpha-beta - and two numbers each:
+how deep it looks, and how often the machine plays any free square instead of what it found. Among
+moves it rates alike it picks one at random.
 
-| | `easy` | `medium` | `hard` |
+| | looks ahead | plays any free square instead | what `--help` says |
 | --- | --- | --- | --- |
-| moves it looks ahead | 1 | 3 | 9 |
-| how often it plays something else anyway | 40% | 15% | never |
+| `easy` | 1 move | 40 times in 100 | takes a win it can see, and often plays somewhere else anyway |
+| `medium` | 3 moves | 15 times in 100 | takes a win and blocks yours, and looks no further |
+| `hard` | 9 moves | never | plays the game out to the end before moving, so it cannot be beaten |
 
-Nine from an empty board is the whole game, which at this size is perfect play. The slip is
-what makes a beatable opponent out of a solved one: a machine that never slipped could not be
-beaten, only drawn with, and losing every game is nobody's idea of an easy one.
-
-Which is worth reading beside [the other game's machine](../Turncoats/README.md#three-sets-of-numbers-not-three-machines),
-where a machine has weights on five things and still cannot see the end of a game. Both are
-machines; only one of them could ever be perfect, and the reason is the game rather than the
-writing.
+One move ahead sees a win of the machine's own; three see the win you would take next, and a
+square of its own that threatens two lines at once, but not one of yours; nine is the whole game
+from wherever it stands. A full search that never slips cannot lose a game that is a draw when
+neither side errs, so `hard` can be drawn with, and no more.
 
 ## The files
 
-Ten files, against [Turncoats'](../Turncoats/README.md#the-files) twenty-one, in the same
-shape and a fifth of the size. Worth reading beside that folder, because the two of them
-together are the whole argument for the seams being where they are.
-
-| File | Role |
+| in the order [TicTacToe.fsproj](TicTacToe.fsproj) compiles them | |
 | --- | --- |
-| [Marks.fs](Rules/Marks.fs) | `Mark`, and the squares - the runs that win worked out from the side rather than written down |
-| [Board.fs](Rules/Board.fs) | What is on the board, and the line somebody holds all of |
-| [Session.fs](Rules/Session.fs) | Where the game stands, and which seat plays which mark |
-| [Turn.fs](Rules/Turn.fs) | `Move`, and how a turn goes: the square has to exist and be free |
-| [Words.fs](Rules/Words.fs) | Every string a player reads |
-| [Rival.fs](Rules/Rival.fs) | A seat played by the program: the game walked to its end, with alpha-beta so it answers |
-| [Ink.fs](Reading/Ink.fs) | Two colours, against the other game's four |
-| [Parse.fs](Reading/Parse.fs) | A number, which on this board is the whole move |
-| [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), which `Readers` then draws three ways |
-| [Offer.fs](Offer.fs) | Both seams filled in |
+| [Rules/Marks.fs](Rules/Marks.fs) | `Mark`, the nine squares, and the eight lines worked out from the side of the board |
+| [Rules/Board.fs](Rules/Board.fs) | What is on the board, which squares are free, and the line somebody holds all of |
+| [Rules/Session.fs](Rules/Session.fs) | Where the game stands, how it ended, and which seat plays which mark |
+| [Rules/Turn.fs](Rules/Turn.fs) | `Move`, `Notice`, and how a turn goes: the square has to exist and be free |
+| [Rules/Words.fs](Rules/Words.fs) | Every string a player reads, and the line a move is written down as |
+| [Rules/Rival.fs](Rules/Rival.fs) | The three skills, and the search they share |
+| [Reading/Ink.fs](Reading/Ink.fs) | The two colour slots, and which words are painted in them |
+| [Reading/Parse.fs](Reading/Parse.fs) | The four spellings of a move |
+| [Reading/Render.fs](Reading/Render.fs) | The board, the record, the rules and the waiting room as scenes, and the page's title and prompt |
+| [Offer.fs](Offer.fs) | Both halves as one `Playable`, and the faults the eight lines are checked for before anybody sits down |
+| [Program.fs](Program.fs) | The game as a program of its own |
 
-Three files where the other game has five, and the two that are missing are the point.
-`Rich.fs` and `Html.fs` were the same board written out a second and a third time; this game
-says what a screen is *made of* and the readers in the table layer do the drawing. See
-[A screen described once](../../../README.md#a-screen-described-once).
+## Checks
 
+[tictactoe.fsx](../../../tests/tictactoe.fsx) is the one suite that loads it, through the harness
+[Noughts.fsx](../../../tests/Noughts.fsx). It holds the eight lines and every square on one of them,
+crosses first, both refusals leaving the game where it was, a win on each line, the draw, resigning,
+undo and redo, a record that reads back and replays to the same game, a number and `place` read
+alike, the three views saying the same things, a page with a button for each free square and none
+for a taken one, `hard` never losing to `easy` in 24 games and winning more than 6 of them, `hard`
+against itself only ever drawing, and the same seed playing the same game twice; then
+`Conforms.against noughts 2` holds it to [the contract](../../../README.md#tests). Its one
+[record](../../../README.md#records) in `logs/` is taken back up by CI with every other.

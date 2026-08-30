@@ -402,7 +402,7 @@ module Render =
 
     let private verbs =
         [ "fire", "draft the Fire protocol (or 'draft fire')"
-          "water dark fire", "set your three against lines 1, 2 and 3 (or 'arrange ...')"
+          "water darkness fire", "set your three against lines 1, 2 and 3 (or 'arrange ...')"
           "fire-3 2", "play Fire-3 face up to line 2 (or 'play fire-3 2')"
           "fire-3 2 down", $"play it face down instead, for {Placed.FaceDownValue}, on any line"
           "refresh", $"put your hand down and take {Deck.HandSize} up - instead of playing, not as well as"

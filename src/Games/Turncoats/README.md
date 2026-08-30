@@ -1,453 +1,293 @@
 # Turncoats
 
-The game this program was built for, and the first of those in it. The engine it runs
-on, and everything that is not this game — the record, the seats, the wire, the screens, the
-command line — is [one directory up](../../../README.md).
-
 Two to five players draw bags of coloured stones and place them into fourteen regions. Nobody
-commands a faction - the stones are red, blue and green whoever holds them - so the game is
+commands a faction — the stones are red, blue and green whoever holds them — so the game is
 settled twice over: the faction ruling the most land carries the board, and the player left
-holding most of that colour carries the faction. A bag played out to nothing wins nothing.
+holding most of that colour carries the faction. Every bag is held closed, and so is the
+reserve, so nobody sees the whole game.
 
 ```powershell
-dotnet run -- turncoats play 3        # or just `dotnet run -- play 3`: a line that
-                                      #   names no game means this one
-dotnet run -- turncoats play 3 --seed 42
-dotnet run -- turncoats play 2 --rival medium
-dotnet run -- turncoats serve 3       # the same game, in a browser
-
-dotnet run -- turncoats replay logs/...-turncoats-3p-seed<n>.log    # one you put down
-dotnet run -- turncoats host --from logs/...-turncoats-3p-seed<n>.log
+dotnet run -- turncoats play 3               # or `dotnet run -- play 3`: a line naming no game means this one
+dotnet run -- turncoats play 2 --rival hard
+dotnet run -- turncoats serve 3              # the same game, in a browser
 ```
 
-**Put it down and come back.** `quit` writes the record and leaves the board exactly as it
-stands, and `Continue a game` at the menu lists what there is to take up — with the same
-factions in the same bags and the machine back at the seats it was playing, at the strength
-it was playing them. Conceding is `resign`, which is a different thing said on purpose. It
-need not be taken up the way it was put down either: `--from` works on `play`, `serve` and
-`host` alike, so a game started against two machines here can be reopened as a table your
-friends join. All of that is the engine's rather than this game's, and is [documented
-there](../../../README.md#taking-it-back-and-writing-it-down).
+Everything that is not this game — the command line, the menu, the record and taking a game up
+again, the three views, tables and houses — is the engine's, [one directory up](../../../README.md).
 
-[Playing](#playing) · [Rules as implemented](#rules-as-implemented) · [The map](#the-map) ·
-[The four actions](#the-four-actions) · [Ruling](#ruling) · [Winning](#winning) ·
-[Ending the game](#ending-the-game) · [Who knows what](#who-knows-what) ·
-[The machine](#the-machine) · [The files](#the-files)
+## The rules
 
-## Playing
+**The deal.** There are 21 stones of each colour, 63 in all. Each home takes two stones of its
+own colour, each of the eight wild regions draws two at random from what is left, and then each
+player draws a bag of eight. What remains is the reserve: 25 stones with two players, 1 with
+five. The Flag, the Axe and the dead region start empty.
 
-Every command that is not about stones - `undo`, `redo`, `history`, `save`, `notes`,
-`commands`, `log`, `view`, `restart`, `players`, `help`, `quit` - belongs to the engine and is
-[documented there](../../../README.md). What follows is what this game adds.
+**The map.** Fourteen regions, numbered 1 to 14. Twelve are land: the three homes — Nightfen
+(green), Emberfall (red) and Tidewatch (blue) — eight wild regions, and The Hollow Waste, dead
+ground that no stone may ever enter though it borders six regions. The Flag and the Axe stand
+apart from the map and border nothing. The borders are drawn under [The board](#the-board).
 
-Once a game is dealt, everything else is typed at the prompt:
+**A turn** is one of four actions. There is no passing.
 
-| command | action |
+| | what happens | refused when |
+| --- | --- | --- |
+| **Recruit** | A stone from the bag goes into any region but the dead one — the Flag and the Axe included. | the stone is not in the bag; the region is dead ground |
+| **Battle** | A stone from the bag goes into the Axe. In the region named, up to as many stones of *other* colours as it already holds of that colour are driven out, back to the reserve. | the region is dead, the Flag or the Axe; it holds no stone of that colour, or nothing of another; a colour named is the battle's own, is not standing there, or more are named than may go; the stone is not in the bag |
+| **March** | A stone from the bag goes into the Flag. One or more stones of that colour then move from the region named into one region bordering it. | the region is dead, the Flag or the Axe; the destination is dead ground, or shares no border with it; fewer stones of that colour stand there than are to move; the stone is not in the bag |
+| **Negotiate** | A stone is drawn from the reserve into the bag. Then one stone from the bag goes back to the reserve — the one just drawn, if you like. | the bag is empty; the reserve is empty |
+
+A battle told no colours drives out all it may. Where that would take a real choice — more
+stones on offer than may go, of more than one colour — the game says what stands there and asks
+which, rather than guessing. A battle must drive out at least one stone. Since the Flag and the
+Axe border nothing, nothing can ever march into them.
+
+A negotiation is two steps, because the draw is random and the player should see it before
+choosing what to hand back. Between the two nothing is accepted but the return and `resign`. A
+stone always goes back, so a negotiation never changes the size of a bag; every other action
+plays one, so a bag only ever shrinks.
+
+**Ruling a region.** A region is ruled by the colour with most stones in it; failing that, most
+stones in the Axe; failing that, most in the Flag; failing that, it is tied and has no ruler.
+Only colours standing in the region contend, so an empty region is unclaimed whatever the Axe
+holds, and each measure only narrows the field the one before it left, so a colour behind on
+stones cannot win the region on the Axe. The cascade is
+[`Tiebreak.run`](../../../src/Common/Tiebreak.fs), which the two below share.
+
+**The end.** The game ends the moment every player in turn has taken a turn without playing a
+stone. A negotiation adds one to the run; a recruit, a battle or a march sets it back to nought;
+a player whose bag is empty has their turn skipped, and the skip counts as a negotiation — so
+once every bag is empty the run fills in one lap of the table. The board says which it was:
+*every player has negotiated in turn*, or *every player has played out their bag*. `resign` ends
+it at once, and is written down as *the players walked away*.
+
+**The faction that carries the board** rules the most land, the Flag and the Axe not being
+land; failing that, holds most stones in the Axe; failing that, most in the Flag; failing that,
+the game is a draw. All three colours contend, ruling something or not.
+
+**The player who carries the faction** holds the most stones of its colour still in the bag;
+failing that, the fewest stones of the other two colours; failing that, would take the next turn
+— which no two players are equally close to, so it always settles. But if every bag has been
+played out nobody wins, and the game is drawn even though a faction carried the board.
+
+## The words
+
+Once a game is dealt, everything is typed at the prompt. These are the game's own words; `undo`,
+`history`, `save`, `view`, `restart`, `players`, `resign`, `help`, `quit` and the rest are the
+table's, and are [listed there](../../../README.md#at-the-prompt).
+
+| | |
 | --- | --- |
-| `recruit <colour> <region>` (`r`) | [Recruit](#the-four-actions) |
-| `battle <colour> <region> [colours...]` (`b`) | [Battle](#the-four-actions); name no colours to drive out all you may |
-| `march <colour> <from> <to> [count]` (`m`) | [March](#the-four-actions); count defaults to 1 |
-| `negotiate` (`n`), then `return <colour>` | [Negotiate](#the-four-actions) |
-| `rule <region>` | not an action; shows [who rules a region](#ruling) and why |
+| `recruit <colour> <region>` | or `r` |
+| `battle <colour> <region> [colours...]` | or `b`; name no colours to drive out all you may, or the colours to drive out, one stone each. `none` is read, and refused |
+| `march <colour> <from> <to> [count]` | or `m`; the count is 1 unless said |
+| `negotiate`, then `return <colour>` | or `n`; the return is asked for until it comes |
+| `rule <region>` | not a move: shows who rules the region and why |
 
-Colours are `r`/`red`, `b`/`blue`, `g`/`green`; regions are numbered as shown on
-the board. So `battle green 2 blue` places a green stone in the Axe and drives one
-blue stone out of Saltmarsh, and `march blue 8 5 2` places a blue stone in the Flag
-and moves two blue stones from the Crossroads into Emberfall.
+Colours are `r`/`red`, `b`/`blue` and `g`/`green`; regions are their numbers on the map. So
+`battle green 2 blue` puts a green stone in the Axe and drives one blue stone out of Saltmarsh,
+and `march blue 8 5 2` puts a blue stone in the Flag and moves two blue stones from The
+Crossroads into Emberfall. `k` and `black` still read as green, because the earliest records
+wrote the third colour that way and a record is meant to replay for good. A line that is none of
+these is answered with the four in short — `r b 5`, `b r 8`, `m g 8 5 2`, `n` — and `help` has
+them at length.
 
-Every random decision at this game comes from the seed — the deal, the bags, the stone a
-negotiation draws — so a seed and a list of messages reproduce a game exactly, and `restart`
-draws its next seed from the generator already in play rather than off the clock. Why the
-generator is [a value rather than `System.Random`](../../../README.md) is the engine's story
-and is told there.
+The record keeps each move as it would be typed: `battle r 8` for a battle that drove out all it
+could and `battle r 8 b g` for one that named its casualties, `march g 8 5 2` with the count
+always written, `return r`, `resign`.
 
-## Rules as implemented
+## The board
 
-- 21 stones of each colour: red, blue, green (63 in total).
-- 14 regions: one home per colour, eight wild regions, two special regions and
-  one dead region.
-- Each home starts with two stones of its own colour; each wild region draws two
-  stones at random from what is left. The special regions (**The Flag** and
-  **The Axe**) start empty and border nothing. The dead region starts empty and
-  nothing may ever enter it, but it still sits on the map for adjacency.
-- 2 to 5 players. Each draws a bag of eight stones at random; a player commands no
-  faction, so a bag holds stones of any colour. Undealt stones sit in the reserve
-  (25 with two players, 1 with five).
-- On a turn a player takes one of [the four actions](#the-four-actions). There is no
-  passing.
+Every screen is drawn for one seat and headed by where the game stands — *Turn 4 - Player 1 to
+play*; *Turn 4 - Player 1 drew a Green stone and must hand one back*; *Game over after 12 turns -
+every player has negotiated in turn* — and shows the same blocks in every view:
 
-Points the rules did not settle, decided here and easy to change:
-
-- **Setup exclusions** — "every other region gets 2 stones at random" is read as
-  covering the wild regions only: the dead region is excluded because nothing may
-  enter it, and the special regions are excluded because they start empty by rule.
-- **Region count** — the Flag and the Axe are additions to the original twelve, so
-  the board holds fourteen regions: 3 home + 8 wild + 1 dead makes the twelve, plus
-  the two specials.
-
-## The map
-
-Borders are declared once in `Board.declaredBorders` and symmetrised, so a border
-only has to be named from one end. The resulting graph has 23 edges, is connected
-across all twelve mainland regions, and leaves the Flag and the Axe bordering
-nothing.
-
-| region | borders |
+| | |
 | --- | --- |
-| 1 Nightfen (Green home) | 2, 4 |
-| 2 Saltmarsh | 1, 3, 4 |
-| 3 Greymarket | 2, 4, 5, 6 |
-| 4 Thornwood | 1, 2, 3, 6, 7 |
-| 5 Emberfall (Red home) | 3, 6, 8 |
-| 6 The Hollow Waste (dead) | 3, 4, 5, 7, 8, 9 |
-| 7 Stonecradle | 4, 6, 9, 10 |
-| 8 The Crossroads | 5, 6, 9, 11 |
-| 9 Windgap | 6, 7, 8, 10, 11, 12 |
-| 10 Tidewatch (Blue home) | 7, 9, 12 |
-| 11 Ironford | 8, 9, 12 |
-| 12 Dunmoor | 9, 10, 11 |
-| 13 The Flag, 14 The Axe | none |
+| The map | the twelve regions of land, with what stands in each and who rules it |
+| Standing apart | the Flag and the Axe, the same way |
+| Players | every seat, its bag as you may see it, and the run of negotiations against the number that ends the game |
+| Land ruled | how many of the eleven regions that can be held each colour rules, how many are tied, how many unclaimed |
+| Supply | what is on the board, in the reserve, and out of sight |
+| Result | once the game is over, both cascades with their working |
+| Commands, Log | the box of what can be typed, and what the game has been saying; `commands` and `log` turn them |
 
-Regions are numbered across the map rather than by kind, so that neighbours read as
-neighbours: no border joins regions more than three apart, and all but three of the
-numbers border the one after them. The mainland takes 1 to 12, with the dead region
-at its centre; the Flag and the Axe, which are no part of the map, come last.
-
-### Drawn as a map
-
-That border graph is a patch of a triangular lattice, so it can be drawn as the map
-it is rather than listed. `Board.layout` says where each region lies — rows north to
-south, each row half a region across from the one above — and the board is drawn as a
-honeycomb:
+The map is the border table laid out. Each region is a hex, each row sits half a region across
+from the one above, and **a shared side is a border**: two regions that meet only at a point
+share none. Seed 42, three players, after `battle b 4 g`, `march r 3 4` and `recruit g 9`:
 
 ```
+THE MAP
                       _/________/ \________\_/________/ \________\_
                       | [ 2] Saltmarsh      | [ 1] Nightfen (G)   |
                       | B B              >B | G G              >G |
            _/________/ \________\_/________/ \________\_/________/
            | [ 3] Greymarket     | [ 4] Thornwood      |
-           | R R              >R | B G             =BG |
+           | R                >R | R B              >B |
 _/________/ \________\_/________/ \________\_/________/ \________\_
 | [ 5] Emberfall (R)  | [ 6] Hollow Waste   | [ 7] Stonecradle    |
-| R R              >R | dead                | R B             =RB |
+| R R              >R | dead                | R B              >B |
  \________\_/________/ \________\_/________/ \________\_/________/ \________\_
            | [ 8] The Crossroads | [ 9] Windgap        | [10] Tidewatch (B)  |
-           | R G             =RG | B G             =BG | B B              >B |
+           | R G              >R | B G G            >G | B B              >B |
             \________\_/________/ \________\_/________/ \________\_/________/
                       | [11] Ironford       | [12] Dunmoor        |
-                      | B B              >B | B G             =BG |
+                      | B B              >B | B G              >B |
                        \________\_/________/ \________\_/________/
+
+STANDING APART
+__________/ \__________   __________/ \__________
+| [13] The Flag       |   | [14] The Axe        |
+| R                >R |   | B                >B |
+__________\_/__________   __________\_/__________
 ```
 
-Every region is a hex two half-columns wide, upright either side and coming to a
-point above and below, and each row is laid half a region across from the one above.
-So a region has six neighbours — two beside it and two along each of its sloping
-sides — which is exactly the most any region on this map has. **A shared side is a
-border, and regions that meet only at a point share none.** No border is drawn as a
-line into open ground, and none can be drawn wrong: the picture is the border table,
-laid out.
+A home has its colour after its name, `>B` marks the colour ruling a region, `=BG` the colours
+level in it, and the dead region says so where its stones would be. The layout is
+`Board.layout` and the borders `Board.declaredBorders`, and `Board.problems` walks one against
+the other before a game is dealt — every land region laid out once, the Flag and the Axe not at
+all, no shared side without a border and no border without a shared side — so a map that lies
+stops the game rather than being drawn. It is what the seam's `Faults` reports.
 
-`Board.problems` checks that it is, before a game is ever dealt. Alongside the
-older checks — ids on the board, no self-borders, isolated regions bordering
-nothing, every other region reachable — it now walks the layout and the borders
-against each other: every mainland region laid out exactly once, the Flag and the
-Axe laid out nowhere, no border without a shared side, and no shared side without a
-border. A layout that drifts from the table stops the game rather than drawing a
-map that lies. [actions.fsx](../../../tests/actions.fsx) checks the same list is empty.
-
-The Flag and the Axe are drawn below the map in the same hand, standing clear of it
-and of each other — sharing no side with anything, they border nothing.
-
-No two homes border each other, and every home is three steps from every other,
-whether or not the dead region is passable.
-
-Rules that use adjacency can be written against `Board.areAdjacent` and
-`Board.neighbours`.
-
-## The four actions
-
-**Recruit** — place any stone from the bag into any region but the dead one. The
-Flag and the Axe are legal targets, since the rule excludes only the dead region.
-
-**Battle** — place any stone from the bag into the Axe and name another region
-(not dead, not the Flag or the Axe). Count the stones there matching the colour
-just placed; up to that many stones *of other colours* are driven out of that
-region and back to the reserve.
-
-A battle must be a real fight, so the target must hold at least one stone of the
-attacking colour and at least one stone of another colour, and at least one stone
-must be driven out. Naming no colours drives out everything the rule allows. Where
-that would take a genuine choice — more stones on offer than removals, spread
-across more than one colour — the game asks which instead of guessing.
-
-**March** — place any stone from the bag into the Flag and name another region
-(not dead, not the Flag or the Axe). One or more stones there of the matching
-colour then move into a single region bordering it, which must not be the dead
-region. The source must hold at least one stone of that colour and at least one
-must move. Since the Flag and the Axe border nothing, they can never be marched
-into.
-
-**Negotiate** — only open to a player holding at least one stone. Draw a stone from
-the reserve at random into the bag, then hand any one stone from the bag back to
-the reserve, which may be the stone just drawn. A stone always goes back, so a
-negotiation trades one stone for another and never changes the size of a bag.
-
-Readings the rules left open, all easy to change:
-
-- **"the main bag"** in Battle is taken to be the reserve, the same pool Negotiate
-  draws from.
-- **Battle counts matching stones in the named region**, not in the Axe. The stone
-  placed in the Axe stays there and does not count towards its own total.
-- **A march moves its whole group into one destination**, rather than splitting it
-  across several neighbours.
-- **Negotiate is two steps.** The draw is random, so the player cannot sensibly
-  choose what to hand back before seeing it. `Actions.negotiate` draws and leaves
-  the turn in `AwaitingReturn`; `Actions.settle` then ends it. No other action is
-  accepted in between, and the turn cannot end without a stone going back.
-
-## Ruling
-
-A region is ruled by the colour holding the most stones in it. Ties cascade through
-two further measures, and each one only narrows the field left by the one before —
-a colour knocked out never comes back:
-
-1. most stones in the region;
-2. failing that, most stones in the Axe;
-3. failing that, most stones in the Flag;
-4. failing that, the region is tied and has no ruler.
-
-So a colour trailing on stones cannot win a region on the strength of the Axe, even
-if it holds the Axe outright. `Ruling.decide` returns `RuledBy`, `Contested` (level
-after every measure) or `Unclaimed`.
-
-An empty region is `Unclaimed`: only colours actually present contend, so a loaded
-Axe does not hand out the regions nobody has entered. That is a reading, not a
-stated rule — counting absent colours as tied on zero would instead give every
-empty region to whoever leads the Axe.
-
-Ruling is computed on demand from the position, never stored, so it cannot fall out
-of step with the board. `rule <region>` shows the working:
+`rule <region>` shows the working behind a `>`:
 
 ```
-> rule 2
-Saltmarsh holds 1 Blue and 1 Green.
-  stones in the region: Blue 1, Green 1 -> Blue, Green still level
-  stones in the Axe: Blue 0, Green 1 -> Green leads
-  Green rules the region.
+> rule 4
+Thornwood holds 1 Red and 1 Blue.
+  stones in the region: Red 1, Blue 1 -> Red, Blue still level
+  stones in the Axe: Red 0, Blue 1 -> Blue leads
+  Blue rules the region.
 ```
 
-## Winning
+The three views are written by hand — [Render.fs](Reading/Render.fs) is `plain`,
+[Rich.fs](Reading/Rich.fs) is `rich` and [Html.fs](Reading/Html.fs) is `html` — rather than
+drawn from a `Scene`, for the honeycomb's sake ([screens](../../../README.md#screens)). They say
+the same things in the same words and differ in what each medium allows. `rich` draws each region
+as a panel bordered in its ruler's colour, land ruled as a bar chart and what is out of sight as
+a breakdown. The page puts the moves under the regions: `R` `B` `G` recruit a stone of that
+colour into it and `?` asks `rule`; where stones stand, `×R` battles with a Red one and drives
+out all it may, and `R→8` marches one Red stone into 8. A *This turn* row offers `negotiate`, or
+`return Red`, `return Blue` and `return Green` while a stone is owed. Anything more — a battle
+naming its casualties, a march of more than one stone — is typed.
 
-Two cascades run when the game ends, both shaped exactly like ruling a region — see
-`Tiebreak.run`, which all three share.
+`notes` turns the explanations under the blocks: the map, the Flag and the Axe, what counts as
+land, what is closed to you, and on the page what its controls do. There is no clock and no key
+to press — every move is a typed line — and the game makes no sound of its own. Its four colour
+slots on the video page are `red`, `blue`, `green` and `hidden`, the last for closed bags and
+dead ground, standing crimson, azure, moss and slate ([colours](../../../README.md#colours)).
 
-**The faction that carries the board:**
+**What a seat may see** is decided in `Knowledge.seenBy` ([Knowledge.fs](Rules/Knowledge.fs))
+and in the seam's `SeenBy`, never in a view:
 
-1. rules the most land;
-2. failing that, the most stones in the Axe;
-3. failing that, the most stones in the Flag;
-4. failing that, the game is a draw.
-
-The Flag and the Axe are ruled like anywhere else, but they are manoeuvres bought
-with stones rather than ground held, so they count for nothing in the first
-measure — only in the tie-breakers they *are*. That leaves twelve regions of land:
-three homes, eight wilds and the dead region, which nobody can ever hold.
-`RegionKind.isLand` draws that line.
-
-Every faction contends, including one ruling nothing. If no faction rules a single
-region they are level on nought and the Axe decides, rather than the game being
-drawn out of hand.
-
-**The player who carries that faction:**
-
-1. if every player has played out their bag, nobody wins and the game is a draw;
-2. otherwise, the most stones of the winning faction's colour still in the bag;
-3. failing that, the fewest stones of the losing factions;
-4. failing that, whoever would take the next turn.
-
-The last measure always separates them, since no two players sit the same distance
-from the next turn — so a game with a winning faction and any stones left always
-has exactly one winning player.
-
-One reading to confirm: when every bag is empty the whole game is a draw, following
-"no one wins, the entire game is a draw" — even though a faction did carry the
-board.
-
-## Ending the game
-
-The game ends once every player, in a row, has taken a turn without playing a
-stone. `Play.Negotiations` counts that run: negotiating adds to it, recruiting,
-battling or marching resets it to zero, and the game is over the moment it reaches
-the number of players.
-
-A player whose bag is empty has their turn skipped, and the skip counts towards the
-run exactly as a negotiation does. So in a two-player game, one player being
-skipped and the other negotiating ends it. If every bag is empty, every turn is a
-skip and the run fills in one lap of the table — which is the "all players have
-played out their stones" ending, arrived at by the same counter rather than a
-separate check. The end is reported either way: *every player has negotiated in turn*,
-or *every player has played out their bag*.
-
-Since a negotiation never grows a bag and only a stone in hand allows one, every
-bag shrinks monotonically, so a game always winds down.
-
-## Who knows what
-
-A bag is held closed and so is the reserve, so nobody sees the whole game. Every
-screen is drawn for one seat, and `Knowledge.seenBy`
-([Knowledge.fs](Rules/Knowledge.fs)) is what that seat is shown:
-
-| | what they see |
+| | |
 | --- | --- |
-| their own bag | every stone, colour by colour |
-| the map | every stone, colour by colour — it is open to everyone |
-| every other bag | how many stones, never which |
+| the map, the Flag and the Axe | every stone |
+| your own bag | every stone |
+| every other bag | how many stones, never which — `closed (7)`, or a `?` a stone |
 | the reserve | how many stones, never which |
-| out of sight | which colours are out there, never where |
+| out of sight | which colours are out there, exactly, and never where |
 
-That last line is the one worth having. Every stone is somewhere, so whatever is
-neither on the map nor in the beholder's own bag must be in the reserve or in
-somebody's bag, and its colours follow exactly: `Unseen` is the whole game less
-the map less what the beholder holds. A player can count what is still to come
-without being told where any of it is.
+Every stone is somewhere, so whatever is neither on the map nor in your bag is in the reserve or
+in somebody else's, and its colours follow: a player can count what is still to come without
+being told where it is. Two things said at the table would give a closed bag away, and both are
+worded round: the stone drawn in a negotiation is named to the player who drew it and is *a
+stone* to everyone else — handing one back is public, since it lands in the reserve in front of
+everybody — and *Settle the negotiation first* leaves the colour out, because it stays on the
+screen after the turn has moved on. The journal and the record keep the whole truth; the masking
+is the view's, and once the game is over `Knowledge.laidBare` opens every bag and the reserve.
 
-A `Sight` is either `Open` of a pile or `Closed` of a count, so a closed bag has
-no colours to leak by accident — there is nothing in the value to read. Once the
-game is over `Knowledge.laidBare` opens everything, because there is no longer
-anything to hold back.
-
-Two things a player is told would otherwise give a closed bag away, and both are
-worded around in [Words.fs](Rules/Words.fs):
-
-- **A stone drawn from the reserve** goes straight into a closed bag. The player
-  who drew it is told its colour; everyone else is told only that a stone was
-  drawn. Handing one back *is* public — the stone lands in the reserve in front
-  of everybody — so between the two, the table learns what left a bag and never
-  what entered it.
-- **"Settle the negotiation first"** names the stone just drawn, and it stays on
-  screen after the turn has moved on, so the colour is left out of it. Only the
-  player who drew can be refused this way, and the heading tells them the colour
-  regardless.
-
-Every other refusal stays public and unabridged. Asking is part of what happened
-at the table: if a player calls for a red stone and cannot produce one, the table
-saw that, and the record says so.
-
-The journal keeps the whole truth, and so does the saved record — masking is a
-property of the view, not of what is stored. `Render` reads the journal through
-`Words.noticeSeenBy`; `Transcript` writes it through `Words.notice`. So typing
-`save` mid-game does put a full account on disk, where the file is out of the
-game's hands anyway.
+`history` is the record so far: each line as it was typed, what the game said back, and how far
+from the deal the game stands.
 
 ## The machine
 
-The engine's half of this - when a machine plays, what stops it, how it is fenced in, and how
-`undo` walks its answers back - is
-[in the main README](../../../README.md#playing-against-the-program). What follows is this
-game's half: what its machine actually weighs.
-
-### Three sets of numbers, not three machines
-
-There is one machine. What `easy`, `medium` and `hard` name is a set of weights and
-two knobs, all at the foot of [Rival.fs](Rules/Rival.fs):
+There is one machine, and `easy`, `medium` and `hard` are three sets of numbers at the foot of
+[Rival.fs](Rules/Rival.fs). How a machine is seated, when it plays and how `undo` takes its
+answers back is the engine's ([against the machine](../../../README.md#against-the-machine));
+what it weighs is this game's.
 
 | | `easy` | `medium` | `hard` |
 | --- | --- | --- | --- |
-| land ruled by the faction it is backing | 10 | 10 | 10 |
-| standing inside a region, short of ruling it | 1 | 1 | 1 |
-| the Axe, and the Flag | — | — | 4, 3 |
-| its own faction's stones still in the bag | 12 | 12 | 12 |
-| the other two's, which count against it | −1 | −1 | −1 |
-| how often it plays anything legal instead | always | 15% | never |
-| how many of its own moves it checks a reply to | — | — | 5 |
+| | plays anything the rules allow | plays the best move it can see, and now and again does not | counts the tie-breakers too, and what you could do about it |
+| land ruled | 10 | 10 | 10 |
+| standing in a region, short of ruling it | 1 | 1 | 1 |
+| stones in the Axe, in the Flag | — | — | 4, 3 |
+| its own colour still in the bag | 12 | 12 | 12 |
+| every other stone in the bag | −1 | −1 | −1 |
+| turns in 100 it plays anything legal instead | 100 | 15 | 0 |
+| moves it looks a reply ahead on | — | — | 5 |
 
-`easy` throws its judgement away every turn, so its column is there for the shape of the
-thing rather than because it is ever read.
+It backs the colour its bag holds most of. Land, standing, the Axe and the Flag are each a lead
+— its colour's count less the better of the other two — so a colour is only winning relative to
+its rivals; the two bag lines are plain counts. *Standing in a region* is that lead in stones, region by region across
+the land, clamped to two either way, so that piling stones into a region already ruled is worth
+nothing more. *Its own colour in the bag* is set above a region because the game is settled a
+second time by who is left holding the winning colour: weighed low, a machine empties its bag
+onto the map and draws.
 
-The last line is the only one that involves looking past its own turn, and it runs into the
-same wall as everything else: it cannot see the next player's bag, so it does not guess at
-one. It assumes the worst instead - that the seat about to act holds every stone that is
-neither on the map nor in its own bag, which is exactly what `Knowledge.Unseen` says is out
-there somewhere. Pessimistic, and honest. It never plays better for knowing something it was
-not told, only more carefully.
+Every move the rules would take is tried and the position it leaves weighed: every recruit,
+every battle with every set of casualties it could name, every march of every count. A
+negotiation is weighed as what it hopes for — the bag with one stone of another colour swapped
+for one of its own — and no reply is looked for against it. A stone kept weighs more than a
+region ruled, so it plays a stone only where a battle or a march is worth more than holding it
+and negotiates otherwise: two `hard` machines left to each other play a battle each and
+negotiate the game shut in 3 or 4 turns. When it owes a stone it weighs each colour it could
+hand back the same way.
 
-The weights are the game's own winning conditions with a number against each, so
-there is no strategy written down anywhere: there is a statement of what winning is,
-which the rules already say, and how much a machine cares about each part of it.
-Adding a fourth way of playing is a fourth entry in the list; changing how `hard`
-plays is changing a number. Nothing else in the program knows what any of these
-words mean.
-
-Two of those lines are worth explaining, because they are what the numbers had to be
-tuned to get right.
-
-**Standing inside a region** is the slope up to the step. Ruling a region is a step,
-and most moves do not take one - so weighed on land alone nearly every move is worth
-exactly what every other one is, and the machine picks between them by drawing lots.
-Tuned without it, `hard` beat `easy` about as often as a coin would.
-
-**Its own stones still in the bag**, set high against land, is what stops it emptying
-its bag onto the map. This game is settled in two cascades: which faction carried the
-board, and then which *player* carried the faction - and that second one is decided by
-who is left holding most of the winning colour. A bag played out to nothing wins
-nothing, and a game where every bag is empty is drawn outright. Weighted low, two
-machines play every stone they have and draw every time.
-
-That has a corollary that the checks had to be taught: **a machine that never plays a
-stone at all beats a random one handsomely**, because the rules reward being left
-holding things. It also makes a dreadful opponent. So `hard` is held to beating that
-as well, and not by imitating it - [rival.fsx](../../../tests/rival.fsx) plays it against a
-weights-set built to sit still, and separately insists that a machine facing somebody
-who plays plays back rather than negotiating the game away.
-
-The ordering the checks hold, over twelve deals played twice each with the seats
-swapped so that going first is not what is being measured:
-
-```
-hard vs easy     net +10   won 16  lost  6  drawn  2
-medium vs easy   net  +3   won 11  lost  8  drawn  5
-hard vs medium   net  +7   won 13  lost  6  drawn  5
-hard vs hoarder  net +10   won 16  lost  6  drawn  2
-```
-
-Fixed seeds, so there is nothing flaky in that: a run that came out differently would
-mean the machine had changed and not the dice.
-
-What it does not do is model the clock. The game ends when everybody negotiates in a
-row, and knowing whether you want that to happen yet is a real part of playing well
-that none of these three understand. Two machines of the same skill will often close a
-game out at once for that reason; against somebody playing stones, they play back.
-
+`hard` keeps its five best and rates each by the worst the next player could leave it. It
+cannot see that player's bag, so it takes it to be everything out of sight — `Knowledge.Unseen`,
+the same pile a person can count — which is pessimistic and honest: it never plays better for
+knowing something it was not told. Among moves that weigh the same it draws lots from its own
+generator, so the same deal against the same machines plays the same game twice; `easy` draws
+lots among everything legal every turn, and `medium` does so 15 turns in 100.
 
 ## The files
 
-A game is a folder, and inside it the two seams are two folders. `Rules` is how it is played:
-no English a player reads is laid out there, no screen, and nothing from `src/Table` - which
-is not a house rule but a fact you can check, because not one file in there opens it.
-`Reading` is how it is read. `Offer.fs` joins them, and is the only file either layer above
-ever sees.
+`Rules/` is how it is played and knows nothing of screens or English; `Reading/` is how it is
+read; [Offer.fs](Offer.fs) joins them as the one `Playable` the table sees
+([the seam](../../../README.md#the-seam)). In the order they compile:
 
-| File | Role |
+| | |
 | --- | --- |
-| [Stones.fs](Rules/Stones.fs) | `StoneColour` and `Pile`, a multiset of stones |
-| [Board.fs](Rules/Board.fs) | The fixed map: `RegionId`, the regions, the borders, and the checks that it hangs together |
-| [Players.fs](Rules/Players.fs) | `Player` and `Table`, a seating of 2-5 with one of them active |
-| [Position.fs](Rules/Position.fs) | Which stones stand where |
-| [Ruling.fs](Rules/Ruling.fs) | Who rules a region, and how the land stands - both read off a position alone |
-| [Game.fs](Rules/Game.fs) | The game in progress, and what can be asked of it |
-| [Knowledge.fs](Rules/Knowledge.fs) | What one player can see of a game, and what they cannot |
-| [Events.fs](Rules/Events.fs) | What happened, and why an action was refused |
-| [Actions.fs](Rules/Actions.fs) | The four actions, each a `Game -> Result<Game * Event, Rejection>` |
-| [Outcome.fs](Rules/Outcome.fs) | Which faction carries the board, and which player carries the faction |
-| [Setup.fs](Rules/Setup.fs) | Dealing a fresh game |
-| [Turn.fs](Rules/Turn.fs) | `Move`, and where a game stands: the phase, the turn, the run of negotiations, and how a turn ends |
-| [Playing.fs](Rules/Playing.fs) | This game as the engine takes one, and the engine with it already in |
-| [Words.fs](Rules/Words.fs) | Every string a player reads, including how events and rejections are worded |
-| [Rival.fs](Rules/Rival.fs) | A seat played by the program: how a position is weighed, and how well |
-| [Ink.fs](Reading/Ink.fs) | What this game colours, and its alphabet for laying colour over a drawn board |
-| [Parse.fs](Reading/Parse.fs) | This game's own words as a `Move` - and only those, the rest having been read already |
-| [Render.fs](Reading/Render.fs) | The `plain` view: every screen as blocks of text |
-| [Rich.fs](Reading/Rich.fs) | The `rich` view: every screen built from Spectre's panels, tables and charts |
-| [Html.fs](Reading/Html.fs) | The `html` view: every screen as a fragment of a page |
-| [Offer.fs](Offer.fs) | Both seams filled in: this game as the engine takes one, and as a table reads one |
+| [Rules/Stones.fs](Rules/Stones.fs) | `StoneColour`, and `Pile`, stones counted by colour |
+| [Rules/Board.fs](Rules/Board.fs) | the fourteen regions, the borders, the layout, and the checks that hold them to each other |
+| [Rules/Players.fs](Rules/Players.fs) | a `Player` with a bag, and the `Table` of 2 to 5 with one of them to act |
+| [Rules/Position.fs](Rules/Position.fs) | which stones stand in which region |
+| [Rules/Ruling.fs](Rules/Ruling.fs) | who rules a region, and how the land stands |
+| [Rules/Game.fs](Rules/Game.fs) | the position, the table, the reserve and the generator, and what can be asked of them |
+| [Rules/Knowledge.fs](Rules/Knowledge.fs) | what one seat sees of a game: `Open` piles, `Closed` counts, and what is out of sight |
+| [Rules/Events.fs](Rules/Events.fs) | what happened, how a game ends, and why a move was refused |
+| [Rules/Actions.fs](Rules/Actions.fs) | the four actions on a `Game`, each the game after and what happened, or a `Rejection` |
+| [Rules/Outcome.fs](Rules/Outcome.fs) | the two cascades: which faction carries the board, and which player the faction |
+| [Rules/Setup.fs](Rules/Setup.fs) | the deal, from a seed |
+| [Rules/Turn.fs](Rules/Turn.fs) | `Move`, the phase, the run of negotiations, and how a turn is handed on and a game ends |
+| [Rules/Playing.fs](Rules/Playing.fs) | the seven answers the engine asks for, as `Rules` |
+| [Rules/Words.fs](Rules/Words.fs) | every string a player reads, and what each seat is told |
+| [Rules/Rival.fs](Rules/Rival.fs) | the machine: how a position is weighed, and the three skills |
+| [Reading/Ink.fs](Reading/Ink.fs) | the colour slots, and how a drawn board is painted |
+| [Reading/Parse.fs](Reading/Parse.fs) | a typed line as a `Move`, or `rule` as a question |
+| [Reading/Render.fs](Reading/Render.fs) | the `plain` view: the honeycomb, the notes, the help, and the words the other two build on |
+| [Reading/Rich.fs](Reading/Rich.fs) | the `rich` view, in Spectre's panels, tables and charts |
+| [Reading/Html.fs](Reading/Html.fs) | the `html` view, with the moves as controls under the regions, and the page's stylesheet |
+| [Offer.fs](Offer.fs) | the `Playable`: both halves, the three views, and the one way this game is played |
+| [Program.fs](Program.fs) | the door: this game as a program of its own |
 
+## Checks
+
+[turncoats.fsx](../../../tests/turncoats.fsx) is the contract, and the rest hold the game
+itself. Each loads [Harness.fsx](../../../tests/Harness.fsx), the rules alone, or
+[Whole.fsx](../../../tests/Whole.fsx), the game on the whole stack.
+
+| | |
+| --- | --- |
+| [turncoats.fsx](../../../tests/turncoats.fsx) | `Conforms.against`, everything the table expects of a `Playable`, over a game of two resigned on its first turn — where a turn count built by hand reads wrong |
+| [actions.fsx](../../../tests/actions.fsx) | the map hangs together; each of the four actions does what it says, refuses what it must, and keeps all 63 stones |
+| [ruling.fsx](../../../tests/ruling.fsx) | who rules a region, tie by tie: the Axe, the Flag, level throughout, and a colour out early never coming back |
+| [outcome.fsx](../../../tests/outcome.fsx) | both cascades: land, the Axe, the Flag, a draw; the winning stones, the losing ones, who acts next, every bag played out |
+| [knowledge.fsx](../../../tests/knowledge.fsx) | a seat sees its own bag, the sizes of the others and the reserve, and an out-of-sight pile that comes to exactly what is held back |
+| [history.fsx](../../../tests/history.fsx) | undo and redo exact, and time travel rather than a re-roll; a refusal written down and changing nothing; a record that replays state for state, survives the file, seats the machines back down and still reads `k` |
+| [view.fsx](../../../tests/view.fsx) | no view shows a seat another's bag or names the drawn stone to anyone but the drawer; the three have the same blocks and notes; colours change by the words a person types, and `plain` stays plain |
+| [html.fsx](../../../tests/html.fsx) | the page has its places and carries its client, and the board offers exactly the recruits, battles, marches and returns the position allows, and nothing for what is not there |
+| [solo.fsx](../../../tests/solo.fsx) | the table at one keyboard, played on this game: the margins, a machine answering before the prompt returns, undo taking its answer back, and the record written on `save`, `quit`, `restart` and the end |
+| [properties.fsx](../../../tests/properties.fsx) | over games FsCheck deals and plays itself: every colour keeps its 21 stones, a refused move changes nothing, a ruler holds as many stones as anyone there, a seat sees no more than it should, a record read back is the same game |
+| [rival.fsx](../../../tests/rival.fsx) | machines play a game out with nothing refused, in lines the prompt reads back, the same twice from one seed; a machine plays the same move however the bags it cannot see are shuffled; over twelve deals each way `hard` beats `easy`, `medium`, and a machine that sits on its stones |
+| [counting.fsx](../../../tests/counting.fsx) | every count in the game agreeing with its noun |

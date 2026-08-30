@@ -1,188 +1,154 @@
 # Life
 
-Conway's, on a board with its edges joined: a soup, a rule, and nobody to play against. The
-fifth of the games here, and the engine it runs on is [one directory
-up](../../../README.md).
-
-**It is not a feature either.** [Noughts and crosses](../TicTacToe/README.md) is here because
-a claim that four fifths of this program is generic in the game cannot be tested by the game
-it was extracted from. This one is here because four games of two or more people taking turns
-against each other do not test that claim very hard either. Life has:
-
-- one seat, where every other game has two to seven;
-- no opponent, and no machine to be one;
-- nothing to win, and no ending at all;
-- a position that changes because a rule says so rather than because anybody chose it.
-
-It fills in [the same two records](../../../README.md#two-seams) as the rest, unchanged, and
-gets the timeline, the record on disk, the replay, the shared verbs, the seat, the menu, the
-command line, the wire and all three screens without a line of any of them being touched.
+Conway's Game of Life, on a board of 26 by 16 with its edges joined. There is one seat, and
+whoever sits in it does not play: the deal is a soup, the rule runs on a clock, and what the
+watcher does is start it and stop it, step it, wind it, and draw on the board. Nothing is hidden,
+nothing is won and the game never ends, and [no machine](../../../README.md#against-the-machine)
+sits at it — the rule is already playing.
 
 ```powershell
-dotnet run -- life play 1                 # a soup, running; 'p' stops and starts it
-dotnet run -- life play 1 --seed 42       # that soup, and the same one every time
-dotnet run -- life serve 1                # the same board in a browser
-
-dotnet run -- life replay logs/...-life-1p-seed<n>.log   # one you put down
+dotnet run -- life play 1              # a soup, running; p stops it and starts it again
+dotnet run -- life play 1 --seed 42    # that soup, the same every time
+dotnet run -- life serve 1             # the same board in a browser
 ```
 
-## Playing
+The menu, the table's own words, records, views and colours are the engine's, described [one
+directory up](../../../README.md); this file is what Life adds to them.
 
-Every command that is not about cells or generations - `undo`, `redo`, `history`, `save`,
-`notes`, `commands`, `log`, `view`, `restart`, `help`, `quit` - belongs to the engine and is
-[documented there](../../../README.md). What this game adds is a cell and a count.
+## The rules
 
-| command | action |
-| --- | --- |
-| `f7` | turn cell f7 on, or off again |
-| `toggle f7` (`t`) | the same, the long way round |
-| `run` (`p`, space in a browser) | start the rule, and stop it again |
-| `start`, `stop` | say which outright, rather than turning it the other way |
-| `step` (`s`, `.` at a terminal) | one generation, which is what you want while it is stopped |
-| `step 10` (`10`) | ten of them, stopping early if there is nothing left to happen |
-| `+` and `-` | wind the clock (`faster`, `slower`); `speed 7` goes straight to a notch |
-| `clear` (`c` at a terminal) | sweep the board, to draw on it from nothing |
-| `why f7` (`ask`) | how many living neighbours that cell has, and what the rule will do with it |
+- The board is 26 columns by 16 rows, 416 squares, and its edges are joined: the column after `z`
+  is `a` again and the row below 16 is 1, so every cell has eight neighbours and what leaves one
+  side arrives at the other. [Torus.fs](Rules/Torus.fs) says so, on the
+  [`Grid`](../../Common/Grid.fs) three games share.
+- A living cell with two or three living neighbours lives on. An empty cell with exactly three
+  comes alive. Everything else is empty next generation, and corners count.
+- The deal is a soup: every square is asked of the generator once and comes alive on a roll under
+  30 in 100, so about three in ten are filled. A seed is a pattern, and the same seed is the same
+  pattern every time. The deal is generation 0, and the generation is what the record calls the
+  turn.
+- A board is dealt running, at speed 5 of 9. A beat of the clock is one generation, and speed *n*
+  beats every 560 − 50*n* milliseconds — 510 at 1, 310 at 5, 110 at 9, between about two and nine
+  generations a second. `+` and `-` wind it a notch and `speed 7` goes straight to one; winding
+  past either end does nothing, and a notch outside 1 to 9 is refused.
+- `run` turns the rule the other way from wherever it is; `start` and `stop` say which, and asking
+  for what already holds does nothing. A beat over a board that is stopped, settled or empty does
+  nothing and writes nothing, so a stopped board costs no lines however long the clock beats over
+  it; a beat that arrives at a settled or an empty board says so, once.
+- `step` is one generation and `step 10` ten, at most 100 in a run. A run stops early where the
+  board settles or dies, and says so. It is refused at a board with nothing on it, and at a still
+  life, where the next generation would be this one again.
+- Naming a cell turns it on, or off again if it was on; a cell off the board is refused, and told
+  where the board ends. A board just drawn on forgets what it was beating between.
+- `clear` sweeps the board, and is refused when there is nothing to sweep.
+- Where the rule has got to is one of four things: still going; settled, when the next generation
+  would be this one again; beating, when the board is back where it was two generations ago; or
+  empty. Only a beat of two is noticed, since the world keeps two generations behind it and no more.
+- Settling and dying are said plainly, and neither ends the game: `Over` is never true, so a board
+  the rule has run out on is still a board to draw on. There is no resigning — `resign` is refused,
+  there being nobody to resign to — and the door refuses any number of players but 1.
 
-Cells are named the way a person reads a square off a board they are looking at: a letter for
-the column and a number for the row, so `f7` is six across and seven down.
+## The words
 
-```
-    abcdefghijklmnopqrstuvwxyz
- 1  ..........................
- 2  ..........................
- ...
- 7  .....#.#..................
- 8  ......##..................
- 9  ......#...................
-```
-
-A bare cell is a move and a bare number is a run, and the two can never be mistaken for each
-other: a cell begins with a letter and a run does not. Which is worth the shortcut - `f7 f8 f9`
-typed one after another is how a glider gets drawn - and the long way round is kept because it
-is what a record is written in.
-
-`resign` is refused, and that is deliberate: there is nobody to resign to. A game that answered
-it with an ending would be a game inventing an opponent for the sake of a verb.
-
-## It runs on a clock
-
-The rule runs on its own, at about three generations a second, and `run` - or `p` at a terminal,
-space in a browser - starts and stops it. Dealt running, because a soup nobody has asked to see
-is a soup that has done nothing.
-
-| notch | 1 | 2 | 3 | 4 | **5** | 6 | 7 | 8 | 9 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| a generation | 510ms | 460ms | 410ms | 360ms | **310ms** | 260ms | 210ms | 160ms | 110ms |
-| a second | 2.0 | 2.2 | 2.4 | 2.8 | **3.2** | 3.8 | 4.8 | 6.2 | 9.1 |
-
-**Stopping it does not stop the clock**, and that is the whole trick. The table goes on asking
-for a beat three times a second whatever the board is doing; a stopped world answers with
-nothing at all, and the engine leaves a move that neither moved the game nor said a word out of
-the record. So a board sitting stopped for an hour is a board with an hour of nothing in its
-record, and starting it again is one keypress rather than something the table has to be told
-about. A board that has settled or died answers the same way, so a clock left running cannot
-fill a log with refusals either.
-
-Starting, stopping and winding are all ordinary moves, which means the record says when the rule
-was running and how fast, `undo` walks back through beats, and a saved game replays generation
-for generation with no clock involved. `beat` is the clock's own move spelt out, for a console
-that cannot press anything - a game piped in from a file plays its beats by asking for them in
-words.
-
-## Rules as implemented
-
-- A board of 26 by 16, with the edges joined - the column after the last is the first again,
-  and the row below the last is the top.
-- A living cell with two or three neighbours lives on; an empty one with exactly three comes
-  alive; everything else is empty next generation. Corners count as neighbours.
-- The deal is a soup: every square asked of the generator once, filling about three in ten. A
-  seed is therefore a pattern, and the same seed is the same pattern for ever.
-- The deal is generation nought, and the generation is what the record calls the turn.
-- A run of at most 100 generations at a time, which is a cap on waiting rather than a rule of
-  the game.
-
-**The edges are joined**, and that is a decision about the game rather than about the drawing.
-A glider on a board with edges runs off it and there is nothing left in fifty generations; on
-a board with none it goes round for ever, and a board small enough to read on a screen is only
-worth watching if it does.
-
-**It never ends.** What it does instead is arrive somewhere the rule has nothing more to do,
-and there are two of those:
-
-| | what the screen says | what `step` does |
+| | or | |
 | --- | --- | --- |
-| a still life - a block, a beehive | *settled: 4 cells that will not change again* | refuses, and says why |
-| nothing left alive | *nothing is left alive* | refuses, and says to draw something |
+| `f7` | `toggle f7`, `t f7` | turn cell f7 on, or off again |
+| `step` | `s`; `.` at a terminal | one generation |
+| `step 10` | `s 10`, `10` | ten generations, up to 100 |
+| `run` | `p`; space or `p` in a browser | start the rule, or stop it |
+| `start` | `go` | start it, saying which outright |
+| `stop` | `pause`, `halt` | stop it, likewise |
+| `faster`, `slower` | `+`, `-`; `quicker` | wind the clock a notch |
+| `speed 7` | | straight to a notch, 1 to 9 |
+| `clear` | `c` at a terminal | sweep the board |
+| `why f7` | `ask f7` | what the rule will do with that cell, and why — a question, not a move |
+| `beat` | | one beat of the clock, spelt out, for a console with nothing to press |
 
-Neither of them takes the board away, which is the whole reason `Over` is `false` at this game
-and always will be. `Over` is what stops the engine taking moves; a board the rule has run out
-on is still a board to draw a glider on and let go.
+A cell is a letter for the column, `a` to `z`, and a number for the row, 1 to 16, in either case:
+`F7` is `f7`. A bare cell is a move and a bare number is a run, and the two cannot be mistaken for
+each other. The record keeps the long form — `toggle f7`, `step 10`, `run`, `start`, `stop`,
+`faster`, `slower`, `speed 7`, `clear`, `beat` — which is why the long form is read. A word that is
+neither is told what a cell looks like, and `step x` what a run looks like.
 
-**A still board and a beating one look identical in one frame**, and the difference is the only
-thing anybody watching wants to know. So the world carries the two generations behind it, and
-the heading says which of the three is happening: still going, settled, or beating between two
-shapes.
+`undo`, `redo`, `history`, `save`, `notes`, `commands`, `log`, `sound`, `mute`, `view`, `restart`,
+`players`, `help` and `quit` are [the table's](../../../README.md#at-the-prompt), the same at
+every game. `restart` deals another soup here, and `restart 42` that one.
 
-**The board is worked out rather than written down.** `Torus.Width` and `Torus.Height` are the
-only two numbers, and the cells, their names, the letters they are named by and every cell's
-eight neighbours all follow. What could be wrong with that is arithmetic rather than a typo -
-but arithmetic goes wrong too, which is why this game fills in the seam's `Faults` and says so
-before anybody sits down: a cell that is its own neighbour, a neighbour off the board, a cell
-whose name does not read back as the cell it was drawn on.
+## The board
 
-## No machine
+The heading says where the rule has got to — `Generation 4 - 5 cells alive`, `Generation 0 -
+settled: 4 cells that will not change again`, `Generation 2 - 3 cells, beating between two
+shapes`, `Generation 1 - nothing is left alive` — and under it are five blocks:
 
-`Skills` is empty, and the empty list is the honest answer rather than a gap.
+| | |
+| --- | --- |
+| The board | the grid, `#` for a living cell and `.` for an empty one, under the letters the columns are named by and beside the numbers of the rows, with a note on naming a cell |
+| The run | the generation, the living out of 416 squares, the speed and how to stop or start it, which of the four things is happening, and the rule as a note |
+| What next | `stop` or `run`, whichever applies, then `step`, `step 10`, `slower`, `faster`, `undo`, `clear`, `restart` — each is the line it types, and on a page each is a button |
+| Commands | the box of every command |
+| Log | what the game has been saying |
 
-A machine here would sit in the one seat and type `step` for ever - and it would: the engine
-plays the machines between one prompt and the next for as long as the seat to act is theirs,
-and a glider on a board with joined edges neither dies nor settles, so that run would never come
-back. The rule already plays this game, and the clock is what lets it: what the person at the
-keyboard does is decide when to let it run, which is a keypress rather than a seat.
+```
+=== Generation 4 - 5 cells alive ===
 
-## The board is drawn as rows, not as cells
+THE BOARD
+      abcdefghijklmnopqrstuvwxyz
+  6   ..........................
+  7   ........#.................
+  8   ......#.#.................
+  9   .......##.................
+  10  ..........................
+```
 
-Every other board here is a [`Walled`](../../../README.md#a-screen-described-once) grid: a cell
-with room in it, a wall round it and a button on it. This one is `Aligned` rows of spans, and
-that is a decision about the game rather than a shortcut. At four hundred and sixteen cells,
-every reader would draw something unreadable - a table four hundred columns of walls wide, or a
-page of four hundred boxes. What a cell of this board *is*, is one character in a shape made of
-its neighbours, and the shape is the whole point.
+`notes` hides the two notes, `commands` hides What next and Commands, and `log` hides the log. All
+three views draw the board as rows of text, a page included, with the What next buttons beside
+The run.
 
-So the controls are the things a player does over and over - `run` (captioned `stop` while it
-runs, because a caption that is not the line it types is a lie at a terminal), `step`, `step 10`,
-`slower`, `faster`, `undo`, `clear`, `restart` - and each carries the line it would type, which
-is how one description gives a browser its buttons and a terminal its words. While the clock is
-running a terminal draws none of them: the line saying which speed it is on and how to stop it
-stays, because that is the one thing somebody watching needs.
+At a terminal `p` runs and stops the rule, `.` steps it, `c` clears the board and `+` and `-` wind
+it, on the keypad too; Enter opens the prompt for anything longer, and the clock itself is
+[the engine's](../../../README.md#a-game-on-a-clock). While the clock beats — stopped or not, until
+space or `h` holds it, which is the table's key rather than a move — a terminal draws only the
+heading, The board and The run, and the log if it is on, which is why the line in The run saying
+which speed it is at and that `p` stops it is the one that stays. On a page, space and `p` run,
+`.` steps, `+` or `=` winds up and `-` or `_` winds down.
+
+`why f7` answers with a block for the cell: alive or empty, how many living cells are round it and
+which, and what the rule will do with it next. `history` lists every move with the generation it
+was made at and what it was told.
+
+Nothing is hidden: the one seat, called The watcher, is told everything the game says, and the game
+sounds nothing. It draws in one colour, the slot `live` — moss unless the
+[video page](../../../README.md#colours) or `--colour live=teal` says otherwise — for the living
+cells and for every cell named in the log.
 
 ## The files
 
-Eight files, in the same shape as every other game here.
+In the order the project compiles them:
 
-| File | Role |
+| | |
 | --- | --- |
-| [Torus.fs](Rules/Torus.fs) | The board, its names, its joined edges - and `step`, which is the whole of Conway's rule |
-| [World.fs](Rules/World.fs) | Where the game stands: the living, the two generations behind them, and the soup they were dealt from |
-| [Turn.fs](Rules/Turn.fs) | `Move`, and how far a run goes before something stops it |
-| [Words.fs](Rules/Words.fs) | Every string a player reads |
-| [Ink.fs](Reading/Ink.fs) | One colour, which is the fewest a game can have and still have any |
-| [Parse.fs](Reading/Parse.fs) | A cell, a count, and a question |
-| [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), which `Readers` then draws three ways |
-| [Offer.fs](Offer.fs) | Both seams filled in |
+| [Rules/Torus.fs](Rules/Torus.fs) | the board on a `Grid`, its joined edges and every cell's eight neighbours, and `step`, which is the whole of the rule |
+| [Rules/World.fs](Rules/World.fs) | where the game stands: the living, the generation after them, the two behind, the count, whether it is running and how fast, and the deal |
+| [Rules/Turn.fs](Rules/Turn.fs) | `Move`, what happens, what is refused, and how far a run goes before something stops it |
+| [Rules/Words.fs](Rules/Words.fs) | every string a player reads, and the line each move is written as |
+| [Reading/Ink.fs](Reading/Ink.fs) | the one colour slot, `#` and `.`, and the cell names painted in the log |
+| [Reading/Parse.fs](Reading/Parse.fs) | a typed line as a move or a question |
+| [Reading/Render.fs](Reading/Render.fs) | every screen as a `Scene`, the help, and the page's keys |
+| [Offer.fs](Offer.fs) | the `Playable`: the deal, the clock, the terminal's keys, and the faults that hold the board's arithmetic before anybody sits down |
+| [Program.fs](Program.fs) | the door, when Life is a program of its own |
 
-## What it turned up
+## Checks
 
-Writing a game the two seams were not shaped around found three things in code that had been
-right for four games:
-
-- **"1 players"** in the list of games and on the screen that asks how many are sitting down.
-  Both were written as a number and a word; neither had ever been handed a one.
-- **`'vs <skill>...' for ,`** at the front door of a game with no machines - a clause written
-  whatever the game said about having any.
-- **A block that loses its name.** A block inside a `Beside`, holding nothing but short lines,
-  comes out of the reader that builds panels narrower than its own header, and Spectre drops a
-  header that will not fit rather than saying so. Worked around here by giving the block a line
-  worth reading; the reader itself still has the hole in it, and it is the same hole the `Tile`
-  comment in [Readers.fs](../../Table/Parts/Readers.fs) describes.
+[life.fsx](../../../tests/life.fsx) loads [Living.fsx](../../../tests/Living.fsx) and holds the
+game to its board — 416 squares, eight distinct neighbours each, a corner touching the far corner,
+every name reading back — and to the rule: a lone cell dies, a block stands, a blinker turns over
+and comes back, a glider moves a square diagonally in four generations and ten in forty, edges and
+all. Then to its words, each refusal saying why and a refused move still written down; its one
+seat and its lack of a machine; the record read back and replayed; the three views drawing the
+ninth row cell for cell; the page's buttons being exactly the controls; and the clock — dealt
+running at notch 5, a beat a generation that says nothing, twenty beats at a stopped board writing
+nothing, winding, every key typing a line the game reads, and a record of beats replaying to the
+same board. It ends with `Conforms.against life 1 [ "a1"; "b2"; "step"; "run"; "clear"; "faster" ]`,
+the [contract](../../../README.md#tests) every game is held to.
+[counting.fsx](../../../tests/counting.fsx) holds `cells` and `generations`, and every refusal and
+happening that carries a count, to their nouns at nought, one and two.

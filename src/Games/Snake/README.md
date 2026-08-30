@@ -1,199 +1,214 @@
 # Snake
 
-The arcade game, and the one game here that does not wait for you. The sixth of the games, and
-the engine it runs on is [one directory up](../../../README.md).
-
-It is offered two ways, which are the same rules at two paces:
-
-| | | |
-| --- | --- | --- |
-| `snake` | on a clock | the snakes move on their own and quicken as they eat; you only steer |
-| `snake-turns` | a step at a time | the board waits for you, four can play round one keyboard, and the machines play here |
+The arcade game: a board of 24 by 14 with a wall round it, a snake each for 1 to 4 players, and
+one piece of food at a time. The snakes move on their own and quicken as they eat, and you only
+steer — or, played the other way, the board waits for you and a direction is a step. The two are
+one set of rules at two paces, and the engine they run on is [one directory up](../../../README.md).
 
 ```powershell
-dotnet run -- snake play 1                # the arcade game: arrows steer, space holds
-dotnet run -- snake serve 1               # the same, in a browser
-dotnet run -- snake play 2                # two snakes: arrows are A's, wasd are B's
-
-dotnet run -- snake-turns play 2 --rival hard   # the same board, a step at a time
-dotnet run -- snake replay logs/...-snake-1p-seed<n>.log   # one you put down
+dotnet run -- snake play 1                      # on the clock: the arrows steer, space holds
+dotnet run -- snake play 2                      # two snakes at one keyboard, the arrows and wasd
+dotnet run -- snake serve 1                     # the same, in a browser
+dotnet run -- snake-turns play 2 --rival hard   # a step at a time, against the machine
 ```
 
-## A game that does not wait, on an engine that folds
+## The rules
 
-The interesting half of this game is not the snake. It is that the engine underneath is a pure
-Model-View-Update fold — nothing happens until a message arrives — and an arcade game is the
-one shape that seems to need something else.
+Each snake is dealt 3 segments long, spread evenly down the board and facing in from the left and
+right edges by turns, with a piece of food on a square nothing is standing on, drawn from the
+deal's seed. A snake moves one square at a time, the way its head faces, and may go any way but
+back into its own neck — the square behind its head, wherever that is. Eating adds a segment,
+which arrives on the step after: the head goes on and the tail stays put once. The next piece
+lands at once, somewhere nothing is standing.
 
-It does not. **A beat is a move.** The game says what its beat is and how long a table should
-leave between them, and the *tables* keep the time:
+A snake stops when its head meets the wall, another snake, or itself, and what is left of it lies
+where it fell, for everybody else to go round. The square a tail is leaving is not in the way, its
+own or anybody's, since the tail has gone by the time a head arrives — unless that snake is
+growing, when its tail is staying where it is.
 
-```fsharp
-Pulse =
-    Some
-        { Every = every      // from where the game stands, so it quickens as the snakes eat
-          Beat = Beat        // an ordinary move, folded by the ordinary update
-          Pressed = pressed }  // and a key stands for a line this game already reads
-```
+At a table of one the game is over when the snake stops, and the score is what it ate. At a table
+of more it is over when one snake is left moving, and that one has won, or when none is.
 
-What that buys is that nothing about real time leaks into the game:
+**A step at a time** (`snake-turns`): the snakes go in seat order, a direction is one square that
+way, and a turn is one round of whoever is still moving; a snake that has stopped is passed over.
+`resign` stops your own snake, and the rest play on.
 
-- **The record is every beat.** A saved game replays to the square it was saved on, because
-  what is in the file is the moves — beats included — and not a stopwatch.
-- **`undo` walks back through beats** like any other move, and takes the food draw with it.
-- **Every rule in this game is checked without a clock.** [snake.fsx](../../../tests/snake.fsx)
-  folds beats by hand, and if any of it needed a timer the design would be wrong.
-- **All three tables drive it the same way**: a loop at a terminal, a timer in the process
-  serving a browser, and a timer per table in a house — each calls the same `beaten`, which is
-  four lines because a beat is a move and the tables were already generic in what a move is.
+**On the clock** (`snake`): every snake still moving steps at once, each beat, the way it faces,
+and a direction only turns a head — turning it where it already points does nothing. Every head is
+judged against the board as it stood when the beat began, so two heads that pick the same square
+both stop, a snake following another nose to tail is safe, and the head that lands on the food
+eats it. Two turns between one beat and the next are both taken, each checked against where the
+neck is and not against the way the head now points. `resign` stops every snake, because a resign
+carries no seat and on the clock nobody is to play.
 
-## Playing
+The clock has nine notches, and a fresh board starts at 5. A beat is 420ms less 40ms a notch,
+less 8ms for every piece the best-fed snake has eaten, and never under 50ms — so notch 5 opens
+at 220ms, notch 9 at 60ms, and a board that has been going a while tightens on its own. Winding
+the clock is a move: it is in the record, `undo` takes it back, and `restart` deals at 5 again.
+Winding past either end, or to the notch you are at, does nothing and says nothing; `speed 12`
+is refused.
 
-Every command that is not a direction — `undo`, `redo`, `history`, `save`, `notes`, `commands`, `log`,
-`view`, `resign`, `restart`, `help`, `quit` — belongs to the engine and is [documented
-there](../../../README.md). What this game adds is four ways to go, at two paces.
+Each way refuses the other's moves and says so: a direction on the clock is not a step, and `go`
+at a game of turns is not a beat.
 
-**On a clock**, a direction turns a head and the beat moves everything:
+## The words
+
+The compass is `north`, `east`, `south` and `west`, each also by its initial or by where it is on
+the screen — `n` or `up`, `e` or `right`, `s` or `down`, `w` or `left`. Typed, `w` is west; the
+keys, under [The board](#the-board), are another matter.
+
+A step at a time:
 
 | | |
 | --- | --- |
-| arrows | turn Snake A |
-| `wasd`, `ijkl`, number pad | turn B, C and D — four hands at one keyboard |
-| `north` (`n`, `up`) | the same, typed. A bare direction is A's |
-| `b north` | somebody else's, by the letter it is drawn with |
-| `go` | one beat, said out loud — for a console that cannot press anything |
-| `+` and `-` | wind the clock up or down a notch (`faster`, `slower`) |
-| `speed 7` | straight to a notch, from 1 to 9 |
-| space | hold the clock while you think - and read everything the running screen leaves off |
-| `r` | deal another board, once the clock has stopped (`restart`, which every game here takes) |
-| Enter | type a whole line, with the clock held while you do |
-| Esc | put it down |
-
-`r` only answers while the game is held or over, and that is the whole of the guard it needs: a
-key meant for a snake in the middle of a run would otherwise sweep the game away, and a game
-swept away by a mistyped key is a game nobody types a key at again. Typing `restart` works at any
-moment, as it does at every game here.
-
-**While the clock is running you get the board and nothing else** - the heading, the board, the
-score and the last few lines of what was said. The writing that explains the board, the box
-listing what can be typed and the list of ways to turn are all for somebody who has stopped to
-read them, and redrawing them three times a second under a board that has moved makes a screen
-nobody can follow. Space puts them back, because holding the clock is exactly the moment you
-wanted them. It is the same `notes` and `commands` setting either way, and saying either of
-those while held is what you get back next time you hold.
-
-**A step at a time**, a direction *is* a step:
-
-| | |
-| --- | --- |
-| `north` (`n`, `up`) | one square that way |
+| `north` | one square that way |
 | `go` (`on`, `ahead`) | straight on, the way you are already facing |
+| `why north` (`look north`) | what is one square that way, before you commit to it |
 
-Both take `why east`, which says what is one square that way before you commit to it.
+On the clock:
 
-**There is no `wasd` among the typed words, on purpose.** `w` is west on a board with compass
-points on it and up on a keyboard, and `d` is down to half the people who type it and right to
-the other half. The typed words are the compass; the *keys* are `wasd`, and every key sends a
-line that names its snake — `b north` — so a key can never mean a direction for somebody else's
-snake.
+| | |
+| --- | --- |
+| `north` | turn Snake A that way |
+| `b north` | turn Snake B — the snakes are lettered from `a` |
+| `go` (`beat`, `tick`) | one beat, said out loud |
+| `faster` (`quicker`, `+`), `slower` (`-`) | wind the clock a notch |
+| `speed 7` | straight to a notch, from 1 to 9 |
+| `why north` (`look north`) | as above |
 
-## Rules as implemented
+`resign`, `restart`, `undo` and the rest are the table's, read the same at every game and listed
+[there](../../../README.md#at-the-prompt); what `resign` stops is this game's, above. A record
+keeps a move as it is typed here — `north`, `go`, `a north`, `faster`, `speed 7` — so a record
+of the clock way is beats and steers, and replays beat for beat with no clock involved.
 
-- A board of 24 by 14 with **walls** at the edges. [Life](../Life/README.md) joins its edges and
-  this one does not, which is the difference between a board you can watch for ever and a board
-  that is a game.
-- One square a beat (or a turn), any way but **back into your own neck** — which is where the
-  neck actually is, not the opposite of the way the head points. On a clock those are different
-  questions: turning is not moving, so a snake can be turned twice between two beats, and it is
-  then facing one way while lying another. Asking about the facing let north-then-east through as
-  two legal presses and killed the snake on the next beat.
-- A snake starts three segments long. Eating adds one, and it arrives **on the next step**,
-  because a snake grows by keeping its tail rather than by gaining a head.
-- The next piece of food is placed the moment one is eaten, somewhere nothing is standing.
-- A snake stops when its head meets the wall, another snake, or itself. What is left of it lies
-  where it fell, and everybody else has to go round it.
-- At a table of one the game is over when the snake stops, and the score is what it ate. At a
-  table of more it is over when one is left moving, and that one has won.
-- `resign` stops your own snake at a game of turns. On a clock — where nobody was waiting on you
-  in the first place — it gives the whole game up.
+## The board
 
-**Everything moves at once on a clock**, and that costs three rules a game of turns never needed:
-
-- every tail that was going to move counts as gone, so snakes can follow each other nose to tail
-  and none of them is bitten by a square that was about to be empty;
-- two heads that pick the same square **both** stop, because neither of them got there first;
-- and a snake that stops on a beat still leaves its body there for whoever is still going.
-
-**How fast it goes is yours to set**, from the first beat or in the middle of a run: `+` and `-`
-wind the clock a notch, `speed 7` goes straight to one, and the board says which notch it is on
-while it runs. Nine notches, 40ms apart:
-
-| notch | 1 | 2 | 3 | 4 | **5** | 6 | 7 | 8 | 9 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| a beat | 380ms | 340ms | 300ms | 260ms | **220ms** | 180ms | 140ms | 100ms | 60ms |
-
-On top of the notch, the game quickens by 8ms for every piece the longest snake has eaten - a
-board that ran at one speed for ever would be a board with nothing to fear on it - down to a
-floor of 50ms.
-
-**The notch is in the position, not in a setting**, which is the one surprising thing about it. A
-clock could hardly be more obviously "how this is being read" — except that what a game hands the
-table is `Every: 'State -> TimeSpan`, so the only way the game can have an opinion is for the
-state to hold one. Which turns out to be the right place anyway: winding it up is a move, so it
-goes into the record, it replays, and it can be taken back. It does not outlive the game, though:
-a `restart` deals a fresh board at notch 5.
+A table of four dealt from seed 7, drawn plain with the notes off:
 
 ```
-+------------------------+
-|........................|
-|....aaA.................|
-|........*.........Bbb...|
-|........................|
-+------------------------+
+=== Beat 1 - Snake A (you), 3 segments, ate nothing yet ===
+
+THE BOARD
+  +------------------------+
+  |........................|
+  |.aaA....................|
+  |........................|
+  |......*.................|
+  |....................Bbb.|
+  |........................|
+  |........................|
+  |.ccC....................|
+  |........................|
+  |........................|
+  |....................Ddd.|
+  |........................|
+  |........................|
+  |........................|
+  +------------------------+
+
+THE SNAKES
+    Snake A (you)  3 segments  ate nothing yet  facing east
+    Snake B        3 segments  ate nothing yet  facing west
+    Snake C        3 segments  ate nothing yet  facing east
+    Snake D        3 segments  ate nothing yet  facing west
+  clock at speed 5 of 9 - 'faster' and 'slower', or + and -
 ```
 
-A snake is its own letter: small along the body, capital at the head, so a board tells you which
-way everything is pointing at a terminal with no colour in it. A snake that has stopped is drawn
-as `#` in the quiet colour, because what it is now is an obstacle.
+A snake is its own letter, small along the body and capital at the head, so a board with no colour
+in it still says which way everything points; the food is `*`, and a snake that has stopped is
+`#` in the quiet colour, because what it is now is an obstacle. The heading is your snake's — at a
+game of turns, whoever is to play — and once the game is over it is the score. `The snakes` has a
+row each, with `->` at the one to play. `Which way` is the lines you could type next: your own
+snake's four turns, `slower`, `faster` and `restart` on the clock; the four directions, `go` and
+`restart` at a game of turns. On a page each is a button, drawn for the seat looking at it. Two
+notes explain the board and the pace, and go with `notes`. `why north` answers with what is one
+square that way — open board, the wall, the food, its own body, Snake B, or what is left of Snake
+B — how many steps the food is from there, and a warning when that way is its neck.
+
+The four snakes and the food are the colour slots, `a` to `d` and `food`: moss, crimson, azure,
+violet and gold unless [set otherwise](../../../README.md#colours), and a snake's name is painted
+in its colour wherever it is written. `plain`, `rich` and `html` are drawn from the same
+[scenes](../../../README.md#screens) and show the same things. Nothing is hidden — every seat is
+told the same — and nothing rings.
+
+On the clock the keys are hands rather than seats, at a terminal and on a page alike:
+
+| | |
+| --- | --- |
+| the arrows | turn Snake A |
+| `w` `a` `s` `d` | turn Snake B |
+| `i` `j` `k` `l` | turn Snake C |
+| `8` `4` `5` `6` on the number pad | turn Snake D — on a page, any key that types those |
+| `+`, `-` | `faster`, `slower`; a page takes `=` and `_` as well |
+
+Each sends a line the game reads, and the arrows send `a north` wherever they are pressed, so a
+key can never turn somebody else's snake by mistake; at a table with the players at different
+machines a page's arrows are still Snake A's, and Snake B's player steers with `wasd` or the
+buttons. The rest of the keys are [the table's](../../../README.md#a-game-on-a-clock): at a
+terminal space holds the clock and brings back the notes and the box of commands, which go while
+the board is moving; `r` deals another board once the clock is held or the game is over, and not
+before; Enter opens the prompt and Esc puts the game down. A game of turns has no keys and no
+clock, and is played at the prompt.
 
 ## The machine
 
-At the pace that has turns, where a machine has a turn to take. Three ways of playing, and the
-difference between them is one question: **how much room does this step leave me in?**
+Three skills, at `snake-turns` only. Each looks at every way its snake can go that is not back into
+its neck and does not stop it, and rates a step by four things compared in order: whether the room
+it leaves is at least the snake's own length, whether it eats, how much nearer the food it lands,
+and the room itself. The room is a flood fill out from the square the head would land on, over
+everything no body is standing on, and only `hard` counts it; the other two take the whole board
+for the room, so the first and last never tell them anything. A slip is a step taken at random
+from the ones that do not stop it, rather than the best it can see; if every way stops it, it
+takes one anyway.
 
 | | `easy` | `medium` | `hard` |
 | --- | --- | --- | --- |
-| walks into things | often | never | never |
 | counts the room a step leaves | no | no | yes |
-| plays something other than its best | 35% | 5% | never |
+| slips | 35 in 100 | 5 in 100 | never |
 
-Anybody can see that the square in front of them is empty. What kills a snake is the square it
-will want four moves from now, and the cheapest honest way to ask about that is to count how
-many squares can still be reached from the one you are about to stand on.
+There is no machine on the clock: the engine plays a machine's turns between one person's move
+and the next, and on the clock there is no such turn. How a machine is seated and held is
+[the engine's](../../../README.md#against-the-machine).
 
-**There is no machine on the clock**, and the empty list is the honest answer rather than a gap:
-the engine plays a machine's turns between one person's move and their next, and at a table
-where nobody's turn it is there is no such gap. A rival there would have to be steered by the
-beat, which is a thing to build rather than a thing to pretend.
+## Settings
+
+`snake` and `snake-turns` are one game offered two ways, each a `Playable` of its own with the
+same rules behind it. Which one a new game is dealt as is settled on the game's
+[settings page](../../../README.md#settings) — `plays snake-turns` under `[snake]` in
+`settings.txt` — or by naming the way on the command line, as `dotnet run -- snake-turns play 2`
+does; a record replays the way it was played. The video page sets the five colours above.
 
 ## The files
 
-Ten files, in the same shape as every other game here.
-
-| File | Role |
+| | |
 | --- | --- |
-| [Board.fs](Rules/Board.fs) | The board, the four directions, and a step - which may leave the board, because that is what makes a wall hittable |
-| [Snakes.fs](Rules/Snakes.fs) | One snake: the body head-first, what it owes itself in growth, and how it stopped |
-| [Session.fs](Rules/Session.fs) | The table: the snakes, the food, the pace, and the generator the next piece comes from |
-| [Turn.fs](Rules/Turn.fs) | `Move`, `Ahead`, a step, and the beat that moves everything at once |
-| [Words.fs](Rules/Words.fs) | Every string a player reads |
-| [Rival.fs](Rules/Rival.fs) | A seat played by the program: what a step is worth, and how much room it leaves |
-| [Ink.fs](Reading/Ink.fs) | Five colours - one per seat, and the food |
-| [Parse.fs](Reading/Parse.fs) | Two readers, one per pace: at one a direction is a step, at the other it turns a named snake |
-| [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), and the keys a page steers with |
-| [Offer.fs](Offer.fs) | Both seams filled in, twice - one `Playable` per pace |
+| [Rules/Board.fs](Rules/Board.fs) | the 24 by 14 grid, the four directions, and a step along one — which may leave the board, which is what a wall is |
+| [Rules/Snakes.fs](Rules/Snakes.fs) | one snake: its body head first, the way it faces, the growth it is owed, what it has eaten, and how it stopped |
+| [Rules/Session.fs](Rules/Session.fs) | the table: the snakes by seat, the food and the generator it comes from, whose turn, the pace and the notch; the deal and the endings |
+| [Rules/Turn.fs](Rules/Turn.fs) | the moves and what they do — a step, a steer, a winding, a resign — and the beat that moves everybody at once |
+| [Rules/Words.fs](Rules/Words.fs) | every word a player reads, and how a move is written in the record |
+| [Rules/Rival.fs](Rules/Rival.fs) | the three skills: what a step is worth, and how much room it leaves |
+| [Reading/Ink.fs](Reading/Ink.fs) | the glyphs, the five colour slots, and the marking that paints a snake's name |
+| [Reading/Parse.fs](Reading/Parse.fs) | two readers, one a way: a direction as a step, or as a turn of a lettered snake |
+| [Reading/Render.fs](Reading/Render.fs) | every screen as a scene — the board, the record, the answer to `why`, the rules, the waiting room — and the page's keys |
+| [Offer.fs](Offer.fs) | the seam filled in twice, one `Playable` a way: the deal and its faults, the clock, the keys, and the machines at one pace |
+| [Program.fs](Program.fs) | the door: this game as a program of its own |
 
-`Ahead` — wall, snake, food or open board — is a type rather than three tests written out where
-they are wanted, because three things ask that question and they must not come to disagree: the
-rules, to say what a step did; the machine, to pick one; and the screen, to answer a player who
-asked what is over there before committing to it.
+## Checks
+
+[snake.fsx](../../../tests/snake.fsx) loads [Slither.fsx](../../../tests/Slither.fsx), the harness
+that compiles the files above, and holds the game to: the deal at every size and its faults; a
+step, the tail following, and no turning back; eating, the segment arriving a step later, the next
+piece drawn where the same deal draws it, and `undo` taking the draw back; the three stops and the
+tail rule, growing or not; four seats in order, a resign passed over, and each ending in its words;
+on the clock, a beat and a steer, two quick turns, two heads on one square, following a tail,
+eating on the beat, the notches and the floor, and winding as a move; every key a line the game
+reads, and the page's keys the same list; a record written in beats and steers that replays with
+no clock; the three views and the page, block by block; and the machines played out, `hard`
+eating more than three times what `easy` does and the same seed playing the same game. It ends
+with [Conforms.against](../../../README.md#tests) for both ways — `beat`, `faster`, `slower` and
+`b north` on the clock, `go`, `north` and `go` a step at a time.
+
+[counting.fsx](../../../tests/counting.fsx) holds the counts of segments, steps and pieces eaten to
+their nouns at nought and one, and [records.ps1](../../../tools/records.ps1) takes the Snake
+records in `logs/` back up on every CI run.

@@ -1,270 +1,329 @@
 # Diplomacy
 
-The standard board, played by the standard rules. Seven powers, seventy-five provinces,
-thirty-four supply centres, and no chance in it anywhere — not a die, not a shuffle, not a
-card. Hold eighteen centres and you have won.
+The standard board, played by the standard rules: seven powers, seventy-five provinces,
+thirty-four supply centres, and no chance in it anywhere - not a die, not a shuffle, not a
+card. Every power writes its orders in secret and they are all carried out at once. Hold
+eighteen centres and you have won.
+
+It takes seven, and exactly seven. Seat 1 is Austria and seat 7 is Turkey at every game -
+the seats run Austria, England, France, Germany, Italy, Russia, Turkey - and the seats nobody
+is in are given to the machine with `--rival`, once for each.
 
 ```powershell
-dotnet run -- diplomacy play 7      # seven seats at this keyboard
-dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard --rival hard --rival hard --rival hard    # one of you, in a browser
-dotnet run -- diplomacy host 7      # seven of you, at your own machines
-
-dotnet run -- diplomacy replay logs/...-diplomacy-7p-seed<n>.log        # take a saved game up
-dotnet run -- diplomacy host --from logs/...-diplomacy-7p-seed<n>.log   # ...and let others join
+dotnet run -- diplomacy play 7          # seven seats at this keyboard
+dotnet run -- diplomacy host 7          # seven of you, at your own machines
+dotnet run -- diplomacy serve 7 --rival hard --rival hard --rival hard --rival hard --rival hard --rival hard
 ```
 
-**A game of this takes a while, so put it down and come back.** `quit` writes the record and
-leaves the board exactly as it stands; `Continue a game` at the menu lists what there is to
-take up, and `replay` names one outright. Either way the same powers come back played by the
-same machines at the same strength. Conceding is `resign`, which is a different thing said on
-purpose.
+The last is one of you in a browser, as Austria, against six machines. A game of this takes a
+while, so put it down and come back: `quit` keeps it, and [a record](../../../README.md#records)
+is taken up against the same machines at the same strength. The rest of playing it - the menu,
+the prompt, a table others join - is [the engine's](../../../README.md).
 
-And it need not be taken up the way it was put down. `--from` works on `play`, `serve` and
-`host` alike, so a game you started against six machines at this keyboard can be reopened as a
-table your friends join — they take the seats the machines were not playing, and the machines
-keep theirs.
+## The rules
 
-[A year](#a-year) · [The orders](#the-orders) ·
-[The map](#the-map) ·
-[Points the rules leave to the adjudicator](#points-the-rules-leave-to-the-adjudicator-decided-here) ·
-[The machine](#the-machine) · [The files](#the-files)
+**The board.** Seventy-five provinces: nineteen seas, fourteen landlocked and forty-two on a
+coast. Thirty-four are supply centres - twenty-two home centres, three to a power and four to
+Russia, and twelve neutral - and each power opens with a unit on each of its homes, twenty-two
+units in all, Russia's northern fleet on St Petersburg's south coast. Armies walk the land.
+Fleets sail the seas and along the coasts and cannot cross a land border - a fleet in Rome
+sails to Naples and not to Venice - and the two maps are written out separately, since neither
+follows from the other. Spain, Bulgaria and St Petersburg have two coasts each, facing
+different waters: a fleet standing there stands on one of them, and a fleet sent there says
+which.
 
-The third game written here, and the engine it runs on is
-[one directory up](../../../README.md). Every command that is not about this board - `undo`,
-`redo`, `history`, `save`, `notes`, `commands`, `log`, `view`, `restart`, `help`, `quit` - belongs to the engine
-and is documented there.
+**A year.**
 
-**Seven, and exactly seven.** There is no variant here for a table of five, and there should
-not be: the balance of the whole thing is built on all seven home countries being played. A
-seat with nobody in it is given to the machine, which is what `--rival` is for — once per seat
-you are giving away. Seat one is Austria and seat seven is Turkey, at every game there will
-ever be, so a record reads the way anybody who plays this would write it.
+| Phase | Reads | Asked of |
+| --- | --- | --- |
+| Spring, Autumn | `Spring 1901`, `Autumn 1901` | every power with a unit: an order for each, then `commit` |
+| Retreats | `Spring 1901 retreats` | every power with a unit beaten out: where each goes, or `disband`, then `commit` |
+| Winter | `Winter 1901` | every power with more centres than units, or fewer: builds or removals, then `commit` |
 
-**It is here to lean on the seams.** Noughts and crosses tests them by being small; this one
-tests them by being unlike everything else the machinery had been asked for. Seven seats. No
-chance at all. Orders written in secret by every power at once. A year made of three kinds of
-phase, two of them skipped most years. A move that changes nothing on the board and is still
-the most important thing anybody does. And a map with more borders than a honeycomb has sides.
-[What that turned up](../../../README.md#what-a-third-game-found) is in the engine's README.
+A phase with nobody to ask is passed straight through: a season that dislodged nobody goes on
+to the next, and a winter where every power is square - or owes builds and has no free home to
+build in - is passed over, so a quiet year is two phases. The record counts phases rather than
+years: Spring 1901 is turn 1, Autumn 1901 turn 2 and Winter 1901 turn 3 whether or not anybody
+had anything to do in it, and a season's retreats are a turn of their own only when somebody
+was beaten out.
 
-## A year
+Centres change hands once a year, on the way into the winter - after the autumn's retreats, if
+there were any: a centre with a unit standing on it passes to that unit's power, and one with
+nobody on it keeps its owner. A power with eighteen at that count has won outright and the game
+is over. It is over too when one power alone is left with anything on the board, the rest out
+of the game or walked away, and when everybody has walked away.
 
-| Phase | What is asked for |
-| --- | --- |
-| Spring, Autumn | An order for each of your units, then `commit` |
-| Retreats | Where each beaten unit goes, or `disband` |
-| Winter | Builds or removals, to match your centres |
+**Everybody writes at once.** The seats come round one at a time, Austria first, and what a
+power writes stays its own business until the last of them has committed: the others are told
+that it wrote an order for Vienna, and no more. Then the whole phase resolves and everybody sees
+all of it together. An order written again for the same unit replaces the first, `cancel vie`
+takes one back, and `commit` seals a power's orders and passes the prompt to the next power
+still writing, after which nothing of that power's can be changed. A unit with no order holds.
+An order for an empty province, or for another power's unit, is refused.
 
-The centres are counted once a year, after the autumn's retreats. **A phase with nobody in it
-is skipped without anybody being stopped to be asked** — most seasons dislodge nobody and most
-winters owe nothing, so a quiet year is two phases and not five.
+**Orders.** A unit may hold, move to a province it borders, support another unit holding or
+moving, or - a fleet at sea - convoy an army from one coast to another.
 
-**Everybody writes at once.** The seats come round one at a time, and what any of them has
-written stays that power's own business until the last of them has committed. Then the whole
-season resolves and everybody sees all of it together. That is not a concession to the
-machinery — it is exactly the guarantee that writing orders at one table in one room is
-supposed to give.
+- One unit beats one unit. A move is as strong as the unit making it and every support given it
+  that stands; so is a hold. A move goes through when it is stronger than what holds the
+  province and stronger than every other move into it; equal strengths bounce, and nobody
+  enters. A unit beaten out of its province is dislodged and must retreat.
+- A support names a unit and, for a move, the province it is going to, and the supporting unit
+  must itself be able to reach the province the support is aimed at. It is cut by another
+  power's attack on the supporting unit from any province but that one - the unit under attack
+  cannot cut the support against it, short of dislodging the supporter - and an attack that
+  never arrives, a convoy with no water under it, cuts nothing. A support for something the
+  named unit is not doing counts for nothing.
+- A power never dislodges its own unit: a move against one is worth nothing, and support it
+  gives to somebody else's attack on one does not count towards driving it out.
+- Two units ordered into each other's provinces meet head-on: the stronger dislodges the
+  weaker, equals bounce, and neither passes the other - unless one of them is convoyed, in
+  which case they pass. A unit that gets out of its province counts as gone, so a column steps
+  forward at once and a ring of units each moving into the next's province all goes round.
+- Two or more moves into one province that all bounce leave it contested, and nothing may
+  retreat into it that season.
+- A convoy carries an army from one coast to another. The army sails if fleets at sea, each
+  ordered `c <army> - <destination>` and none of them dislodged, run from a sea washing where
+  the army stands to one washing where it is going; a chain broken anywhere leaves the army
+  where it is.
 
-## The orders
+**Retreats.** A dislodged unit may go to any province it could have moved to that is empty once
+the season has settled, is not contested, and is not the one its attacker came from - unless
+the attacker came by sea. Retreats are not supported: a beaten unit with no order written is
+disbanded, and two retreating into the same province are both disbanded.
 
-| Order | Written |
-| --- | --- |
-| Hold | `vie hold` |
-| Move | `vie - tri`, and `mao - spa/nc` where a province has two coasts |
-| Support a unit where it stands | `bud s vie` |
-| Support a move | `bud s vie - tri` |
-| Convoy an army over water | `nth c lon - bel` |
-| Retreat | `vie - tri`, the same as a move |
-| Disband, build | `disband vie`, `build a vie`, `build f stp/sc` |
-| Take one back | `cancel vie` |
-| Finish | `commit` |
+**Winter.** A power owes the difference between its centres and its units. Builds go on a home
+centre of its own that it still holds and that stands empty - an army anywhere, a fleet only on
+a coast, and on a named coast at St Petersburg - and are its to make or not. Removals are owed
+in full: it names the units to give up, and any it does not name are taken for it, furthest
+from any of its home centres first, walked by land and sea alike, fleets before armies at the
+same distance. It cannot write more builds or removals than it owes.
 
-Provinces are named by their first three letters, or by their name with the spaces taken out —
-`stp` and `stpetersburg` are the same place. `A vie - tri` works too; the piece is named in
-every printed set of these rules and the order does not need it.
+**Press.** `press france ...` is read by France and by nobody else; `press all ...` by the
+table. Everybody is told that a word went and nobody else what was in it, and a power cannot
+send word to itself. Press is a move like any other - it is in the record, and `undo` takes it
+back - and nothing in the rules makes anybody keep a promise. The machine does not read it.
 
-**Talking** is `press france <anything>`, read by France and by nobody else, or `press all
-<anything>` for the table. Everybody is told that a message went and nobody else is told what
-was in it. Nothing in the rules makes anybody keep a promise, and that is the game. The machine
-does not read its press.
+**Walking away.** `resign` does not end a game of seven. The power that walks away takes back
+whatever it had written this phase, and from then on its units stand where they are: beaten
+out, they are disbanded, and owed as removals they are taken furthest from home first. Its
+centres stay its own until somebody stands on them at an autumn count, and it is never asked
+anything again. A power with neither a unit nor a centre is out of the game.
 
-**Walking away** is `resign`, and it does not end a game of seven because one power left: its
-units stand where they are and are taken off the board as they are pushed out, which is what
-these rules call civil disorder. Units it owes and does not name are taken furthest from home
-first, so a table never waits forever on somebody who has gone.
+### Points the rules leave to the adjudicator
 
-## The map
-
-Armies walk the land; fleets sail the water and hug the coast. **They do not travel the same
-map**, and neither graph can be worked out from the other: Rome and Venice border, and a fleet
-cannot use it. Spain, Bulgaria and St Petersburg have two coastlines each that face different
-waters, so a fleet standing there is standing on one of them and a fleet sent there has to say
-which — unless only one is reachable from where it is, in which case being asked would be
-pedantry rather than a rule.
-
-The board is drawn as a honeycomb, and **a province takes as many hexes as it needs**. There
-are no walls inside one: a province is drawn as a single shape with its name written across it,
-and where its centre is held the shape is **outlined in that power's colour**. One hex of each
-carries the letter of whoever holds the centre (or a `*` where nobody does), and under it
-whatever is standing there.
-
-**A name between tildes is open water** — `~nth~` is the North Sea, and only a fleet can go
-there. It is said in characters and not only in colour, because the plainest terminal draws no
-colour at all and half of what you may do turns on whether a province is wet. The water has a
-colour of its own on top of that, which is the eighth thing this game says it colours and can be
-changed like any of the others.
-
-```
-    ╰──╮  ╰──╮  ╰─────╯  ╭─────┬──┴──┬──┴─────┴──────────────┬─────┬─────┬──┴──╮  ╰──╮
-       │~iri~│ lvp   lvp │ wal │ yor │~nth~ ~nth~ ~nth~ ~nth~│~ska~│swe* │ fin │ stp │
-       │     │           │     │     │                       │     │     │     │     │
-    ╭──┴──╮  ╰────────┬──╯  ╭──┴──┬──╯  ╭─────╮     ╭────────┴──┬──╯  ╭──┴──┬──╯  ╭──┴──╮
-```
-
-Liverpool is two hexes and the North Sea four, and each is one outline.
-
-**There is one hole in the map, and it is Switzerland.** A gap used to be load-bearing here —
-it was what kept two provinces that do not border from being drawn side by side — and there were
-a good many. Once every border was drawn most of them were keeping nothing apart, so they were
-filled in. The four cells left over sit between Marseilles, Burgundy, Munich, Tyrolia and
-Piedmont, which are exactly the five provinces that ring Switzerland on the printed board, and
-nothing may ever enter it. That is checked too, so a gap anywhere else is an accident rather than
-scenery.
-
-**Why more than one hex.** A hexagon has six sides, and provinces on this board have up to
-eleven neighbours — so one hex a province caps the picture at about half its borders, which is
-exactly where the first version of this map stuck. A region three or four hexes across has
-sides to spare and can touch everything it really touches. **All two hundred and six borders are
-drawn.**
-
-**What the picture promises.** Turncoats prints
-[a honeycomb](../Turncoats/README.md#drawn-as-a-map) whose every border can be drawn, because
-its board really is a patch of a triangular lattice — the picture *is* its border table. This
-board was thought not to be able to manage that, and for a long time the promise here was
-one-directional. It is both directions now, and it is checked before a game is ever dealt:
-
-> **Every side the map draws between two provinces is a real border, and every border is drawn.**
-
-So two provinces share a side exactly when they border each other, and two drawn apart do not.
-What you can see is what a piece can do.
-
-A side between two hexes of the *same* province is not a border but the inside of a country: it
-is no part of either half of that claim, and it is not drawn at all. `Atlas.problems` walks the
-layout against the border tables, refuses to deal onto a map that draws a side which is not
-there **or** leaves out one that is, and also refuses one that draws a province in two separate
-pieces. The drawing itself is checked too — [diplomacy.fsx](../../../tests/diplomacy.fsx) counts
-the walls the layout calls for and then counts the walls on the board, so a picture that put a
-wall through the middle of a country or ran two countries together would fail even with the
-tables underneath it perfectly honest.
-
-**The shapes were grown, not drawn.** The regions were seeded a hex apiece at roughly the right
-places and then spread outwards, one hex at a time, always into the space that met a neighbour
-they had not met yet and never into one that would put them beside a province they do not
-border. That is why some shapes are odd — the Norwegian Sea wraps round the Barents, the Ionian
-round the Eastern Mediterranean. Those are the shapes that make the adjacencies come out right,
-and the adjacencies are what a map of this is *for*.
-
-**What the grower could not do is back out of a corner.** It only ever added a hex where one was
-free and safe, so wherever the right answer was to take a hex off somebody or move a province
-across, it stopped — and stopped somewhere that broke no rule and made no sense. Those places
-have been put right by hand since, and every one of them is that same failing:
-
-- The **Mid-Atlantic** was the worst-served province on the board. It now runs the whole western
-  margin, round the foot of Portugal and along the top of North Africa at one end and up past
-  Ireland to the North Atlantic at the other, and reaches all ten of the provinces it borders.
-- The **Barents** had been left mid-row with the Norwegian Sea on either side and nothing else in
-  reach — no use at all when the whole point of it is that Russia's northern fleet sails into it.
-  It sits above Norway and St Petersburg now. Moving it freed the column between Edinburgh and
-  Norway, which is the Norwegian Sea in any atlas and is drawn as it now, so that sea runs down to
-  meet the North Sea.
-- The **Eastern Mediterranean** was the Barents over again: one hex in the middle of the Ionian,
-  with Ionian on all six sides and none of the three provinces it exists to touch. It is at the
-  east end of the bottom row now, under Smyrna and Syria with the Aegean beside it.
-- **Burgundy** and **Munich** were short of each other and of Ruhr, penned in by a row of Piedmont
-  that was doing nothing — three of Piedmont's six hexes touched only Piedmont and empty space.
-  Handing that row to Burgundy joins all three, and what is left of it is the gap between France
-  and Italy, which is the Alps and belongs there.
-- **Italy** took two cells. The empty one between Rome and Venice went to Rome, Piedmont's
-  southern tip went to Venice, and with that Rome, Venice, Tuscany, Apulia, Naples and Piedmont
-  all touch everything they border.
-- **Armenia with Sevastopol** and **Moscow with St Petersburg** were the last two, and they are
-  why the promise above can be made in both directions. Sevastopol takes one more hex east of the
-  Black Sea and Armenia one under it; St Petersburg runs down the far side of Livonia on three
-  cells that had nothing in them.
-
-For the rest, ask:
-
-```
-borders vie      what a piece in Vienna could reach, by land and by sea
-where mun        what is standing there, who holds the centre, and where it is
-```
-
-That answer comes out of the same table the adjudicator walks, so it cannot be out of date and
-cannot be wrong. In a browser every unit carries the question as a button beside its orders.
-
-## Points the rules leave to the adjudicator, decided here
-
-- **Convoy or march.** An army ordered somewhere it can walk to is walking, whatever fleets are
-  sitting in the water beside it; an army ordered somewhere it cannot is asking to be carried.
-  Decided by the map rather than by reading intent into the order, which is what saves this
-  from needing a rule about intent.
-- **Paradoxes.** A convoy that holds only if it is not attacked and is attacked only if it
-  holds is broken by disrupting the convoy — Szykman's rule, which is the one most sets of
-  these rules end up at. A ring of units all moving is not a paradox and all of it gets through.
-- **Support to a province, not to a coast.** A support names provinces; which coast the
-  supported unit lands on is its own business.
+- **Convoy or march.** An army ordered somewhere it can walk to walks, whatever fleets are
+  sitting in the water beside it; an army ordered to a coast it cannot walk to is asking to be
+  carried. The map decides, not the wording of the order.
+- **Paradoxes.** Orders that come out differently depending on what they are assumed to come out
+  as are a ring. A ring of plain moves all goes through - a circle of units may rotate. A ring
+  with a convoy in it is broken at the convoy: the fleets are taken as broken, which is what
+  stops a fleet carrying the very attack that would dislodge it (Szykman's rule).
+- **Support to a province, not to a coast.** `s mao - spa` names Spain; which coast the fleet
+  lands on is its own business.
+- **A coast left unsaid.** A fleet sent to a province with two coasts and told neither is put on
+  the only one it can reach, and asked which when it could reach both. An army is never on a
+  coast, and is refused one.
 - **Retreat as a move.** `vie - tri` in a retreat phase is a retreat, because the parser reads a
   line without being told which phase the game is in and one line should not mean two things.
+- **Nothing said.** A beaten unit nobody gave a retreat is disbanded, a removal nobody named is
+  chosen as above, and a build nobody wrote is not made.
 
+## The words
+
+An order names the unit by the province it stands in and nothing else: `vie - tri`, though
+`A vie - tri` is let through, `a`, `f`, `army` and `fleet` being ignored. A province is its
+code, the three letters written across it on the map - `vie`, `tri`, `nth` - or its name with
+the spaces taken out, `stpetersburg`, `northsea` (the Mid-Atlantic, whose name has a dash in
+it, is `mao`). A coast follows a slash: `spa/nc`, `spa/sc`, `bul/ec`, `bul/sc`, `stp/nc`,
+`stp/sc`. Capitals do not matter, and `-` may be `>`, with or without spaces round it.
+
+| Order | Written | Also read |
+| --- | --- | --- |
+| Hold | `vie hold` | `vie h`, `vie holds` |
+| Move | `vie - tri`; `mao - spa/nc` where there are two coasts | `vie > tri` |
+| Support a unit where it stands | `bud s vie` | `bud support vie` |
+| Support a move | `bud s vie - tri` | `bud support vie - tri` |
+| Convoy | `nth c lon - bel` | `nth convoy lon - bel` |
+| Retreat | `vie - tri`, as a move | `vie r tri`, `vie retreat tri` |
+| Disband, a beaten unit or one given up in a winter | `disband vie` | `remove vie`, `vie disband`, `vie d` |
+| Build | `build a vie`, `build f tri`, `build f stp/nc` | `build army vie`, `build vie f` |
+| Take an order back | `cancel vie` | `clear vie` |
+| Finish | `commit` | `done`, `ready`, `seal` |
+| A word to one power | `press france leave Trieste alone` | the power by name, adjective, letter or first three letters: `press french`, `press f`, `press fra` |
+| A word to the table | `press all nobody move` | `press table`, `press everyone` |
+
+Press keeps its capitals, and is closed with a full stop unless you closed it yourself.
+
+Three questions are answered on the spot. They are not moves, so they reach neither the record
+nor the other players:
+
+| | |
+| --- | --- |
+| `borders vie` | whether it is landlocked, a coast or open sea, and everywhere an army and a fleet could reach from it - from each coast, where there are two |
+| `where mun` | what stands there, which region it is in, and whose centre it is |
+| `orders` | what you have written this phase |
+
+`resign` is the table's word and stands for walking away, above. `undo`, `history`, `save`,
+`notes`, `view`, `quit` and the rest are the table's too, and are
+[in the main README](../../../README.md#at-the-prompt).
+
+## The board
+
+The screen is headed by the phase and who is to write - `=== Spring 1901 - Austria (you) to
+write ===` - and holds four blocks of the game's own, then the table's commands and log:
+
+| | |
+| --- | --- |
+| **The powers** | one a row: `>` at the power to write, its centres, its units, and where it stands - `still writing`, `committed`, `nothing to do`, `walked away`, `out of the game` |
+| **Your orders** | in a season, each of your units with what you have written for it, `-` for nothing yet, then for each unit still unwritten the lines it could type - `bud hold`, every `bud - ...`, `borders bud` - and `commit`. In a retreat phase, each beaten unit, its ways out and `disband`. In a winter, `1 to build`, `2 to give up` or `nothing owed`, what is written, and a tile for each home centre with room in it or each unit that could go |
+| **The board** | the map |
+| **Last time round** | every phase resolved since you were last asked, in full: each unit's order and what came of it, then who retreated where, who was disbanded, raised or given up, and every centre that changed hands - `Serbia to Austria` |
+
+In a browser every line a unit could type is a button. No order another power has written
+appears anywhere until the phase resolves.
+
+What came of an order is one of nine words:
+
+| | |
+| --- | --- |
+| `moves to tri` | the move went through |
+| `held up` | it bounced |
+| `stands` | a hold, or a unit with no order |
+| `support given`, `support cut`, `nothing to support` | a support that stood, one that was cut, and one whose unit was not doing what it said |
+| `convoy holds`, `convoy broken` | a convoying fleet that stood, and one dislodged |
+| `no way across` | an army whose convoy never sailed |
+
+**The map** is a honeycomb, 282 hexes in nineteen rows, 120 columns wide on a screen that asks
+for 138. A province takes as many hexes as it needs and is drawn as one shape with its code in
+every hex; a wall runs between two provinces exactly where they border, by land or by sea, and
+never through the inside of one - all 206 borders are drawn, and what you can see is what a
+piece can do. The one hole in it is Switzerland, four hexes between Marseilles, Burgundy,
+Munich, Tyrolia and Piedmont, which nothing may enter.
+
+```
++--+--+-----+--------------+--+--+  +--+     +--+-----+--------------+--+-----+--+--+--+
+|breF | pic |bel*   bel   bel | hol | kie   kie |berG | pru   pru   pru |warR |mosR |
+| F F |     |                 |     |           | A G |                 | A R | A R |
++--+  +--+  +--+           +--+  +--+           +--+  +--+           +--+     +--+  +--+
+```
+
+A sea's name is written between tildes, `~nth~`, and in the sea's own colour. On the first hex
+of every province, reading along the rows: for a supply centre, the letter of the power that
+holds it or `*` where nobody does, and under the name whatever stands there - `A` or `F` and
+its power's letter. Here Brest is French and holds a French fleet, Belgium is nobody's, and the
+army in Berlin is German. A province whose centre is held is outlined in that power's colour,
+in `rich` and in a browser.
+
+The map is written in [Atlas.fs](Rules/Atlas.fs) as nineteen strings, one a row, a code to a
+hex and `.` for a hole, each row starting half a cell along from the last. `Atlas.problems`
+walks that picture against the two border tables and refuses to deal on one that draws a side
+which is not a border, leaves out one that is, or draws a province in two pieces.
+
+**Colours.** Eight slots, each settable [as any colour is](../../../README.md#colours): the
+seven powers - Austria crimson, England azure, France sky, Germany bone, Italy moss, Russia
+violet, Turkey gold - and `sea`, teal. A power's name is painted in its colour wherever the
+text says it. The three views are drawn from the same scenes, so they say the same things, and
+nothing here is on a clock, so there are no keys.
+
+**What a seat may see** is decided in `SeenBy`, the same at one keyboard and at a table over a
+wire:
+
+| | the power itself | every other power |
+| --- | --- | --- |
+| an order written in a season or a retreat | `Austria: vie - tri.` | `Austria writes an order for Vienna.` |
+| an order written in a winter | `Austria: build a vie.` | `Austria writes an order.` |
+| an order taken back | `Austria takes back the order for Vienna.` | `Austria takes back an order for Vienna.`, or in a winter `Austria takes back an order.` |
+| a word to one power | `Austria to Italy: leave Trieste alone.`, read by both | `Austria sends word to Italy.` |
+| a word to the table | `Austria to the table: nobody move.` | the same |
+
+The record (`history`) keeps the same veil over the phase still open - another power's line
+reads `an order for Vienna`, or in a winter `an order` and `cancel ...` - and shows the line in
+full once the phase has resolved. A word between two other powers reads `press italy ...` in it
+for good, and `orders` answers with your own and nobody else's.
 
 ## The machine
 
-The engine's half of this - when a machine plays, what stops it, and how `undo` walks its
-answers back - is [in the main README](../../../README.md#playing-against-the-program). What
-follows is this game's half.
-
-**There is nothing to search, and saying so plainly is better than a name that promises
-more.** Noughts and crosses can be walked to its end; Turncoats can at least be scored. This
-is seven powers writing in secret and a resolution nobody can see coming, and the part of it
-that actually decides games happens in conversation between the people playing - which a
-machine at this table is not having.
-
-So what is here plays the board and nothing else: it wants centres, it wants them near, it
-will hold what it has, and the better ones will put a second unit behind a push rather than
-send it somewhere on its own.
+Three skills. `--help` describes `easy` as one that "walks at whatever is next door and worth
+having, and often somewhere else instead", `medium` as one that "looks three provinces out and
+will put a second unit behind a push", and `hard` as one that "looks across half the board,
+supports its own attacks and stands over its centres":
 
 | | `easy` | `medium` | `hard` |
 | --- | --- | --- | --- |
-| how far out it will look for something worth taking | 1 | 3 | 6 |
-| will spend a unit backing another unit's move | — | yes | yes |
-| will stand a unit in front of a centre it holds | — | — | yes |
-| how often it plays something other than its own advice | 35% | 12% | never |
+| how far out it feels a centre worth taking | 1 | 3 | 6 |
+| backs another of its units' moves with support | - | yes | yes |
+| stands a unit over a centre with support | - | - | yes |
+| how often it plays any of its choices at random instead | 35 in 100 | 12 in 100 | never |
 
-A centre somebody else holds is worth most, a neutral one nearly as much, one of its own is
-worth holding on to, and everywhere else on the map is worth nothing at all and is only ever a
-road to somewhere. That is the whole valuation, and it is in
-[Rival.fs](Rules/Rival.fs).
+Only a centre is worth anything: another power's 8, nobody's 6, its own 3, counted in tens, plus
+how near a province lies to the nearest centre it does not hold - at most its sight, so nearness
+only ever separates centres worth the same. Each unit without an order, in turn, is offered:
+holding, worth where it stands; each move to a province it can reach that none of its other
+units is already going to or standing in, 4 off if somebody else's unit is there; backing
+another of its units' written move it could reach, worth the destination and 2 more; and
+guarding, a support for one of its own units standing on a supply centre, worth that centre
+less 5. The best is taken, ties by lot - or any of them at all, with the chance above - and when
+every unit has an order it commits.
 
-**It does not read its press.** A machine at a seat is sent messages like anybody else and
-does nothing with them, which is worth knowing before you spend a season promising it things.
+Beaten out, it takes the way out worth most and disbands only where there is none. In a winter
+it builds at the home nearest something worth taking - an army inland; at a coast a fleet if it
+has fewer fleets than a third of its units, and always for England; on the north coast at St
+Petersburg - and gives up the unit furthest from anything worth taking, one on a centre of its
+own last. It never convoys, never supports another power, never writes press and does not read
+it. How a machine is seated, what stops it and how `undo` walks its answers back is
+[the engine's](../../../README.md#against-the-machine).
+
 ## The files
 
-Thirteen files and about thirty-four hundred lines, in the same two folders the other games
-use — [Turncoats](../Turncoats/README.md#the-files) has twenty-one and
-[noughts and crosses](../TicTacToe/README.md#the-files) has ten.
+Fourteen files, in the order the project compiles them - the shape
+[Turncoats](../Turncoats/README.md#the-files) and
+[noughts and crosses](../TicTacToe/README.md#the-files) share.
 
-| File | Role |
+| File | |
 | --- | --- |
-| [Powers.fs](Rules/Powers.fs) | The seven, army and fleet, and which coastline of a province that has two |
-| [Atlas.fs](Rules/Atlas.fs) | The board: seventy-five provinces, the two graphs over them with both ends of every border written out, where they all lie so the map can be drawn, and the checks that all three agree |
-| [Position.fs](Rules/Position.fs) | What is standing where, who owns which centres, and the opening |
-| [Orders.fs](Rules/Orders.fs) | The eight orders, and what each phase will take |
-| [Adjudicate.fs](Rules/Adjudicate.fs) | What happened when everybody moved at once: strengths, cut supports, dislodgement, convoys, and the two rules for a cycle that answers differently depending on what it is told about itself |
-| [Session.fs](Rules/Session.fs) | The year: three kinds of phase, the ones with nobody in them walked straight through, and the centres counted once |
-| [Turn.fs](Rules/Turn.fs) | `Move` - write an order, take one back, commit, send a word, walk away - and the total `Play` |
-| [Words.fs](Rules/Words.fs) | Every string a player reads, including which sentence a seat gets for an order it did not write |
-| [Rival.fs](Rules/Rival.fs) | A seat played by the program: it wants centres, it wants them near, and the better ones put a second unit behind a push |
-| [Ink.fs](Reading/Ink.fs) | Eight colours - seven powers and the open water - against the other games' four and two |
-| [Parse.fs](Reading/Parse.fs) | The words every printed set of these rules uses, and the other half of the bargain `Words.order` writes |
-| [Render.fs](Reading/Render.fs) | Every screen described once as a [`Scene`](../../../README.md#a-screen-described-once), including the map and what it does and does not promise |
-| [Offer.fs](Offer.fs) | Both seams filled in |
+| [Powers.fs](Rules/Powers.fs) | the seven powers in seat order, army and fleet, and the three coasts a province can have |
+| [Atlas.fs](Rules/Atlas.fs) | seventy-five provinces, the army table and the fleet table with both ends of every border written out, `anyReach` for a walk by any road at all, the map as nineteen strings, and `problems`, every way the three could disagree |
+| [Position.fs](Rules/Position.fs) | what stands where and who holds which centre, the opening, and the autumn count |
+| [Orders.fs](Rules/Orders.fs) | the seven instructions, and what a season, a retreat and a winter will each take |
+| [Adjudicate.fs](Rules/Adjudicate.fs) | a season worked out - strengths, cut supports, convoys, dislodgements, rings and where the beaten may go - and the retreats after it |
+| [Session.fs](Rules/Session.fs) | the year: the stages, who is awaited, phases with nobody in them passed through, the count, removals nobody named, and the endings |
+| [Turn.fs](Rules/Turn.fs) | `Move` - write, take back, commit, press, resign - and `asked`, which is the seam's `Play` |
+| [Words.fs](Rules/Words.fs) | every sentence a player reads, each move as the record writes it, and what another power is told instead |
+| [Rival.fs](Rules/Rival.fs) | the three skills and the valuation above |
+| [Ink.fs](Reading/Ink.fs) | the eight colour slots, and a power's name painted wherever it is said |
+| [Parse.fs](Reading/Parse.fs) | the table above, read |
+| [Render.fs](Reading/Render.fs) | every screen as a [`Scene`](../../../README.md#screens) - the board, the record, the three answers, the rules, the waiting room - and the page |
+| [Offer.fs](Offer.fs) | the `Playable`: seven seats and no other number, no chance, and the board's faults checked before a deal |
+| [Program.fs](Program.fs) | the game as a program of its own |
+
+## Checks
+
+[diplomacy.fsx](../../../tests/diplomacy.fsx) is the suite. It loads
+[Europe.fsx](../../../tests/Europe.fsx) - the engine, the table and the wire, then the files
+above in the order above - and [Conforms.fsx](../../../tests/Conforms.fsx), and holds the game
+to:
+
+- the board: its counts, what an army and a fleet can reach, which provinces have coasts;
+- the map: every province drawn and in one piece, every side drawn a border and every border
+  drawn, Switzerland the only gap, the walls counted on the drawn board, held centres outlined
+  in their holders' colours, seas between tildes in the sea's;
+- the adjudicator: a bounce, a supported attack, a cut support, a power's own unit, a
+  beleaguered garrison, a head-on, a ring of three, convoys by one fleet and by three, a
+  swamped convoy, a paradox, a standoff closing a retreat, two retreats into one province;
+- the year: spring to autumn to the next spring, a neutral taken bringing a winter and a build,
+  coasts asked for and not, a power going out in a winter, removals measured by sea as well as
+  land, a build written twice replacing the first, a power that resigns leaving its units
+  standing, and the refusals;
+- what each seat is told and shown of orders, winter orders, press, and the open phase's record;
+- every kind of line written to a record and read back the same; a table of six turned away;
+  seven `medium` machines playing four thousand moves through all three kinds of phase to 1905
+  or beyond, every unit somewhere it may stand and nobody over strength, and that game
+  replaying to the same board; every view at every kind of phase for every seat, the three
+  questions, and every control on the page one the rules take;
+- and `Conforms.against diplomacy 7 [ "vie hold"; "done"; "ber hold"; "done" ]`, the contract
+  every game answers to.
+
+[counting.fsx](../../../tests/counting.fsx) holds its counts - centres, units, builds and units
+owed, a winner's centres - to their nouns at nought and one, and its records in `logs/` are
+[taken back up on every CI run](../../../README.md#records).

@@ -1,199 +1,207 @@
 # Warband
 
 Two squads of five, mustered onto ten hexes apiece out of each other's sight, a stretch of ground
-between them, and then a battle neither of you plays. Two players.
+between them, and then a battle neither of you plays. Two seats, and no chance anywhere in it: the
+same two musters fight the same battle every time, blow for blow, which is why the muster is hidden
+and why the battle is watched rather than played.
 
 ```
 dotnet run -- warband play 2                    # two people at one keyboard
-dotnet run -- warband play 2 --rival steady     # or one, against the machine
+dotnet run -- warband play 2 --rival steady     # one, against the machine
 ```
 
-Everything you decide, you decide before the fighting starts. There is no chance in the battle
-anywhere: the same two musters fight the same battle every time, blow for blow. That is not an
-economy, it is the game — it is why the muster is hidden, and why what a squad is worth is entirely
-a question of where each of the five is standing, and of how far off the other line is.
+## The rules
 
-## The formation
+**The formation.** Each squad has ten hexes in three ranks: `f1` to `f3` across the front, nearest
+the other squad, `m1` to `m4` across the middle, `b1` to `b3` at the back. The ranks sit half a hex
+apart, so `m2` and `m3` touch six hexes each, `f2` and `b2` four, the other six three, and the
+front rank never touches the back one. Touching is what a mender mends into and what a warder
+shields; nothing else in the game reads it.
 
-Ten hexes in three ranks, offset by half a hex:
+**The muster.** Squad One places first, then the squads take turns, one unit at a time, until each
+has five, at most two of a kind; a hex already taken is refused, and so is a third of one kind.
+Neither squad sees the other's until both are on the field, and the tenth placement joins the
+battle. `resign` during the muster ends the game — the squad whose turn it is walked away.
 
-```
-     f1  f2  f3        the front rank, nearest them
-   m1  m2  m3  m4
-     b1  b2  b3        the back rank
-```
-
-That is where it differs from a three by three square, and the difference is not decoration. On
-squares, every cell in the middle has the same four neighbours and every rank is three wide. Here
-the middle rank is four wide, `m2` and `m3` touch six hexes apiece, and the four corners touch
-three. The front rank never touches the back one. Say `why m2` and the game will tell you what any
-hex touches.
-
-Two things read that: a **mender** puts back only into hexes it touches, and a **warder** steps in
-front of blows aimed at hexes it touches. Both are worth roughly twice as much at `m2` as at `f1`,
-and neither cares which rank it is standing in for anything else.
-
-## The muster
-
-Five units each, taken from the roster, **at most two of a kind**, placed one at a time turn and
-turn about. Neither squad sees the other's until both are on the field — the board draws their ten
-hexes empty and the log says only that a muster happened.
-
-```
-bowman b2         a bowman on b2 (or 'muster bowman b2')
-engage 3          stand the two lines three hexes apart
-why bowman        what one does from each rank
-why m2            what that hex is and what it touches
-```
-
-The five hexes you leave empty are as much a choice as the five you fill: a squad packed into the
-front rank kills faster and is all in range of everything, and one spread over the middle rank has
-its warder covering six hexes instead of three.
-
-## The roster
-
-Where a unit stands is what it does. This is the whole game, and it is the one thing every kind
-below is an answer to.
+**The roster.** Where a unit stands is what it does: each kind is three answers, one for each rank.
 
 | | front | middle | back | vigour | quick | reach |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Footman** | strike 3 ×2 | strike 3 | strike 1 | 10 | 3 | 1 |
-| **Spearman** | strike 5 | strike 3 ×2 | strike 1 | 9 | 3 | 2 |
-| **Bowman** | strike 1 | shoot 2 ×2 | shoot 2 ×3 | 7 | 4 | 4 |
-| **Rider** | strike 3 ×3 | strike 3 | *nothing* | 12 | 5 | 2 |
-| **Mender** | strike 1 | mend 2 | mend 4 | 6 | 2 | 1 |
-| **Warder** | strike 2 ×2 | strike 2 | strike 1 | 14 | 1 | 1 |
+| `Foot` footman | strike 3 x2 | strike 3 | strike 1 | 10 | 3 | 1 |
+| `Pike` spearman | strike 5 | strike 3 x2 | strike 1 | 9 | 3 | 2 |
+| `Bow` bowman | strike 1 | shoot 2 x2 | shoot 2 x3 | 7 | 4 | 4 |
+| `Ride` rider | strike 3 x3 | strike 3 | nothing | 12 | 5 | 2 |
+| `Mend` mender | strike 1 | mend 2 | mend 4 | 6 | 2 | 1 |
+| `Ward` warder | strike 2 x2 | strike 2 | strike 1 | 14 | 1 | 1 |
 
-Reach is per stance rather than per kind, and the column is the furthest of the three: a rider
-charges across two hexes from the front rank and only one from the middle. `why rider` reads them
-out rank by rank. With the lines touching — where a game is dealt — every reach on the roster is
-enough, and none of them bites.
+Vigour is what a unit takes before it falls, quick is who acts first, and reach is how many hexes
+of ground a blow will cross — the column is the furthest of the three ranks: a spear reaches 2 from
+any rank, a charge 2 from the front and 1 from the middle, a bow 4 from the middle or back and 1 in
+front, everything else 1. A warder, wherever it stands, steps in front of any blow aimed at a unit
+on a hex it touches. A rider in the back rank has no room to ride and does nothing.
 
-- A **footman** is the plain answer and wants the front.
-- A **spearman** reaches past the rank in front of it, and is the one kind that would rather be in
-  the middle than at the front.
-- A **bowman** is three shots from the back and almost nothing in front of everybody.
-- A **rider** is the hardest charge there is and has *no room to ride* from the back rank — it
-  stands there and does nothing, which is the plainest lesson the game teaches.
-- A **mender** is the only thing that puts anything back, and only into hexes it touches.
-- A **warder** takes blows meant for its neighbours wherever it stands. What the rank changes for a
-  warder is how many neighbours it has.
+**The ground.** The lines are dealt touching, 1 hex apart, and either squad may say `engage <n>`
+while the muster is on to stand them 1 to 9 hexes apart; the last word stands, and both squads are
+told. Nobody stands on the ground and nothing can be mustered there; what it changes is who can act
+at all, since a blow whose reach is shorter than the ground lands nowhere. At 2 hexes a spearman
+from any rank, a rider from the front and a bowman from the middle or back still act; at 3 or 4
+only the bowman; at 5 to 9 nobody, and the first beat says so. Mending never crosses the ground
+and is never stopped by it.
 
-## The ground
+**The battle.** Once both squads are mustered nobody is asked anything again. It goes in rounds:
+every unit still up acts once a round, quickest first, a tie on quickness going to Squad One in odd
+rounds and Squad Two in even ones, then front rank before middle before back, then left to right.
+A unit that cannot reach the other line is left out of the round, and the board counts them; a
+unit felled before its turn comes round never acts.
 
-The two formations are not drawn up on top of each other. There are hexes between them, and how
-many is the **engagement**: one hex is the lines touching, and `engage 3` while the muster is on
-stands them three hexes apart instead, out to nine.
+- A **strike** falls on the foremost rank of the other squad that still has anybody standing, on
+  whoever there has the most left in them. Empty a front rank and the blows walk back to the
+  middle. A run of blows is aimed afresh for each, so a rider's second strike finds somebody else
+  once its first has felled its target.
+- A **shot** ignores rank and finds whoever is nearest to falling.
+- A **warder** on a hex touching the target steps in front of the blow, strike or shot, and takes
+  it — the furthest forward of them if two touch. A blow steps aside once and no further: nothing
+  steps in front of a blow aimed at a warder.
+- A **mending** goes into whichever hex the mender touches is missing the most, up to that unit's
+  vigour. It cannot bring anybody back up, and a mender with nobody hurt beside it does nothing.
 
-```
-     b1  b2  b3          Squad Two, drawn facing you
-   m1  m2  m3  m4
-     f1  f2  f3
+A squad with nobody left standing is broken, and the other holds the field. If neither breaks in
+12 rounds it is settled on what is left: the squad with more vigour left across its standing units
+takes it, and equal is drawn. When a round would open and nobody on either side can reach the other
+line, it ends there the same way, or with nothing to choose between them.
 
-     .   .   .   .       the ground - three hexes of it, fading
-   .   .   .   .
-     .   .   .   .
+## The words
 
-     f1  f2  f3          yours
-   m1  m2  m3  m4
-     b1  b2  b3
-```
-
-The hexes in between are ground: nobody stands on one and nothing in the rules could put a unit
-there, so the board draws them thin and fading rather than as a map. They are there to say *how far*
-and nothing else.
-
-What the ground changes is **who can do anything at all**. Every blow has a reach, and a reach
-shorter than the ground between the lines lands nowhere.
-
-| ground | what still works |
-| --- | --- |
-| 1 — touching | everything. This is where a game is dealt |
-| 2 | the spear, the charge from the front rank, and the bow |
-| 3 – 4 | the bow, and nothing else. An archery duel |
-| 5 – 9 | nothing. Neither line can touch the other, and the game says so at once rather than standing there for twelve rounds |
-
-Menders are the exception, and not really an exception: mending happens inside your own formation,
-so no amount of ground stops it. A unit that cannot reach is left out of the round entirely rather
-than handed a beat to say so in — the roster greys it out and the field box counts it, which is
-where a standing fact belongs.
-
-**A rank is who you are, not how far away you are.** Standing at the back does not add to the
-crossing; it changes what you do. Counting the ranks into the distance as well would be the more
-unified model and it is the obvious thing to try when a unit gets stats of its own — it is left
-alone for now because it would quietly rewrite the roster above, and the roster is the part that is
-going to change anyway.
-
-Either squad may set the ground while the muster is on and the last word stands. That is a
-placeholder: the day a battle is dealt from a scenario rather than agreed at the table, the ground
-comes with the scenario and `engage` goes.
-
-## The battle
-
-Once both squads are mustered nobody is asked anything again. It runs on a clock, and every unit
-still up acts once a round, quickest first.
-
-```
-run, stop         whether the battle runs on its own ('p' at a terminal, space in a browser)
-step              one blow, while it is stopped ('.' at a terminal)
-beat              the clock's own move, spelt out for a console that cannot press anything
-```
-
-All three are moves, so the record says when the battle was running. Space or `h` at a terminal
-holds the table's own clock instead, and writes nothing down.
-
-- A **strike** falls on the foremost rank of the other squad that still has anybody up, on whoever
-  there has the most left in them. Empty your front rank and the blows walk back to your middle.
-- A **shot** ignores rank and finds whoever is nearest to falling. The two are opposites on purpose:
-  melee grinds down whoever is holding the line, arrows finish whoever is nearly gone.
-- A **mending** goes into whichever hex the mender touches is missing the most. It cannot bring
-  anybody back up.
-- A **warder** steps in front of any blow aimed at a unit on a hex it touches. **A blow steps aside
-  once and no further** — nothing steps in front of a blow aimed at a warder, or two warders either
-  side of one hex would hand it back and forth for ever.
-
-A tie on quickness goes to the first squad in odd rounds and the second in even ones, so neither is
-always the one that swings first. A squad with nobody left up is broken and the other holds the
-field. If neither breaks in twelve rounds — two squads of warders and menders will do it, and so
-will an archery duel at three hexes — it is settled on what is left standing.
-
-There is no resigning a battle. It was decided the moment it was joined, and the game says so
-rather than pretending otherwise; `undo` walks back into the muster if you would rather try
-something else.
-
-## What is where
+[Parse.fs](Reading/Parse.fs) reads these, and nothing else; case does not matter, and the record
+writes each move as the first form in its row.
 
 | | |
 | --- | --- |
-| [Rules/Formation.fs](Rules/Formation.fs) | The ten hexes, and what touches what. The only file that knows this is not a square grid |
-| [Rules/Kinds.fs](Rules/Kinds.fs) | The six kinds, as three answers apiece — one for each rank — and how far each answer reaches |
-| [Rules/Squads.fs](Rules/Squads.fs) | A squad, and every question a blow has to ask of one before it can be aimed |
-| [Rules/Session.fs](Rules/Session.fs) | The state: a muster, a battle, or an ending — the ground between the lines, and the order a round acts in |
-| [Rules/Events.fs](Rules/Events.fs) | Everything the game can say happened, and everything it can refuse |
-| [Rules/Battle.fs](Rules/Battle.fs) | One blow, whether it gets there, and everything that follows from it. Nobody plays this |
-| [Rules/Turn.fs](Rules/Turn.fs) | The moves and the fold |
-| [Rules/Words.fs](Rules/Words.fs) | Every word a player reads — and the one place anything is hidden |
-| [Rules/Rival.fs](Rules/Rival.fs) | The machine, which only ever musters |
-| [Reading/Ink.fs](Reading/Ink.fs) | Two slots: the other squad, and the hexes |
-| [Reading/Parse.fs](Reading/Parse.fs) | A typed line read as a move |
-| [Reading/Render.fs](Reading/Render.fs) | Two honeycombs facing each other, and the boxes round them |
-| [Offer.fs](Offer.fs) | The seam: both halves handed over as one `Playable` |
+| `muster bowman b2`, `bowman b2` | a unit of that kind on that hex. A kind is its name or the four letters the board draws it with — `pike m2` is a spearman on m2 |
+| `engage 3`, `ground 3` | stand the lines 3 hexes apart, from 1 to 9, while the muster is on |
+| `run`, `p` | set the battle running if it is stopped, and stop it if it is running |
+| `start`, `go` | set it running |
+| `stop`, `pause`, `halt` | stop it |
+| `step`, `s` | one beat by hand, whether the battle is running or stopped |
+| `beat` | the clock's own move, spelt out for a console with no clock |
+| `why bowman`, `why m2`, `ask m2` | what a kind does from each rank, or what a hex is and what it touches; anything else gets the roster |
+| `resign` | walk away from the muster — refused once the battle is joined |
 
-## The machines
+From the tenth placement to the end the battle is on the clock, and a beat is a move: the record
+writes `beat` for each one that landed, and nothing for a beat during the muster or while the
+battle is stopped. The game is dealt running, so the battle starts the moment the lines are formed;
+`stop` during the muster says the battle will stand stopped once they are.
+
+The rules refuse, in words, a muster on a hex already taken or a third of one kind, a muster or
+`engage` once the lines are formed, `engage` outside 1 to 9, `step` before there is a battle, and
+`resign` during one. `undo`, `history`, `save`, `view`, `restart`, `quit` and the rest are the
+table's, the same at every game — see [at the prompt](../../../README.md#at-the-prompt).
+
+## The board
+
+Three blocks from the top: **Across the field**, the other squad drawn facing you with its front
+rank nearest the middle of the screen; the ground, a line saying how far apart the lines stand and
+a row of dots for every hex of it; and **Your squad**, front rank at the top. A hex shows the
+unit's code and what is left of it, and `gone` once it has fallen.
+
+```
+     +-----+-----+-----+
+     | f1  |Ride | f3  |
+     |     |12/12|     |
+  +--+--+--+--+--+--+--+--+
+  | m1  |Ward | m3  | m4  |
+  |     |14/14|     |     |
+  +--+--+--+--+--+--+--+--+
+     | b1  | b2  | b3  |
+     |     |     |     |
+     +-----+-----+-----+
+```
+
+During the muster the blocks below are **The muster** — how many still to place and what you have
+so far — and **The roster**, the table above with anything that could not reach across the ground
+as it stands drawn quiet. Once the battle is joined they are **The field** — both squads' standing
+counts, how many of each cannot put a blow across the ground, who swings next, and whether the
+clock is running — and **What next**, lines you could type. `why <kind>` and `why <hex>` answer in
+a box of their own. Three notes explain the hexes, the ranks and reach, and `notes` hides them.
+
+The three views come from one description
+([how the board is drawn](../../../README.md#how-the-board-is-drawn)); the one thing a page does
+that a terminal cannot is fade the ground towards the middle of the gap. Two things are drawn in
+colour, set on the [video page](../../../README.md#colours): `foe`, the squad across the field,
+crimson by default, and `hex`, the hexes and every hex named in what the game says, bone. Your own
+squad is in the colour the table keeps for yours.
+
+**On the clock.** A beat lands every 600 milliseconds and nothing winds it — `+` and `-` do nothing
+here. At a terminal `p` runs and stops the battle and `.` takes one beat, both as moves; space or
+`h` holds the table's own clock and writes nothing down; Enter opens the prompt, which is how a
+muster is typed. In a browser, space and `p` run and stop it and `.` steps. The rest is the
+engine's — see [a game on a clock](../../../README.md#a-game-on-a-clock).
+
+**What it rings.** A muster placed sounds `ready` for the squad waited on, the tenth placement a
+`chime`, every blow a `tap`, a battle settled a `fanfare`, and a squad walking away a `knell` — read
+off the position rather than the move, so a game taken up from a record sounds like the one it was
+saved from.
+
+**What is hidden.** While the muster is on, the other squad's hexes are drawn empty under a count
+of how many it has placed, the log and the history say `Squad One musters, out of your sight.` and
+write the line as `muster` alone, and a placement the rules refused is reported as `asked for a
+muster the rules would not take`, with no hex or kind in it. The ground is told to both. Once the
+lines are formed both formations are open to both squads and the history writes every muster line
+out. At one keyboard the screen belongs to whoever is to place, and to Squad One through the
+battle; a [hosted table](../../../README.md#a-hosted-table) draws each console its own seat, holds
+the turn during the muster, and lets either console run, stop and step the battle.
+
+## The machine
+
+Two skills, in [Rival.fs](Rules/Rival.fs), and both of them only muster: once the lines are formed
+there is nothing left for anybody to decide.
 
 | | |
 | --- | --- |
 | `raw` | musters a kind at random onto a hex at random, and finds out what the ranks were for |
 | `steady` | musters to a plan: the heavy at the front, the reach behind it, the bow and the mender at the back |
 
-Neither of them does anything once the battle joins, because there is nothing to do.
+`steady` draws one of three written-out squads when it first places and follows it to the end:
+rider f2, footman f1, warder m2, bowman b2, mender b1; footman f1, footman f3, spearman m2, warder
+m3, bowman b2; or warder f2, rider f1, spearman m3, bowman b2, bowman b3. Which one comes from the
+deal's seed and its seat, so the same deal against `steady` musters the same squad. How a machine
+is seated and held is the engine's — see
+[against the machine](../../../README.md#against-the-machine).
 
-## What it added to the seam
+## The files
 
-Nothing. See [SEAM.md](../../../SEAM.md). It is the fourth game to need no new member of `Rules`,
-`Playable` or `Pulse`, and the first one to be *hidden* and *on a clock* at once — which was the
-only thing about it worth doubting, since the two had never met before.
+In the order [Warband.fsproj](Warband.fsproj) compiles them.
 
-What it did turn up is one small thing, written down where it happened: a game's state may not have
-a field called `Phase`, because `Margins` has one and F# resolves a field on an un-annotated value
-by name alone. It is called `Stage` here, and [Rules/Session.fs](Rules/Session.fs) says why.
+| | |
+| --- | --- |
+| [Rules/Formation.fs](Rules/Formation.fs) | the ten hexes, their names, and what touches what |
+| [Rules/Kinds.fs](Rules/Kinds.fs) | the six kinds as three stances apiece, with vigour, quickness and reach |
+| [Rules/Squads.fs](Rules/Squads.fs) | a squad, and who a strike, a shot, a warder and a mending pick out of one |
+| [Rules/Session.fs](Rules/Session.fs) | the state — mustering, fighting or ended — the ground, what the board is sounding, and the order a round acts in |
+| [Rules/Events.fs](Rules/Events.fs) | everything the game can say happened and everything it can refuse |
+| [Rules/Battle.fs](Rules/Battle.fs) | one beat: a unit's turn, whether it reaches, and how the battle ends |
+| [Rules/Turn.fs](Rules/Turn.fs) | the moves, what each does at each stage, and the sound a move leaves |
+| [Rules/Words.fs](Rules/Words.fs) | every sentence a player reads, the record's lines, and what each seat is told |
+| [Rules/Rival.fs](Rules/Rival.fs) | the two skills and the three plans |
+| [Reading/Ink.fs](Reading/Ink.fs) | the two colour slots, and hex names picked out in the log |
+| [Reading/Parse.fs](Reading/Parse.fs) | a typed line as a move or a question |
+| [Reading/Render.fs](Reading/Render.fs) | the two honeycombs, the ground, the roster, the field, the answers, the rules and the page |
+| [Offer.fs](Offer.fs) | the seam: the `Playable`, the clock, the sounds and the faults |
+| [Program.fs](Program.fs) | the game as a program of its own |
+
+## Checks
+
+[tests/warband.fsx](../../../tests/warband.fsx) loads [Warbands.fsx](../../../tests/Warbands.fsx)
+and holds the game to: the formation's counts of what touches what; each kind's stances and reach;
+the muster's turns and refusals; a beat costing nothing during the muster or while stopped; one
+unit's turn on positions built by hand — strike, shot, a warder stepping in once, mending; the
+ground, from what reaches across it to two lines that cannot; the three ways a battle ends, and
+the same two musters fighting the same battle; what one squad is told of the other; `steady`
+mustering whole squads; every sound; the keys; a hosted table refusing the console whose turn it
+is not; `Conforms.against` over a muster with a refused line in it; and the game's own `Faults` in
+[Offer.fs](Offer.fs) — the formation, the roster and the machine's plans — coming back empty.
+
+[tests/counting.fsx](../../../tests/counting.fsx) holds its counts of units, hexes, rounds and
+blows, and every refusal, ending and answer that carries a number, to reading right at nought and
+one. The three Warband records in [logs/](../../../logs) are taken back up by
+[records.ps1](../../../tools/records.ps1) on every CI run.

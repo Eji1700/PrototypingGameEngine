@@ -174,7 +174,7 @@ year of three kinds of phase, and a board no picture can show all of. It needed 
 member. What it did find is that the engine's idea of *what one move can say* was looser than two
 games suggested: one phase resolving produces twenty notices where the others produce one or two.
 Nothing broke — `Model.LogDepth` truncates and the journal keeps the rest — but it is worth
-knowing. See [what a third game found](README.md#what-a-third-game-found).
+knowing.
 
 **Compile** — a deck rather than a board, and three games in a row: a draft, a laying-out, then
 play, with different moves and three senses of whose turn it is. It went in a piece at a time over
@@ -185,8 +185,8 @@ can be *added to* rather than only added, without anything above it moving. Noth
 rule says so rather than because anybody chose it. It got the timeline, the record, the replay,
 the menu, the command line, the wire and all three screens for nothing. What it turned up was
 three places where code right for four games had never been handed a *one*: "1 players" in the
-list of games, a clause about machines at a game with none, and a block that loses its name. See
-[what it turned up](src/Games/Life/README.md#what-it-turned-up).
+list of games, a clause about machines at a game with none, and a block that loses its name.
+
 
 **Warband** — the first game that is **hidden and on a clock at once**, which was the only thing
 about it worth doubting. Turncoats and Diplomacy keep things back but wait for everybody; Life,

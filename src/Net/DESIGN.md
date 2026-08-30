@@ -1,387 +1,220 @@
-# A house of tables
+# The Net layer
 
-*A design, not a description. Nothing here is built yet.*
+The same table with the players at different machines. What that does for a player is in the
+README — [a hosted table](../../README.md#a-hosted-table), [a browser](../../README.md#in-a-browser),
+[a house](../../README.md#a-house), [further than a room](../../README.md#further-than-a-room) and
+[a container](../../README.md#in-a-container). This note is how the layer is put together.
+[Prototyping.Net.fsproj](Prototyping.Net.fsproj) references `Prototyping.Table`, is the one project
+with a web server in it, and compiles its files in this order:
 
-One game's program should be able to hold more than one game of it at once: a page listing
-what is being played, what is waiting for players, and what has finished, with a way to open a
-new one and a way to sit down at somebody else's.
-
-**It is one game's house.** `Turncoats` lists games of Turncoats and knows of no other. There
-is no front door above the four games and there should not be: a container runs one program,
-one port, one game, and a list of every game on the machine is a different thing at a different
-level, most likely not written in F# at all. Everything below assumes that and gets simpler for
-it.
-
-## The word
-
-`Net/Lobby.fs` already means *one dealt table with consoles at it*, and that is the right word
-for what it is. The new thing is above it and needs its own: **a house**, holding **tables**.
-A player enters the house, sees the tables, and sits down at one.
-
-## What it is built out of, which is more than expected
-
-The useful discovery is that the hard part is already done.
-
-`Table` in [Server.fs](Server.fs) is **already a non-generic interface**:
-
-```fsharp
-type Table =
-    abstract Sits: console:string * offered:string * resuming:string option * view:string * palette:string -> Post list
-    abstract Said: console:string * line:string -> Post list
-    abstract Left: console:string -> Post list
-```
-
-Its own comment says the types stop there "the same way they stop at `Chosen`". `Held<'Move,
-'State, 'Notice>` implements it behind a lock, writes the record after every change, and hands
-back a list of things to say. **A house can hold a `Table list` today**, with no new machinery
-at all, because everything crossing that boundary is already a string.
-
-So the fear that the type-erasure problem returns in full is wrong. What is missing is smaller
-and in two pieces.
-
-### Where those pieces live — **moved**
-
-`Table`, `Held` and `Aside` were in `Server.fs`, above a wall of `Microsoft.AspNetCore` opens,
-and used **none** of it. That put them out of reach of `dotnet fsi`, because `tests/Whole.fsx`
-loads as far as `Lobby.fs` and stops — deliberately, since everything past it wants ASP.NET and
-SignalR.
-
-They are in [Tables.fs](Tables.fs) now, between the lobby and the wire, and nothing in that
-file has met a socket. It is the difference between a seam that gets *checked* and one that
-gets *smoke-tested*: an interface whose only implementation needs a web server running is an
-interface that will be exercised by starting a web server.
-
-### The one new seam: making a table — **done**
-
-`Server.host` takes an **already-dealt model**. Everything about dealing — `game.Rules.Deal`,
-`game.Seating`, the seed — is generic in the game, and a house has to do it on demand, at a
-moment when it holds nothing but a `Table list`.
-
-That is the whole of the new existential, and it is small:
-
-```fsharp
-/// Opening a table without knowing what a move is at this game.
-type Hosting =
-    /// Deal one, and hand back something to play it. The seating says who is a person and
-    /// who is the machine, in the words `Seating` already reads.
-    abstract Deals: seating:Sitter list * seed:uint64 option -> Result<Table, string>
-
-    /// And take one up off a record, which is the same question asked of a file.
-    abstract Resumes: path:string -> Result<Table, string>
-
-    /// How many may sit down, so the house can refuse a table of the wrong size before
-    /// dealing rather than after.
-    abstract Fewest: int
-    abstract Most: int
-```
-
-Built by closing over a `Playable`, exactly as `Play.chosen` closes over one — the same trick
-for the same reason, and the fourth time this program plays it: `Rules` seals what a game *is*,
-`Playable` seals how it is read, `Chosen` seals it for a list to hold, and `Hosting` seals it
-for a house to deal from. It lives in `Tables.fs` rather than beside `Play.chosen` for the
-reason just given — `Play.fs` is compiled after the whole of the wire and cannot be loaded into
-a script without it.
-
-`Deals` takes a `Sitter list` rather than a count. `Seating` already models who is a person and
-who is a machine and at what strength, `Menu.seats` is already the screen that asks, and both
-are already generic. **The "open a new table" form is a screen this program has written and
-tested**, and how many are playing is the length of the seating rather than a second thing to
-keep in step.
-
-Two things `tests/house.fsx` pinned down while it was being written:
-
-- **A way this game does not have deals the plainest one** rather than refusing — the same
-  answer a settings file already gets for a way that has since been renamed. A house that
-  refused to deal over a stale name would be a house you could lock yourself out of by editing
-  a file.
-- **A resumed table has the game and nobody at it.** The seats are the game's, the moves are
-  the record's, and the players have to come back to them — so it comes back `Filling`, not
-  `Underway`. That is the honest reading of a restarted house: it holds the games, not the
-  people. The machines *do* come back, because which seat one played is written in the record
-  and nowhere else.
-
-### What `Table` has to learn to say — **done**
-
-Today a `Table` can be played and cannot be *described*, and a house is mostly a list of
-descriptions. `Lobby.Standing` and `Table.Standing` are built:
-
-```fsharp
-type Stage = Filling | Underway | Finished
-
-type Standing =
-    { Stage: Stage
-      Places: int      // every seat
-      Machines: int    // played by the program; never empty, never sat at
-      Sat: int         // taken by a person, here or not
-      Reading: int     // ...and with a console actually attached
-      Sitters: string list }
-```
-
-`Lobby` knew every part of it already, so this is a projection rather than new state. Two
-things it turned out to be worth being careful about:
-
-- **The three states that look alike from outside.** A seat nobody has taken, a seat somebody
-  took and walked away from, and a seat the machine plays are one thing to a naive count and
-  three to a house. A table of two with a machine at one seat has *no* seat going spare;
-  a table whose second player dropped has none either, and is not waiting for anybody — it is
-  simply one console short. `tests/lobby.fsx` holds all three cases.
-- **No id and no time.** Which table this is, and when it was opened, are the *house's* facts:
-  it made the table and did the naming. A table answering for them would be answering a
-  question it was never asked.
-
-Taken under the same lock as everything else, so a list cannot catch a table mid-move — one
-value rather than members asked one at a time, which is the whole reason it is a record.
-
-## Routing
-
-Everything on the wire is single-table today and each needs a table in the path:
-
-| Now | In a house |
+| | |
 | --- | --- |
-| `Protocol.Path = "/table"` (SignalR hub) | `/table/{id}` |
-| `MapGet "/"` — the board | `/` is the house; `/table/{id}` is a board |
-| `Page.Stream`, `Page.Say` | per table |
-| one `Browser.Pages()` | one per table, or one keyed by table |
+| [Protocol.fs](Protocol.fs) | the hub's path, the names of its calls, and the spans both ends keep time by: a beat every 15 seconds, given up after 60 |
+| [Pages.fs](Pages.fs) | one bounded queue per page, and the pages that are reading |
+| [Browser.fs](Browser.fs) | a page as a console: its cookie, its stream, a line posted, the door's answers |
+| [Lobby.fs](Lobby.fs) | a dealt table with consoles at it, as a value: seats, tokens, whose turn |
+| [Tables.fs](Tables.fs) | `Table`, a lobby behind a lock, and `Hosting` — a game sealed for a house to deal from |
+| [House.fs](House.fs) | tables by name, the sweep, and the clock that beats them |
+| [Announce.fs](Announce.fs) | what is said as a table, a game or a house opens, as lines |
+| [Server.fs](Server.fs) | the door, the routes, the hub, and the three programs `host`, `serve` and `house` |
+| [Client.fs](Client.fs) | a terminal at somebody else's table |
 
-`Protocol.Path` being a constant that both ends already agree on is the right shape; it becomes
-a function of an id. The console's `--code` and `--token` handling is untouched.
+## Consoles and posts
 
-The house page itself is a page like any other and should be built the way the rest are — a
-`Scene` drawn by `Readers`, so it is one description read three ways rather than hand-written
-HTML. It has no game in it, so it is drawn in plain colours, like the picker in `Program.fs`.
+A console is a name — a terminal's its SignalR connection id, a page's `page-` and a guid held in a
+cookie — and a table tells the two apart only by `Shown`: `AtATerminal` views for one, `InABrowser`
+for the other. Everything a table says is a `Post` ([Posts.fs](../Table/Parts/Posts.fs)),
+`{ To: console; Say: ToPlayer }`, where `ToPlayer` is `Seated` of a seat and its token, `Screen`,
+`Told`, `TurnedAway`, `GotUp`, `Nudged` or `Rang` of a `Sound`. `Wire.deliver` in `Server.fs` puts a
+page's posts on its stream and turns a terminal's into the hub calls named in `Protocol.Call`.
 
-## Two doors, which already compose
+## Lobby
 
-`Reach` mints a word per table and `guarded` checks it. A house wants two layers:
+`Lobby<'Move, 'State, 'Notice>` is a private record — the `Playable`, the `Model`, the machines and
+a `Seat` per player — and every function in the module takes one and gives back the next with its
+posts. A `Seat` has an `Occupant` — `Empty`; `Taken of token * console * here`, which keeps the seat
+whether or not the console is here; or `Played`, a seat the machine has, set by `Lobby.openedFor`
+from the seating and never waited for — and three things that are the console's own and reach
+neither the record nor anybody else: its `Margins`, whether it is `Hushed`, and its `View`.
 
-- **The house door** — may you see the list at all. One word, given to the host at startup, or
-  none for a room you trust. This is `Reach` exactly as it is.
-- **The table door** — may you sit at *this* one. Also `Reach`, per table, which is what
-  `Reach.minted()` is already for.
+`Lobby.join console offered resuming view` sits a console down. A token brings it back to the seat
+holding that token whatever the console is now called, since a terminal reconnects under a new id,
+and a token no seat holds is `TurnedAway`. With no token, a console the table already knows is put
+back in its own seat — a page that reloads has the same cookie and no idea it was away — otherwise
+the first `Empty` seat is taken under the token `offered`, or a full table turns the console away.
+The console is told `Seated`, everybody here is drawn again, the newcomer is told which seats the
+machines have, and if this seat filled the table the machines play until a person is to act
+([Machines.answering](../Engine/Machines.fs)) and that person is `Nudged`. `Lobby.left` marks the
+seat as away and redraws everybody.
 
-Neither needs new machinery; what is new is only that there are two of them and the house has
-to say which one refused you. A table with no word inside a house that has one is the ordinary
-case and should be the default: you proved who you were at the front door.
+`Lobby.said console typed` answers a line, giving back the next lobby with its posts. A console at
+no seat is `TurnedAway`; `quit` (`Leave`) is answered before anything else, the console let go, the
+seat kept and `GotUp` said; while the table is filling any line redraws the waiting screen; the
+table's own commands — `help`, `notes`, `view`, `sound` and the rest — change or draw this seat
+alone; `save` is told the table writes the record itself. Of a `Send`, `undo` and `redo` are
+refused, since walking a game back would show a hand the seat is not meant to see, and so are
+`restart` and `players n`. A move is taken from the seat `Rules.Active` names and from nobody else
+— "It is Player 1's turn." — unless the game's `Pulse.Free` says the clock has freed every seat to
+steer. A move that is taken goes through `Update.update` and the machines answer; the posts are
+everybody drawn again, the board's sounds (`Rings`, only for a move that happened, only to seats
+not hushed) and a nudge to the seat now to act, not to the console that spoke.
 
-## Lifetime, and the thing that makes it cheap
+`Lobby.beaten` is a beat, only while every seat is filled and the game is not over, and says
+nothing if the journal did not move. `Lobby.described` is a `Standing` — `Stage` (`Filling`,
+`Underway`, `Finished`), `Places`, `Machines`, `Sat`, `Reading`, `Begun`, `Sitters` — which is what
+a house sweeps and lists by.
 
-A house that never forgets a table grows until the process dies. Tables need to go when they
-are finished and nobody is reading them, and when they were opened and never filled.
+## Tables
 
-The pleasant part is **rehydration**. Every table already writes a replayable record after
-every change, and `Transcript.saved()` and `takeUp` already read them back. So a house that
-restarts can offer the games it was holding, off the same files, with no new format and no
-database — and `Resumes` above is the whole of what it needs to do it. That is worth building
-early rather than bolting on, because it turns "the container was restarted" from a disaster
-into a pause.
+`Table` is an interface with no type parameters, so a house can hold a list of them: `Sits` with a
+console's name, the token to offer it, the token it is resuming with, its `Shown`, and its view and
+palette as words; `Said` and `Left`; `Beats`, giving the posts and when the next beat is due; and
+`Standing`. `Table.sits` is the one place a seat token is made, by `Reach.minted`: the same twelve
+letters as a word at the door, since it is what a player types after `--token`.
 
-## What already works and should be left alone
+`Held` is a `Lobby` behind a lock: `Change` runs one lobby function under the gate, keeps the next
+lobby, hands its model to `keep` and returns the posts. `keep` is `Transcript.kept`
+([Transcript.fs](../Table/Playing/Transcript.fs)): the whole record, written beside the file and
+moved over so it is never half-written, and not written at all while the journal is empty or the
+text is unchanged, so a refused line or an idle beat costs nothing. `Beats` beats once and says when
+the next is due, from `Pulse.Every` of the state, or `None` at a game with no clock; the clock
+itself is outside the table. `Aside` is the same arrangement over a `Solo`, for `serve`.
 
-- **Two people at one table read it differently.** A joining console sends its view and colours
-  as strings and the table reads them against the game. That is per-console already and needs
-  nothing from a house.
-- **Records.** One stamp per table, `Transcript.stamping` per deal. Already right.
-- **Locking.** `Held` locks per table, so tables are independent by construction and a house is
-  not a new concurrency problem — only a dictionary that is itself locked.
+`Hosting` seals a game for a house that holds nothing typed: `Name`, `Title`, `Fewest`, `Most`, the
+`Shell`, `Slots` and standard palette a page needs, the `Ways` it can be played,
+`Deals(sitters, seed, way)` and `Resumes path`. `Hosting.of' ways clock stamping` closes over the
+ways: `Deals` deals the way named, or the first of the list for a name it does not have, from the
+seed given or from the clock, and a count the rules refuse comes back in their words. `Resumes`
+tries each way in turn with `Transcript.takenUp`, since which way a record is of is not in its
+name, and keeps the record's own stamp so the table goes on writing to the file it came from; it
+comes back `Filling`, with the machines at their seats and nobody else.
 
-## Whose settings does a hosted table use? — **settled**
+## The house
 
-`settings.txt` is read from the current directory, so a hosted table reads the *host's*. The
-answer is that this is right for two of the three things it holds and wrong for the third, and
-the split is along a line already drawn everywhere else in this program.
+`House(hosting, now, naming, keeping)` is a lock, a list of `Opened` — `Id`, `At`, `Way`, `Table` —
+and two maps of its own: when each table's stage was last seen to change, and when its next beat
+falls. `Opens` and `Resumes` deal through `Hosting` and name the table inside the gate, with
+`Reach.minted` at `Server.house`, so two opened at one moment cannot share a name.
 
-**Video and Audio stay where they are, and stay per console.** A joining console already sends
-its view and colours as strings and the table reads them against the game; the bell is answered
-at whichever keyboard is hearing it. None of that is the table's business and none of it should
-become so. A host's own colours have never leaked to a guest and must not start.
+`Housekeeping.spent keeping age standing` is the whole of the sweep's rule, a function of a
+standing and an age so that it is checked without a table:
 
-**The way of playing belongs to the table.** It is not how a game is read — it is what game was
-dealt, it goes in the record's deal line, and a house must be able to hold a plain game and a
-game with the optional rule in it at the same time. So:
+| | |
+| --- | --- |
+| nobody ever sat at it and nothing was played (`Sat = 0`, not `Begun`) | after `Unused`, an hour |
+| finished | after `Finished`, a day |
+| anybody still reading it, in any stage | never |
+| a seat somebody took, a game under way, or a record taken back up | never |
 
-- `Deals` carries the way of playing, as a name.
-- The house's "new table" form asks, offering the ways the game declares.
-- The host's `settings.txt` supplies the **default that form opens on**, not the answer. Which
-  is exactly what that page always meant: it settles what a *new* game is dealt as.
+Age is measured from when the stage last changed, not from opening: a game that finishes on
+Thursday was not finished on Monday. A sweep takes the table off the list and touches nothing on
+disk — the record outlives the table. `Listed` orders the tables for the front page: a seat going
+spare first, then filling, under way and finished, newest first within each. `Sweeping` and
+`Beating` each run on a `Clock.ticking`, whose ticks never overlap and whose faults are said, and
+`Beat` asks only the tables whose own next beat has come round, outside the gate.
 
-That is a smaller change than it looked, because `Playable` already carries the ways and the
-Game page already reads and writes the name.
+## Server.fs
 
-The corollary worth stating plainly: **a house must run with no `settings.txt` at all**, since
-a container has no keyboard to have made one. `Settings.none` already answers every question
-with the game's own default, so this holds today — but it should be a check rather than a thing
-that happens to be true.
+Three programs share the parts. `host` holds one `Held` and a `Finding` that answers it for every
+connection; `serve` holds an `Aside` and no hub; `house` holds a `House` and a `Finding` that reads
+the table's name off the route. Each clears the logging providers, listens on every address at
+`reach.Port` — https there when `--cert` gave Kestrel a certificate (`Kept`) — and prints its
+`Announce` lines before it runs.
 
-## Order of work
+The door is one piece of middleware in front of everything, added only when the reach is `Locked`.
+A request presents the word one of three ways — the query `code`, which the address a host reads
+out has on its end; the header `X-Table-Code`, which the terminal client sends; or the cookie
+`proto-code`, set once a right word has been seen — and `Reach.admits`
+([Reach.fs](../Table/Parts/Reach.fs)) compares in fixed time with case and dashes thrown away. A
+right word passes and is never counted; a wrong one has to get past two token buckets, one per
+caller address (10, one back every 5 seconds) and one for the door as a whole (60, one back a
+second), and an empty bucket is a 429 with `Retry-After`; otherwise a page is answered with the
+locked page and its one box, anything else with 403. `--behind` (`Ahead`) reads the forwarded
+headers, known proxies cleared, which makes `IsHttps` true behind a tunnel and so marks cookies `Secure`.
 
-1. ~~**`Standing` on `Table`**, snapshot taken under the lock.~~ **Done** — `tests/lobby.fsx`.
-2. ~~**`Hosting`**, carrying the way of playing per the decision above.~~ **Done** —
-   `Tables.fs` and `tests/house.fsx`, sixteen checks and not a socket among them.
-3. ~~**The house as a value**~~ **Done** — [House.fs](House.fs), thirty checks in `house.fsx`
-   and still not a socket among them.
-4. **Routing and the page**, last, because by then it is a thin thing over something already
-   checked.
+The routes:
 
-### What step 3 settled
-
-**The house is a lock and a list; the rules are values beside it.** What a house *holds* are
-live tables, so it cannot be a value the way `Lobby` is. What it *decides* — which tables have
-stopped being worth keeping, and what order to show them in — needs no table, no lock and no
-clock that moves, so `Housekeeping` is separate and is checked by being asked about tables that
-do not exist at ages that have not happened.
-
-**Reaping** is two spans, not one, because the two ways a table stops mattering are not alike:
-
-| | kept for | why |
+| | | |
 | --- | --- | --- |
-| nobody ever sat at it | an hour | nothing was played, nothing is written down |
-| finished | a day | somebody may want to walk the last moves back |
-| anything else | for ever | it is somebody's game |
+| `GET /` | all | the page — at a house, the front: a button per size the game takes, and a row per table |
+| `POST /open` | house | deal a table for `players` and send the browser to it; a POST, so a link prefetched or previewed deals nothing |
+| `GET /at/{table}` | house | a table's page; the cookie `proto-table` says which table this browser is at |
+| `GET /stream` | all | the page's stream; at a house the table is found by the cookie, and a page at none is sent to `/` |
+| `POST /say` | all | a line typed or a button pressed |
+| `GET /datastar.js`, `POST /amiss` | all | the one script, read out of the assembly; a fault the page reports, printed up to 50 a run |
+| `/table`, `/table/{table}` | host, house | the SignalR hub |
 
-Three rules that matter more than the numbers, all checked:
+The route value is `table` rather than `id`, which SignalR also uses as a query value on the same
+address, and the board sits under `/at` so that the page and the hub are never mapped at one path.
+`TableHub` is the hub: `Join(token, view, palette)` and `Say(line)` each ask `Finding` for the table
+and, at a name the house does not know, say so as `TurnedAway` and abort the connection rather than
+dropping it in silence; a disconnection is `Left`.
 
-- **Never while a console is attached**, whatever state the table is in.
-- **A half-full table is not an unused one.** Somebody took a seat and their seat is being kept
-  for them; sweeping it because nobody is looking would lose a game somebody is coming back to.
-- **A game under way is never swept, however long a turn takes.** Diplomacy across two time
-  zones can sit untouched for a day and is not abandoned.
+The host's own seat is taken over the same wire as everybody else's: [Play.fs](../Play/Play.fs)
+hands `host` a `playing` that runs `Client.join` against `localhost`, and `host` starts the server,
+plays, then waits for shutdown. A game on a clock gets one `Clock.ticking` from its `Pulse` at
+`host` and at `serve`, waiting what the last beat asked for and 1 second after a beat that threw;
+at a house one clock beats every 40 milliseconds and `House.Beat` decides which tables are due.
+`house --fill` takes up every record in `logs/` whose name carries this game (`Transcript.saved`),
+and the sweep runs every 5 minutes and says what it took away.
 
-Nothing on disk is touched by a sweep. The record outlives the table by design — a game swept
-off the list is one somebody can still take up from the file it wrote.
+## Browser.fs and Pages.fs
 
-**Naming** is `Reach.minted`: twelve letters that cannot be misheard down a telephone, grouped
-in fours, from the machine's own randomness rather than from the deal's. Already URL-safe,
-already unguessable, already written. Minted inside the gate, so two people opening a table at
-the same moment cannot be handed one name between them.
+A page is a console named by its cookie: `proto-console`, `HttpOnly`, `Lax` so that a link followed
+out of chat still arrives with it, `Secure` exactly when the request is https, kept 7 days. What the
+browser side needs of a game is `Drawn` — `Shell`, `Slots`, standard `Palette` — with no type
+parameter in it, so one set of routes serves every table of a house.
 
-**Startup** is the host's call, not the house's: `Resumes` is a method rather than something
-that happens. A house holds nothing that is not also on disk, so filling one from `logs/` is
-the whole of what a restart costs — but a container that is meant to come up empty should come
-up empty.
+The page ([Page.fs](../Table/Parts/Page.fs)) opens `GET /stream?colours=…` as it loads, and that is
+where it sits down: the handler turns buffering off, sends the SSE headers with `X-Accel-Buffering:
+no` for any nginx in front, and only then calls `Sitting.Watching` with the words the page sent,
+exactly as `Table.Sits` takes them. From there it loops on whichever comes first — something to
+send, or the keep-alive falling due — sending `alive()` on the beat and otherwise the frames
+waiting: a `Piece` of html is patched into the page, a `Doing` runs a script. A line is `POST /say`,
+from the query for a button or a steering key and from the page's signals for the box.
 
-### Step 4 was not thin, and here is what it cost
+`Pages` holds one `Outgoing` per console, and `Outgoing` is bounded: at most 8 boards, the oldest
+let go, since each board replaces the last on the page, and never a script, since a nudge or a
+sound is not replaced by the next. A reload opens its second stream before the first has noticed,
+so `Open` completes any older stream of the same console and `Close` says whether the stream
+closing was still the console's; the table is told `Gone` only then, so an old stream ending does
+not get a page up from the seat it has just come back to. The heartbeat is the page's side of the
+same span: after 90 seconds without `alive()` — six beats — it says the table stopped answering,
+sends a `HEAD` to its own address after 1 second and then every 3 until something answers, and
+reloads; the same cookie brings it back to the same seat.
 
-The claim above that the hard part was done was true of the **console** half and false of the
-browser half. `Table` had no type parameters; `Browser.Sitting` had three. A house holds
-several tables of one game behind one set of routes, so a page could be served for the one
-table a process was holding and for no other.
+## Announce.fs
 
-Nothing had to be invented — only moved. What the browser side actually needed of a game was a
-`Shell`, a `Slot list` and a `Palette`, none of which has a type parameter; they were reached
-*through* the game because there was one game to reach through. They travel as `Browser.Drawn`
-now, and nothing on the browser side is generic.
+Lines rather than printing, so a check can read them. `hosted` says the roster, the word at the
+door, which seats are this machine's and which are somebody else's, the whole `join` line each of
+them types (`Launch.written`) or the address to open in a browser (`Reach.opened`, the word on its
+end), and every address the table answers at. `served` and `housed` are the same for a page and a
+house, the latter with the `join --table <table>` line.
 
-The one real change: `Sitting.Watching` is handed the **words** a page sent rather than a
-`View` built before the table was told anybody had arrived. That is the arrangement `Table.Sits`
-always had, so both consoles now arrive by the same door.
+## Client.fs
 
-And that door needed one more thing — **which kind of console is knocking**. A terminal and a
-page cannot read the same screens, so `Sits` is told `shown` rather than left to guess. It could
-have been read off the console's name, pages having a mark in theirs, but a table that has never
-heard of a browser is worth more than a parameter saved.
+`Client.join game address token code table rings view` is a terminal at somebody else's table.
+`Reach.endpoint` makes the address to dial — a bare name is http on port 5000, a whole URL is taken
+as given — with the path `/table`, or `/table/<name>` at a house, and the word goes in the
+`X-Table-Code` header. Starting is tried 3 times, 2 seconds apart, when nothing answers; a door's
+401, 403 or 429 is said in words, and any other status is "not a table". Once connected it calls
+`Join` with the token it was given, the view's name and its palette written as words, and `Seated`
+prints the whole `join --token` line that brings it back. Lines are read from stdin on a background
+thread and sent with `Say`; `Nudged` rings the bell and marks the window title.
 
-### Step 4 — done, for browsers
+Reconnection is the client library's, with a policy that doubles from a second up to half a minute
+and then keeps trying for as long as the console is left running. The connection comes back with a
+new id, which is a new console to the table, so on reconnecting the client sits down again with its
+token: the token, not the connection, is what says who you are. It ends when the table has nothing
+more for it — `GotUp` after `quit`, or `TurnedAway` — or when stdin closes, and exits 1 when turned
+away and 0 otherwise.
 
-A `house` command, `Server.house`, and a front page that lists the tables and opens one.
-Driven in a real browser by `smoke.ps1`: the front page serves and names the game, opening a
-table lands the browser on a table of its own, a board arrives there over the stream, and the
-house then says somebody is sitting at it.
+## Checks
 
-**A note about a bug that was not there.** This was written up as broken — "a browser at a
-house table never takes a seat" — and it was not. The check was.
-
-`#screen` ships with `Sitting down…` already in it, so a loop asking whether that element had
-*any* text in it exited on its first turn and read the front page before a byte had come down
-the stream. The same mistake in a second, quite different check: `sseStartResponseWithHeaders`
-runs **before** `sitting.Watching`, so a client that reads the response headers and then asks
-the house who is seated has asked too early. Two checks, one error, reported as a defect in
-the server.
-
-What the check is worth is the difference between "the element has text" and "the element has
-stopped saying the one thing it says before anything happens". The first is a check that
-cannot fail; the second is the check.
-
-Two decisions taken while building it:
-
-- **A browser is at one table, held in a cookie.** The alternative was hanging every address
-  off the table's name, which reaches further than it looks: a board's own buttons carry the
-  address they post to, drawn deep in a game's own markup, so a game would have to be told
-  which table it was being drawn for. A browser was already one console — that is what
-  `consoleOf` settles — so being at two tables was already not a thing.
-- **Browsers only.** A console at a terminal reaches a table through a SignalR hub, and a hub
-  is found by the framework from a type named in a route, so a house wants a hub that resolves
-  which table a connection is for. That is the one piece of this program that has broken
-  silently before. Until it is done a house says nothing about `join`, and `host` is still how
-  a terminal is given a table.
-
-### The three things step 4 had left, and how they went
-
-- ~~**Where the house is made.**~~ A `house` command beside `host` and `serve`, read and
-  written by the same declaration as every other.
-- ~~**Who sweeps, and when.**~~ A timer in the web host, on a five-minute tick, saying out loud
-  what it took away.
-- **Two doors — decided against.** This was on the list above and should not have been. A house
-  exists so that people can *see what is being played and sit down at it*; a table with a
-  second word of its own is a row on that list you are not allowed to use, which is a list with
-  no purpose. One door, and everything inside is behind it — the list, opening a table, and
-  every board. `smoke.ps1` holds a house to that: a stranger with no word is shown the door,
-  cannot read the list, and cannot have a table dealt for them.
-
-  What a second door would actually buy is a *public* house where strangers open tables and
-  play each other without joining yours. That is a different thing from what this is, and it
-  should be built when somebody wants it rather than because the word "two" was appealing.
-
-### What is left
-
-- ~~**Terminal consoles at a house.**~~ Done, and `wire.ps1` was watching — which was the whole
-  point, because it failed the first time and could not have failed anywhere else.
-
-  The hub holds a **question** rather than a table: `Finding` answers "which table is this
-  connection for", the same way at a hosted table every time and off the route at a house. A
-  name a house does not know is answered with nothing, and the console is *told* — the failure
-  this arrangement produced before was a console that negotiated, connected, and was dropped in
-  silence.
-
-  **The bug it caught was a routing collision.** The browser's board page and the hub had both
-  been mapped at `GET /table/{id}`; both registrations are legal, the first match wins, and the
-  page won. So a console negotiated successfully, was told where to connect, and was handed a
-  page of HTML where its transport should have been — reporting "the server disconnected before
-  the handshake could be started", which sounds like anything except two routes fighting. The
-  page lives at `/at/{id}` now and the wire keeps `/table/{id}`.
-
-  It was invisible from the outside twice over: the house clears its log providers, so the
-  server said nothing at all until that was turned off.
-- ~~**A container.**~~ Written, and built by the build machine rather than by anybody's own —
-  which is the right place for it, the image being a Linux one and the runner being Linux.
-  `image.ps1` is the checks and CI is what runs them, against two games so that
-  `--build-arg GAME` is proved to be wired to something.
-
-  It was written without ever being built, there having been no Docker to hand at the time.
-  The [Dockerfile](../../Dockerfile) and [image.ps1](../../tools/image.ps1) both say so in
-  their first lines, and should stop saying it once CI has had a green run.
-
-  One decision worth keeping: **configuration is the command line, not the environment.** The
-  design note above asked for env vars; that was wrong for the same reason a second door was.
-  This program has one language for what to open and how far it reaches, and `PROTO_PORT`
-  beside `--port` is a second one to keep in step for ever. The entry point is the game, the
-  command is a default, and `docker run turncoats house --code hunter2` is how it is
-  configured.
-
-  What *was* verified without Docker is the set of assumptions the image rests on: a published
-  game, alone in an empty directory, serves a house with no settings file and no project beside
-  it, and calls itself by the name it was published under. The two things left to find out are
-  whether `/data` is writable by the image's `app` user and whether the entry point's
-  `exec "$@"` shell passes arguments and signals as intended — neither of which fails at build
-  time, which is why `image.ps1` exists.
-- ~~**`--fill` and the sweep timer have no checks.**~~ Both do now.
-
-  The timer **moved** to get one. It was four lines inside `Server.house`, sitting between a
-  rule that was thoroughly checked and a house that would grow for ever, and no check could
-  reach it. `House.Sweeping(every, told)` starts it and hands it back, so `house.fsx` can pass
-  a span of forty milliseconds and a real clock and watch a table go without anybody asking —
-  and watch one with somebody sitting at it stay.
-
-  `--fill` is checked where it can only be checked: a house started in a folder of its own,
-  played at until it writes a record, stopped, and started again in the same folder. It offers
-  the game back. Started *without* `--fill` in that same folder it comes up holding nothing,
-  which is the other half of the claim and the half a container depends on.
+[Stack.fsx](../../tests/Stack.fsx) loads every file but `Browser.fs`, `Server.fs` and `Client.fs`,
+the three that need ASP.NET Core or the SignalR client, so [lobby.fsx](../../tests/lobby.fsx) —
+`Lobby`, the streams and the announcements — and [house.fsx](../../tests/house.fsx) — `Hosting`,
+`Housekeeping`, `House`, the sweep on a clock of its own, both halves of `--fill` — run with no
+server. [reach.fsx](../../tests/reach.fsx) holds the word and the addresses,
+[Conforms.fsx](../../tests/Conforms.fsx) puts every game at a lobby, and [wire.ps1](../../tools/wire.ps1)
+and [smoke.ps1](../../tools/smoke.ps1) put one over a real socket and in a real browser.
