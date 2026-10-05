@@ -21,10 +21,10 @@ jobs:
         run: dotnet tool restore
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore PrototypingGameEngine.slnx
 
       - name: Build
-        run: dotnet build --no-restore -warnaserror
+        run: dotnet build PrototypingGameEngine.slnx --no-restore -warnaserror
 
       - name: Check formatting
         run: dotnet fantomas --check src tests tools templates
@@ -79,3 +79,54 @@ jobs:
 
       - name: Build the image and play a game in it
         run: pwsh tools/image.ps1 -Game ${{ matrix.game }}
+
+  # What a game in a repository of its own builds on. Every push to main is handed out as a release
+  # holding the four packages and the two scripts a game's suite loads beside them, so a game takes
+  # a newer engine from here - one download, on any machine - rather than from whichever machine
+  # last packed one.
+  #
+  # The number is this file's doing. Directory.Build.props says the first two parts and the run
+  # number is the third, so no two pushes hand out the same version: NuGet keeps what it has
+  # restored by name and number, and would give back the older of two engines that shared one.
+  #
+  # It does not wait for the jobs above. A game that takes a release holds it to Conforms.fsx in its
+  # own suite, and an engine that does not build does not pack.
+  release:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Pack the four under a number of their own
+        run: |
+          series=$(grep -oP '(?<=<PrototypingVersion>)\d+\.\d+' Directory.Build.props)
+          version="$series.${{ github.run_number }}"
+
+          for project in \
+            src/Prototyping.Engine.fsproj \
+            src/Table/Prototyping.Table.fsproj \
+            src/Net/Prototyping.Net.fsproj \
+            src/Play/Prototyping.Play.fsproj
+          do
+            dotnet pack "$project" -c Release -o release -p:PrototypingVersion="$version"
+          done
+
+          echo "version=$version" >> "$GITHUB_ENV"
+
+      - name: Hand them out
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$version" \
+            release/*.nupkg tests/Checks.fsx tests/Conforms.fsx \
+            --target "$GITHUB_SHA" \
+            --title "$version" \
+            --notes "The engine as of ${GITHUB_SHA::7}: the four packages, and the two scripts a game's suite loads beside them."
