@@ -12,6 +12,15 @@ module Screens =
 
     let steering () = not System.Console.IsInputRedirected
 
+    // The letters that steer, as this keyboard has them. Kept here rather than handed to every
+    // `asking`, because they belong to the keyboard and not to any one screen - and the keyboard page
+    // changes them while it is being steered by them.
+    let mutable private letters = Keymap.standard
+
+    let lettered keymap = letters <- keymap
+
+    let lettering () = letters
+
     let cleared () =
         try
             System.Console.Clear()
@@ -148,14 +157,14 @@ module Screens =
             kept
             @ [ says $"  ... {List.length body - List.length kept} more lines, and this screen is taller than the window" ]
 
-    /// A screen to steer with the arrows - unless input is coming from somewhere that has no keys to
+    /// A screen to steer by its keys - unless input is coming from somewhere that has no keys to
     /// press, in which case the screen is printed once and a line is read.
     ///
     /// `above` is something already drawn - a board, in a view of its own choosing - and it is
     /// printed as it stands rather than handed to `says`. Painting a drawing that has already been
     /// painted throws it away: what a rich board is made of is escapes rather than markup, and the
     /// second pass eats them. A menu has nothing drawn for it and passes "".
-    let askingOver (says: string -> string) said (above: string) screen at =
+    let askingOver (says: string -> string) said (above: string) (board: Keys.Steered) at =
         let lines (text: string) =
             text.Replace("\r\n", "\n").Split '\n' |> Array.toList
 
@@ -169,11 +178,12 @@ module Screens =
 
                   // Whose the keyboard is, said where somebody is about to press a key. A mode with
                   // no sign of itself is a mode people press keys into and wonder at.
-                  if Keys.typing standing then
-                      yield $"> {standing.Buffer}_"
-                  elif steering () then
-                      yield says "  (space to type a line)"
-                      yield "> "
+                  if steering () then
+                      let shown = Keys.prompt (lettering ()) standing
+                      let hints, typed = List.splitAt (List.length shown - 1) shown
+
+                      yield! List.map says hints
+                      yield! typed
                   else
                       yield "> " ]
 
@@ -189,7 +199,7 @@ module Screens =
             // scrolled what had just been cleared, and the eye caught the halves.
             let drawn = redrawn drawn (frame standing (Some index))
 
-            match Keys.answer (Keys.pressed (Keys.typing standing) (System.Console.ReadKey true)) standing with
+            match Keys.answer (lettering ()) (System.Console.ReadKey true) standing with
             | Keys.Steering next -> steer drawn next
             | Keys.Answered line -> Some line, Keys.path standing
 
@@ -197,13 +207,14 @@ module Screens =
             // Cleared once, and drawn over from then on. The first frame has whatever was on the
             // terminal before it under it; every frame after is written over the last.
             cleared ()
-            steer nothing (Keys.standing screen at)
+            steer nothing (Keys.standing board at)
         else
-            printf "%s" (frame (Keys.standing screen at) None)
+            printf "%s" (frame (Keys.standing board at) None)
 
             match System.Console.ReadLine() with
             | null -> None, at
             | line -> Some line, at
 
     /// The same, for a screen that is the whole of what is on the terminal - which is every menu.
-    let asking says said screen at = askingOver says said "" screen at
+    let asking says said screen at =
+        askingOver says said "" (Keys.steered screen) at

@@ -45,9 +45,9 @@ module Options =
         |> inRows
         |> List.mapi (fun i row -> (if i = 0 then "Colours:" else "").PadRight Labels + row)
 
-    // What the left and right arrows send on a row that turns through a list of names: the next one
-    // along, coming round at either end. Taking the row sends the next one too, so Enter on a row
-    // that turns does what Right does rather than sending back what is already there.
+    // What turning a row sends when it turns through a list of names: the next one along, coming
+    // round at either end. Taking the row sends the next one too, so Enter on a row that turns does
+    // what turning it on does rather than sending back what is already there.
     let private stepping said (all: string list) standing step =
         match List.length all with
         | 0 -> said standing
@@ -125,7 +125,7 @@ module Options =
               Keys.sends (Keys.nth 1) "save" "keep all this, and open that way next time" "save"
               Keys.sends (Some '0') "done" "back to the settings" "done" ]
           Note =
-            [ "Left and right turn it over, and so does taking the row; or say 'bell on' or"
+            [ "Turning the row turns it over, and so does taking it; or say 'bell on' or"
               "'bell off' outright."
               ""
               "This one is not a game's own. A bell is a fact about the room you are sitting in,"
@@ -178,7 +178,7 @@ module Options =
                 Keys.sends (Keys.nth (after + 1)) "save" "keep all this, and open that way next time" "save"
                 Keys.sends (Some '0') "done" "back to the settings" "done" ]
           Note =
-            [ "Left and right walk the one marked -> through what it can be, and so does taking it."
+            [ "Turning the one marked -> walks it through what it can be, and so does taking it."
               "Or name one outright: 'blue teal' for a colour, 'view rich' for a way of drawing."
               "" ]
             @ [ "Drawn:".PadRight Labels + String.concat ", " views ]

@@ -52,7 +52,7 @@ module Keys =
 
     // Rows are numbered from 1 as they are read, and there is no tenth: 0 is the way out of every
     // screen, so a row that was handed it would answer the key meant for leaving. A screen with
-    // more rows than digits walks the rest with the arrows.
+    // more rows than digits walks the rest by moving the mark.
     let nth n =
         if n > 8 then None else Some(char (int '0' + n + 1))
 
@@ -147,77 +147,37 @@ module Keys =
              @ [ "" ]
              @ indented screen.Note)
 
-    type Press =
-        | Moved of by: int
-        | Turned of by: int
-        | Picked
-        | Numbered of char
-        | Typed of char
+    /// A screen as it is steered: the outermost one, and what turning the page and sealing the turn
+    /// send. Those two are facts about the whole board rather than about any one list on it, which
+    /// is why they sit here and not on `Screen` - every menu has neither - and why the page turns and
+    /// the turn seals from however deep somebody has walked.
+    [<NoComparison; NoEquality>]
+    type Steered =
+        { Screen: Screen
+          Pages: (int -> string) option
+          Seals: string option }
 
-        /// Hand the keyboard to the prompt, with nothing typed into it yet.
-        | Prompting
+    let steered screen =
+        { Screen = screen
+          Pages = None
+          Seals = None }
 
-        | Rubbed
-        | Backed
-        | Sent
-        | Ignored
+    /// Whose the keyboard is. Held rather than worked out from whether anything has been typed, so
+    /// that a line may begin with one of the steering letters, and so that the prompt can be open
+    /// and empty, which is what backspacing a line back to nothing leaves.
+    type Prompt =
+        | Shut
+        | Open of line: string
 
-    /// What a keypress means, which depends on whose the keyboard is.
-    ///
-    /// Steering, the letter keys are the letter keys: w, a, s and d walk the rows and a digit takes
-    /// one. Typing, **every** printable key is a letter, those four included - which is the whole
-    /// point of there being a mode at all. Reading the mode off "has anything been typed yet" is
-    /// what this used to do, and it left every word beginning with one of those four impossible to
-    /// type: the first press steered instead of starting the line, so there was never a line under
-    /// way for the rest of it to belong to. `search` was untypeable at a game about searching.
-    ///
-    /// The space bar is what hands the keyboard over, since a line never usefully begins with one.
-    /// Any other printable key that is not a steering key hands it over as well and is the first
-    /// letter, so nothing about the old way of starting a line has been taken away.
-    let pressed typing (key: ConsoleKeyInfo) =
-        match key.Key with
-        | ConsoleKey.Enter -> if typing then Sent else Picked
-        | ConsoleKey.Backspace -> Rubbed
-        | ConsoleKey.Escape -> Backed
-
-        // The arrows are never ambiguous, so they steer whether or not a line is under way.
-        | ConsoleKey.UpArrow -> Moved -1
-        | ConsoleKey.DownArrow
-        | ConsoleKey.Tab -> Moved 1
-        | ConsoleKey.LeftArrow -> if typing then Ignored else Turned -1
-        | ConsoleKey.RightArrow -> if typing then Ignored else Turned 1
-
-        // Matched as a key as well as a character, because a space arrives as both: a terminal
-        // sends ' ' with it and some send nothing at all.
-        | ConsoleKey.Spacebar -> if typing then Typed ' ' else Prompting
-        | _ ->
-            match key.KeyChar with
-            | letter when typing -> if Char.IsControl letter then Ignored else Typed letter
-            | ' ' -> Prompting
-            | 'w'
-            | 'W' -> Moved -1
-            | 's'
-            | 'S' -> Moved 1
-            | 'a'
-            | 'A' -> Turned -1
-            | 'd'
-            | 'D' -> Turned 1
-            | digit when Char.IsDigit digit -> Numbered digit
-            | letter when Char.IsControl letter -> Ignored
-            | letter -> Typed letter
-
+        /// Sealing was asked for and is asked about before it is sent: a sealed turn cannot be
+        /// walked back the way a mark can.
+        | Offering of seal: string
 
     [<NoComparison; NoEquality>]
     type Standing =
-        {
-            Stack: (Screen * int) list
-            Buffer: string
-
-            /// Whose the keyboard is. Held rather than worked out from whether anything has been typed,
-            /// so that a line may begin with one of the steering letters - and so that the prompt can
-            /// be open and empty, which is what backspacing a line back to nothing leaves.
-            Typing: bool
-        }
+        { Stack: (Screen * int) list
+          Board: Steered
+          Prompt: Prompt }
 
     /// Where somebody is standing, as the way down to it: which row of the first screen, then which
     /// row of the screen that one opens, and so on.
@@ -243,10 +203,10 @@ module Keys =
             | Some _, [] -> here at
             | None, _ -> here 0
 
-    let standing screen path =
-        { Stack = descend screen path
-          Buffer = ""
-          Typing = false }
+    let standing (board: Steered) path =
+        { Stack = descend board.Screen path
+          Board = board
+          Prompt = Shut }
 
     let facing standing = List.head standing.Stack
 
@@ -257,14 +217,76 @@ module Keys =
     let path standing =
         standing.Stack |> List.rev |> List.map snd
 
-    let typing standing = standing.Typing
-
     [<NoComparison; NoEquality>]
     type Answer =
         | Steering of Standing
         | Answered of string
 
-    let answer press standing =
+    type private Press =
+        | Moved of by: int
+        | Turned of by: int
+        | Paged of by: int
+        | Offered
+        | Picked
+        | Numbered of char
+        | Prompting
+        | Backed
+        | Ignored
+
+    /// What a key means while the prompt is shut.
+    ///
+    /// Only the letters in the keymap steer, and nothing else does - not the arrows, not Tab, not a
+    /// letter the keymap does not hold. A letter that is not a steering one used to start a line,
+    /// but which letters steer is now the player's to choose, so the same key would start a line at
+    /// one keyboard and move the mark at another. The space bar is the one way into the prompt, and
+    /// is the same at every keyboard.
+    let private pressed keymap (key: ConsoleKeyInfo) =
+        match key.Key with
+        | ConsoleKey.Enter -> Picked
+        | ConsoleKey.Backspace
+        | ConsoleKey.Escape -> Backed
+
+        // Matched as a key as well as a character, because a space arrives as both: a terminal
+        // sends ' ' with it and some send nothing at all.
+        | ConsoleKey.Spacebar -> Prompting
+        | _ ->
+            match key.KeyChar with
+            | ' ' -> Prompting
+            | digit when Char.IsDigit digit -> Numbered digit
+            | letter ->
+                match Keymap.keyOf letter keymap with
+                | Some Up -> Moved -1
+                | Some Down -> Moved 1
+                | Some Left -> Turned -1
+                | Some Right -> Turned 1
+                | Some Previous -> Paged -1
+                | Some Next -> Paged 1
+                | Some Seal -> Offered
+                | None -> Ignored
+
+    /// What a key means while a line is being typed. **Every** printable key is a letter, the
+    /// steering ones included - which is the whole point of there being a mode at all: `search` was
+    /// once untypeable at a game about searching, because its first letter steered instead.
+    let private typing line (key: ConsoleKeyInfo) standing =
+        let opened line =
+            Steering { standing with Prompt = Open line }
+
+        let shut () =
+            Steering { standing with Prompt = Shut }
+
+        match key.Key with
+        | ConsoleKey.Enter -> Answered line
+
+        // Escape leaves the prompt before it leaves the screen: somebody half-way through a line
+        // who changed their mind wants the line gone, not the screen.
+        | ConsoleKey.Escape -> shut ()
+        | ConsoleKey.Backspace when line = "" -> shut ()
+        | ConsoleKey.Backspace -> opened (line.Substring(0, line.Length - 1))
+        | ConsoleKey.Spacebar -> opened (line + " ")
+        | _ when Char.IsControl key.KeyChar -> Steering standing
+        | _ -> opened (line + string key.KeyChar)
+
+    let answer keymap (key: ConsoleKeyInfo) standing =
         let showing, at = facing standing
         let here () = List.tryItem at showing.Rows
 
@@ -274,16 +296,11 @@ module Keys =
 
             // A row that writes the beginning of a line and waits hands the keyboard over as well,
             // or the rest of what it asked for could not be typed.
-            | Types text ->
-                Steering
-                    { standing with
-                        Buffer = text
-                        Typing = true }
+            | Types text -> Steering { standing with Prompt = Open text }
             | Opens under ->
                 Steering
-                    { Stack = (under, 0) :: standing.Stack
-                      Buffer = ""
-                      Typing = false }
+                    { standing with
+                        Stack = (under, 0) :: standing.Stack }
 
         // Backing out of the innermost screen; from the outermost there is nowhere to go, so it
         // answers with whatever line the screen said stands for leaving it, if any.
@@ -293,65 +310,83 @@ module Keys =
                 match showing.Backs with
                 | Some line -> Answered line
                 | None -> Steering standing
-            | _ :: behind ->
-                Steering
-                    { Stack = behind
-                      Buffer = ""
-                      Typing = false }
+            | _ :: behind -> Steering { standing with Stack = behind }
             | [] -> Steering standing
 
-        // Out of the prompt and back to the rows, with whatever was half-typed thrown away.
-        let dropped () =
-            Steering
-                { standing with
-                    Buffer = ""
-                    Typing = false }
+        match standing.Prompt with
+        | Open line -> typing line key standing
 
-        let rubbed () =
-            Steering
-                { standing with
-                    Buffer = standing.Buffer.Substring(0, standing.Buffer.Length - 1) }
-
-        match press with
-        | Ignored -> Steering standing
-        | Prompting -> Steering { standing with Typing = true }
-        | Typed letter ->
-            Steering
-                { standing with
-                    Buffer = standing.Buffer + string letter
-                    Typing = true }
-        | Sent -> Answered standing.Buffer
-
-        // Escape leaves the prompt before it leaves the screen: somebody half-way through a line
-        // who changed their mind wants the line gone, not the screen.
-        | Backed -> if typing standing then dropped () else out ()
-        | Rubbed ->
-            if not (typing standing) then out ()
-            elif standing.Buffer = "" then dropped ()
-            else rubbed ()
-        | Moved by ->
-            Steering
-                { standing with
-                    Stack = (showing, moved by at showing) :: List.tail standing.Stack }
-        | Numbered digit ->
-            match byDigit digit showing with
-            | Some row -> taking row
-            | None -> Steering standing
-        | Picked ->
-            match here () with
-            | Some row -> taking row
-            | None -> Steering standing
-
-        // Right on a row that has nothing to turn through takes it, and Left backs out, so a screen
-        // of plain rows can be walked into and out of with one hand on the arrows.
-        | Turned by ->
-            match
-                here ()
-                |> Option.bind (fun row -> row.Turns |> Option.map (fun turn -> row, turn))
-            with
-            | Some(_, turn) -> Answered(turn by)
-            | None when by > 0 ->
+        // Anything but the seal or Enter is a no, and is used up saying it: a key pressed to get
+        // out of the question is not also a key that does something else.
+        | Offering seal ->
+            if key.Key = ConsoleKey.Enter || Keymap.keyOf key.KeyChar keymap = Some Seal then
+                Answered seal
+            else
+                Steering { standing with Prompt = Shut }
+        | Shut ->
+            match pressed keymap key with
+            | Ignored -> Steering standing
+            | Prompting -> Steering { standing with Prompt = Open "" }
+            | Backed -> out ()
+            | Moved by ->
+                Steering
+                    { standing with
+                        Stack = (showing, moved by at showing) :: List.tail standing.Stack }
+            | Numbered digit ->
+                match byDigit digit showing with
+                | Some row -> taking row
+                | None -> Steering standing
+            | Picked ->
                 match here () with
                 | Some row -> taking row
                 | None -> Steering standing
-            | None -> out ()
+            | Paged by ->
+                match standing.Board.Pages with
+                | Some turn -> Answered(turn by)
+                | None -> Steering standing
+            | Offered ->
+                match standing.Board.Seals with
+                | Some seal -> Steering { standing with Prompt = Offering seal }
+                | None -> Steering standing
+
+            // Turning on a row that has nothing to turn through takes it, and turning back backs
+            // out, so a screen of plain rows can be walked into and out of with one hand.
+            | Turned by ->
+                match
+                    here ()
+                    |> Option.bind (fun row -> row.Turns |> Option.map (fun turn -> row, turn))
+                with
+                | Some(_, turn) -> Answered(turn by)
+                | None when by > 0 ->
+                    match here () with
+                    | Some row -> taking row
+                    | None -> Steering standing
+                | None -> out ()
+
+    /// The lines under the list: what the keys do here, then the line a line is typed on. The last
+    /// is always the typed one, and is the only one that must never be painted - what somebody types
+    /// is not markup.
+    ///
+    /// The hint is built from the keymap and names only what does something on this screen, so it
+    /// is right for whoever moved which letters, and it is the one place the program names a key: a
+    /// note that said "left and right" would be wrong for every player who moved them.
+    let prompt keymap standing =
+        let showing, _ = facing standing
+        let letter key = string (Keymap.letter key keymap)
+
+        let pair first second does =
+            $"{letter first} {letter second} {does}"
+
+        match standing.Prompt with
+        | Open line -> [ $"> {line}_" ]
+        | Offering _ -> [ $"  Ready? {letter Seal} or Enter seals it, anything else does not."; "> " ]
+        | Shut ->
+            let hint =
+                [ pair Up Down "move"
+                  if showing.Rows |> List.exists (fun row -> row.Turns.IsSome) then
+                      pair Left Right "turn"
+                  if standing.Board.Pages.IsSome then pair Previous Next "page"
+                  if standing.Board.Seals.IsSome then $"{letter Seal} ready"
+                  "space to type" ]
+
+            [ "  " + String.concat "   " hint; "> " ]

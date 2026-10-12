@@ -81,7 +81,7 @@ module Menu =
                     (Reach.reading reach)
                     (opening "reaches") ]
           Note =
-            [ $"Left and right walk the one marked -> through {Seating.names skills}."
+            [ $"Turning the one marked -> walks it through {Seating.names skills}."
               "Enter takes the next one along, and so does the seat's own number."
               ""
               "A table with anybody joining is opened over the network and waited at. One without"
@@ -138,7 +138,7 @@ module Menu =
                   (reach.Address |> Option.defaultValue "this machine's own addresses")
                   $"{after reach} at:" ]
           Note =
-            [ "Left and right change the one marked ->, and so does its own number. The two that"
+            [ "Turning the one marked -> changes it, and so does its own number. The two that"
               "need typing write the line as far as they can and wait for you to finish it."
               ""
               "A word at the door is what keeps a stranger out of somebody's seat, and a table"
@@ -231,7 +231,7 @@ module Menu =
           Prose = [ game.Blurb ]
           Rows = rows
           Note =
-            [ "Move with the arrows or w and s. Enter takes the one marked ->, and so does its number."
+            [ "Enter takes the one marked ->, and so does its number."
               ""
               $"Or type it: a seat each, from {Seating.names game.Skills} - 'play {fewest}' to deal"
               $"one, 'serve {fewest}' to read it in a browser, 'seats {fewest}' to lay it out"

@@ -59,9 +59,9 @@ let private tell rings posts =
 /// Playing a game of turns at this keyboard.
 ///
 /// Two ways in, and `at` is why they are one function. A game that offers rows for where it stands
-/// is *steered* - the arrows and w/a/s/d walk them, Enter takes the marked one, and Enter with a
-/// line underway sends the line instead, so the prompt is never taken away. A game that offers
-/// none, or a console that cannot read a key at all, gets the loop it always had.
+/// is *steered* - the steering letters walk them, Enter takes the marked one, and Enter with a line
+/// underway sends the line instead, so the prompt is never taken away. A game that offers none, or
+/// a console that cannot read a key at all, gets the loop it always had.
 ///
 /// `at` is where the mark had got to, carried across a move on purpose: every line rebuilds the
 /// screen from the state it left behind, and a mark that went back to the top each time would make
@@ -92,7 +92,7 @@ let rec private loop rings sitters said at solo =
 
         // The board goes above the rows, and goes up *as its view drew it*: it has been painted
         // once already, and painting it again would throw that away rather than add to it.
-        match Screens.askingOver says (String.concat Environment.NewLine said) board screen at with
+        match Screens.askingOver says (String.concat Environment.NewLine said) board (Keys.steered screen) at with
         | None, at -> heard at "quit"
         | Some line, at -> heard at line
 

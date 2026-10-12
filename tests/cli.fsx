@@ -533,7 +533,7 @@ let private unread reader screen =
 report "every row the menu offers stands for a line the menu itself can read" [] (unread chosen front)
 
 report
-    "and the same on the colour screen, where left and right walk a slot through the colours"
+    "and the same on the colour screen, where turning walks a slot through the colours"
     []
     (unread (Options.chooseVideo standard) (settings standard))
 
@@ -637,7 +637,7 @@ report
     (unread Options.choose (Options.screen (List.length waysOffered)))
 
 report
-    "and every row on the Audio page, including the one left and right turn over"
+    "and every row on the Audio page, including the one that turns over"
     []
     (unread Options.chooseAudio (Options.audio true)
      @ unread Options.chooseAudio (Options.audio false))
@@ -821,16 +821,21 @@ let private key press =
 let private letter (typed: char) =
     ConsoleKeyInfo(typed, enum<ConsoleKey> 0, false, false, false)
 
-let private walkingAt at screen keys =
+let private spelt (text: string) = text |> Seq.map letter |> List.ofSeq
+
+let private walkingWith keymap (board: Keys.Steered) at keys =
     let rec next standing keys =
         match keys with
         | [] -> None
         | key :: rest ->
-            match Keys.answer (Keys.pressed (Keys.typing standing) key) standing with
+            match Keys.answer keymap key standing with
             | Keys.Steering standing -> next standing rest
             | Keys.Answered line -> Some line
 
-    next (Keys.standing screen at) keys
+    next (Keys.standing board at) keys
+
+let private walkingAt at screen keys =
+    walkingWith Keymap.standard (Keys.steered screen) at keys
 
 let private walking screen keys = walkingAt [] screen keys
 
@@ -848,14 +853,38 @@ report
     (Ok("seats", "you you you", None))
     (dealing (chosen "seats you you you"))
 
-let private taking down =
-    walked (List.replicate 5 down @ [ key ConsoleKey.Enter ])
-
-report "the arrows walk down the list" (Some "rules") (taking (key ConsoleKey.DownArrow))
-
-report "and w and s are the same two keys" (Some "rules") (taking (letter 's'))
-
 report "up from the top of the list is the bottom of it" (Some "quit") (walked [ letter 'w'; key ConsoleKey.Enter ])
+
+report
+    "the arrows and Tab move nothing, since only the letters steer"
+    (Some "quit")
+    (walked
+        [ key ConsoleKey.DownArrow
+          key ConsoleKey.Tab
+          key ConsoleKey.DownArrow
+          key ConsoleKey.RightArrow
+          key ConsoleKey.UpArrow
+          letter 'w'
+          key ConsoleKey.Enter ])
+
+report
+    "and a letter that steers nothing does nothing, rather than starting a line"
+    (Some "settings")
+    (walked [ letter 'j'; letter 'x'; letter '5' ])
+
+report
+    "the space bar opens the prompt, so a line that begins with a steering letter can be said"
+    (Some "search")
+    (walked ([ key ConsoleKey.Spacebar ] @ spelt "search" @ [ key ConsoleKey.Enter ]))
+
+let private remapped =
+    Keymap.rebind Up "i" Keymap.standard
+    |> Result.defaultWith (fun problem -> failwith problem)
+
+report
+    "with up moved to i, i moves up and w does nothing at all"
+    (Some "quit")
+    (walkingWith remapped (Keys.steered front) [] [ letter 'w'; letter 'i'; key ConsoleKey.Enter ])
 
 report
     "a row that needs more writes the part it knows and waits for the rest"
@@ -868,13 +897,9 @@ report
 
 
 report
-    "and once a line is underway the steering letters are letters again"
-    (Some "join sad")
-    (walked (
-        [ 'j'; 'o'; 'i'; 'n'; ' '; 's'; 'a'; 'd' ]
-        |> List.map letter
-        |> fun keys -> keys @ [ key ConsoleKey.Enter ]
-    ))
+    "and once a line is underway every steering letter is a letter, the page and the seal included"
+    (Some "wade request")
+    (walked ([ key ConsoleKey.Spacebar ] @ spelt "wade request" @ [ key ConsoleKey.Enter ]))
 
 // The prompt is a mode, and this is why it had to become one. Reading "is somebody typing" off
 // "has anything been typed yet" left every line beginning with w, a, s or d impossible to say: the
@@ -991,23 +1016,20 @@ let private walkingSeat times press =
     List.replicate times press
     |> List.fold (fun sitters press -> pressed press sitters) (Seating.here 3)
 
-report "right walks a seat on to the machine" "easy you you" (Seating.line (walkingSeat 1 (key ConsoleKey.RightArrow)))
+report "right walks a seat on to the machine" "easy you you" (Seating.line (walkingSeat 1 (letter 'd')))
 
-report
-    "and on again, through the machines and out the far side"
-    "joins you you"
-    (Seating.line (walkingSeat 4 (key ConsoleKey.RightArrow)))
+report "and on again, through the machines and out the far side" "joins you you" (Seating.line (walkingSeat 4 (letter 'd')))
 
 report
     "walking a seat right round comes back where it started"
     "you you you"
-    (Seating.line (walkingSeat (List.length (Seating.all playing.Skills)) (key ConsoleKey.RightArrow)))
+    (Seating.line (walkingSeat (List.length (Seating.all playing.Skills)) (letter 'd')))
 
-report "and left from the first is the last" "joins you you" (Seating.line (walkingSeat 1 (key ConsoleKey.LeftArrow)))
+report "and left from the first is the last" "joins you you" (Seating.line (walkingSeat 1 (letter 'a')))
 
 report
-    "the seat's own number walks it too, the same as the arrow"
-    (Seating.line (walkingSeat 1 (key ConsoleKey.RightArrow)))
+    "the seat's own number walks it too, the same as turning it"
+    (Seating.line (walkingSeat 1 (letter 'd')))
     (Seating.line (pressed (letter '1') (Seating.here 3)))
 
 
@@ -1071,7 +1093,7 @@ report
 report
     "and what carries it walks from the clear to behind whatever holds the certificate"
     "port:5000 word:kbd4-9mtx-7rfp behind"
-    (Reach.line (settling [ key ConsoleKey.DownArrow; key ConsoleKey.RightArrow ] (Reach.locked "kbd4-9mtx-7rfp")))
+    (Reach.line (settling [ letter 's'; letter 'd' ] (Reach.locked "kbd4-9mtx-7rfp")))
 
 
 let private typed row rest reach =
@@ -1108,7 +1130,7 @@ let private colours = settings standard
 let private FirstSlot = [ 1 ]
 
 let private walkedRight times palette =
-    List.replicate times (key ConsoleKey.RightArrow)
+    List.replicate times (letter 'd')
     |> List.fold
         (fun palette press ->
             match walkingAt FirstSlot (settings palette) [ press ] with
@@ -1129,15 +1151,12 @@ let private along steps =
 
     names[((at + steps) % names.Length + names.Length) % names.Length]
 
-report
-    "right walks a slot on to the next colour"
-    (Some $"red {along 1}")
-    (walkingAt FirstSlot colours [ key ConsoleKey.RightArrow ])
+report "right walks a slot on to the next colour" (Some $"red {along 1}") (walkingAt FirstSlot colours [ letter 'd' ])
 
 report
     "and left to the one before, which from the first is the last"
     (Some $"red {along -1}")
-    (walkingAt FirstSlot colours [ key ConsoleKey.LeftArrow ])
+    (walkingAt FirstSlot colours [ letter 'a' ])
 
 report
     "walking right round the colours comes back where it started"
@@ -1146,7 +1165,7 @@ report
       (Palette.shadeOf "red" (walkedRight (List.length Palette.shades) standard)).Name ]
 
 
-report "right walks the top row on to the next way of drawing" (Some "view rich") (walking colours [ key ConsoleKey.RightArrow ])
+report "right walks the top row on to the next way of drawing" (Some "view rich") (walking colours [ letter 'd' ])
 
 
 let private wandered screen keys =
@@ -1154,21 +1173,16 @@ let private wandered screen keys =
         match keys with
         | [] -> Keys.path standing
         | key :: rest ->
-            match Keys.answer (Keys.pressed (Keys.typing standing) key) standing with
+            match Keys.answer Keymap.standard key standing with
             | Keys.Steering standing -> next standing rest
             | Keys.Answered _ -> Keys.path standing
 
-    next (Keys.standing screen []) keys
+    next (Keys.standing (Keys.steered screen) []) keys
 
 report
     "and the cursor comes back where it was left, however deep it went"
     [ 3 ]
-    (wandered
-        colours
-        [ key ConsoleKey.DownArrow
-          key ConsoleKey.DownArrow
-          key ConsoleKey.DownArrow
-          key ConsoleKey.RightArrow ])
+    (wandered colours [ letter 's'; letter 's'; letter 's'; letter 'd' ])
 
 
 // --- staying where you are when a row is taken --------------------------------------------------
@@ -1201,27 +1215,128 @@ report
     [ 1; 2 ]
     (wandered
         outer
-        [ key ConsoleKey.DownArrow // onto 'A list'
+        [ letter 's' // onto 'A list'
           key ConsoleKey.Enter // into it
-          key ConsoleKey.DownArrow
-          key ConsoleKey.DownArrow // onto its third row
+          letter 's'
+          letter 's' // onto its third row
           key ConsoleKey.Enter ]) // and take it
 
 report
     "and standing there again is standing on the same row of the same list"
     (Some "thing 2", "Everything there is")
-    (let standing = Keys.standing outer [ 1; 2 ]
+    (let standing = Keys.standing (Keys.steered outer) [ 1; 2 ]
      let showing, at = Keys.facing standing
      showing.Rows |> List.tryItem at |> Option.map (fun row -> row.Says), showing.Title)
 
 report
     "a path deeper than the screens now go stops where they do rather than throwing"
     (0, "The first screen")
-    (let standing = Keys.standing outer [ 0; 4; 4 ]
+    (let standing = Keys.standing (Keys.steered outer) [ 0; 4; 4 ]
      let showing, at = Keys.facing standing
      at, showing.Title)
 
-report "and a row that is no longer there is the first one, not a crash" 0 (Keys.standing outer [ 99 ] |> Keys.facing |> snd)
+report
+    "and a row that is no longer there is the first one, not a crash"
+    0
+    (Keys.standing (Keys.steered outer) [ 99 ] |> Keys.facing |> snd)
+
+
+// --- the page and the seal ----------------------------------------------------------------------
+//
+// Facts about the whole board rather than any list on it, so they answer from however deep
+// somebody has walked.
+
+let private deeper: Keys.Screen =
+    { Title = "Further out still"
+      Prose = []
+      Rows = [ Keys.opens (Some '1') "The first screen" "and everything under it" outer ]
+      Note = []
+      Backs = None }
+
+let private sealing board =
+    { Keys.steered board with
+        Pages = Some(sprintf "page %d")
+        Seals = Some "ready" }
+
+let private onBoard board at keys =
+    walkingWith Keymap.standard board at keys
+
+report
+    "the seal letter asks before it seals, and pressing it again seals"
+    (Some "ready")
+    (onBoard (sealing outer) [] [ letter 'r'; letter 'r' ])
+
+report
+    "and Enter answers the question the same way"
+    (Some "ready")
+    (onBoard (sealing outer) [] [ letter 'r'; key ConsoleKey.Enter ])
+
+report
+    "anything else is a no, and the prompt is shut again"
+    (Some "one")
+    (onBoard (sealing outer) [] [ letter 'r'; letter 'x'; key ConsoleKey.Enter ])
+
+report
+    "and the key that said no is used up saying it rather than also moving the mark"
+    (Some "one")
+    (onBoard (sealing outer) [] [ letter 'r'; letter 's'; key ConsoleKey.Enter ])
+
+report
+    "the seal letter does nothing where the board has nothing to seal"
+    (Some "one")
+    (walking outer [ letter 'r'; letter 'r'; key ConsoleKey.Enter ])
+
+report
+    "the page turns from three lists deep, both ways"
+    [ Some "page 1"; Some "page -1" ]
+    [ onBoard (sealing deeper) [ 0; 1; 2 ] [ letter 'e' ]
+      onBoard (sealing deeper) [ 0; 1; 2 ] [ letter 'q' ] ]
+
+report
+    "and the page letters do nothing where the board has no pages"
+    (Some "one")
+    (walking outer [ letter 'q'; letter 'e'; key ConsoleKey.Enter ])
+
+let private hinted keymap board at keys =
+    let rec next standing keys =
+        match keys with
+        | [] -> Keys.prompt keymap standing
+        | key :: rest ->
+            match Keys.answer keymap key standing with
+            | Keys.Steering standing -> next standing rest
+            | Keys.Answered line -> [ $"answered '{line}'" ]
+
+    next (Keys.standing board at) keys
+
+report
+    "the hint under a plain list names moving and typing, and nothing that would do nothing"
+    [ "  w s move   space to type"; "> " ]
+    (hinted Keymap.standard (Keys.steered outer) [] [])
+
+report
+    "and a list with a row that turns names turning"
+    [ "  w s move   a d turn   space to type"; "> " ]
+    (hinted Keymap.standard (Keys.steered front) [] [])
+
+report
+    "and a board with pages and a seal names those, from however deep"
+    [ "  w s move   q e page   r ready   space to type"; "> " ]
+    (hinted Keymap.standard (sealing deeper) [ 0; 1 ] [])
+
+report
+    "the hint names the letters as this keyboard has them"
+    [ "  i s move   space to type"; "> " ]
+    (hinted remapped (Keys.steered outer) [] [])
+
+report
+    "asking before sealing says what will seal it, and what will not"
+    [ "  Ready? r or Enter seals it, anything else does not."; "> " ]
+    (hinted Keymap.standard (sealing outer) [] [ letter 'r' ])
+
+report
+    "and while a line is typed the line is all there is"
+    [ "> go_" ]
+    (hinted Keymap.standard (sealing outer) [] ([ key ConsoleKey.Spacebar ] @ spelt "go"))
 
 
 // --- a screen of bare names, drawn in columns ---------------------------------------------------
