@@ -655,11 +655,12 @@ report
 
 report
     "the way back out of each page is a line that page reads as going back"
-    [ true; true; true; true ]
+    [ true; true; true; true; true ]
     ([ Options.screen 2, Options.choose
        Options.audio true, Options.chooseAudio
        Options.game waysOffered "compile", Options.chooseGame waysOffered
-       settings standard, Options.chooseVideo standard ]
+       settings standard, Options.chooseVideo standard
+       Options.keyboard Keymap.standard, Options.chooseKeyboard Keymap.standard ]
      |> List.map (fun ((screen: Keys.Screen), reader) ->
          match screen.Backs with
          | Some line ->
@@ -670,14 +671,69 @@ report
 
 report
     "'save' is a line every page reads as keeping the lot"
-    [ true; true; true ]
+    [ true; true; true; true ]
     ([ Options.chooseAudio
        Options.chooseGame waysOffered
-       Options.chooseVideo standard ]
+       Options.chooseVideo standard
+       Options.chooseKeyboard Keymap.standard ]
      |> List.map (fun reader ->
          match reader "save" with
          | Ok Options.Keep -> true
          | _ -> false))
+
+report
+    "the settings menu opens the keys page by name"
+    true
+    (match Options.choose "keys" with
+     | Ok(Options.Opening Options.Keyboard) -> true
+     | _ -> false)
+
+let private rebound keymap line =
+    match Options.chooseKeyboard keymap line with
+    | Ok(Options.Rebound keymap) -> Ok(Keymap.lines keymap)
+    | Ok _ -> Error "that was not a key moved"
+    | Error problem -> Error problem
+
+report
+    "every row on the keys page turns its key to a letter the page reads, both ways"
+    []
+    (everyRow (Options.keyboard Keymap.standard)
+     |> List.collect (fun row ->
+         match row.Turns with
+         | Some turn -> [ turn -1; turn 1 ]
+         | None -> [])
+     |> List.filter (fun line -> rebound Keymap.standard line |> Result.isError))
+
+report
+    "and taking one writes the start of the line, for the letter to finish"
+    (Ok
+        [ "key up i"
+          "key down s"
+          "key left a"
+          "key right d"
+          "key previous q"
+          "key next e"
+          "key seal r" ])
+    (match (List.head (Options.keyboard Keymap.standard).Rows).Pick with
+     | Keys.Types text -> rebound Keymap.standard (text + "i")
+     | _ -> Error "the row does not wait for a letter")
+
+report
+    "a letter another key already has is refused, in words that say which"
+    (Error "'s' cannot both move up and move down. Give one of them another letter.")
+    (rebound Keymap.standard "key up s")
+
+report
+    "and a key the page does not know is refused, naming the ones it does"
+    (Error "'sideways' is not a key that can be moved. There is up, down, left, right, previous, next, seal.")
+    (rebound Keymap.standard "key sideways x")
+
+report
+    "reset puts every letter back"
+    (Ok(Keymap.lines Keymap.standard))
+    (match Keymap.bound [ (Up, "i"); (Seal, "x") ] with
+     | Ok moved -> rebound moved "reset"
+     | Error problem -> Error problem)
 
 
 let private saidBack settings =
@@ -755,10 +811,60 @@ report
      | _ -> false)
 
 report
-    "and a line that is none of the four is complained about, saying what the four are"
+    "and a line that is none of the five is complained about, saying what the five are"
     true
     (match Settings.read "frobnicate" |> snd with
-     | [ problem ] -> problem.Contains "'frobnicate' is not 'view <name>', 'bell on', 'plays <name>' or '<what> <colour>'"
+     | [ problem ] ->
+         problem.Contains
+             "'frobnicate' is not 'view <name>', 'bell on', 'key <what> <letter>', 'plays <name>' or '<what> <colour>'"
+     | _ -> false)
+
+let private swapped =
+    Keymap.bound [ (Up, "s"); (Down, "w"); (Seal, "x") ]
+    |> Result.defaultWith (fun problem -> failwith problem)
+
+report
+    "the letters are written as one line a key, and read back as they were"
+    (Keymap.lines swapped, Keymap.lines swapped)
+    (let kept = Settings.none |> Settings.keying swapped
+
+     let written =
+         (Settings.write kept).Split '\n'
+         |> Array.map (fun line -> line.Trim())
+         |> Array.filter (fun line -> line.StartsWith "key ")
+         |> List.ofArray
+
+     written, kept |> saidBack |> Settings.keymap |> Keymap.lines)
+
+report
+    "a file that says nothing about the keys keeps the usual ones"
+    (Keymap.lines Keymap.standard)
+    (Settings.read "bell on" |> fst |> Settings.keymap |> Keymap.lines)
+
+report
+    "a swap written by hand reads the same whichever line comes first"
+    ([ "key up s"; "key down w" ], [])
+    (let settings, problems = Settings.read "key down w\nkey up s"
+     Keymap.lines (Settings.keymap settings) |> List.truncate 2, problems)
+
+report
+    "a key said under one game is complained about, being nobody's game in particular"
+    true
+    (match Settings.read "[compile]\nkey up i" |> snd with
+     | [ problem ] -> problem.Contains "said about every game at once"
+     | _ -> false)
+
+report
+    "and a letter on two keys is one complaint, and the usual letters rather than half of them"
+    (Keymap.lines Keymap.standard, 1)
+    (let settings, problems = Settings.read "key up i\nkey down i"
+     Keymap.lines (Settings.keymap settings), List.length problems)
+
+report
+    "a key with a name nobody has is complained about, naming the ones there are"
+    true
+    (match Settings.read "key sideways x" |> snd with
+     | [ problem ] -> problem.Contains "There is up, down, left, right, previous, next, seal."
      | _ -> false)
 
 
@@ -810,7 +916,7 @@ report
 report
     "and no two rows on one screen answer to the same number"
     []
-    (everyScreen front
+    (everyScreen front @ [ Options.keyboard Keymap.standard ]
      |> List.collect (fun screen -> screen.Rows |> List.choose (fun row -> row.Digit) |> List.countBy id)
      |> List.filter (fun (_, many) -> many > 1))
 

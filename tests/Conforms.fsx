@@ -702,8 +702,8 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
     // Every row on a settings page answers to a digit and 0 is the way out of every page, so a page
     // that numbered two rows alike, or handed a row the 0, has a key that does the wrong thing -
     // which the Video page did at a game with six colours to settle, and again at eight. Held for
-    // the pages a game's own colours, views and ways give their shape to, and the front page that
-    // opens them.
+    // the pages a game's own colours, views and ways give their shape to, the front page that opens
+    // them, and the keys page beside them.
     let drawnAs =
         Playable.offered AtATerminal palette game |> List.map (fun view -> view.Name)
 
@@ -711,7 +711,8 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
         [ Options.screen 1
           Options.audio true
           Options.video drawnAs plain.Name palette
-          Options.game [ (game.Name, game.Blurb) ] game.Name ]
+          Options.game [ (game.Name, game.Blurb) ] game.Name
+          Options.keyboard Keymap.standard ]
 
     report
         "no two rows on any settings page answer to the same digit, and 0 is only ever the way out"

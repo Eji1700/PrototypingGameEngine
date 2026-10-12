@@ -25,8 +25,8 @@ module Keymap =
     let private keys =
         [ Up, "up", 'w', "move up"
           Down, "down", 's', "move down"
-          Left, "left", 'a', "turn the marked row back"
-          Right, "right", 'd', "turn the marked row on"
+          Left, "left", 'a', "turn the row back"
+          Right, "right", 'd', "turn the row on"
           Previous, "previous", 'q', "turn the page back"
           Next, "next", 'e', "turn the page on"
           Seal, "seal", 'r', "seal the turn" ]

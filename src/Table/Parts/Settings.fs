@@ -18,6 +18,7 @@ type Settings =
           Drawn: string option
 
           Bell: bool option
+          Keys: Keymap option
           Games: (string * Kept) list }
 
 module Settings =
@@ -30,6 +31,7 @@ module Settings =
     let none =
         { Drawn = None
           Bell = None
+          Keys = None
           Games = [] }
 
     [<Literal>]
@@ -40,6 +42,9 @@ module Settings =
 
     [<Literal>]
     let private PlaysWord = "plays"
+
+    [<Literal>]
+    let private KeyWord = "key"
 
     let private forGame name settings =
         settings.Games |> List.tryFind (fun (said, _) -> said = name) |> Option.map snd
@@ -55,6 +60,9 @@ module Settings =
 
     let bell settings =
         settings.Bell |> Option.defaultValue true
+
+    let keymap settings =
+        settings.Keys |> Option.defaultValue Keymap.standard
 
     let palette name slots settings =
         forGame name settings
@@ -99,15 +107,17 @@ module Settings =
 
     let ringing on settings = { settings with Bell = Some on }
 
+    let keying keymap settings = { settings with Keys = Some keymap }
+
 
     let private heading =
         [ "# What this program was left set to, and picks up again next time."
           "#"
-          "# Every line here is one you could type at the screen it belongs to: 'view <name>'"
-          "# and 'bell on' are what the settings pages take, '<what> <colour>' is what the Video"
-          "# page takes and 'plays <name>' what the Game page takes. So there is nothing in this"
-          "# file that cannot be said at a screen, and nothing at a screen that cannot be written"
-          "# here."
+          "# Every line here is one you could type at the screen it belongs to: 'view <name>',"
+          "# 'bell on' and 'key up w' are what the settings pages take, '<what> <colour>' is what"
+          "# the Video page takes and 'plays <name>' what the Game page takes. So there is nothing"
+          "# in this file that cannot be said at a screen, and nothing at a screen that cannot be"
+          "# written here."
           "#"
           "# A name in square brackets opens one game's own settings. Anything above the first"
           "# of them is said about every game at once."
@@ -132,6 +142,7 @@ module Settings =
              @ [ "" ]
              @ (settings.Drawn |> Option.toList |> List.map (fun name -> $"{DrawnWord} {name}"))
              @ (settings.Bell |> Option.toList |> List.map (fun on -> $"{BellWord} {said on}"))
+             @ (settings.Keys |> Option.map Keymap.lines |> Option.defaultValue [])
              @ (settings.Games
                 |> List.collect (fun (name, _) -> [ ""; $"[{name}]" ] @ under name))
              @ [ "" ])
@@ -148,15 +159,18 @@ module Settings =
             |> Array.filter (fun line -> line <> "")
             |> List.ofArray
 
-        let folding (settings, into, problems) (line: string) =
-            let wrong said = settings, into, problems @ [ said ]
+        let movable = Keymap.all |> List.map Keymap.word |> String.concat ", "
+
+        let folding (settings, into, problems, keyed) (line: string) =
+            let wrong said =
+                settings, into, problems @ [ said ], keyed
 
             let words =
                 line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
                 |> List.ofArray
 
             let under name change =
-                changing name change settings, into, problems
+                changing name change settings, into, problems, keyed
 
             match line.StartsWith "[", line.EndsWith "]" with
             | true, true ->
@@ -165,22 +179,34 @@ module Settings =
                 if name = "" then
                     wrong "'[]' does not name a game."
                 else
-                    changing name id settings, Some name, problems
+                    changing name id settings, Some name, problems, keyed
             | true, false
             | false, true -> wrong $"'{line}' opens a game's settings but does not close them. Say '[{line.Trim('[', ']')}]'."
             | false, false ->
                 match words |> List.map (fun word -> word.ToLowerInvariant()), into with
                 | [ word; name ], Some game when word = DrawnWord -> under game (fun kept -> { kept with Drawn = Some name })
-                | [ word; name ], None when word = DrawnWord -> { settings with Drawn = Some name }, into, problems
+                | [ word; name ], None when word = DrawnWord -> { settings with Drawn = Some name }, into, problems, keyed
                 | [ word; way ], Some game when word = PlaysWord -> under game (fun kept -> { kept with Plays = Some way })
                 | [ word; _ ], None when word = PlaysWord ->
                     wrong $"'{line}' says how one game is played, and nothing above it says which. Put a '[<game>]' line over it."
                 | [ word; on ], None when word = BellWord ->
                     match on with
-                    | "on" -> { settings with Bell = Some true }, into, problems
-                    | "off" -> { settings with Bell = Some false }, into, problems
+                    | "on" -> { settings with Bell = Some true }, into, problems, keyed
+                    | "off" -> { settings with Bell = Some false }, into, problems, keyed
                     | _ -> wrong $"'{line}' is not '{BellWord} on' or '{BellWord} off'."
                 | [ word; _ ], Some _ when word = BellWord ->
+                    wrong
+                        $"'{line}' is said about every game at once, so it goes above the first '[<game>]' line rather than under one."
+
+                // Collected rather than laid as they come, and checked whole once the file is read,
+                // so that a swap written by hand reads the same whichever line comes first.
+                | [ word; key; letter ], None when word = KeyWord ->
+                    match Keymap.ofWord key with
+                    | Some key -> settings, into, problems, keyed @ [ (key, letter) ]
+                    | None -> wrong $"'{line}' names no key that can be moved. There is {movable}."
+                | word :: _, None when word = KeyWord ->
+                    wrong $"'{line}' is not '{KeyWord} <what> <letter>', as in '{KeyWord} up w'."
+                | word :: _, Some _ when word = KeyWord ->
                     wrong
                         $"'{line}' is said about every game at once, so it goes above the first '[<game>]' line rather than under one."
                 | [ _; _ ], Some game ->
@@ -189,10 +215,19 @@ module Settings =
                             Colours = kept.Colours @ [ line.ToLowerInvariant() ] })
                 | [ _; _ ], None ->
                     wrong $"'{line}' colours something, and nothing above it says which game. Put a '[<game>]' line over it."
-                | _ -> wrong $"'{line}' is not '{DrawnWord} <name>', '{BellWord} on', '{PlaysWord} <name>' or '<what> <colour>'."
+                | _ ->
+                    wrong
+                        $"'{line}' is not '{DrawnWord} <name>', '{BellWord} on', '{KeyWord} <what> <letter>', '{PlaysWord} <name>' or '<what> <colour>'."
 
-        let settings, _, problems = meaningful |> List.fold folding (none, None, [])
-        settings, problems
+        let settings, _, problems, keyed =
+            meaningful |> List.fold folding (none, None, [], [])
+
+        match keyed with
+        | [] -> settings, problems
+        | keyed ->
+            match Keymap.bound keyed with
+            | Ok keymap -> { settings with Keys = Some keymap }, problems
+            | Error problem -> settings, problems @ [ $"{problem} The keys are left as they usually are." ]
 
     let private source = Path.Combine(Directory.GetCurrentDirectory(), "settings.txt")
 

@@ -338,6 +338,7 @@ let rec private settling settled at said =
         | Ok(Options.Opening Options.Audio) -> settling (listening settled [] "") at ""
         | Ok(Options.Opening Options.Video) -> settling (watching settled [] "") at ""
         | Ok(Options.Opening Options.Game) -> settling (playing settled [] "") at ""
+        | Ok(Options.Opening Options.Keyboard) -> settling (keying settled [] "") at ""
         | Ok step -> wayOut settled step (fun settled said -> settling settled at said)
 
 and private listening settled at said =
@@ -351,6 +352,22 @@ and private listening settled at said =
         | Ok Options.Done -> settled
         | Ok(Options.Ringing on) -> listening { settled with Rings = on } at ""
         | Ok step -> wayOut settled step (fun settled said -> listening settled at said)
+
+// The letters are changed the moment they are chosen rather than when the page is left, so the
+// page answers to the new ones straight away and a letter moved somewhere awkward is felt at once.
+and private keying settled at said =
+    let keymap = Screens.lettering ()
+
+    match Screens.asking settled.View.Says said (Options.keyboard keymap) at with
+    | None, _ -> settled
+    | Some line, at ->
+        match Options.chooseKeyboard keymap line with
+        | Error problem -> keying settled at problem
+        | Ok Options.Done -> settled
+        | Ok(Options.Rebound keymap) ->
+            Screens.lettered keymap
+            keying settled at ""
+        | Ok step -> wayOut settled step (fun settled said -> keying settled at said)
 
 and private watching settled at said =
     let view = settled.View
@@ -390,7 +407,7 @@ and private playing settled at said =
         | Ok step -> wayOut settled step (fun settled said -> playing settled at said)
 
 /// The two answers every settings page has in common, and where the page goes on from them: `save`
-/// keeps all three pages at once, and anything else leaves the page where it was.
+/// keeps every page at once, and anything else leaves the page where it was.
 and private wayOut settled step onwards =
     match step with
     | Options.Keep ->
@@ -407,6 +424,7 @@ and private wayOut settled step onwards =
             settings
             |> Settings.keeping settled.Game.Name settled.View.Name settled.View.Palette
             |> Settings.ringing settled.Rings
+            |> Settings.keying (Screens.lettering ())
             |> chosen
 
         match Settings.save kept with
@@ -694,6 +712,7 @@ let rec private making (ways: Playable<'Move, 'State, 'Notice> list) (game: Play
 
         member _.FromCommandLine argv =
             let settings, unread = Settings.load ()
+            Screens.lettered (Settings.keymap settings)
             let opened = settling settings
 
             // A line in settings.txt that could not be read is said here as it is at the menu, so a
@@ -713,6 +732,7 @@ let rec private making (ways: Playable<'Move, 'State, 'Notice> list) (game: Play
 
         member _.FromMenu behind =
             let settings, unread = Settings.load ()
+            Screens.lettered (Settings.keymap settings)
             let opened = settling settings
             let plain, stale = Playable.opening AtATerminal settings opened
 

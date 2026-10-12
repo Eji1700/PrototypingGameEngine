@@ -59,5 +59,8 @@ let main argv =
     | [] ->
         match Games.all with
         | [ only ] -> Play.alone only []
-        | _ -> choosing []
+        | _ ->
+            // Steered before any game has read the settings, so it reads the letters for itself.
+            Screens.lettered (Settings.load () |> fst |> Settings.keymap)
+            choosing []
     | words -> picked words ||> Play.alone

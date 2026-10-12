@@ -8,6 +8,7 @@ module Options =
         | Audio
         | Video
         | Game
+        | Keyboard
 
     [<NoComparison; NoEquality>]
     type Step =
@@ -16,6 +17,7 @@ module Options =
         | Drawn of string
         | Ringing of bool
         | Playing of string
+        | Rebound of Keymap
         | Keep
         | Same
         | Done
@@ -86,9 +88,10 @@ module Options =
             [ Keys.sends (Keys.nth 0) "audio" "whether the table rings when your turn comes round" "audio"
               Keys.sends (Keys.nth 1) "video" "how the board is drawn, and what is drawn in what colour" "video"
               Keys.sends (Keys.nth 2) "game" game "game"
+              Keys.sends (Keys.nth 3) "keys" "which letters steer: move, turn, page, seal" "keys"
               Keys.sends (Some '0') "done" "back to the menu" "done" ]
           Note =
-            [ "Nothing on any of these pages is kept unless you say 'save', which keeps all three"
+            [ "Nothing on any of these pages is kept unless you say 'save', which keeps them all"
               "at once - so a page you only looked at is a page that changed nothing." ]
           Backs = Some "done" }
 
@@ -105,7 +108,9 @@ module Options =
             | [ "colors" ] -> Ok(Opening Video)
             | [ "game" ]
             | [ "rules" ] -> Ok(Opening Game)
-            | word :: _ -> Error $"I don't know how to '{word}'. Say 'audio', 'video', 'game', 'save', or 'done'."
+            | [ "keys" ]
+            | [ "keyboard" ] -> Ok(Opening Keyboard)
+            | word :: _ -> Error $"I don't know how to '{word}'. Say 'audio', 'video', 'game', 'keys', 'save', or 'done'."
             | [] -> Ok Same
 
 
@@ -258,4 +263,51 @@ module Options =
             | [ "plays" ] -> Error $"Say 'plays <name>', for one of {listed}."
             | [ name ] -> named name
             | word :: _ -> Error $"I don't know how to '{word}'. Say 'plays <name>', 'save', or 'done'."
+            | [] -> Ok Same
+
+
+    let keyboard (keymap: Keymap) : Keys.Screen =
+        let row at key =
+            let word = Keymap.word key
+            let holding keymap = string (Keymap.letter key keymap)
+
+            Keys.types (Keys.nth at) word ((Keymap.says key).PadRight Shows + holding keymap) $"key {word} "
+            |> Keys.turning (fun by -> $"key {word} {holding (Keymap.next key by keymap)}")
+
+        let after = List.length Keymap.all
+
+        { Title = "Settings - Keys"
+          Prose =
+            [ "Which letter does what while you walk a list, at the menus and at a board. The space"
+              "bar, Enter, Escape, Backspace and the numbers do the same everywhere and are not"
+              "moved here, so a list with every letter moved somewhere strange can still be left by"
+              "its number." ]
+          Rows =
+            (Keymap.all |> List.mapi row)
+            @ [ Keys.sends (Keys.nth after) "reset" "put the letters all back" "reset"
+                Keys.sends (Keys.nth (after + 1)) "save" "keep all this, and open that way next time" "save"
+                Keys.sends (Some '0') "done" "back to the settings" "done" ]
+          Note =
+            [ "Turning the one marked -> walks it on to the next letter nothing else has. Taking it"
+              "writes the start of the line and waits for the letter; or say it outright, 'key up i'."
+              ""
+              "This one is not a game's own. Which letter does what is a fact about the hands at the"
+              "keyboard, so it is asked once and every game picks it up." ]
+          Backs = Some "done" }
+
+    let chooseKeyboard (keymap: Keymap) (text: string) : Result<Step, string> =
+        let words = Commands.lowered text
+        let movable = Keymap.all |> List.map Keymap.word |> String.concat ", "
+
+        match wayOut words with
+        | Some out -> out
+        | None ->
+            match words with
+            | [ "reset" ] -> Ok(Rebound Keymap.standard)
+            | [ "key"; word; letter ] ->
+                match Keymap.ofWord word with
+                | Some key -> Keymap.rebind key letter keymap |> Result.map Rebound
+                | None -> Error $"'{word}' is not a key that can be moved. There is {movable}."
+            | "key" :: _ -> Error "Say 'key <what> <letter>', as in 'key up i'."
+            | word :: _ -> Error $"I don't know how to '{word}'. Say 'key <what> <letter>', 'reset', 'save', or 'done'."
             | [] -> Ok Same
