@@ -69,11 +69,7 @@ module Words =
             | Some FaceDown -> " face-down"
             | None -> ""
 
-        let lying =
-            match selector.Uncovered, selector.Covered with
-            | true, _ -> " uncovered"
-            | _, true -> " covered"
-            | _ -> ""
+        let lying = if selector.Covered then " covered" else ""
 
         let notThis = if selector.NotThis then " other" else ""
 

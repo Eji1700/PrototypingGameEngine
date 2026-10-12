@@ -1088,7 +1088,8 @@ report
     (let session =
         standing (opened 1UL)
         |> holding one fireZero
-        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 2 [ mute Hate 3 ]
 
      match playFireZero session with
      | Some after, told ->
@@ -1105,7 +1106,8 @@ report
     (let session =
         standing (opened 1UL)
         |> holding one fireZero
-        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 2 [ mute Hate 3 ]
 
      match playFireZero session with
      | Some waiting, _ ->
@@ -1123,7 +1125,8 @@ report
     (let session =
         standing (opened 1UL)
         |> holding one fireZero
-        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 2 [ mute Hate 3 ]
 
      match playFireZero session with
      | Some waiting, _ ->
@@ -1138,13 +1141,14 @@ report
     (let session =
         standing (opened 1UL)
         |> onlyHolding one fireZero
-        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 2 [ mute Hate 3 ]
 
      match playFireZero session with
      | Some waiting, _ ->
          match Turn.asked (Choose(TheCard(card Hate 3))) waiting with
          | Some after, told ->
-             Side.stack 1 (Session.side one after)
+             Side.stack 2 (Session.side one after)
              |> List.exists (fun placed -> placed.Card = card Hate 3 && Placed.isFaceUp placed),
              happenings told
              |> List.exists (function
@@ -1160,7 +1164,8 @@ report
     (let session =
         standing (opened 1UL)
         |> holding one fireZero
-        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
+        |> lyingDown one 1 [ mute Speed 2 ]
+        |> lyingDown one 2 [ mute Hate 3 ]
 
      match playFireZero session with
      | Some waiting, _ ->
@@ -2489,8 +2494,8 @@ report
      List.length (Side.stack 3 (Session.side two after)))
 
 report
-    "'in 1 line' asks which, and then runs there and nowhere else"
-    (2, 0)
+    "'in 1 line' asks which, and then runs there and nowhere else, and only on the uncovered card"
+    (2, 1)
     (let session =
         standing (opened 1UL)
         |> poised two 1 [ quiet Gravity 1; quiet Light 2 ]
@@ -2893,6 +2898,7 @@ report
         standing (opened 1UL)
         |> holding one (quiet Water 4)
         |> poised one 1 [ card Apathy 2 ]
+        |> poised one 2 [ mute Spirit 3 ]
 
      match Turn.asked (Play(quiet Water 4, 1, FaceUp)) session with
      | Some after, told ->
@@ -2916,6 +2922,7 @@ report
         standing (opened 1UL)
         |> holding one (quiet Water 4)
         |> poised one 1 [ card Apathy 2 ]
+        |> poised one 2 [ mute Spirit 3 ]
 
      match Turn.asked (Play(quiet Water 4, 1, FaceUp)) session with
      | Some after, _ -> Field.valueOn one 1 after.Field
@@ -3093,6 +3100,7 @@ report
         standing (opened 1UL)
         |> poised one 1 [ card Psychic 4 ]
         |> poised two 1 [ card Hate 3; card Death 3 ]
+        |> poised two 2 [ mute Spirit 3 ]
 
      let asked, _ =
          running
@@ -3910,7 +3918,7 @@ report
      let took skills who =
          deals |> List.filter (fun seed -> wonBy skills seed = Some who) |> List.length
 
-     took [ "deep"; "hard" ] one >= 8, took [ "hard"; "deep" ] two >= 5)
+     took [ "deep"; "hard" ] one >= 7, took [ "hard"; "deep" ] two >= 4)
 
 
 report

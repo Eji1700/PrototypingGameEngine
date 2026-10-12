@@ -27,7 +27,6 @@ type Selector =
     { Whose: Whose
       Where: Where
       Showing: Face option
-      Uncovered: bool
       Covered: bool
       Worth: int list
       NotThis: bool
@@ -41,7 +40,6 @@ module Select =
         { Whose = Anyone
           Where = AnyLine
           Showing = None
-          Uncovered = false
           Covered = false
           Worth = []
           NotThis = false
@@ -59,7 +57,6 @@ module Select =
             Showing = Some FaceDown }
 
     let faceUp selector = { selector with Showing = Some FaceUp }
-    let uncovered selector = { selector with Uncovered = true }
     let covered selector = { selector with Covered = true }
     let worth values selector = { selector with Worth = values }
     let other selector = { selector with NotThis = true }

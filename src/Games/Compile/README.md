@@ -81,7 +81,8 @@ Playing anything on a line, face up or face down, covers the middle and the bott
 that was on top. A card lying face down says nothing at all, and one line can be silenced so that
 no middle box in it speaks.
 
-A command with one thing to point at does it. With nothing, it finds nothing to do and the next
+A command reaches only the uncovered card of each stack unless it says *covered*; *this card*
+and *that card* name one outright. A command with one thing to point at does it. With nothing, it finds nothing to do and the next
 command still runs - except behind *if you do*, which lets nothing through unless the command
 before it did something. With several, the game stops and asks: which card, which line, whether
 (*you may*), or which of two (*either ... or*). It may ask the player whose turn it is not, and

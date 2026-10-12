@@ -55,11 +55,15 @@ module Resolving =
 
     /// Every card on the table the selector names. The clauses read as one long "and": a
     /// selector is written by adding conditions to `Select.any`, so an unset field means the
-    /// card text said nothing about that and everything passes it.
+    /// card text said nothing about that and everything passes it - with one exception. A card
+    /// that says nothing about covered cards reaches only the uncovered one of each stack; it
+    /// has to say `covered` to reach under, and `this card` or `that card` name one outright.
     let private onTable actor selector (source: Source) session =
         let field = session.Field
 
         let picks seat line (placed: Placed) =
+            let onTop = Stack.uncovered (Side.stack line (Field.side seat field)) = Some placed
+
             (match selector.Whose with
              | Yours -> seat = actor
              | Theirs -> seat <> actor
@@ -72,10 +76,7 @@ module Resolving =
             && (match selector.Showing with
                 | Some wanted -> placed.Face = wanted
                 | None -> true)
-            && (not selector.Uncovered
-                || Stack.uncovered (Side.stack line (Field.side seat field)) = Some placed)
-            && (not selector.Covered
-                || Stack.uncovered (Side.stack line (Field.side seat field)) <> Some placed)
+            && (if selector.Covered then not onTop else onTop || selector.JustThis || selector.WasChosen)
             && (not selector.NotThis || placed.Card <> source.Saying)
             && (not selector.JustThis || placed.Card = source.Saying)
             && (not selector.WasChosen || Some placed.Card = session.Chose)
