@@ -1,0 +1,3 @@
+# Proof artifacts from verification runs stay on this machine; they are not part of the repository.
+*
+!.gitignore
