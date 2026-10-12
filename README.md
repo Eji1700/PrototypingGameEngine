@@ -18,6 +18,8 @@ game it is carrying.
 | [**Cascade**](src/Games/Cascade/README.md) | 1 | Two hundred and fifty-six elbows; touch one and watch the turning spread |
 | [**Warband**](src/Games/Warband/README.md) | 2 | Two squads mustered out of each other's sight, then a battle nobody plays |
 
+[HOWTOPLAY.md](HOWTOPLAY.md) is the short version — how to start each game, and what to type once it is dealt.
+
 The rules of each game, the words it takes and what its machines weigh are in that game's own
 README. This file is the engine: how to play any game on it, how to write one, and how the code
 is arranged.
