@@ -57,12 +57,15 @@ module Resolving =
     /// selector is written by adding conditions to `Select.any`, so an unset field means the
     /// card text said nothing about that and everything passes it - with one exception. A card
     /// that says nothing about covered cards reaches only the uncovered one of each stack; it
-    /// has to say `covered` to reach under, and `this card` or `that card` name one outright.
-    let private onTable actor selector (source: Source) session =
+    /// has to say `covered` to reach under, or `every`, which sweeps a stack whole, and `this
+    /// card` or `that card` name one outright.
+    let private onTable sweeping actor selector (source: Source) session =
         let field = session.Field
 
         let picks seat line (placed: Placed) =
-            let onTop = Stack.uncovered (Side.stack line (Field.side seat field)) = Some placed
+            let onTop =
+                sweeping
+                || Stack.uncovered (Side.stack line (Field.side seat field)) = Some placed
 
             (match selector.Whose with
              | Yours -> seat = actor
@@ -123,7 +126,7 @@ module Resolving =
              | ToOrFromHere -> true)
             && hand |> List.exists (fun card -> mayLay actor card line face session.Field))
 
-    let rec private targets actor command source (session: Session) =
+    let rec private targetsWith sweeping actor command source (session: Session) =
         let field = session.Field
 
         match command with
@@ -148,9 +151,11 @@ module Resolving =
         | Opposing _ -> []
         | Give
         | Reveal -> (Field.side actor field).Hand |> List.map (fun card -> InHand(actor, card))
-        | May inner
-        | Every inner -> targets actor inner source session
-        | Either(first, second) -> targets actor first source session @ targets actor second source session
+        | May inner -> targetsWith sweeping actor inner source session
+        | Every inner -> targetsWith true actor inner source session
+        | Either(first, second) ->
+            targetsWith sweeping actor first source session
+            @ targetsWith sweeping actor second source session
         | Discard -> (Field.side actor field).Hand |> List.map (fun card -> InHand(actor, card))
         | PlayFromHand(face, where) ->
             let lines = layable actor face where source session
@@ -162,7 +167,10 @@ module Resolving =
         | Flip selector
         | Return selector
         | Show selector
-        | Shift(selector, _) -> onTable actor selector source session
+        | Shift(selector, _) -> onTable sweeping actor selector source session
+
+    let private targets actor command source session =
+        targetsWith false actor command source session
 
 
     let private replacing line placed change side =
@@ -302,7 +310,10 @@ module Resolving =
             | WorthOfChosen -> session.Chose |> Option.map (fun card -> card.Value) |> Option.defaultValue 0
             | HowManyPlus n -> session.Done + n
             | PerCards(each, selector) ->
-                if each <= 0 then 0 else List.length (targets actor (Delete selector) source session) / each
+                if each <= 0 then
+                    0
+                else
+                    List.length (targetsWith true actor (Delete selector) source session) / each
 
         match command with
         | Opposing inner -> resolve inner { source with Owner = actor } session
@@ -399,7 +410,7 @@ module Resolving =
             []
 
         | Every inner ->
-            match targets actor inner source session with
+            match targetsWith true actor inner source session with
             | [] -> fizzling actor source session
             | many ->
                 // Whatever one target pushes on the pile goes ahead of what the last one pushed,

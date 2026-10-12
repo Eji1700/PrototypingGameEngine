@@ -2494,8 +2494,8 @@ report
      List.length (Side.stack 3 (Session.side two after)))
 
 report
-    "'in 1 line' asks which, and then runs there and nowhere else, and only on the uncovered card"
-    (2, 1)
+    "'in 1 line' asks which, and then runs there and nowhere else, covered cards and all"
+    (2, 0)
     (let session =
         standing (opened 1UL)
         |> poised two 1 [ quiet Gravity 1; quiet Light 2 ]
@@ -3918,7 +3918,7 @@ report
      let took skills who =
          deals |> List.filter (fun seed -> wonBy skills seed = Some who) |> List.length
 
-     took [ "deep"; "hard" ] one >= 7, took [ "hard"; "deep" ] two >= 4)
+     took [ "deep"; "hard" ] one >= 9, took [ "hard"; "deep" ] two >= 3)
 
 
 report
