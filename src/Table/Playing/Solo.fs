@@ -121,8 +121,8 @@ module Solo =
     let painting console solo =
         readingAt console solo |> Option.map (fun reading -> reading.View.Says)
 
-    /// The rows this game offers for where it stands, if any, over the board as this console draws
-    /// it and for the seat it was drawn for.
+    /// The rows this game offers for where it stands, if any, with its page and its seal, over the
+    /// board as this console draws it and for the seat it was drawn for.
     let steering console solo =
         readingAt console solo
         |> Option.bind (fun reading -> solo.Game.Steering (boardFor solo reading) reading.Margins (active solo) solo.Model)

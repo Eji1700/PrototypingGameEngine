@@ -32,6 +32,7 @@ asked for two fields is the answer worth keeping.
 | 2026-08-24 | **EndTimes** | `Margins.Showing`; `Command.Showing`; `Screens.askingOver` |
 | 2026-08-27 | **EndTimes** | `Keys.path` for `Keys.standing`; `Keys.draw` in columns |
 | 2026-08-29 | **Warband** | `Pulse.Free` |
+| 2026-10-11 | **EndTimes** | `Playable.Steering` returns `Keys.Steered`: the page turn and the seal line beside the rows |
 
 ## What each one was for
 
@@ -164,6 +165,26 @@ who the board is drawn for — which Warband had already found is not the same q
 reaches a table. The seatless `resign` at a four-player clocked Snake is the same shape of gap and is
 left where it is, pinned in `snake.fsx`: closing it needs `Resign` to carry a seat, which is a
 different change.
+
+**EndTimes — `Playable.Steering` returns `Keys.Steered`, 2026-10-11.** The same member asked for a
+second time, and the first change to the seam that changed a member's type rather than adding one.
+Steering went over to seven letters a player may move — two to walk the list, two to turn the marked
+row, two to turn the page and one to seal the turn — and the last three answer facts the table had
+never been told: what *the page* is at a board that has several, and what line *sealing the turn*
+sends. EndTimes had been faking the first by hanging the same page turn on every row of its board,
+which used up every row's own turning and stopped working inside any list a row opened.
+
+A page and a seal are facts about the whole board, not about one list on it, so they sit beside the
+rows rather than on them: `Steering` hands back the outermost `Keys.Screen` with `Pages` and `Seals`
+next to it, and the keys that turn the page and seal the turn answer from however deep somebody has
+walked. The other way was a field for each on every `Screen`, and the thirty-eight screens built
+today, the table's menus and EndTimes' own, would have carried two fields that mean nothing to
+nearly all of them — a settings page could have been handed a seal.
+The eight games here have no rows to steer, said `None`, and still do, so not one of them changed.
+`Conforms.against` holds the two new answers to the rows' bargain: both page turns read as lines the
+game reads, and the seal reads as a move, since it is a turn given up and is asked about first. The
+letters themselves are not seam. They belong to the keyboard, and are settled on a page of their own
+and kept in `settings.txt`.
 
 ## What the four quiet games did instead
 

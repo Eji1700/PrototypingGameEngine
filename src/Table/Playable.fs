@@ -139,19 +139,20 @@ type Playable<'Move, 'State, 'Notice> =
         /// offer is a board.
         Aside: Aside option
 
-        /// Rows a player may steer at the board, where this game has any for where it stands.
+        /// Rows a player may steer at the board, where this game has any for where it stands, and
+        /// what turning the page and sealing the turn send, where it has a page or a turn to seal.
         ///
         /// A row stands for a line the game already reads - exactly as `Pulse.Pressed` does for a
-        /// game on a clock - so nothing can be picked that could not have been typed, and a game
-        /// driven by the arrow keys writes the same record as one driven by hand. Enter with nothing
-        /// typed takes the marked row; Enter with a line underway sends the line, so the prompt is
-        /// never taken away from anybody.
+        /// game on a clock - and so do the page and the seal, so nothing can be picked that could
+        /// not have been typed, and a game driven by its keys writes the same record as one driven
+        /// by hand. Enter with nothing typed takes the marked row; Enter with a line underway sends
+        /// the line, so the prompt is never taken away from anybody.
         ///
         /// The board as this table drew it is handed in, with the margins and the seat it was drawn
         /// for - the same three the board itself was drawn from, so the rows and the board are
         /// answers about one screen rather than two. `None` means what it always meant: draw the
         /// board and read a line.
-        Steering: string -> Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Screen option
+        Steering: string -> Margins -> PlayerId -> Model<'Move, 'State, 'Notice> -> Keys.Steered option
 
         /// What a browser is sent besides the board: the page's title, the game's own stylesheet,
         /// the keys it binds, and the placeholder in the prompt.

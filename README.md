@@ -450,7 +450,7 @@ few lines said, and nothing in `Update.update` can throw.
 | `Skills`, `Seating` | the machines it offers, and which seats they take; `Playable.seating` builds the second from the parts |
 | `Pulse` | the clock, for a board that moves on its own |
 | `Aside` | a section of the menu the game owns, for something that is not a board |
-| `Steering` | rows to walk with the arrows at the board, each standing for a line |
+| `Steering` | rows to walk at the board, each standing for a line, and what its page turn and its seal send |
 | `Page` | a browser's title, stylesheet, keys and prompt |
 | `Views` | every way of drawing it: `Readers.views scenes`, or a `View` written by hand |
 

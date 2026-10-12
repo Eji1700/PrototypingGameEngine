@@ -609,10 +609,11 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
 
     // --- rows steered at the board ------------------------------------------------------------------------------
 
-    // The same bargain `Pulse.Pressed` makes: a row stands for a line the game already reads, so
-    // nothing can be picked that could not have been typed, and a game driven by the arrow keys
-    // writes the same record as one driven by hand. Checked at every state the suite's lines walk
-    // through, since a game may offer rows at one phase and none at another.
+    // The same bargain `Pulse.Pressed` makes: a row stands for a line the game already reads, and so
+    // do turning the page and sealing the turn, so nothing can be picked that could not have been
+    // typed, and a game driven by its keys writes the same record as one driven by hand. Checked at
+    // every state the suite's lines walk through, since a game may offer rows at one phase and none
+    // at another.
     //
     // Every row *anywhere* under the screen, walking into the lists a row opens: taking one of those
     // leaves whoever took it standing where they were, so a list two deep is somewhere a player
@@ -636,7 +637,8 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
 
                   match game.Steering drawn Margins.all seat model with
                   | None -> ()
-                  | Some screen ->
+                  | Some board ->
+                      let screen = board.Screen
                       let where = $"{shown}, seat {place}"
 
                       yield! blank $"{where}: a screen steered at the board with no title" screen.Title
@@ -674,7 +676,25 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                       | Some line ->
                           match Playable.read game line with
                           | Ok _ -> ()
-                          | Error problem -> yield $"{where}: backing out sends '{line}', which does not read: {problem}" ]
+                          | Error problem -> yield $"{where}: backing out sends '{line}', which does not read: {problem}"
+
+                      match board.Pages with
+                      | None -> ()
+                      | Some turn ->
+                          for line in [ turn -1; turn 1 ] do
+                              match Playable.read game line with
+                              | Ok _ -> ()
+                              | Error problem -> yield $"{where}: turning the page sends '{line}', which does not read: {problem}"
+
+                      // Sealing is asked about before it is sent because it is a turn given up, so
+                      // what it sends has to be a move rather than a look at something.
+                      match board.Seals with
+                      | None -> ()
+                      | Some line ->
+                          match Playable.read game line with
+                          | Ok(Send _) -> ()
+                          | Ok _ -> yield $"{where}: sealing sends '{line}', which reads as something other than a move"
+                          | Error problem -> yield $"{where}: sealing sends '{line}', which does not read: {problem}" ]
 
 
     // --- the settings pages -------------------------------------------------------------------------------------
