@@ -112,11 +112,14 @@ With no command, a game opens its menu:
      7  Quit
 ```
 
-Every screen in the program is walked the same way: the arrows or `w` and `s` move the mark, a
+Every screen in the program is walked the same way. Seven letters steer it: two move the mark, two
+turn the marked row through its choices — a seat, a view, a colour — two turn the page at a board
+that has pages, and one seals the turn at a board that has one to seal, asking first. The line
+under every list names the ones that do something there, as this keyboard has them, and the
+**keys** settings page moves any of them to another letter. The rest of the keyboard is fixed: a
 row's number takes it outright, Enter takes the one marked, Escape backs out, and `0` is the way
-out of a settings page. On a row that turns through choices — a seat, a view, a colour — left and
-right, or `a` and `d`, walk it. The space bar, or any letter that is not one of those four, starts
-a line at the prompt instead, and from then on every key is a letter until the line is sent.
+out of a settings page. The space bar is the one way into the prompt, and from then on every key
+is a letter until the line is sent.
 
 Every row stands for a line that could have been typed, so the two are one grammar. `New game`
 asks how many, then lists the seats:
@@ -233,17 +236,25 @@ players, and at a table over a network each console has its own.
 
 ### Settings
 
-`settings` at the menu opens three pages — **audio**, whether the table rings when your turn comes
-round; **video**, which view and what colour each of the game's slots is drawn in; and **game**,
-whatever this game lets you settle about itself. Compile is played with or without its optional
-rule, and Snake on a clock or a step at a time; each way keeps a name of its own, so what is
-settled here is what a *new* game is dealt as, and a record still replays as it was played.
+`settings` at the menu opens four pages — **audio**, whether the table rings when your turn comes
+round; **video**, which view and what colour each of the game's slots is drawn in; **game**,
+whatever this game lets you settle about itself; and **keys**, which letter steers what, for every
+game at once. Compile is played with or without its optional rule, and Snake on a clock or a step
+at a time; each way keeps a name of its own, so what is settled here is what a *new* game is dealt
+as, and a record still replays as it was played.
 
 `save` on any page writes `settings.txt` beside the records, and every way into a game reads it:
 
 ```
 view rich
 bell off
+key up w
+key down s
+key left a
+key right d
+key previous q
+key next e
+key seal r
 
 [turncoats]
 view rich
@@ -515,8 +526,8 @@ Each folder below lists its files in the order they compile:
 src/Common      Result, Tiebreak, Random, Counting, Grid, Notch - generic, and shared by the games
 src/Engine      Seats, Messages, Told, Rules, Timeline, Journal, Model, Update, Machines
 src/Table
-  Parts/        Invoked, Posts, Waiting, Scene, Palette, Settings, Reach, Keys, Commands, View,
-                Seating, Tint, Page, Screens, Options, Readers - none of which knows there is a seam
+  Parts/        Invoked, Posts, Waiting, Scene, Palette, Keymap, Settings, Reach, Keys, Commands,
+                View, Seating, Tint, Page, Screens, Options, Readers - none of which knows there is a seam
   Playable.fs   the seam
   Playing/      Solo (the game at one keyboard, as a value), Transcript (a journal as a file),
                 Menu, Launch (the command line, read and written from one declaration)

@@ -10,7 +10,7 @@
        generated outside this repository has no file like this above it. -->
 
   <PropertyGroup>
-    <PrototypingVersion>0.5.0</PrototypingVersion>
+    <PrototypingVersion>0.6.0</PrototypingVersion>
     <Version>$(PrototypingVersion)</Version>
 
     <TargetFramework>net10.0</TargetFramework>
