@@ -1457,6 +1457,26 @@ report
 
      offered 1, offered 3)
 
+
+report
+    "a command that says nothing about covered cards is offered only the uncovered card of each stack"
+    [ card Speed 2; card Spirit 3 ]
+    (let session =
+        standing (opened 1UL)
+        |> lyingDown one 1 [ mute Speed 2; mute Hate 3 ]
+        |> lyingDown one 3 [ mute Spirit 3 ]
+
+     let after, _ = running (Flip Select.any) (card Light 0) session
+
+     match Session.asking after with
+     | Some { Wanting = ACard(_, targets) } ->
+         targets
+         |> List.choose (function
+             | OnTable(_, _, placed) -> Some placed.Card
+             | InHand _ -> None)
+         |> List.sort
+     | _ -> [])
+
 report
     "and the second question is the card's, not the rules' - it says where *this* card goes"
     (Some(card Gravity 1))
