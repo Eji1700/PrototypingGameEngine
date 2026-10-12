@@ -1255,4 +1255,62 @@ let private spoken: Keys.Screen =
 
 report "and a screen with anything said beside a row stays one to a line" 1 (abreast 100 spoken)
 
+
+// --- the letters that steer ---------------------------------------------------------------------
+
+let private refused said =
+    match Keymap.bound said with
+    | Ok _ -> "taken"
+    | Error problem -> problem
+
+report
+    "the usual letters are w s a d q e r, in the order the keyboard page lists them"
+    [ 'w'; 's'; 'a'; 'd'; 'q'; 'e'; 'r' ]
+    (Keymap.all |> List.map (fun key -> Keymap.letter key Keymap.standard))
+
+report
+    "one letter cannot do two things, and the refusal says which two"
+    "'s' cannot both move up and move down. Give one of them another letter."
+    (refused [ (Up, "s") ])
+
+report "a key is one letter, not two" "'ww' cannot move up: a key is one letter, from a to z." (refused [ (Up, "ww") ])
+
+report
+    "and not a number, a space or anything else that is not a letter"
+    [ "'5' cannot move up: a key is one letter, from a to z."
+      "' ' cannot move up: a key is one letter, from a to z."
+      "';' cannot move up: a key is one letter, from a to z." ]
+    [ refused [ (Up, "5") ]; refused [ (Up, " ") ]; refused [ (Up, ";") ] ]
+
+report
+    "swapping two keys is read the same whichever is said first"
+    [ Ok('s', 'w'); Ok('s', 'w') ]
+    ([ [ Up, "s"; Down, "w" ]; [ Down, "w"; Up, "s" ] ]
+     |> List.map (fun said ->
+         Keymap.bound said
+         |> Result.map (fun keymap -> Keymap.letter Up keymap, Keymap.letter Down keymap)))
+
+report
+    "a capital is read as the letter it is, both when it is bound and when it is pressed"
+    (Some Up)
+    (Keymap.bound [ (Up, "I") ] |> Result.toOption |> Option.bind (Keymap.keyOf 'I'))
+
+report
+    "turning a key walks it past the letters the others hold"
+    [ 'f'; 'c' ]
+    [ Keymap.letter Right (Keymap.next Right 1 Keymap.standard)
+      Keymap.letter Right (Keymap.next Right -1 Keymap.standard) ]
+
+report
+    "and round from z to a"
+    'b'
+    (match Keymap.bound [ (Up, "z") ] with
+     | Ok keymap -> Keymap.letter Up (Keymap.next Up 1 keymap)
+     | Error _ -> '?')
+
+report
+    "a key is named by the word settings.txt uses for it"
+    ([ for key in Keymap.all -> Some key ], None)
+    ([ for key in Keymap.all -> Keymap.ofWord (Keymap.word key) ], Keymap.ofWord "sideways")
+
 finish ()

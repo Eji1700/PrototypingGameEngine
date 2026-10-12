@@ -18,6 +18,7 @@
     <Compile Include="Parts/Waiting.fs" />
     <Compile Include="Parts/Scene.fs" />
     <Compile Include="Parts/Palette.fs" />
+    <Compile Include="Parts/Keymap.fs" />
     <Compile Include="Parts/Settings.fs" />
     <Compile Include="Parts/Reach.fs" />
     <Compile Include="Parts/Keys.fs" />
