@@ -432,6 +432,31 @@ and private wayOut settled step onwards =
         | Error problem -> onwards settled problem
     | _ -> onwards settled ""
 
+/// Looking back over a record at this keyboard. There is no `Solo` here, no machine and no file:
+/// the review was worked out when it was opened, and all this does is draw it and read a line. The
+/// view is held here rather than in the review because it is this console's, as it is at a board.
+let rec private reviewed (view: View<_, _, _>) said at review =
+    match Screens.askingOver view.Says said (Review.drawn view review) (Review.steered view review) at with
+    | None, _ -> ()
+    | Some line, at ->
+        match Review.said view line review with
+        | Said.Moved next -> reviewed view "" at next
+        | Said.Printed(next, text) -> reviewed view text at next
+        | Said.Looked chosen -> reviewed chosen "" at review
+        | Said.Left -> ()
+
+let private reviewing settled (path: string) =
+    let game = settled.Game
+
+    let elsewhere other =
+        match Invoked.another other with
+        | Some line -> $" Review it with '{line} review {path}'."
+        | None -> ""
+
+    Transcript.reading elsewhere game path
+    |> Result.bind (Review.opened game (Path.GetFileName path))
+    |> Result.map (reviewed settled.View "" [])
+
 let private starting settled choice =
     let game, view = settled.Game, settled.View
 
@@ -456,6 +481,7 @@ let private starting settled choice =
     | Menu.Replay path ->
         takeUp game path
         |> Result.map (fun (model, sitters, stamp) -> Play(settled, model, sitters, stamp |> Option.defaultWith (stamping game)))
+    | Menu.Review _
     | Menu.Sitting _
     | Menu.Reaching _
     | Menu.Continuing
@@ -531,6 +557,11 @@ let rec private taking settled at said =
             | Some name -> settled.Ways |> List.exists (fun way -> way.Name = name)
             | None -> true)
 
+    let recorded path =
+        Transcript.about path
+        |> Option.map (fun name -> Settled.playing name settled)
+        |> Option.defaultValue settled
+
     match Screens.asking settled.View.Says said (Menu.continuing game records) at with
     | None, _ -> Some(Done 0)
     | Some line, at ->
@@ -539,13 +570,17 @@ let rec private taking settled at said =
         | Ok Menu.Continuing -> taking settled at ""
         | Ok Menu.Backing -> None
         | Ok Menu.Leave -> Some(Done 0)
+
+        // Back to the list, on the record that was reviewed, rather than to the two choices under it:
+        // somebody who has finished looking at one game wants the next, not the same one again.
+        | Ok(Menu.Review path) ->
+            match reviewing (recorded path) path with
+            | Ok() -> taking settled (List.truncate 1 at) ""
+            | Error problem -> taking settled at problem
         | Ok chosen ->
             let settled =
                 match chosen with
-                | Menu.Replay path ->
-                    Transcript.about path
-                    |> Option.map (fun name -> Settled.playing name settled)
-                    |> Option.defaultValue settled
+                | Menu.Replay path -> recorded path
                 | _ -> settled
 
             match starting settled chosen with
@@ -575,6 +610,10 @@ let rec private welcome settled behind at said =
     | Ok(Menu.Looking chosen) -> welcome { settled with View = chosen } behind at ""
     | Ok Menu.Options -> welcome (settling settled [] "") behind at ""
     | Ok Menu.Continuing -> taking settled [] "" |> Option.defaultWith again
+    | Ok(Menu.Review path) ->
+        match reviewing settled path with
+        | Ok() -> again ()
+        | Error problem -> retry problem
     | Ok Menu.Working ->
         match game.Aside with
         | None -> again ()
@@ -664,6 +703,7 @@ let private opening settled launch =
         let hosting = Net.Hosting.of' settled.Ways clockSeed (fun game -> stamping game ())
 
         Server.house hosting reach filling
+    | Launch.Review path -> reviewing settled path |> onward (fun () -> 0)
 
 
 [<NoComparison; NoEquality>]

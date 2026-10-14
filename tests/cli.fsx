@@ -79,7 +79,8 @@ let private launches =
           Gen.zip hosting reach |> Gen.map Launch.Host
           Gen.zip (Gen.zip address token) (Gen.zip code table)
           |> Gen.map (fun ((address, token), (code, table)) -> Launch.Join(address, token, code, table))
-          Gen.zip reach (Gen.elements [ true; false ]) |> Gen.map Launch.House ]
+          Gen.zip reach (Gen.elements [ true; false ]) |> Gen.map Launch.House
+          path |> Gen.map Launch.Review ]
     |> Arb.fromGen
 
 
@@ -315,6 +316,24 @@ report
     (through [ "play"; "--from"; saved ])
     (through [ "replay"; saved ])
 
+report "a saved game can be reviewed instead" (0, Some(Launch.Review saved)) (through [ "review"; saved ])
+
+report
+    "drawn whichever way it is asked for"
+    (0, Some(Launch.Review saved))
+    (through [ "review"; saved; "--view"; "plain"; "--colour"; "blue=teal" ])
+
+report "and a review of nothing in particular is turned away" true (turnedAway [ "review" ])
+
+report
+    "the program's help offers it beside 'replay'"
+    true
+    (match Launch.taken playing [ "--help" ] with
+     | Printed text ->
+         text.Contains "review logs/<saved>.log"
+         && text.Contains "walk through a saved game"
+     | _ -> false)
+
 
 let private door words =
     match through words with
@@ -531,6 +550,42 @@ let private unread reader screen =
         | Error _ -> true)
 
 report "every row the menu offers stands for a line the menu itself can read" [] (unread chosen front)
+
+let private record: Transcript.Saved =
+    { Path = saved
+      Named = saved
+      Game = Some "turncoats"
+      Players = 2
+      Seed = 42UL
+      Moves = 12
+      Written = DateTime(2026, 8, 2, 21, 58, 23) }
+
+report
+    "a saved game on the list opens on taking it up and reviewing it, and nothing else"
+    [ $"taken up: {saved}"; $"reviewed: {saved}" ]
+    (match (Menu.continuing playing [ record ]).Rows with
+     | [ { Pick = Keys.Opens choosing } ] ->
+         choosing.Rows
+         |> List.collect linesOf
+         |> List.map (fun line ->
+             match chosen line with
+             | Ok(Menu.Replay path) -> $"taken up: {path}"
+             | Ok(Menu.Review path) -> $"reviewed: {path}"
+             | Ok _ -> $"'{line}' is something else"
+             | Error problem -> problem)
+     | _ -> [ "the record is not one row that opens" ])
+
+report "and every row on that list stands for a line the menu can read" [] (unread chosen (Menu.continuing playing [ record ]))
+
+report
+    "'review' at the menu names a record outright, as 'replay' does"
+    (true, true)
+    ((match chosen $"review {saved}" with
+      | Ok(Menu.Review path) -> path = saved
+      | _ -> false),
+     (match chosen "review" with
+      | Error problem -> problem.Contains "review <file>"
+      | Ok _ -> false))
 
 report
     "and the same on the colour screen, where turning walks a slot through the colours"

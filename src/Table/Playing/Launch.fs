@@ -17,9 +17,10 @@ type Launch =
     | Host of Start * reach: Reach
     | Join of address: string * token: string option * code: string option * table: string option
     | House of reach: Reach * filling: bool
+    | Review of path: string
 
 
-/// What the six commands say about the options they share, said once - so `play --help` and
+/// What the seven commands say about the options they share, said once - so `play --help` and
 /// `host --help` cannot describe --seed two ways, and the two that deliberately differ stand out.
 module private Usage =
 
@@ -192,7 +193,7 @@ type ReplayArgs =
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Path _ -> "the saved game to take up again"
+            | Path _ -> "the record of the saved game"
             | View _ -> Usage.View
             | Colour _ -> Usage.Colour
 
@@ -203,6 +204,7 @@ type Argument =
     | [<CliPrefix(CliPrefix.None); First>] House of ParseResults<HouseArgs>
     | [<CliPrefix(CliPrefix.None); First>] Join of ParseResults<JoinArgs>
     | [<CliPrefix(CliPrefix.None); First>] Replay of ParseResults<ReplayArgs>
+    | [<CliPrefix(CliPrefix.None); First>] Review of ParseResults<ReplayArgs>
 
     interface IArgParserTemplate with
         member this.Usage =
@@ -213,6 +215,7 @@ type Argument =
             | House _ -> "open a house: several games at once, listed on a page, dealt as people ask for them"
             | Join _ -> "sit down at a table someone else is hosting"
             | Replay _ -> "take up a saved game where it was left, against the same players"
+            | Review _ -> "walk through a saved game a turn at a time, as everyone or as one seat, changing nothing"
 
 [<NoComparison; NoEquality>]
 type Taken<'Move, 'State, 'Notice> =
@@ -256,6 +259,7 @@ module Launch =
                  ""
                  shown $"{name} replay logs/<saved>.log" "a saved game, taken up where it was left"
                  shown $"{name} serve --from logs/<saved>.log" "...the same game, taken up in a browser"
+                 shown $"{name} review logs/<saved>.log" "...or looked back over, as everyone or as one seat"
                  ""
                  listed "How the board can be drawn:" (String.concat ", " drawn)
                  listed "  ...and in a browser:" (Playable.namesFor InABrowser game) ]
@@ -392,6 +396,7 @@ module Launch =
                       @ (table |> Option.toList |> List.map JoinArgs.AtTable)
                   )
               ) ]
+        | Launch.Review path -> [ Review(replaying.ToParseResults [ ReplayArgs.Path path ]) ]
 
     let words launch =
         parser.PrintCommandLineArguments(arguments launch) |> List.ofArray
@@ -603,7 +608,12 @@ module Launch =
             | Some(Replay args) ->
                 let! view = reading game kept (args.GetResults ReplayArgs.Colour) (args.TryGetResult ReplayArgs.View)
                 return Launch.Play(Start.Saved(args.GetResult ReplayArgs.Path)), view
-            | None -> return! Error "That does not say what to open. Say 'play', 'serve', 'host', 'house', 'join' or 'replay'."
+            | Some(Review args) ->
+                let! view = reading game kept (args.GetResults ReplayArgs.Colour) (args.TryGetResult ReplayArgs.View)
+                return Launch.Review(args.GetResult ReplayArgs.Path), view
+            | None ->
+                return!
+                    Error "That does not say what to open. Say 'play', 'serve', 'host', 'house', 'join', 'replay' or 'review'."
         }
 
     // A line copied off the screen may still have `dotnet run --` on the front of it, which is how the

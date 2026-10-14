@@ -1,6 +1,7 @@
 namespace Prototyping.Table
 
 open System
+open Prototyping.Common
 open Prototyping.Engine
 
 /// Whose eyes a review looks through: everybody's at once, with nothing hidden, or one seat's, with
@@ -46,6 +47,18 @@ type Review<'Move, 'State, 'Notice> =
             /// from the eye at the moment the board is drawn, so there is one place that decides it.
             Margined: Margins
         }
+
+/// What a line typed at a review comes to.
+[<RequireQualifiedAccess; NoComparison; NoEquality>]
+type Said<'Move, 'State, 'Notice> =
+    | Moved of Review<'Move, 'State, 'Notice>
+    | Printed of Review<'Move, 'State, 'Notice> * string
+
+    /// Another way of drawing the board. The view belongs to the console rather than the review, as
+    /// it does at a board, so it goes back to whoever holds it.
+    | Looked of View<'Move, 'State, 'Notice>
+
+    | Left
 
 module Review =
 
@@ -209,3 +222,194 @@ module Review =
         | None -> deal
         | Some(turn, entries) -> $"This turn ({turn})" :: (entries |> List.collect (entry review))
         |> String.concat Environment.NewLine
+
+    let private seats review =
+        Playable.seatsOf review.Reviewed (Model.state review.Stops[0].Reached)
+
+    /// The seat the board is drawn for. Everyone is drawn from the first seat with the curtain
+    /// lifted: a game that lifts it shows every seat from there, and one chair for the whole review
+    /// keeps the board from turning round every time the seat to play changes.
+    let private seat review =
+        match review.Beholding with
+        | Eye.Everyone -> Seat.at 1
+        | Eye.Seat seat -> seat
+
+    let private margins review =
+        { review.Margined with
+            Curtain =
+                match review.Beholding with
+                | Eye.Everyone -> Lifted
+                | Eye.Seat _ -> Hanging }
+
+    let private eyeing review =
+        match review.Beholding with
+        | Eye.Everyone -> "as everyone, with nothing hidden"
+        | Eye.Seat seat -> $"as {review.Reviewed.Seat seat} saw it"
+
+    /// The same list for every turn so far, which is what `history` is in a review. The game's own
+    /// history is never asked for here: it takes no curtain, so it could not show everything to
+    /// everyone, and a game's history may tell a seat more of the others' orders than its board did.
+    let private history review =
+        let turns =
+            match turnsTo review with
+            | [] -> deal
+            | turns ->
+                turns
+                |> List.collect (fun (turn, entries) -> $"Turn {turn}" :: (entries |> List.collect (entry review)))
+
+        String.concat Environment.NewLine ($"The game so far, {eyeing review}" :: "" :: turns)
+
+    let private heading review =
+        let place = place review
+
+        let where =
+            if place.Move = 0 then
+                let turns = Counting.several "turn" "turns" place.Turns
+                let moves = Counting.several "move" "moves" place.Moves
+                $"the deal, with {turns} and {moves} to come"
+            else
+                $"turn {place.Turn} of {place.Turns}, move {place.Move} of {place.Moves}"
+
+        $"Reviewing {review.Filed} - {where} - {eyeing review}"
+
+    let private board (view: View<'Move, 'State, 'Notice>) review =
+        view.Board (margins review) (seat review) (model review)
+
+    /// The heading, the game's own board for the eye, and the turn it stands in.
+    let drawn view review =
+        String.concat Environment.NewLine [ heading review; board view review; ""; thisTurn review ]
+
+    let private typed =
+        [ "Or type it: 'next turn', 'back a move', 'move 12', 'start', 'end',"
+          "'eye all', 'eye 2', 'history', or the game's own word for one of its"
+          "screens. 'quit' leaves." ]
+
+    let private screen review (pages: (int -> string) option) : Keys.Screen =
+        let eye =
+            Keys.sends (Some '5') "Eye" (eyeing review) "eye next"
+            |> Keys.turning (fun by -> if by < 0 then "eye back" else "eye next")
+
+        // Only where the game turns pages of its own here: a row that turned nothing would be a row
+        // somebody stood on and pressed keys at.
+        let paging =
+            match pages with
+            | Some turn ->
+                [ Keys.sends (Some '6') "Screen" (Margins.showing "the one it opens on" review.Margined) (turn 1)
+                  |> Keys.turning turn ]
+            | None -> []
+
+        { Title = "Review"
+          Prose = []
+          Rows =
+            [ Keys.sends (Some '1') "Next turn" "" "next turn"
+              Keys.sends (Some '2') "Back a turn" "" "back a turn"
+              Keys.sends (Some '3') "Next move" "" "next move"
+              Keys.sends (Some '4') "Back a move" "" "back a move"
+              eye ]
+            @ paging
+            @ [ Keys.sends (Some '0') "Leave" "" "quit" ]
+          Note = typed
+          Backs = Some "quit" }
+
+    /// The review's own rows, with the game's page turn beside them where the game has one for the
+    /// seat and the stop being drawn. Nothing seals: there is no turn here to give up.
+    let steered view review =
+        let pages =
+            review.Reviewed.Steering (board view review) (margins review) (seat review) (model review)
+            |> Option.bind (fun (steered: Keys.Steered) -> steered.Pages)
+
+        { Keys.steered (screen review pages) with
+            Pages = pages }
+
+    let private eyes review =
+        Eye.Everyone :: (seats review |> List.map Eye.Seat)
+
+    let private turnedEye by review =
+        let eyes = eyes review
+        let at = eyes |> List.findIndex ((=) review.Beholding)
+        looking eyes[Keys.wrapped (List.length eyes) at by] review
+
+    let private helping =
+        Scene.prose
+            "A review walks a record without changing it. 'next turn' and 'back a turn' go a turn at a time, and 'next move' and 'back a move' a move; 'move 12', 'start' and 'end' go straight there. 'eye all' shows everything, and 'eye 2' only what the second seat was shown then. 'history' is every turn so far, through the same eye. Nothing can be played, and nothing is written. 'quit' leaves."
+
+    let said (view: View<'Move, 'State, 'Notice>) (line: string) review =
+        let game = review.Reviewed
+        let printed text = Said.Printed(review, text)
+
+        let margined change =
+            Said.Moved
+                { review with
+                    Margined = change review.Margined }
+
+        let switched wanted now = wanted |> Option.defaultValue (not now)
+
+        match Commands.lowered line with
+        | [ "next"; "turn" ] -> Said.Moved(turned 1 review)
+        | [ "back"; "a"; "turn" ]
+        | [ "back"; "turn" ]
+        | [ "previous"; "turn" ] -> Said.Moved(turned -1 review)
+        | [ "next"; "move" ]
+        | [ "next" ] -> Said.Moved(stepped 1 review)
+        | [ "back"; "a"; "move" ]
+        | [ "back"; "move" ]
+        | [ "previous"; "move" ]
+        | [ "previous" ] -> Said.Moved(stepped -1 review)
+        | [ "start" ] -> Said.Moved(standing 0 review)
+        | [ "end" ] -> Said.Moved(standing (last review) review)
+        | [ "move"; number ] ->
+            match Commands.tryInt number with
+            | Some at -> Said.Moved(standing at review)
+            | None -> printed $"'{number}' is not a move. Say 'move 12' for the twelfth."
+        | [ "eye"; "all" ]
+        | [ "eye"; "everyone" ] -> Said.Moved(looking Eye.Everyone review)
+        | [ "eye"; "next" ] -> Said.Moved(turnedEye 1 review)
+        | [ "eye"; "back" ] -> Said.Moved(turnedEye -1 review)
+        | [ "eye"; number ] ->
+            match
+                Commands.tryInt number
+                |> Option.map Seat.at
+                |> Option.filter (fun seat -> List.contains seat (seats review))
+            with
+            | Some seat -> Said.Moved(looking (Eye.Seat seat) review)
+            | None ->
+                printed
+                    $"There is no seat '{number}' at this game. Say 'eye all', or a seat from 1 to {List.length (seats review)}."
+        | "eye" :: _ -> printed "Say 'eye all' to see everything, or 'eye 2' to see what the second seat saw."
+        | [ "back" ]
+        | [ "menu" ] -> Said.Left
+        | _ ->
+            match Playable.read game line with
+            | Error problem -> printed problem
+            | Ok Nothing -> Said.Moved review
+            | Ok Help -> printed helping
+            | Ok Recount -> printed (history review)
+
+            // `Answer` takes no curtain, so as everyone the answer is the first seat's, and says so.
+            | Ok(Asking question) ->
+                let answer = view.Answer (seat review) question (model review)
+
+                match review.Beholding with
+                | Eye.Everyone -> printed $"As {game.Seat(seat review)} saw it:{Environment.NewLine}{answer}"
+                | Eye.Seat _ -> printed answer
+            | Ok(Notes wanted) ->
+                margined (fun margins ->
+                    { margins with
+                        Notes = switched wanted margins.Notes })
+            | Ok(Listing wanted) ->
+                margined (fun margins ->
+                    { margins with
+                        Commands = switched wanted margins.Commands })
+            | Ok(Logging wanted) ->
+                margined (fun margins ->
+                    { margins with
+                        Logged = switched wanted margins.Logged })
+            | Ok(Showing screen) -> margined (fun margins -> { margins with Showing = screen })
+            | Ok(Looking name) ->
+                match Playable.byName view.Shown view.Palette game name with
+                | Ok chosen -> Said.Looked chosen
+                | Error problem -> printed problem
+            | Ok(Hushing _) -> printed "A review makes no sound, so there is nothing to hush."
+            | Ok Keep -> printed "A review writes nothing down. The record is left as it was."
+            | Ok Leave -> Said.Left
+            | Ok(Send _) -> printed "A review cannot be played. 'quit' leaves."

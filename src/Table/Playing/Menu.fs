@@ -13,6 +13,7 @@ module Menu =
         | Reaching of seating: Sitter list * reach: Reach
         | Join of address: string * code: string option
         | Replay of path: string
+        | Review of path: string
         | Continuing
 
         /// Open the section of the menu the game owns, if it has one.
@@ -158,11 +159,22 @@ module Menu =
                 | Some _ -> ""
                 | None -> "  (its name does not say which game)"
 
-            Keys.sends
-                (Keys.nth at)
-                (record.Written.ToString "d MMM yyyy HH:mm")
-                (sprintf "%-10s%-12s%s%s" seats moves record.Named said)
-                $"replay {record.Named}"
+            let written = record.Written.ToString "d MMM yyyy HH:mm"
+
+            let choosing: Keys.Screen =
+                { Title = record.Named
+                  Prose = [ $"{seats}, {moves}, put down {written}." ]
+                  Rows =
+                    [ Keys.sends (Keys.nth 0) "Take it up" "and play on from where it was left" $"replay {record.Named}"
+                      Keys.sends
+                          (Keys.nth 1)
+                          "Review it"
+                          "a turn or a move at a time, as everyone or as one seat, changing nothing"
+                          $"review {record.Named}" ]
+                  Note = []
+                  Backs = None }
+
+            Keys.opens (Keys.nth at) written (sprintf "%-10s%-12s%s%s" seats moves record.Named said) choosing
 
         { Title = $"Take up a {game.Title} game"
           Prose =
@@ -179,14 +191,17 @@ module Menu =
                   "strength it was playing them - and it goes on being written to the same file." ]
           Rows = records |> List.mapi row
           Note =
-            [ (match records with
-               | [] -> "'undo' walks a game you take up backwards"
-               | _ -> "The most recently put down is first. 'undo' walks a game you take up backwards")
-              "through every state it really passed through, so this is how a game is reviewed as"
-              "well as how it is carried on."
-              ""
-              "Or type it: 'replay <file>', naming any record - including one from somewhere else"
-              $"than the {game.Title} games listed here." ]
+            (match records with
+             | [] ->
+                 [ "A game can be taken up and played on, or reviewed: walked a turn or a move at a"
+                   "time, as everyone or as one seat, with nothing in it changed." ]
+             | _ ->
+                 [ "The most recently put down is first. Each one can be taken up and played on, or"
+                   "reviewed: walked a turn or a move at a time, as everyone or as one seat, with"
+                   "nothing in it changed." ])
+            @ [ ""
+                "Or type it: 'replay <file>' or 'review <file>', naming any record - including one"
+                $"from somewhere else than the {game.Title} games listed here." ]
           Backs = Some "back" }
 
     let screen game (showing: View<_, _, _>) behind : Keys.Screen =
@@ -240,7 +255,7 @@ module Menu =
               (match game.Skills with
                | [] -> $"'host {game.Fewest}',"
                | _ -> $"'host {game.Fewest}', 'vs <skill>...' for {machines},")
-              $"'join <address> [word]', 'continue', 'replay <file>',"
+              $"'join <address> [word]', 'continue', 'replay <file>', 'review <file>',"
               (match game.Aside with
                | Some aside -> $"'{aside.Word}', 'view <{Playable.namesFor AtATerminal game}>',"
                | None -> $"'view <{Playable.namesFor AtATerminal game}>',")
@@ -315,6 +330,8 @@ module Menu =
             | ("rules" | "help" | "?"), [] -> Ok Rules
             | "replay", [ path ] -> Ok(Replay path)
             | "replay", _ -> Error "Say 'replay <file>', naming one saved record."
+            | "review", [ path ] -> Ok(Review path)
+            | "review", _ -> Error "Say 'review <file>', naming one saved record."
             | ("continue" | "resume" | "saved"), [] -> Ok Continuing
             | ("continue" | "resume" | "saved"), _ ->
                 Error "Say 'continue' on its own for the list, or 'replay <file>' to name one outright."

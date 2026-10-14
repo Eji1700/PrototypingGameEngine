@@ -302,13 +302,229 @@ let private kept =
     |> Result.toOption
     |> Option.get
 
-kept
-|> Review.stepped 99
-|> Review.turned -2
-|> Review.looking (Eye.Seat(Seat.at 2))
-|> Review.thisTurn
+// Every line a player might reach for to change a game, said to a review of a record in logs/, with
+// the board drawn after each - which is everything the review loop at a keyboard does.
+[ "end"
+  "undo"
+  "redo"
+  "place 9"
+  "resign"
+  "restart"
+  "players 2 7"
+  "save"
+  "back a turn"
+  "eye 2"
+  "history"
+  "quit" ]
+|> List.fold
+    (fun review line ->
+        Review.drawn plain review |> ignore
+
+        match Review.said plain line review with
+        | Said.Moved next
+        | Said.Printed(next, _) -> next
+        | Said.Looked _
+        | Said.Left -> review)
+    kept
 |> ignore
 
 report "nothing under logs/ is written, moved or changed by reviewing one of them" before (everything ())
+
+
+// --- what a line typed at a review does ---------------------------------------------------------
+
+let private saying line review =
+    match Review.said plain line review with
+    | Said.Moved next -> Ok next
+    | Said.Printed(next, said) -> Error(next, said)
+    | Said.Looked _ -> failwith $"'{line}' asked for another view"
+    | Said.Left -> failwith $"'{line}' left"
+
+let private landed line review =
+    match saying line review with
+    | Ok next -> (Review.place next).Move
+    | Error(_, said) -> failwith $"'{line}' was answered '{said}'"
+
+report
+    "the words walk it as the steps do"
+    [ 1; 0; 6; 4; 5; 4; 0; 9; 7; 9; 0 ]
+    [ landed "next move" review
+      landed "back a move" (walked 1 review)
+      landed "next turn" (walked 4 review)
+      landed "back a turn" (walked 5 review)
+      landed "next" (walked 4 review)
+      landed "previous" (walked 5 review)
+      landed "start" (walked 5 review)
+      landed "end" review
+      landed "move 7" review
+      landed "move 70" review
+      landed "move -3" review ]
+
+report
+    "'eye' turns through everyone and each seat, and round again, leaving the review where it stands"
+    [ Eye.Seat(Seat.at 1), 4
+      Eye.Seat(Seat.at 2), 4
+      Eye.Everyone, 4
+      Eye.Seat(Seat.at 2), 4
+      Eye.Everyone, 4 ]
+    ([ "eye next", review
+       "eye next", Review.looking (Eye.Seat(Seat.at 1)) review
+       "eye next", Review.looking (Eye.Seat(Seat.at 2)) review
+       "eye back", review
+       "eye all", Review.looking (Eye.Seat(Seat.at 2)) review ]
+     |> List.map (fun (line, looking) ->
+         match saying line (walked 4 looking) with
+         | Ok next -> Review.eye next, (Review.place next).Move
+         | Error(_, said) -> failwith said))
+
+report
+    "and 'eye 2' looks as the second seat, while a seat the game does not have is refused in words"
+    (Ok(Eye.Seat(Seat.at 2)), Error "There is no seat '3' at this game. Say 'eye all', or a seat from 1 to 2.")
+    (saying "eye 2" review |> Result.map Review.eye |> Result.mapError snd,
+     saying "eye 3" review |> Result.map Review.eye |> Result.mapError snd)
+
+report
+    "a line that would be a move is refused in one sentence, and the review stays where it was"
+    []
+    [ for line in [ "place 9"; "9"; "undo"; "redo"; "resign"; "restart"; "players 2 7" ] do
+          match saying line (walked 4 review) with
+          | Error(next, "A review cannot be played. 'quit' leaves.") when (Review.place next).Move = 4 -> ()
+          | Error(_, said) -> yield $"'{line}' was answered '{said}'"
+          | Ok _ -> yield $"'{line}' moved the review" ]
+
+report
+    "and 'save' is told that nothing is written"
+    (Error "A review writes nothing down. The record is left as it was.")
+    (saying "save" review |> Result.mapError snd |> Result.map ignore)
+
+report
+    "'quit', 'back' and 'q' leave"
+    [ true; true; true; true ]
+    ([ "quit"; "back"; "q"; "menu" ]
+     |> List.map (fun line ->
+         match Review.said plain line review with
+         | Said.Left -> true
+         | _ -> false))
+
+report
+    "'view' with a way of drawing the game hands it back, since the view is the console's"
+    [ true; false ]
+    ([ "view plain"; "view fancy" ]
+     |> List.map (fun line ->
+         match Review.said plain line review with
+         | Said.Looked _ -> true
+         | _ -> false))
+
+report
+    "'history' lists every turn so far through the eye, and nobody else's secrets through a seat's"
+    (true, false, true)
+    (let history eye =
+        match saying "history" (opened secretive reading |> Review.looking eye |> walked 9) with
+        | Error(_, said) -> said
+        | Ok _ -> ""
+
+     let x = history (Eye.Seat(Seat.at 1))
+     let everyone = history Eye.Everyone
+     x.Contains "Turn 7", x.Contains "O: place 5 (secret)", everyone.Contains "O: place 5 (secret)")
+
+// A view that says how it was asked to draw, rather than drawing.
+let private telling =
+    { plain with
+        Board = fun margins seat _ -> $"curtain {margins.Curtain}, seat {PlayerId.value seat}, notes {margins.Notes}" }
+
+report
+    "as everyone the board is drawn for the first seat with the curtain lifted, and through a seat's eyes for that seat with it hanging"
+    [ true; true; true ]
+    [ (Review.drawn telling review).Contains "curtain Lifted, seat 1"
+      (Review.drawn telling (Review.looking (Eye.Seat(Seat.at 2)) review)).Contains "curtain Hanging, seat 2"
+      (Review.drawn telling (Review.looking (Eye.Seat(Seat.at 1)) review)).Contains "curtain Hanging, seat 1" ]
+
+report
+    "the margins are this console's to change, as at a board"
+    true
+    (match saying "notes" review with
+     | Ok next -> (Review.drawn telling next).Contains "notes False"
+     | Error _ -> false)
+
+report
+    "the review is headed with the record, where it stands and through whose eyes"
+    [ "Reviewing a game.log - the deal, with 7 turns and 9 moves to come - as everyone, with nothing hidden"
+      "Reviewing a game.log - turn 5 of 7, move 6 of 9 - as O saw it" ]
+    [ (Review.drawn plain review).Replace("\r\n", "\n").Split('\n')[0]
+      (Review.drawn plain (walked 6 review |> Review.looking (Eye.Seat(Seat.at 2)))).Replace("\r\n", "\n").Split('\n')[0] ]
+
+// Noughts and crosses has nothing to be asked, so this one is taught a question.
+let private asked =
+    { noughts with
+        Read = fun line -> if line = "why" then Ok(Asking line) else noughts.Read line }
+
+report
+    "as everyone a question is answered as the first seat would be, and says so; through a seat's eyes, as that seat"
+    (true, true, true)
+    (let answered review =
+        match Review.said plain "why" review with
+        | Said.Printed(_, answer) -> answer
+        | _ -> ""
+
+     let question = opened asked reading
+
+     (match saying "help" review with
+      | Error(_, help) -> help.Contains "A review walks a record"
+      | Ok _ -> false),
+     (answered question).StartsWith "As X saw it:",
+     answered (Review.looking (Eye.Seat(Seat.at 2)) question) = plain.Answer (Seat.at 2) "why" (Review.model question))
+
+
+// --- the rows it is steered by --------------------------------------------------------------------
+
+let private rowLines (steered: Keys.Steered) =
+    steered.Screen.Rows
+    |> List.collect (fun row ->
+        (match row.Pick with
+         | Keys.Sends line -> [ line ]
+         | _ -> [])
+        @ (match row.Turns with
+           | Some turn -> [ turn -1; turn 1 ]
+           | None -> []))
+
+report
+    "every row stands for a line the review reads, and none of them is a move"
+    []
+    [ for line in rowLines (Review.steered plain (walked 4 review)) do
+          match Review.said plain line (walked 4 review) with
+          | Said.Printed(_, said) -> yield $"'{line}' was answered '{said}'"
+          | Said.Moved _
+          | Said.Looked _
+          | Said.Left -> () ]
+
+report
+    "at a game with no pages of its own there is no page to turn, nor any row for it, and nothing ever seals"
+    (false, false, false)
+    (let steered = Review.steered plain review
+     steered.Pages.IsSome, steered.Screen.Rows |> List.exists (fun row -> row.Says = "Screen"), steered.Seals.IsSome)
+
+// A game that turns between two screens of its own, by name, for whichever seat is drawn.
+let private paged =
+    { noughts with
+        Steering =
+            fun _ margins _ _ ->
+                Some
+                    { Keys.steered
+                          { Title = ""
+                            Prose = []
+                            Rows = []
+                            Note = []
+                            Backs = None } with
+                        Pages = Some(fun by -> if Margins.showing "board" margins = "board" then "rules" else "board")
+                        Seals = Some "pass" } }
+
+report
+    "a game that turns its own pages has them turned from the review, onto the screen it names, and still nothing seals"
+    (true, true, false, Some "rules")
+    (let shown = opened paged reading
+     let steered = Review.steered plain shown
+     let turned = steered.Pages |> Option.map (fun turn -> turn 1)
+
+     steered.Pages.IsSome, steered.Screen.Rows |> List.exists (fun row -> row.Says = "Screen"), steered.Seals.IsSome, turned)
 
 Checks.finish ()
