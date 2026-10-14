@@ -33,6 +33,7 @@ asked for two fields is the answer worth keeping.
 | 2026-08-27 | **EndTimes** | `Keys.path` for `Keys.standing`; `Keys.draw` in columns |
 | 2026-08-29 | **Warband** | `Pulse.Free` |
 | 2026-10-11 | **EndTimes** | `Playable.Steering` returns `Keys.Steered`: the page turn and the seal line beside the rows |
+| 2026-10-13 | **EndTimes** | `Margins.Curtain`; `Review` and `review <file>` |
 
 ## What each one was for
 
@@ -185,6 +186,31 @@ The eight games here have no rows to steer, said `None`, and still do, so not on
 game reads, and the seal reads as a move, since it is a turn given up and is asked about first. The
 letters themselves are not seam. They belong to the keyboard, and are settled on a page of their own
 and kept in `settings.txt`.
+
+**EndTimes — `Margins.Curtain`, 2026-10-13.** Not the seam, but next to it, and the same place
+`Showing` went: a game that keeps things from its players needed to be asked, once in a while, to
+keep nothing back. Its owner wanted to look over a game put down - a turn or a move at a time,
+either as everybody with nothing hidden, or as one seat with only what that seat was shown then.
+
+Taking a record up could not do it. That puts the game back on a live table, where a machine
+answers, `undo` is a move, the record is written again on the way out, and the board is drawn for
+whoever is to play. A `Review` is a value of its own beside `Solo` rather than a mode of it: every
+position the record passed through, worked out once by the same fold that takes a game up, and
+where it stands and through whose eyes. It reaches no `Solo`, no machine and no file, so it is
+read-only because there is nothing in it that could write, not because something remembers to
+check. The list of what each turn held is the table's own, built from the journal: through a
+seat's eyes it shows that seat's orders and only what it was told of anybody else's, worded by
+`SeenBy` - which the table had never called for itself before.
+
+What only a game can do is lift its own curtain. `Curtain` is the one word for asking - `Hanging`
+or `Lifted` - and it rides in the margins for the reasons `Showing` does: it is per console, and it
+never reaches the model or the record. Only a review looking as everyone lifts it; no typed line
+can. A member on `Playable` was the other way, and every game would have had to answer it,
+including the ones with nothing to hide. A seat that meant everyone was a third, and failed
+silently: a game that did not know the number would draw somebody's private board under a heading
+saying "everyone". A game that ignores the curtain draws the board it always draws, which for a
+game with nothing hidden is the right one, and `Conforms.against` draws every view with it lifted,
+for every seat at every state, so no game can throw on it or draw nothing.
 
 ## What the four quiet games did instead
 

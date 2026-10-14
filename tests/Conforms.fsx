@@ -445,6 +445,18 @@ let against (game: Playable<'Move, 'State, 'Notice>) seats (lines: string list) 
                   if keep (view.Says "something worth reading") = "" then
                       yield $"{view.Name} passes a line on as nothing" ]
 
+        // A review looking as everyone lifts the curtain, and nothing else does. A game may ignore
+        // it and draw what it always draws; what it may not do is draw nothing, or fall over.
+        report
+            $"and draws every seat at every state with the curtain lifted, as a review asks, {what}"
+            []
+            [ for view in views do
+                  for where, model in states do
+                      for seat in places do
+                          if keep (view.Board { Margins.all with Curtain = Lifted } seat model) = "" then
+                              yield
+                                  $"{view.Name} draws {where} as nothing with the curtain lifted, for seat {PlayerId.value seat}" ]
+
         report
             $"and draws a table still filling up with every seat named, {what}"
             []

@@ -53,7 +53,7 @@ the program's own name from a published file, so it runs wherever the reader is 
 
 ### The command line
 
-Six commands, the same at every game:
+Seven commands, the same at every game:
 
 | | |
 | --- | --- |
@@ -63,6 +63,7 @@ Six commands, the same at every game:
 | `join <address>` | sit down at a table someone else is hosting |
 | `house` | several games at once, listed on a page, dealt as people ask for them |
 | `replay <file>` | take a saved game up where it was left, against the same players |
+| `review <file>` | walk through a saved game a turn at a time, as everyone or as one seat, changing nothing |
 
 and the options that go with them:
 
@@ -71,7 +72,7 @@ and the options that go with them:
 | `--seed <n>` | play, serve, host | deal from this seed rather than from the clock, for the same game again |
 | `--rival <skill>` | play, serve | the machine plays the next seat; once per seat you give away |
 | `--from <file>` | play, serve, host | take up this saved game instead of dealing one |
-| `--view <name>` | play, host, join, replay | how the board is drawn at this terminal: `plain` or `rich` |
+| `--view <name>` | play, host, join, replay, review | how the board is drawn at this terminal: `plain` or `rich` |
 | `--colour <slot>=<colour>` | all but house | what to draw something in, as `blue=teal`; once per slot |
 | `--port <n>` | serve, host, house | listen on this port rather than 5000 |
 | `--code <word>` | serve, host, house, join | the word at the door, rather than one made up here |
@@ -88,10 +89,20 @@ dotnet run -- play 3 --seed 42 --view rich
 dotnet run -- play 4 --rival easy --rival hard      # you, two machines, and a person at this keyboard
 dotnet run -- serve 2 --rival hard                  # in a browser, against the machine
 dotnet run -- replay logs/2026-08-02-215823-turncoats-2p-seed42.log
+dotnet run -- review logs/2026-08-02-215823-turncoats-2p-seed42.log
 dotnet run -- host 3 --open                         # a table for three, no word at the door
 dotnet run -- join greg-pc --code kbd4-9mtx-7rfp    # from each of the other machines
 dotnet run -- house --fill                          # a house, with last night's games taken up
 ```
+
+`review` opens a saved game without taking it up. Nothing is played in it, no machine answers and
+nothing is written: it is the game's own board, a turn or a move at a time, seen either as
+everyone, with nothing hidden, or as one seat, with only what that seat was shown then. Under the
+board is the turn it stands in — every order in it as everyone, and through a seat's eyes only
+that seat's own and what it was told of the rest. `next turn`, `back a move`, `move 12`,
+`eye all`, `eye 2` and `history` walk it at the prompt, and the rows under the board do the same.
+As everyone, the board is asked for with `Margins.Curtain` lifted, and a game decides for itself
+what that shows; one with nothing to hide draws the board it always draws.
 
 Whatever is wrong with a line is said at the door, before anything is dealt — a count the game
 does not take, a view or a colour nobody has, a skill the game has no machine for.
@@ -141,8 +152,8 @@ machine. A seating with a `joins` in it is a table to open and wait at, so `Deal
 the table`, and the screen behind `How it is reached` settles the port, the word at the door,
 https and the address to tell people. The short ways of saying all this hold at the prompt too:
 `3` for a game of three, `3 42` for that same game again, `play you hard joins`, `serve you
-medium`, `vs easy hard`, `host 3`, `join <address>`, `continue`, `replay <file>`, `view rich`,
-`settings`, `rules`, `quit`.
+medium`, `vs easy hard`, `host 3`, `join <address>`, `continue`, `replay <file>`, `review <file>`,
+`view rich`, `settings`, `rules`, `quit`.
 
 ### At the prompt
 
@@ -204,9 +215,10 @@ each seat — `you` for a person, a skill for a machine. Undo and redo are moves
 replaying passes through every state the original did, in order, and lands on the one it was
 saved from. A replayed game writes a byte-identical record.
 
-A record is a game to carry on with rather than a thing to look at. `Continue a game` at the menu
-lists what there is — when each was put down, how many seats, how many moves — and `replay
-<file>` names one outright. `play`, `serve` and `host` all take `--from <file>` in place of a
+A record is a game to carry on with, and one to look back over. `Continue a game` at the menu
+lists what there is — when each was put down, how many seats, how many moves — and each opens on
+two choices: take it up, or review it, which changes nothing in it. `replay <file>` and `review
+<file>` name one outright. `play`, `serve` and `host` all take `--from <file>` in place of a
 count, so a game put down at one keyboard can be taken up in a browser or as a table others join:
 the machines keep their seats at the strength they were playing, and only the people move. A
 resumed game goes on writing to the file it came from.
