@@ -2,6 +2,10 @@ namespace Prototyping.Table
 
 open Prototyping.Engine
 
+type Curtain =
+    | Hanging
+    | Lifted
+
 /// How much of a screen to draw, which of a game's own screens, and how far through a beat it is
 /// being drawn. None of it is part of the game - the switches and the name are boxes round the
 /// game itself - so none reaches the model or the record, and at a table over a network each
@@ -29,6 +33,12 @@ type Margins =
         Showing: string
 
         Phase: float
+
+        /// Whether a game hides from the seat it draws for what that seat was never shown. It hangs
+        /// wherever a game is played. Only a review looking as everyone lifts it, so no line typed at
+        /// a table can, and a record never carries it. A game with nothing to hide may ignore it and
+        /// draw the board it always draws.
+        Curtain: Curtain
     }
 
 module Margins =
@@ -38,14 +48,16 @@ module Margins =
           Commands = true
           Logged = true
           Showing = ""
-          Phase = 0.0 }
+          Phase = 0.0
+          Curtain = Hanging }
 
     let none =
         { Notes = false
           Commands = false
           Logged = false
           Showing = ""
-          Phase = 0.0 }
+          Phase = 0.0
+          Curtain = Hanging }
 
     let through phase margins = { margins with Phase = phase }
 

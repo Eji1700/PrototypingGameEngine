@@ -192,7 +192,9 @@ module Transcript =
             Moves: int
         }
 
-    let takenUp hint game (path: string) =
+    /// A record read off the disk, unless it is not there or is another game's. Taking a game up and
+    /// reviewing one both begin here, so the two turn away the same records in the same words.
+    let reading hint game (path: string) =
         let ours =
             match about path with
             | Some other when other <> game.Name -> Error $"'{path}' is a game of {other}, not of {game.Name}.{hint other}"
@@ -201,16 +203,18 @@ module Transcript =
         if not (File.Exists path) then
             Error $"There is no record at '{path}'."
         else
-            ours
-            |> Result.bind (fun () -> read game (File.ReadAllText path))
-            |> Result.bind (fun reading ->
-                Update.replay game.Rules reading.Players reading.Seed reading.Moves
-                |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
-                |> Result.map (fun model ->
-                    { Model = model
-                      Sitters = reading.Sitters
-                      Stamp = stampOf path reading.Players reading.Seed
-                      Moves = List.length reading.Moves }))
+            ours |> Result.bind (fun () -> read game (File.ReadAllText path))
+
+    let takenUp hint game (path: string) =
+        reading hint game path
+        |> Result.bind (fun reading ->
+            Update.replay game.Rules reading.Players reading.Seed reading.Moves
+            |> Result.mapError (fun _ -> $"'{path}' asks for a number of players the game does not take.")
+            |> Result.map (fun model ->
+                { Model = model
+                  Sitters = reading.Sitters
+                  Stamp = stampOf path reading.Players reading.Seed
+                  Moves = List.length reading.Moves }))
 
     // Written beside and moved over, so a record is never half-written: an interruption leaves either
     // the game as it stood before or the game as it stands now, and not something in between. The
