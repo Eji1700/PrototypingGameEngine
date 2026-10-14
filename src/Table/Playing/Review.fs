@@ -216,11 +216,23 @@ module Review =
 
     let private deal = [ "The deal"; "  Nothing has been played yet." ]
 
+    /// A line said once. Through a seat's eyes every hidden move of another seat reads the same -
+    /// "Player 1: sealed" - and seven of those in a row say less than one.
+    let private once lines =
+        lines
+        |> List.fold
+            (fun kept line ->
+                match kept with
+                | last :: _ when last = line -> kept
+                | _ -> line :: kept)
+            []
+        |> List.rev
+
     /// The turn the review stands in, through its eye, as far as the stop it stands on.
     let thisTurn review =
         match turnsTo review |> List.tryLast with
         | None -> deal
-        | Some(turn, entries) -> $"This turn ({turn})" :: (entries |> List.collect (entry review))
+        | Some(turn, entries) -> $"This turn ({turn})" :: once (entries |> List.collect (entry review))
         |> String.concat Environment.NewLine
 
     let private seats review =
@@ -255,7 +267,7 @@ module Review =
             | [] -> deal
             | turns ->
                 turns
-                |> List.collect (fun (turn, entries) -> $"Turn {turn}" :: (entries |> List.collect (entry review)))
+                |> List.collect (fun (turn, entries) -> $"Turn {turn}" :: once (entries |> List.collect (entry review)))
 
         String.concat Environment.NewLine ($"The game so far, {eyeing review}" :: "" :: turns)
 
