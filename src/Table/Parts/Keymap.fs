@@ -2,9 +2,10 @@ namespace Prototyping.Table
 
 open System
 
-/// The seven keys a player may move. Everything else on the keyboard - the space bar, Enter,
-/// Escape, Backspace and the numbers - does the same thing everywhere and cannot be moved, so a
-/// player who has moved every letter somewhere strange can still get off any screen by its number.
+/// The nine keys a player may move. Everything else on the keyboard - the space bar, Enter,
+/// Escape, Backspace, the numbers and the page keys - does the same thing everywhere and cannot be
+/// moved, so a player who has moved every letter somewhere strange can still get off any screen by
+/// its number.
 type Key =
     | Up
     | Down
@@ -13,6 +14,8 @@ type Key =
     | Previous
     | Next
     | Seal
+    | Above
+    | Below
 
 /// Which letter does which. Only `Keymap.standard` and `Keymap.bound` make one, so there is never
 /// a key without a letter or a letter on two keys.
@@ -29,7 +32,9 @@ module Keymap =
           Right, "right", 'd', "turn the row on"
           Previous, "previous", 'q', "turn the page back"
           Next, "next", 'e', "turn the page on"
-          Seal, "seal", 'r', "seal the turn" ]
+          Seal, "seal", 'r', "seal the turn"
+          Above, "above", 'i', "scroll the board up"
+          Below, "below", 'k', "scroll the board down" ]
 
     let private about key =
         keys |> List.find (fun (said, _, _, _) -> said = key)
@@ -98,7 +103,7 @@ module Keymap =
         )
 
     /// One key walked on to the next letter no other key holds, coming round from z to a. The
-    /// other six hold six of twenty-six, so the walk always ends.
+    /// other eight hold eight of twenty-six, so the walk always ends.
     let next key by keymap =
         let held =
             keymap.Letters |> List.filter (fun (other, _) -> other <> key) |> List.map snd

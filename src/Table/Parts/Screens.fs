@@ -1,5 +1,7 @@
 namespace Prototyping.Table
 
+open Prototyping.Common
+
 /// What is on the terminal, so the same screen is not written over itself again. A value rather
 /// than a line count because a count cannot answer "is this already there", and it lives beside
 /// `cleared` because a terminal just wiped has nothing on it to be identical to.
@@ -160,23 +162,42 @@ module Screens =
     [<Literal>]
     let private Worth = 3
 
-    /// A body trimmed to what is left after everything that must be drawn.
-    ///
-    /// The rows, the note and the prompt are how somebody gets off a screen, so they are never what
-    /// gets cut; a board is the part that is as long as it likes. What is cut says so, because a
-    /// board that quietly stopped early would be a board somebody read the wrong answer off.
-    let fitting room rest (says: string -> string) (body: string list) =
+    /// Where a body of `length` lines is cut, if it is: how far it is scrolled once that is kept
+    /// between its head and its foot, how far down its foot is, and how far a page goes. A page is
+    /// the board seen between the two cut lines less two, so the last lines read are still there to
+    /// read on from.
+    let private reach room rest length scrolled =
         let spare = room - rest
 
-        if List.length body <= spare || spare < Worth then
-            body
+        if length <= spare || spare < Worth then
+            None
         else
-            let kept = List.truncate (spare - 1) body
+            let deepest = length - (spare - 1)
+            Some(min deepest (max 0 scrolled), deepest, max 1 (spare - 4))
 
-            // At least two lines are cut whenever any are: the body ran past the spare lines, and
-            // one of those went to say so. So the count is never one, and never reads wrong.
-            kept
-            @ [ says $"  ... {List.length body - List.length kept} more lines, and this screen is taller than the window" ]
+    /// A body trimmed to what is left after everything that must be drawn, `scrolled` lines down.
+    ///
+    /// The rows, the note and the prompt are how somebody gets off a screen, so they are never what
+    /// gets cut; a board is the part that is as long as it likes. What is cut says so, at whichever
+    /// end it is cut, because a board that quietly stopped early would be a board somebody read the
+    /// wrong answer off.
+    let fitting room rest (says: string -> string) scrolled (body: string list) =
+        match reach room rest (List.length body) scrolled with
+        | None -> body
+        | Some(scrolled, deepest, _) ->
+            let above =
+                if scrolled = 0 then [] else [ says $"""  ... {Counting.several "line" "lines" scrolled} above""" ]
+
+            let below = scrolled < deepest
+            let shown = room - rest - List.length above - (if below then 1 else 0)
+            let kept = body |> List.skip scrolled |> List.truncate shown
+
+            // At least two lines are cut below whenever any are: a foot one line out of sight is
+            // in sight once the line saying so is not needed. So the count is never one.
+            above
+            @ kept
+            @ [ if below then
+                    says $"  ... {List.length body - scrolled - shown} more lines, and this screen is taller than the window" ]
 
     /// A screen to steer by its keys - unless input is coming from somewhere that has no keys to
     /// press, in which case the screen is printed once and a line is read.
@@ -189,10 +210,13 @@ module Screens =
         let lines (text: string) =
             text.Replace("\r\n", "\n").Split '\n' |> Array.toList
 
-        let frame standing index =
+        // Answers with the frame, how far down the board it was drawn and how far a page goes, both
+        // nought for a board that fits: only the frame knows the room, and the scroll is kept as
+        // drawn so that a press past either end is not one more to press back.
+        let frame standing index scrolled =
             let showing, _ = Keys.facing standing
 
-            let tail =
+            let tail cut =
                 [ yield! lines (says (Keys.draw (across ()) index showing))
 
                   if said <> "" then yield! lines (says said)
@@ -200,7 +224,7 @@ module Screens =
                   // Whose the keyboard is, said where somebody is about to press a key. A mode with
                   // no sign of itself is a mode people press keys into and wonder at.
                   if steering () then
-                      let shown = Keys.prompt (lettering ()) standing
+                      let shown = Keys.prompt (lettering ()) cut standing
                       let hints, typed = List.splitAt (List.length shown - 1) shown
 
                       yield! List.map says hints
@@ -209,28 +233,49 @@ module Screens =
                       yield "> " ]
 
             let body = if above = "" then [] else lines above
+            let room = room ()
 
-            String.concat System.Environment.NewLine (fitting (room ()) (List.length tail) says body @ tail)
+            // Naming the scroll keys or not changes a word on the hint and not how many lines it is.
+            let plain = tail false
+            let rest = List.length plain
+            let reached = reach room rest (List.length body) scrolled
 
-        let rec steer drawn standing =
+            let text =
+                String.concat
+                    System.Environment.NewLine
+                    (fitting room rest says scrolled body
+                     @ if Option.isSome reached then tail true else plain)
+
+            match reached with
+            | Some(scrolled, _, page) -> text, scrolled, page
+            | None -> text, 0, 0
+
+        // The scroll is held here and nowhere else: whatever answers a line is drawn afresh, and may
+        // be another page, so it is read from its head again.
+        let rec steer drawn standing scrolled =
             let _, index = Keys.facing standing
+            let text, scrolled, page = frame standing (Some index) scrolled
 
             // Drawn over rather than cleared and written again. Clearing first and then writing more
             // lines than the window holds is what made a tall screen arrive in pieces: the terminal
             // scrolled what had just been cleared, and the eye caught the halves.
-            let drawn = redrawn drawn (frame standing (Some index))
+            let drawn = redrawn drawn text
 
             match Keys.answer (lettering ()) (System.Console.ReadKey true) standing with
-            | Keys.Steering next -> steer drawn next
+            | Keys.Steering next -> steer drawn next scrolled
+            | Keys.Scrolling(next, Keys.Windowful by) -> steer drawn next (scrolled + by * page)
+            | Keys.Scrolling(next, Keys.Head) -> steer drawn next 0
+            | Keys.Scrolling(next, Keys.Foot) -> steer drawn next System.Int32.MaxValue
             | Keys.Answered line -> Some line, Keys.path standing
 
         if steering () then
             // Cleared once, and drawn over from then on. The first frame has whatever was on the
             // terminal before it under it; every frame after is written over the last.
             cleared ()
-            steer nothing (Keys.standing board at)
+            steer nothing (Keys.standing board at) 0
         else
-            printf "%s" (frame (Keys.standing board at) None)
+            let text, _, _ = frame (Keys.standing board at) None 0
+            printf "%s" text
 
             match System.Console.ReadLine() with
             | null -> None, at

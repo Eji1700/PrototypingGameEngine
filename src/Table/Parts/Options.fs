@@ -289,7 +289,7 @@ module Options =
                 Keys.sends (Some '0') "done" "back to the settings" "done" ]
           Note =
             [ "Turning the one marked -> walks it on to the next letter nothing else has. Taking it"
-              "writes the start of the line and waits for the letter; or say it outright, 'key up i'."
+              "writes the start of the line and waits for the letter; or say it outright, 'key up j'."
               ""
               "This one is not a game's own. Which letter does what is a fact about the hands at the"
               "keyboard, so it is asked once and every game picks it up." ]
@@ -308,6 +308,6 @@ module Options =
                 match Keymap.ofWord word with
                 | Some key -> Keymap.rebind key letter keymap |> Result.map Rebound
                 | None -> Error $"'{word}' is not a key that can be moved. There is {movable}."
-            | "key" :: _ -> Error "Say 'key <what> <letter>', as in 'key up i'."
+            | "key" :: _ -> Error "Say 'key <what> <letter>', as in 'key up j'."
             | word :: _ -> Error $"I don't know how to '{word}'. Say 'key <what> <letter>', 'reset', 'save', or 'done'."
             | [] -> Ok Same

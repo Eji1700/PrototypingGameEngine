@@ -762,15 +762,17 @@ report
 report
     "and taking one writes the start of the line, for the letter to finish"
     (Ok
-        [ "key up i"
+        [ "key up j"
           "key down s"
           "key left a"
           "key right d"
           "key previous q"
           "key next e"
-          "key seal r" ])
+          "key seal r"
+          "key above i"
+          "key below k" ])
     (match (List.head (Options.keyboard Keymap.standard).Rows).Pick with
-     | Keys.Types text -> rebound Keymap.standard (text + "i")
+     | Keys.Types text -> rebound Keymap.standard (text + "j")
      | _ -> Error "the row does not wait for a letter")
 
 report
@@ -780,13 +782,13 @@ report
 
 report
     "and a key the page does not know is refused, naming the ones it does"
-    (Error "'sideways' is not a key that can be moved. There is up, down, left, right, previous, next, seal.")
+    (Error "'sideways' is not a key that can be moved. There is up, down, left, right, previous, next, seal, above, below.")
     (rebound Keymap.standard "key sideways x")
 
 report
     "reset puts every letter back"
     (Ok(Keymap.lines Keymap.standard))
-    (match Keymap.bound [ (Up, "i"); (Seal, "x") ] with
+    (match Keymap.bound [ (Up, "j"); (Seal, "x") ] with
      | Ok moved -> rebound moved "reset"
      | Error problem -> Error problem)
 
@@ -905,21 +907,21 @@ report
 report
     "a key said under one game is complained about, being nobody's game in particular"
     true
-    (match Settings.read "[compile]\nkey up i" |> snd with
+    (match Settings.read "[compile]\nkey up j" |> snd with
      | [ problem ] -> problem.Contains "said about every game at once"
      | _ -> false)
 
 report
     "and a letter on two keys is one complaint, and the usual letters rather than half of them"
     (Keymap.lines Keymap.standard, 1)
-    (let settings, problems = Settings.read "key up i\nkey down i"
+    (let settings, problems = Settings.read "key up j\nkey down j"
      Keymap.lines (Settings.keymap settings), List.length problems)
 
 report
     "a key with a name nobody has is complained about, naming the ones there are"
     true
     (match Settings.read "key sideways x" |> snd with
-     | [ problem ] -> problem.Contains "There is up, down, left, right, previous, next, seal."
+     | [ problem ] -> problem.Contains "There is up, down, left, right, previous, next, seal, above, below."
      | _ -> false)
 
 
@@ -990,7 +992,8 @@ let private walkingWith keymap (board: Keys.Steered) at keys =
         | [] -> None
         | key :: rest ->
             match Keys.answer keymap key standing with
-            | Keys.Steering standing -> next standing rest
+            | Keys.Steering standing
+            | Keys.Scrolling(standing, _) -> next standing rest
             | Keys.Answered line -> Some line
 
     next (Keys.standing board at) keys
@@ -1039,13 +1042,13 @@ report
     (walked ([ key ConsoleKey.Spacebar ] @ spelt "search" @ [ key ConsoleKey.Enter ]))
 
 let private remapped =
-    Keymap.rebind Up "i" Keymap.standard
+    Keymap.rebind Up "j" Keymap.standard
     |> Result.defaultWith (fun problem -> failwith problem)
 
 report
-    "with up moved to i, i moves up and w does nothing at all"
+    "with up moved to j, j moves up and w does nothing at all"
     (Some "quit")
-    (walkingWith remapped (Keys.steered front) [] [ letter 'w'; letter 'i'; key ConsoleKey.Enter ])
+    (walkingWith remapped (Keys.steered front) [] [ letter 'w'; letter 'j'; key ConsoleKey.Enter ])
 
 report
     "a row that needs more writes the part it knows and waits for the rest"
@@ -1126,33 +1129,59 @@ let private plainly (text: string) = text
 report
     "a board taller than the window is cut to what is left after the rows and the prompt"
     ([ for at in 1..15 -> $"board {at}" ])
-    (Screens.fitting 24 8 plainly [ for at in 1..40 -> $"board {at}" ]
+    (Screens.fitting 24 8 plainly 0 [ for at in 1..40 -> $"board {at}" ]
      |> List.truncate 15)
 
 report
     "and what is drawn fits in the room there is"
     16
-    (Screens.fitting 24 8 plainly [ for at in 1..40 -> $"board {at}" ] |> List.length)
+    (Screens.fitting 24 8 plainly 0 [ for at in 1..40 -> $"board {at}" ]
+     |> List.length)
 
 report
     "and what was cut says so"
     true
-    (Screens.fitting 24 8 plainly [ for at in 1..40 -> $"board {at}" ]
+    (Screens.fitting 24 8 plainly 0 [ for at in 1..40 -> $"board {at}" ]
      |> List.last
      |> fun said -> said.Contains "more lines" && said.Contains "25")
 
-report "and the whole of it is drawn where it fits" [ "one"; "two" ] (Screens.fitting 24 8 plainly [ "one"; "two" ])
+report "and the whole of it is drawn where it fits" [ "one"; "two" ] (Screens.fitting 24 8 plainly 0 [ "one"; "two" ])
 
 report
     "and nothing is cut where there is no window to cut it to"
     40
-    (Screens.fitting System.Int32.MaxValue 8 plainly [ for at in 1..40 -> $"board {at}" ]
+    (Screens.fitting System.Int32.MaxValue 8 plainly 0 [ for at in 1..40 -> $"board {at}" ]
      |> List.length)
 
 report
     "and a window with no room left at all is left alone rather than cut to nothing"
     40
-    (Screens.fitting 9 8 plainly [ for at in 1..40 -> $"board {at}" ] |> List.length)
+    (Screens.fitting 9 8 plainly 0 [ for at in 1..40 -> $"board {at}" ]
+     |> List.length)
+
+// Scrolled, a board says it was cut at its head as well as its foot. Twenty-four lines with eight of
+// them the list leaves sixteen for the board, and its foot is in sight twenty-five lines down.
+let private tall = [ for at in 1..40 -> $"board {at}" ]
+
+report
+    "a board scrolled down has that many lines gone from its head, and says so there"
+    ([ "  ... 12 lines above" ] @ [ for at in 13..26 -> $"board {at}" ])
+    (Screens.fitting 24 8 plainly 12 tall |> List.truncate 15)
+
+report
+    "and still fits in the room there is, saying what is below as well"
+    (16, true)
+    (Screens.fitting 24 8 plainly 12 tall
+     |> fun drawn -> List.length drawn, (List.last drawn).Contains "14 more lines")
+
+report "and one line gone is one line" "  ... 1 line above" (Screens.fitting 24 8 plainly 1 tall |> List.head)
+
+report
+    "and scrolling past the foot stops at it, with nothing said below"
+    ([ "  ... 25 lines above" ] @ [ for at in 26..40 -> $"board {at}" ])
+    (Screens.fitting 24 8 plainly 1000 tall)
+
+report "and a board that fits is not scrolled at all" [ "one"; "two" ] (Screens.fitting 24 8 plainly 5 [ "one"; "two" ])
 
 report
     "backing out of a list opened by mistake comes back to the one it was opened from"
@@ -1335,7 +1364,8 @@ let private wandered screen keys =
         | [] -> Keys.path standing
         | key :: rest ->
             match Keys.answer Keymap.standard key standing with
-            | Keys.Steering standing -> next standing rest
+            | Keys.Steering standing
+            | Keys.Scrolling(standing, _) -> next standing rest
             | Keys.Answered _ -> Keys.path standing
 
     next (Keys.standing (Keys.steered screen) []) keys
@@ -1461,10 +1491,11 @@ report
 let private hinted keymap board at keys =
     let rec next standing keys =
         match keys with
-        | [] -> Keys.prompt keymap standing
+        | [] -> Keys.prompt keymap false standing
         | key :: rest ->
             match Keys.answer keymap key standing with
-            | Keys.Steering standing -> next standing rest
+            | Keys.Steering standing
+            | Keys.Scrolling(standing, _) -> next standing rest
             | Keys.Answered line -> [ $"answered '{line}'" ]
 
     next (Keys.standing board at) keys
@@ -1486,7 +1517,7 @@ report
 
 report
     "the hint names the letters as this keyboard has them"
-    [ "  i s move   space to type"; "> " ]
+    [ "  j s move   space to type"; "> " ]
     (hinted remapped (Keys.steered outer) [] [])
 
 report
@@ -1499,6 +1530,51 @@ report
     [ "> go_" ]
     (hinted Keymap.standard (sealing outer) [] ([ key ConsoleKey.Spacebar ] @ spelt "go"))
 
+// The four page keys that scroll a board are fixed, like Enter and Escape, and two letters scroll
+// it too. Each answers with a scroll for the screen to make of it: only the screen knows how tall
+// the window is.
+let private scrolledBy (standing: Keys.Standing) press =
+    match Keys.answer Keymap.standard press standing with
+    | Keys.Scrolling(_, scroll) -> Ok scroll
+    | Keys.Steering standing -> Error standing.Prompt
+    | Keys.Answered line -> Error(Keys.Open line)
+
+let private scrollKeys =
+    [ ConsoleKey.PageDown; ConsoleKey.PageUp; ConsoleKey.Home; ConsoleKey.End ]
+    |> List.map key
+
+let private typingAb =
+    { Keys.standing (Keys.steered outer) [] with
+        Prompt = Keys.Open "ab" }
+
+report
+    "page down and page up scroll a board a windowful, and home and end to its head and foot"
+    [ Ok(Keys.Windowful 1); Ok(Keys.Windowful -1); Ok Keys.Head; Ok Keys.Foot ]
+    (scrollKeys |> List.map (scrolledBy (Keys.standing (Keys.steered outer) [])))
+
+report
+    "and while a line is typed they leave it as it was"
+    (List.replicate 4 (Error(Keys.Open "ab")))
+    (scrollKeys |> List.map (scrolledBy typingAb))
+
+report
+    "k scrolls a board down a windowful and i scrolls it up, as the page keys do"
+    [ Ok(Keys.Windowful 1); Ok(Keys.Windowful -1) ]
+    ([ letter 'k'; letter 'i' ]
+     |> List.map (scrolledBy (Keys.standing (Keys.steered outer) [])))
+
+report
+    "and while a line is typed they are letters like any other"
+    [ Error(Keys.Open "abk"); Error(Keys.Open "abi") ]
+    ([ letter 'k'; letter 'i' ] |> List.map (scrolledBy typingAb))
+
+report
+    "and a board cut to the window names the letters that scroll it, as this keyboard has them"
+    [ [ "  w s move   i k scroll   space to type"; "> " ]
+      [ "  w s move   u j scroll   space to type"; "> " ] ]
+    ([ Keymap.standard
+       Keymap.bound [ (Above, "u"); (Below, "j") ] |> Result.defaultWith failwith ]
+     |> List.map (fun keymap -> Keys.prompt keymap true (Keys.standing (Keys.steered outer) [])))
 
 // --- a screen of bare names, drawn in columns ---------------------------------------------------
 
@@ -1540,14 +1616,33 @@ let private refused said =
     | Error problem -> problem
 
 report
-    "the usual letters are w s a d q e r, in the order the keyboard page lists them"
-    [ 'w'; 's'; 'a'; 'd'; 'q'; 'e'; 'r' ]
+    "the usual letters are w s a d q e r i k, in the order the keyboard page lists them"
+    [ 'w'; 's'; 'a'; 'd'; 'q'; 'e'; 'r'; 'i'; 'k' ]
     (Keymap.all |> List.map (fun key -> Keymap.letter key Keymap.standard))
 
 report
     "one letter cannot do two things, and the refusal says which two"
     "'s' cannot both move up and move down. Give one of them another letter."
     (refused [ (Up, "s") ])
+
+report
+    "there are nine keys to move, and a settings file holds a line for each, read back as written"
+    (9, [ "key above u"; "key below j" ], [])
+    (let settings, problems = Settings.read "key above u\nkey below j"
+
+     let kept =
+         Settings.write settings
+         |> Settings.read
+         |> fst
+         |> Settings.keymap
+         |> Keymap.lines
+
+     List.length kept, List.skip 7 kept, problems)
+
+report
+    "and a scrolling letter another key holds is refused like any other"
+    "'w' cannot both move up and scroll the board up. Give one of them another letter."
+    (refused [ (Above, "w") ])
 
 report "a key is one letter, not two" "'ww' cannot move up: a key is one letter, from a to z." (refused [ (Up, "ww") ])
 
@@ -1569,7 +1664,7 @@ report
 report
     "a capital is read as the letter it is, both when it is bound and when it is pressed"
     (Some Up)
-    (Keymap.bound [ (Up, "I") ] |> Result.toOption |> Option.bind (Keymap.keyOf 'I'))
+    (Keymap.bound [ (Up, "J") ] |> Result.toOption |> Option.bind (Keymap.keyOf 'J'))
 
 report
     "turning a key walks it past the letters the others hold"

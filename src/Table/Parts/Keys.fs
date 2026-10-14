@@ -217,15 +217,28 @@ module Keys =
     let path standing =
         standing.Stack |> List.rev |> List.map snd
 
+    /// How far to scroll a board taller than the window. In pages rather than lines, because how
+    /// many lines a page is depends on the window and the list under the board, and only the screen
+    /// drawing them knows either.
+    type Scroll =
+        | Windowful of by: int
+        | Head
+        | Foot
+
+    /// Scrolling is an answer of its own rather than a field on `Standing`, because it is what is
+    /// on the window and not where somebody is: a standing is handed back to put somebody back on
+    /// the next board, and the next board may be another page, to be read from its head.
     [<NoComparison; NoEquality>]
     type Answer =
         | Steering of Standing
+        | Scrolling of Standing * Scroll
         | Answered of string
 
     type private Press =
         | Moved of by: int
         | Turned of by: int
         | Paged of by: int
+        | Scrolled of Scroll
         | Offered
         | Picked
         | Numbered of char
@@ -239,12 +252,17 @@ module Keys =
     /// letter the keymap does not hold. A letter that is not a steering one used to start a line,
     /// but which letters steer is now the player's to choose, so the same key would start a line at
     /// one keyboard and move the mark at another. The space bar is the one way into the prompt, and
-    /// is the same at every keyboard.
+    /// is the same at every keyboard. So are the page keys, Home and End, which scroll a board as two
+    /// of the letters do: the keymap holds letters, and these are not.
     let private pressed keymap (key: ConsoleKeyInfo) =
         match key.Key with
         | ConsoleKey.Enter -> Picked
         | ConsoleKey.Backspace
         | ConsoleKey.Escape -> Backed
+        | ConsoleKey.PageDown -> Scrolled(Windowful 1)
+        | ConsoleKey.PageUp -> Scrolled(Windowful -1)
+        | ConsoleKey.Home -> Scrolled Head
+        | ConsoleKey.End -> Scrolled Foot
 
         // Matched as a key as well as a character, because a space arrives as both: a terminal
         // sends ' ' with it and some send nothing at all.
@@ -262,6 +280,8 @@ module Keys =
                 | Some Previous -> Paged -1
                 | Some Next -> Paged 1
                 | Some Seal -> Offered
+                | Some Above -> Scrolled(Windowful -1)
+                | Some Below -> Scrolled(Windowful 1)
                 | None -> Ignored
 
     /// What a key means while a line is being typed. **Every** printable key is a letter, the
@@ -328,6 +348,7 @@ module Keys =
             | Ignored -> Steering standing
             | Prompting -> Steering { standing with Prompt = Open "" }
             | Backed -> out ()
+            | Scrolled scroll -> Scrolling(standing, scroll)
             | Moved by ->
                 Steering
                     { standing with
@@ -370,7 +391,10 @@ module Keys =
     /// The hint is built from the keymap and names only what does something on this screen, so it
     /// is right for whoever moved which letters, and it is the one place the program names a key: a
     /// note that said "left and right" would be wrong for every player who moved them.
-    let prompt keymap standing =
+    ///
+    /// `cut` is whether the board above was cut to the window, which only the screen drawing it
+    /// knows. The keys that scroll it are named only then: on a board that fits they do nothing.
+    let prompt keymap cut standing =
         let showing, _ = facing standing
         let letter key = string (Keymap.letter key keymap)
 
@@ -387,6 +411,7 @@ module Keys =
                       pair Left Right "turn"
                   if standing.Board.Pages.IsSome then pair Previous Next "page"
                   if standing.Board.Seals.IsSome then $"{letter Seal} ready"
+                  if cut then pair Above Below "scroll"
                   "space to type" ]
 
             [ "  " + String.concat "   " hint; "> " ]

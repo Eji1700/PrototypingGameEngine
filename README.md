@@ -125,15 +125,18 @@ With no command, a game opens its menu:
      7  Quit
 ```
 
-Every screen in the program is walked the same way. Seven letters steer it: two move the mark, two
+Every screen in the program is walked the same way. Nine letters steer it: two move the mark, two
 turn the marked row through its choices — a seat, a view, a colour — two turn the page at a board
-that has pages, and one seals the turn at a board that has one to seal, asking first. The line
-under every list names the ones that do something there, as this keyboard has them, and the
-**keys** settings page moves any of them to another letter. The rest of the keyboard is fixed: a
-row's number takes it outright, Enter takes the one marked, Escape backs out, and `0` is the way
-out of a settings page. The space bar is the one way into the prompt, and from then on every key
-is a letter until the line is sent. `refresh`, typed at a board, wipes the window and draws it again,
-for a window resized under a board that is drawn over itself.
+that has pages, one seals the turn at a board that has one to seal, asking first, and two scroll a
+board taller than the window. The line under every list names the ones that do something there, as
+this keyboard has them, and the **keys** settings page moves any of them to another letter. The
+rest of the keyboard is fixed: a row's number takes it outright, Enter takes the one marked, Escape
+backs out, and `0` is the way out of a settings page. The space bar is the one way into the prompt,
+and from then on every key is a letter until the line is sent. A board too tall for the window says
+how many of its lines are out of sight above and below, and `i` and `k` — as they come — scroll it
+up and down a windowful at a time, as Page Up and Page Down do, while Home and End go to its head
+and foot. `refresh`, typed at a board, wipes the window and draws it again, for a window resized
+under a board that is drawn over itself.
 
 Every row stands for a line that could have been typed, so the two are one grammar. `New game`
 asks how many, then lists the seats:
