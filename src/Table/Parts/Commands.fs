@@ -79,6 +79,14 @@ module Commands =
           "help", "every command, at length"
           "quit", "leave; the record is written, and 'replay' takes the game up again" ]
 
+    /// Whether a line asks for the window drawn afresh. Answered by the loop at the keyboard before
+    /// the game hears it, because it is about the terminal and no table or game has a say in it.
+    let refreshes (line: string) =
+        match lowered line with
+        | [ "refresh" ]
+        | [ "redraw" ] -> true
+        | _ -> false
+
     let restart =
         "restart", "deal a fresh game to the same players; 'restart 42' deals that one"
 

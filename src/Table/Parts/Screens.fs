@@ -4,11 +4,24 @@ namespace Prototyping.Table
 /// than a line count because a count cannot answer "is this already there", and it lives beside
 /// `cleared` because a terminal just wiped has nothing on it to be identical to.
 [<NoComparison>]
-type Drawn = { Lines: int; Text: string }
+type Drawn =
+    {
+        Lines: int
+        Text: string
+
+        /// The window the text was drawn into. A window made another size since has the text
+        /// somewhere else on it, and drawing over it there leaves the old one showing through.
+        Across: int
+        Down: int
+    }
 
 module Screens =
 
-    let nothing = { Lines = 0; Text = "" }
+    let nothing =
+        { Lines = 0
+          Text = ""
+          Across = 0
+          Down = 0 }
 
     let steering () = not System.Console.IsInputRedirected
 
@@ -82,7 +95,11 @@ module Screens =
             with _ ->
                 0
 
-        if room > 0 && lines.Length >= room then
+        // A window made another size since the last drawing has that drawing somewhere else on it,
+        // wrapped or scrolled, so there is nothing to draw over; it is wiped and drawn afresh.
+        let resized = before.Lines > 0 && (width <> before.Across || room <> before.Down)
+
+        if resized || (room > 0 && lines.Length >= room) then
             cleared ()
         else
             try
@@ -96,12 +113,16 @@ module Screens =
             over.AppendLine(if line.Length >= width then line else line.PadRight width)
             |> ignore
 
-        for _ in lines.Length .. before.Lines - 1 do
-            over.AppendLine(System.String(' ', width)) |> ignore
+        if not resized then
+            for _ in lines.Length .. before.Lines - 1 do
+                over.AppendLine(System.String(' ', width)) |> ignore
 
         printf "%s" (over.ToString())
 
-        { Lines = lines.Length; Text = text }
+        { Lines = lines.Length
+          Text = text
+          Across = width
+          Down = room }
 
     /// How long to wait between looks at the keyboard: short enough that a key is never felt to
     /// lag, long enough that a table waiting on its next beat is not spinning.

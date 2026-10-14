@@ -772,6 +772,8 @@ report
     true
     (let standing =
         { Lines = 3
+          Across = 0
+          Down = 0
           Text =
             "a
 b

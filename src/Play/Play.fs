@@ -78,6 +78,13 @@ let private folded rings sitters line solo =
 
 let rec private loop rings sitters said at solo =
     let heard at line =
+        // The table's own, answered before the game hears it: a window resized under a board
+        // drawn over itself can be left showing two of them, and this is the way out.
+        if Commands.refreshes line then
+            Screens.cleared ()
+            loop rings sitters [] at solo
+        else
+
         let next, answered, doing = folded rings sitters line solo
 
         match doing with
