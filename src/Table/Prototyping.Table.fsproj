@@ -39,6 +39,7 @@
   <ItemGroup Label="Playing one, and the two ways in">
     <Compile Include="Playing/Solo.fs" />
     <Compile Include="Playing/Transcript.fs" />
+    <Compile Include="Playing/Review.fs" />
     <Compile Include="Playing/Menu.fs" />
     <Compile Include="Playing/Launch.fs" />
   </ItemGroup>

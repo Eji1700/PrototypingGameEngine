@@ -39,6 +39,7 @@
 #load "../src/Table/Playable.fs"
 #load "../src/Table/Playing/Solo.fs"
 #load "../src/Table/Playing/Transcript.fs"
+#load "../src/Table/Playing/Review.fs"
 #load "../src/Table/Playing/Menu.fs"
 #load "../src/Table/Playing/Launch.fs"
 #load "../src/Net/Protocol.fs"
