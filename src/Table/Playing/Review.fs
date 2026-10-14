@@ -287,40 +287,39 @@ module Review =
     let private board (view: View<'Move, 'State, 'Notice>) review =
         view.Board (margins review) (seat review) (model review)
 
-    /// The heading, the game's own board for the eye, and the turn it stands in.
+    /// The heading and the turn first, then the game's board. A window too short for the lot loses
+    /// the foot of the board, and the turn's orders are what a review is for.
     let drawn view review =
-        String.concat Environment.NewLine [ heading review; board view review; ""; thisTurn review ]
-
-    let private typed =
-        [ "Or type it: 'next turn', 'back a move', 'move 12', 'start', 'end',"
-          "'eye all', 'eye 2', 'history', or the game's own word for one of its"
-          "screens. 'quit' leaves." ]
+        String.concat Environment.NewLine [ heading review; thisTurn review; ""; board view review ]
 
     let private screen review (pages: (int -> string) option) : Keys.Screen =
+        // Nothing is said beside any row, so the list is laid in columns and takes three lines of a
+        // window that has a board to show. The eye and the page are in the heading already, and the
+        // typed words are under 'help'.
         let eye =
-            Keys.sends (Some '5') "Eye" (eyeing review) "eye next"
+            Keys.sends (Some '3') "Eye" "" "eye next"
             |> Keys.turning (fun by -> if by < 0 then "eye back" else "eye next")
 
         // Only where the game turns pages of its own here: a row that turned nothing would be a row
         // somebody stood on and pressed keys at.
         let paging =
             match pages with
-            | Some turn ->
-                [ Keys.sends (Some '6') "Screen" (Margins.showing "the one it opens on" review.Margined) (turn 1)
-                  |> Keys.turning turn ]
+            | Some turn -> [ Keys.sends (Some '4') "Screen" "" (turn 1) |> Keys.turning turn ]
             | None -> []
+
+        // One row a unit of stepping, turned either way: a row each for the four steps was four
+        // lines where two will do, and the list is laid one row to a line until it has eight.
+        let stepping digit says unit =
+            Keys.sends (Some digit) says "" $"next {unit}"
+            |> Keys.turning (fun by -> if by < 0 then $"back a {unit}" else $"next {unit}")
 
         { Title = "Review"
           Prose = []
           Rows =
-            [ Keys.sends (Some '1') "Next turn" "" "next turn"
-              Keys.sends (Some '2') "Back a turn" "" "back a turn"
-              Keys.sends (Some '3') "Next move" "" "next move"
-              Keys.sends (Some '4') "Back a move" "" "back a move"
-              eye ]
+            [ stepping '1' "Turn" "turn"; stepping '2' "Move" "move"; eye ]
             @ paging
             @ [ Keys.sends (Some '0') "Leave" "" "quit" ]
-          Note = typed
+          Note = []
           Backs = Some "quit" }
 
     /// The review's own rows, with the game's page turn beside them where the game has one for the
